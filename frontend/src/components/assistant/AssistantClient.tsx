@@ -1,81 +1,160 @@
 "use client";
 
-import { useState, useRef, useEffect, KeyboardEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { sendMessage } from "@/lib/api";
-import { ChatMessage, ChatSource } from "@/types";
-import { Send, Cpu, FileText, Globe, ArrowRight } from "lucide-react";
+import { Send, Cpu, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
-interface ExtendedMessage extends ChatMessage {
-  agent_name?: string;
-  delegated_to?: string | null;
-  sources?: ChatSource[];
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  streaming?: boolean;
+  toolsUsed?: string[];
+}
+
+interface HistoryEntry {
+  role: "user" | "assistant";
+  content: string | object[];
 }
 
 export function AssistantClient() {
   const { data: session } = useSession();
-  const [messages, setMessages] = useState<ExtendedMessage[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [sessionId, setSessionId] = useState<string | undefined>();
+  const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const mutation = useMutation({
-    mutationFn: ({ message, sid }: { message: string; sid?: string }) =>
-      sendMessage(message, sid),
-    onSuccess: (data) => {
-      setSessionId(data.session_id);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.message,
-          timestamp: new Date().toISOString(),
-          model_used: data.model_used,
-          latency_ms: data.latency_ms,
-          agent_name: data.agent_name,
-          delegated_to: data.delegated_to,
-          sources: data.sources,
-        },
-      ]);
-    },
-    onError: () => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "I encountered an error processing your request. Please try again.",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    },
-  });
+  const historyRef = useRef<HistoryEntry[]>([]);
+  const memoryRef = useRef<Record<string, string>>({});
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, mutation.isPending]);
+  }, [messages]);
 
-  function handleSend() {
+  const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || mutation.isPending) return;
+    if (!text || isStreaming) return;
 
     setInput("");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
 
-    mutation.mutate({ message: text, sid: sessionId });
-  }
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: text,
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    const assistantId = crypto.randomUUID();
+    const assistantMsg: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      streaming: true,
+      toolsUsed: [],
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+    setIsStreaming(true);
+
+    abortRef.current = new AbortController();
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: historyRef.current,
+          memory: memoryRef.current,
+          userName: session?.user?.name?.split(" ")[0],
+        }),
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+      const toolsUsed: string[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            continue;
+          }
+          if (line.startsWith("data: ")) {
+            const raw = line.slice(6);
+            try {
+              const parsed = JSON.parse(raw);
+
+              if (parsed.text !== undefined) {
+                fullText += parsed.text;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, content: fullText, toolsUsed }
+                      : m
+                  )
+                );
+              } else if (parsed.name !== undefined) {
+                toolsUsed.push(parsed.name);
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
+                  )
+                );
+              } else if (parsed.memory !== undefined) {
+                memoryRef.current = parsed.memory;
+                historyRef.current = [
+                  ...historyRef.current,
+                  { role: "user", content: text },
+                  { role: "assistant", content: fullText },
+                ];
+              }
+            } catch {
+              // non-JSON line, skip
+            }
+          }
+        }
+      }
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, streaming: false, toolsUsed } : m
+        )
+      );
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                content: "I encountered an error. Please try again.",
+                streaming: false,
+              }
+            : m
+        )
+      );
+    } finally {
+      setIsStreaming(false);
+      abortRef.current = null;
+    }
+  }, [input, isStreaming, session]);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -86,37 +165,20 @@ export function AssistantClient() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-6">
         {messages.length === 0 && (
-          <div className="text-center pt-16">
-            <Cpu size={32} className="mx-auto text-text-muted mb-4 opacity-50" />
-            <p className="text-text-secondary text-sm">
-              How can I assist you today?
-            </p>
-            <p className="text-text-muted text-xs mt-1">
-              I can search the web, query your documents, and manage tasks.
-            </p>
-          </div>
+          <EmptyState userName={session?.user?.name?.split(" ")[0]} />
         )}
 
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} session={session} />
         ))}
 
-        {mutation.isPending && (
-          <div className="flex items-start gap-3">
-            <AgentAvatar />
-            <div className="bg-background-surface border border-border-default rounded-card px-4 py-3">
-              <ThinkingDots />
-            </div>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
-      <div className="px-8 py-5 border-t border-border-default">
-        <div className="flex items-end gap-3 bg-background-surface border border-border-default rounded-card px-4 py-3 focus-within:border-border-hover transition-colors">
+      <div className="px-4 sm:px-8 py-5 border-t border-border-default">
+        <div className="flex items-end gap-3 bg-background-surface border border-border-default rounded-card px-4 py-3 focus-within:border-border-hover transition-colors duration-150">
           <textarea
             ref={textareaRef}
             value={input}
@@ -124,7 +186,8 @@ export function AssistantClient() {
             onKeyDown={handleKeyDown}
             placeholder="Message JARVIS..."
             rows={1}
-            className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-sm resize-none outline-none max-h-32 leading-relaxed"
+            disabled={isStreaming}
+            className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
             style={{ height: "auto" }}
             onInput={(e) => {
               const t = e.currentTarget;
@@ -134,10 +197,10 @@ export function AssistantClient() {
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || mutation.isPending}
+            disabled={!input.trim() || isStreaming}
             className={cn(
-              "flex-none p-1.5 rounded-input transition-colors",
-              input.trim() && !mutation.isPending
+              "flex-none p-1.5 rounded-input transition-colors duration-150",
+              input.trim() && !isStreaming
                 ? "text-accent-blue hover:bg-accent-blue/10"
                 : "text-text-muted cursor-not-allowed"
             )}
@@ -154,93 +217,71 @@ export function AssistantClient() {
   );
 }
 
-function MessageBubble({ message, session }: { message: ExtendedMessage; session: any }) {
+function EmptyState({ userName }: { userName?: string }) {
+  return (
+    <div className="text-center pt-16 animate-fade-in">
+      <div className="w-12 h-12 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-5">
+        <Cpu size={20} className="text-accent-blue" />
+      </div>
+      <p className="text-text-primary font-medium mb-1">
+        {userName ? `Good to see you, ${userName}.` : "JARVIS online."}
+      </p>
+      <p className="text-text-secondary text-sm">
+        How can I assist you today?
+      </p>
+    </div>
+  );
+}
+
+function MessageBubble({ message, session }: { message: Message; session: any }) {
   const isUser = message.role === "user";
 
   return (
-    <div className={cn("flex items-start gap-3", isUser && "flex-row-reverse")}>
+    <div className={cn("flex items-start gap-3 animate-slide-in", isUser && "flex-row-reverse")}>
       {isUser ? <UserAvatar session={session} /> : <AgentAvatar />}
-      <div className="max-w-[70%]">
+      <div className={cn("max-w-[80%] sm:max-w-[72%]", isUser && "items-end flex flex-col")}>
+        {message.toolsUsed && message.toolsUsed.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {message.toolsUsed.map((tool, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet"
+              >
+                <Zap size={9} />
+                {tool}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div
           className={cn(
             "rounded-card px-4 py-3 text-sm leading-relaxed",
             isUser
               ? "bg-accent-blue/10 border border-accent-blue/20 text-text-primary"
-              : "bg-background-surface border border-border-default text-text-primary prose-jarvis"
+              : "bg-background-surface border border-border-default text-text-primary"
           )}
         >
-          <div className="whitespace-pre-wrap">{message.content}</div>
-        </div>
-
-        {!isUser && (message.agent_name || message.sources?.length) && (
-          <SourcesBlock message={message} />
-        )}
-
-        {message.model_used && (
-          <p className="text-text-muted text-xs mt-1 font-mono">
-            {message.model_used} · {message.latency_ms}ms
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SourcesBlock({ message }: { message: ExtendedMessage }) {
-  const sources = message.sources ?? [];
-  const hasDocSources = sources.some((s) => s.document_title);
-  const hasWebSources = sources.some((s) => s.url);
-
-  return (
-    <div className="mt-2 space-y-1">
-      {message.agent_name && (
-        <div className="text-text-muted text-xs font-mono flex items-center gap-1.5">
-          <span>{message.agent_name}</span>
-          {message.delegated_to && (
+          {isUser ? (
+            <span className="whitespace-pre-wrap">{message.content}</span>
+          ) : (
             <>
-              <ArrowRight size={10} />
-              <span className="text-accent-violet">{message.delegated_to}</span>
+              {message.content ? (
+                <div className="prose-jarvis">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              ) : message.streaming ? (
+                <ThinkingDots />
+              ) : null}
+              {message.streaming && message.content && (
+                <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
+              )}
             </>
           )}
         </div>
-      )}
-
-      {hasDocSources && (
-        <div className="flex flex-wrap gap-1.5 mt-1.5">
-          {sources
-            .filter((s) => s.document_title)
-            .map((s, i) => (
-              <span
-                key={`doc-${i}`}
-                className="text-xs font-mono px-2 py-1 rounded-badge bg-background-elevated border border-border-default text-text-secondary flex items-center gap-1.5"
-              >
-                <FileText size={10} />
-                {s.document_title}
-                <span className="text-text-muted">· chunk {s.chunk_index}</span>
-              </span>
-            ))}
-        </div>
-      )}
-
-      {hasWebSources && (
-        <div className="flex flex-wrap gap-1.5 mt-1.5">
-          {sources
-            .filter((s) => s.url)
-            .map((s, i) => (
-              <a
-                key={`web-${i}`}
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-mono px-2 py-1 rounded-badge bg-background-elevated border border-border-default text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors flex items-center gap-1.5 max-w-[300px]"
-                title={s.url}
-              >
-                <Globe size={10} />
-                <span className="truncate">{s.title ?? s.url}</span>
-              </a>
-            ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

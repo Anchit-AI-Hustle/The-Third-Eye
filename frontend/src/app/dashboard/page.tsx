@@ -8,11 +8,10 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-semibold text-text-primary">
-          Good{getDayPeriod()},{" "}
+    <div className="px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8 3xl:px-12 3xl:py-10 max-w-7xl 3xl:max-w-screen-2xl mx-auto">
+      <div className="mb-6 md:mb-8">
+        <h1 className="font-display text-2xl md:text-3xl 3xl:text-4xl font-bold text-text-primary tracking-tight">
+          Good {getDayPeriod()},{" "}
           <span className="text-accent-blue">
             {session?.user?.name?.split(" ")[0] ?? "Commander"}
           </span>
@@ -25,15 +24,14 @@ export default async function DashboardPage() {
           }).format(new Date())}
         </p>
       </div>
-
       <DashboardClient />
     </div>
   );
 }
 
 function getDayPeriod() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "morning";
-  if (hour < 17) return "afternoon";
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
   return "evening";
 }

@@ -9,8 +9,10 @@ const config: Config = {
   darkMode: "class",
   theme: {
     extend: {
+      screens: {
+        "3xl": "1920px",
+      },
       colors: {
-        // JARVIS OS Design System — Dark-first palette
         background: {
           base: "#0A0A0F",
           surface: "#111118",
@@ -54,7 +56,6 @@ const config: Config = {
         page: "300ms",
       },
       boxShadow: {
-        // Offset-based only — no blur-heavy shadows
         card: "2px 4px 0px rgba(0,0,0,0.4)",
         elevated: "4px 8px 0px rgba(0,0,0,0.5)",
       },

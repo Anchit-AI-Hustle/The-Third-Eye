@@ -30,9 +30,13 @@ html {
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar styling */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -48,20 +52,65 @@ body {
   background: var(--color-text-muted);
 }
 
-/* Focus ring */
 :focus-visible {
   outline: 2px solid var(--color-accent-blue);
   outline-offset: 2px;
 }
 
-/* Prose for AI responses */
 .prose-jarvis {
   @apply text-text-primary leading-relaxed;
 }
-.prose-jarvis p { @apply mb-3; }
+.prose-jarvis p {
+  @apply mb-3 last:mb-0;
+}
+.prose-jarvis h1 {
+  @apply text-base font-semibold text-text-primary mt-4 mb-2 first:mt-0;
+}
+.prose-jarvis h2 {
+  @apply text-sm font-semibold text-text-primary mt-3 mb-2 first:mt-0;
+}
+.prose-jarvis h3 {
+  @apply text-sm font-medium text-text-secondary mt-2 mb-1 first:mt-0;
+}
+.prose-jarvis ul {
+  @apply mb-3 pl-4 space-y-1 list-disc list-outside;
+}
+.prose-jarvis ol {
+  @apply mb-3 pl-4 space-y-1 list-decimal list-outside;
+}
+.prose-jarvis li {
+  @apply text-sm;
+}
 .prose-jarvis code {
-  @apply font-mono text-accent-blue bg-background-surface px-1 py-0.5 rounded text-xs;
+  @apply font-mono text-accent-blue bg-background-elevated px-1 py-0.5 rounded text-xs;
 }
 .prose-jarvis pre {
-  @apply font-mono bg-background-surface border border-border-default rounded-card p-4 overflow-x-auto text-xs mb-4;
+  @apply font-mono bg-background-elevated border border-border-default rounded-card p-4 overflow-x-auto text-xs mb-3;
+}
+.prose-jarvis pre code {
+  @apply bg-transparent px-0 py-0 text-text-primary;
+}
+.prose-jarvis blockquote {
+  @apply border-l-2 border-accent-blue/40 pl-3 text-text-secondary italic my-3;
+}
+.prose-jarvis a {
+  @apply text-accent-blue underline underline-offset-2 hover:text-accent-violet transition-colors;
+}
+.prose-jarvis strong {
+  @apply font-semibold text-text-primary;
+}
+.prose-jarvis em {
+  @apply italic;
+}
+.prose-jarvis hr {
+  @apply border-border-default my-4;
+}
+.prose-jarvis table {
+  @apply w-full text-xs mb-3 border-collapse;
+}
+.prose-jarvis th {
+  @apply text-left px-3 py-2 bg-background-elevated border border-border-default text-text-secondary font-medium;
+}
+.prose-jarvis td {
+  @apply px-3 py-2 border border-border-default;
 }
