@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { sendMessage } from "@/lib/api";
 import { ChatMessage, ChatSource } from "@/types";
 import { Send, Cpu, FileText, Globe, ArrowRight } from "lucide-react";
@@ -14,6 +15,7 @@ interface ExtendedMessage extends ChatMessage {
 }
 
 export function AssistantClient() {
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | undefined>();
@@ -98,7 +100,7 @@ export function AssistantClient() {
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} session={session} />
         ))}
 
         {mutation.isPending && (
@@ -152,12 +154,12 @@ export function AssistantClient() {
   );
 }
 
-function MessageBubble({ message }: { message: ExtendedMessage }) {
+function MessageBubble({ message, session }: { message: ExtendedMessage; session: any }) {
   const isUser = message.role === "user";
 
   return (
     <div className={cn("flex items-start gap-3", isUser && "flex-row-reverse")}>
-      {isUser ? <UserAvatar /> : <AgentAvatar />}
+      {isUser ? <UserAvatar session={session} /> : <AgentAvatar />}
       <div className="max-w-[70%]">
         <div
           className={cn(
@@ -251,10 +253,19 @@ function AgentAvatar() {
   );
 }
 
-function UserAvatar() {
+function UserAvatar({ session }: { session: any }) {
+  if (session?.user?.image) {
+    return (
+      <img
+        src={session.user.image}
+        alt={session.user.name ?? ""}
+        className="w-7 h-7 rounded-full flex-none object-cover"
+      />
+    );
+  }
   return (
     <div className="w-7 h-7 rounded-full bg-accent-violet/20 border border-accent-violet/30 flex-none flex items-center justify-center text-xs text-accent-violet font-medium">
-      U
+      {session?.user?.name?.[0]?.toUpperCase() ?? session?.user?.email?.[0]?.toUpperCase() ?? "?"}
     </div>
   );
 }
