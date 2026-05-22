@@ -211,6 +211,56 @@ FastAPI Chat Endpoint (POST /api/v1/chat)
 
 ---
 
+### ADR-009: Financial Data Encryption (Phase 3)
+
+**Decision:** Fernet symmetric encryption (AES-128-CBC + HMAC-SHA256) on amount fields; key in environment variable only; never logged
+
+**Context:** Account balances, transaction amounts, budget caps, and subscription costs must be encrypted at rest. The application needs both decrypt (for queries) and encrypt (for writes) — symmetric is the only viable choice.
+
+**Options considered:**
+- **Application-level Fernet:** Standardized in `cryptography` library; combines AES-128-CBC with HMAC integrity check; key rotation supported. Adds ~80 bytes overhead per value.
+- **PostgreSQL `pgcrypto`:** Encryption at the DB layer; queries can decrypt server-side. Couples to PG, awkward for application-side arithmetic.
+- **AES-256-GCM via raw cryptography:** Slightly faster and more compact, but custom implementations risk authentication bypass bugs.
+
+**Resolution:** Fernet (AES-128-CBC + HMAC-SHA256) — well-reviewed, batteries-included, integrity-checked. Key sourced from `FINANCIAL_ENCRYPTION_KEY` env var validated at startup. Decryption happens in the service layer, never in the API layer or logs.
+
+---
+
+### ADR-010: CSV Import Strategy (Phase 3)
+
+**Decision:** Heuristic column detection with named profiles (Chase, BofA) + generic fallback; idempotent inserts via hash key
+
+**Context:** Bank exports vary in column order, naming (Date vs. Posting Date vs. Transaction Date), and amount sign convention (positive=debit vs. negative=debit). User must be able to upload without manual mapping in most cases.
+
+**Options considered:**
+- **External library (e.g., csvkit, plaid-python):** Mature but adds dependencies. Plaid requires API account.
+- **AI-based column mapping:** Robust but adds 1-2s per import and burns tokens. Required only for unusual formats.
+- **Heuristic detection + named profiles + manual mapping fallback:** Detects common headers (date, amount, description) via regex; named profiles handle quirks (Chase signs amounts negative for debits, BofA uses "Posted Date").
+
+**Resolution:** Named profiles for Chase and BofA, generic heuristic fallback, AI column mapping deferred to Phase 6 if needed. Each row's hash (date + amount + description) is checked for duplicates to make re-imports idempotent.
+
+---
+
+### ADR-011: Regulatory Disclaimer Strategy (Phase 3)
+
+**Decision:** Decorator-applied disclaimer at the Financial Agent boundary; UI also renders inline
+
+**Context:** Every AI-generated financial response must carry the disclaimer "JARVIS OS is not a licensed financial advisor..." per regulatory constraint. Forgetting it is a compliance risk.
+
+**Resolution:** A `@with_disclaimer` decorator wraps Financial Agent methods and appends the disclaimer to their text output. The frontend also renders a `<FinanceDisclaimer />` component below any AI insight as a defense-in-depth. A test asserts 100% disclaimer presence across all financial AI outputs.
+
+---
+
+### ADR-012: Forecasting Approach (Phase 3)
+
+**Decision:** Rolling-average extrapolation with category-level seasonality; no ML model in Phase 3
+
+**Context:** Forecasting cash flow 30/90/365 days out requires balancing accuracy against complexity. ML models (Prophet, ARIMA) add training infrastructure and explainability concerns.
+
+**Resolution:** Per-category rolling 90-day mean, projected forward; subscription charges added explicitly from the subscriptions table on their billing dates. Variance ±15% is acceptable for personal finance forecasting. Upgrade to a proper time-series model is a Phase 6 candidate if accuracy proves insufficient.
+
+---
+
 ## Document Ingestion Pipeline (Phase 2)
 
 ```
