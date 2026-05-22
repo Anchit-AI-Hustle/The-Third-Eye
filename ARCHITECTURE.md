@@ -151,6 +151,110 @@ FastAPI Chat Endpoint (POST /api/v1/chat)
 
 ---
 
+### ADR-005: Document Ingestion Strategy (Phase 2)
+
+**Decision:** In-process parsers, synchronous parsing, asynchronous embedding via Redis Streams
+
+**Context:** Documents (PDF, DOCX, XLSX, CSV, TXT, Markdown) must be parsed, chunked, embedded, and stored. Question: do we parse inline (request blocks until done), in a queue worker, or via a dedicated service?
+
+**Options considered:**
+- **External service (e.g., Unstructured.io):** Higher fidelity (tables, images), but adds another service, costs $$/page, and sends documents to a third-party (GDPR concern).
+- **Queue worker (Celery):** Decouples request from processing, but we already chose Redis Streams; doubling up adds complexity.
+- **In-process parse + async embedding:** Parser runs in the request, returns 202 Accepted with document ID. Embedding is queued (Redis Stream) and processed by a background consumer. User polls or websockets for status.
+
+**Resolution:** In-process parsing (fast — < 5s for typical PDF) + async embedding via Redis Streams. Sensitive documents never leave the user's stack. Upload endpoint returns 202 with `processing_status=pending`; client polls `/documents/{id}` for `ready`.
+
+---
+
+### ADR-006: Chunking Approach (Phase 2)
+
+**Decision:** Fixed-size token-based chunks (512 tokens, 50 token overlap) with paragraph/sentence boundary preference
+
+**Context:** RAG quality depends heavily on chunk granularity. Too small → fragments lack context; too large → embedding dilution and irrelevant text in results.
+
+**Options considered:**
+- **Semantic chunking (embed-then-cluster):** Highest quality, but 2-3x slower and requires double embedding pass.
+- **Fixed-size character chunks:** Trivial to implement, but breaks across token boundaries and produces inconsistent embedding inputs.
+- **Fixed-size token chunks (tiktoken-based):** Token-aligned with `cl100k_base` (matches `text-embedding-3-small`), respects paragraph and sentence boundaries when possible, with overlap to preserve context across boundaries.
+
+**Resolution:** 512-token chunks with 50-token overlap. Chunker first tries to break on paragraph boundaries, then sentence boundaries, then falls back to hard token cuts. Empirically retrieves well for typical knowledge-worker documents.
+
+---
+
+### ADR-007: Agent Registry Pattern (Phase 2)
+
+**Decision:** Singleton registry with explicit registration at import time; orchestrator dispatches by intent classification + capability match
+
+**Context:** Multiple agents (Executive, Research, Knowledge, Productivity, etc.) must be reachable by name and discoverable by capability. We must avoid hardcoded if/else chains.
+
+**Options considered:**
+- **Hardcoded dispatcher:** Simple, but every new agent requires editing the dispatcher.
+- **Plugin auto-discovery (entry points):** Most flexible, but premature complexity for an in-tree codebase.
+- **Explicit registration in `__init__` of each agent module:** Agents call `registry.register(self)` at module import. Orchestrator queries registry by `intent` and `capability`.
+
+**Resolution:** Explicit registration with two lookup methods: `registry.get(name)` for direct lookup, `registry.list_capable(capability)` for capability matching. Registry is a process-local singleton; multi-process workers will each have an identical copy (deterministic registration order ensures consistency).
+
+---
+
+### ADR-008: Memory Consolidation Scheduler (Phase 2)
+
+**Decision:** APScheduler (in-process) for Phase 2; revisit for distributed deployments
+
+**Context:** Memory consolidation needs to run nightly: summarize old episodic memories into semantic facts, prune expired records, write audit reports.
+
+**Options considered:**
+- **Redis Streams consumer with cron-like wake-up:** Consistent with ADR-002 (queue), but adds complexity for a single nightly task.
+- **External cron + HTTP endpoint:** Simple, but couples to host OS and breaks in containerized deployments.
+- **APScheduler in-process:** Lives inside the FastAPI process, persists job state to PostgreSQL, supports cron-style triggers, survives restarts.
+
+**Resolution:** APScheduler with PostgreSQL job store for Phase 2. For multi-worker deployments (Phase 4+), revisit by moving consolidation to a dedicated worker process with Redis Streams locks to ensure single execution.
+
+---
+
+## Document Ingestion Pipeline (Phase 2)
+
+```
+Upload → ingestion.parse(file)
+              │
+              ▼
+        chunker.split(text)        ← 512 token chunks, 50 overlap
+              │
+              ▼
+     [Redis Stream: embed_queue]
+              │
+              ▼
+        embedder.batch(chunks)     ← max 100 chunks/call
+              │
+              ▼
+     INSERT INTO document_chunks
+     UPDATE documents SET processing_status='ready'
+```
+
+## Agent Delegation Flow (Phase 2)
+
+```
+User → POST /chat
+        │
+        ▼
+   Orchestrator.dispatch(task, context)
+        │
+        ├─► classify_intent(content)  → executive | research | knowledge | productivity
+        │
+        ├─► registry.get(agent_name)
+        │
+        ├─► agent.run(task, context)
+        │       │
+        │       └─► [optional] orchestrator.delegate(target_agent)  ← guard depth ≤ 3
+        │                            │
+        │                            ▼
+        │                       child_agent.run(...)
+        │
+        ▼
+    Compose response → audit_log → return
+```
+
+---
+
 ## Security Model
 
 | Level | Name | Examples | Approval |

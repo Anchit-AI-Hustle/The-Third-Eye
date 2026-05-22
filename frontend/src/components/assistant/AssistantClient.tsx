@@ -3,12 +3,18 @@
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { sendMessage } from "@/lib/api";
-import { ChatMessage } from "@/types";
-import { Send, Cpu } from "lucide-react";
+import { ChatMessage, ChatSource } from "@/types";
+import { Send, Cpu, FileText, Globe, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface ExtendedMessage extends ChatMessage {
+  agent_name?: string;
+  delegated_to?: string | null;
+  sources?: ChatSource[];
+}
+
 export function AssistantClient() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | undefined>();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -28,6 +34,9 @@ export function AssistantClient() {
           timestamp: new Date().toISOString(),
           model_used: data.model_used,
           latency_ms: data.latency_ms,
+          agent_name: data.agent_name,
+          delegated_to: data.delegated_to,
+          sources: data.sources,
         },
       ]);
     },
@@ -75,7 +84,6 @@ export function AssistantClient() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
         {messages.length === 0 && (
           <div className="text-center pt-16">
@@ -84,7 +92,7 @@ export function AssistantClient() {
               How can I assist you today?
             </p>
             <p className="text-text-muted text-xs mt-1">
-              Ask anything — I have memory of your tasks and preferences.
+              I can search the web, query your documents, and manage tasks.
             </p>
           </div>
         )}
@@ -105,7 +113,6 @@ export function AssistantClient() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div className="px-8 py-5 border-t border-border-default">
         <div className="flex items-end gap-3 bg-background-surface border border-border-default rounded-card px-4 py-3 focus-within:border-border-hover transition-colors">
           <textarea
@@ -145,7 +152,7 @@ export function AssistantClient() {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ message }: { message: ExtendedMessage }) {
   const isUser = message.role === "user";
 
   return (
@@ -162,12 +169,76 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         >
           <div className="whitespace-pre-wrap">{message.content}</div>
         </div>
+
+        {!isUser && (message.agent_name || message.sources?.length) && (
+          <SourcesBlock message={message} />
+        )}
+
         {message.model_used && (
           <p className="text-text-muted text-xs mt-1 font-mono">
             {message.model_used} · {message.latency_ms}ms
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function SourcesBlock({ message }: { message: ExtendedMessage }) {
+  const sources = message.sources ?? [];
+  const hasDocSources = sources.some((s) => s.document_title);
+  const hasWebSources = sources.some((s) => s.url);
+
+  return (
+    <div className="mt-2 space-y-1">
+      {message.agent_name && (
+        <div className="text-text-muted text-xs font-mono flex items-center gap-1.5">
+          <span>{message.agent_name}</span>
+          {message.delegated_to && (
+            <>
+              <ArrowRight size={10} />
+              <span className="text-accent-violet">{message.delegated_to}</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {hasDocSources && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {sources
+            .filter((s) => s.document_title)
+            .map((s, i) => (
+              <span
+                key={`doc-${i}`}
+                className="text-xs font-mono px-2 py-1 rounded-badge bg-background-elevated border border-border-default text-text-secondary flex items-center gap-1.5"
+              >
+                <FileText size={10} />
+                {s.document_title}
+                <span className="text-text-muted">· chunk {s.chunk_index}</span>
+              </span>
+            ))}
+        </div>
+      )}
+
+      {hasWebSources && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {sources
+            .filter((s) => s.url)
+            .map((s, i) => (
+              <a
+                key={`web-${i}`}
+                href={s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-mono px-2 py-1 rounded-badge bg-background-elevated border border-border-default text-text-secondary hover:text-accent-blue hover:border-accent-blue/30 transition-colors flex items-center gap-1.5 max-w-[300px]"
+                title={s.url}
+              >
+                <Globe size={10} />
+                <span className="truncate">{s.title ?? s.url}</span>
+              </a>
+            ))}
+        </div>
+      )}
     </div>
   );
 }

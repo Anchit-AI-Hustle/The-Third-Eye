@@ -10,20 +10,21 @@
 - [ ] Test task creation via chat ("create a task: ...")
 - [ ] Add TOTP enrollment UI (non-blocking for Phase 1 exit)
 
-## Phase 2 — Agent Framework + Knowledge Base
+## Phase 2 — Agent Framework + Knowledge Base ✅ Complete
 
-- [ ] Agent registry with can_handle routing
-- [ ] ResearchAgent (web search stub)
-- [ ] KnowledgeAgent (document Q&A)
-- [ ] ProductivityAgent (task + reminder management)
-- [ ] Document upload endpoint (multipart)
-- [ ] PDF parser (pypdf2 or pdfplumber)
-- [ ] DOCX/CSV/Markdown parsers
-- [ ] Chunk pipeline with overlap (512 tokens, 50 overlap)
-- [ ] Batch embedding job (Redis Streams consumer)
-- [ ] Knowledge base UI (file list + search)
-- [ ] Memory consolidation scheduler
-- [ ] Multi-agent delegation test suite
+- [x] Agent registry with capability lookup
+- [x] ResearchAgent (Serper API + LLM synthesis)
+- [x] KnowledgeAgent (RAG-backed document Q&A)
+- [x] ProductivityAgent (task creation + scheduling)
+- [x] Orchestrator with intent routing + delegation depth guard
+- [x] Document upload endpoint (multipart, async background processing)
+- [x] PDF parser (pypdf)
+- [x] DOCX (python-docx) / XLSX (openpyxl) / CSV / TXT / Markdown parsers
+- [x] Chunk pipeline (tiktoken, 512 tokens, 50 overlap, boundary-aware)
+- [x] Batch embedder (≤100 chunks per call)
+- [x] Knowledge base UI (drag-and-drop, list, search with citations)
+- [x] Memory consolidation scheduler (APScheduler nightly)
+- [x] Multi-agent delegation test suite
 
 ## Phase 3 — Financial Intelligence
 

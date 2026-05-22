@@ -1,6 +1,12 @@
 import axios, { AxiosInstance } from "axios";
 import { getSession } from "next-auth/react";
-import type { Task, Project, ChatResponse } from "@/types";
+import type {
+  Task,
+  Project,
+  ChatResponse,
+  Document,
+  KnowledgeSearchResponse,
+} from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -83,5 +89,54 @@ export async function createProject(data: { name: string; description?: string; 
   const headers = await getAuthHeaders();
   const client = createClient();
   const res = await client.post<Project>("/projects", data, { headers });
+  return res.data;
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+export async function uploadDocument(file: File): Promise<Document> {
+  const headers = await getAuthHeaders();
+  const client = createClient();
+  const form = new FormData();
+  form.append("file", file);
+  const res = await client.post<Document>("/documents/upload", form, {
+    headers: { ...headers, "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+}
+
+export async function fetchDocuments(): Promise<Document[]> {
+  const headers = await getAuthHeaders();
+  const client = createClient();
+  const res = await client.get<Document[]>("/documents/", { headers });
+  return res.data;
+}
+
+export async function fetchDocument(id: string): Promise<Document> {
+  const headers = await getAuthHeaders();
+  const client = createClient();
+  const res = await client.get<Document>(`/documents/${id}`, { headers });
+  return res.data;
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const client = createClient();
+  await client.delete(`/documents/${id}`, { headers });
+}
+
+// ─── Knowledge Search ─────────────────────────────────────────────────────────
+
+export async function searchKnowledge(
+  query: string,
+  topK: number = 5
+): Promise<KnowledgeSearchResponse> {
+  const headers = await getAuthHeaders();
+  const client = createClient();
+  const res = await client.post<KnowledgeSearchResponse>(
+    "/knowledge/search",
+    { query, top_k: topK },
+    { headers }
+  );
   return res.data;
 }

@@ -44,12 +44,50 @@ export interface ChatMessage {
   latency_ms?: number;
 }
 
+export interface ChatSource {
+  document_id?: string;
+  document_title?: string;
+  chunk_index?: number;
+  score?: number;
+  title?: string;
+  url?: string;
+}
+
 export interface ChatResponse {
   message: string;
   session_id: string;
+  agent_name: string;
+  delegated_to?: string | null;
   model_used: string;
   latency_ms: number;
   memories_used: number;
+  sources?: ChatSource[];
+}
+
+export interface Document {
+  id: string;
+  user_id: string;
+  title: string;
+  file_type: string | null;
+  file_size_bytes: number | null;
+  processing_status: "pending" | "parsing" | "chunking" | "embedding" | "ready" | "failed";
+  chunk_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeSearchResult {
+  document_id: string;
+  document_title: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+}
+
+export interface KnowledgeSearchResponse {
+  query: string;
+  results: KnowledgeSearchResult[];
+  latency_ms: number;
 }
 
 export type TaskStatus = Task["status"];

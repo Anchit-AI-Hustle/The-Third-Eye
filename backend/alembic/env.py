@@ -14,6 +14,7 @@ from app.memory.models import (  # noqa: F401
     EpisodicMemory, SemanticMemory, PreferenceMemory, ProjectMemory, MemoryConsolidationLog
 )
 from app.tasks.models import Task, Project, Goal, Reminder, RecurringTask  # noqa: F401
+from app.knowledge.models import Document, DocumentChunk  # noqa: F401
 from app.config import get_settings
 
 settings_app = get_settings()

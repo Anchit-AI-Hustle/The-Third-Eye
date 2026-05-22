@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Assistant", href: "/assistant", icon: MessageSquare },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
-  { label: "Knowledge", href: "/knowledge", icon: BookOpen, phase: 2 },
+  { label: "Knowledge", href: "/knowledge", icon: BookOpen },
   { label: "Automation", href: "/automation", icon: Workflow, phase: 4 },
   { label: "Finance", href: "/finance", icon: BarChart2, phase: 3 },
 ];

@@ -50,6 +50,17 @@ dependencies = [
     "tenacity>=8.3.0",
     "structlog>=24.1.0",
     "python-dateutil>=2.9.0",
+
+    # Phase 2: document ingestion & knowledge base
+    "pypdf>=4.2.0",
+    "python-docx>=1.1.2",
+    "openpyxl>=3.1.2",
+    "markdown-it-py>=3.0.0",
+    "tiktoken>=0.7.0",
+
+    # Phase 2: scheduling for memory consolidation
+    "apscheduler>=3.10.4",
+    "sqlalchemy-utils>=0.41.2",
 ]
 
 [project.optional-dependencies]

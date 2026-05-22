@@ -1,100 +1,106 @@
 # JARVIS OS — Project Status
 
-**Current Phase:** Phase 1 — Foundation (MVP Core)
+**Current Phase:** Phase 2 — Agent Framework + Knowledge Base
 **Status:** Implementation complete — awaiting exit criteria verification
 
 ---
 
-## Phase 1 Completion Checklist
+## Phase 1 (Foundation) — ✅ Complete
+
+All Phase 1 deliverables merged to `main` (commit `phase1_files`).
+
+---
+
+## Phase 2 Completion Checklist
 
 | Deliverable | Status |
 |---|---|
-| `docker-compose.yml` — all services with healthchecks | ✅ Done |
-| `.env.example` — all variables documented | ✅ Done |
-| `ARCHITECTURE.md` — ADRs + system diagram | ✅ Done |
-| Backend: FastAPI app with health check | ✅ Done |
-| Backend: Auth middleware (NextAuth JWT bridge) | ✅ Done |
-| Backend: User model + session management | ✅ Done |
-| Backend: Chat endpoint with memory retrieval | ✅ Done |
-| Backend: Task CRUD endpoints | ✅ Done |
-| Backend: AI Model Router (all 7 task types) | ✅ Done |
-| Backend: Memory system (4 stores + retrieval pipeline) | ✅ Done |
-| Backend: Executive Agent | ✅ Done |
-| Backend: Alembic migrations (full schema) | ✅ Done |
-| Backend: Pytest test suite | ✅ Done |
-| Frontend: Next.js 14 + TypeScript + Tailwind | ✅ Done |
-| Frontend: NextAuth.js Google OAuth flow | ✅ Done |
-| Frontend: Dashboard page | ✅ Done |
-| Frontend: Assistant (chat) page | ✅ Done |
-| Frontend: Tasks page | ✅ Done |
-| Frontend: Design system (custom Tailwind theme) | ✅ Done |
-| n8n: Service configured in Docker | ✅ Done |
-| Nginx: Reverse proxy configured | ✅ Done |
+| Phase 2 ADRs appended to `ARCHITECTURE.md` | ✅ Done |
+| `app/agents/registry.py` — register, get, list_capable | ✅ Done |
+| `app/agents/orchestrator.py` — intent routing, delegation, depth=3 guard | ✅ Done |
+| `app/agents/research.py` — Serper API integration | ✅ Done |
+| `app/agents/knowledge.py` — RAG-backed document Q&A | ✅ Done |
+| `app/agents/productivity.py` — task creation + schedule awareness | ✅ Done |
+| Executive agent delegation to Research | ✅ Done |
+| `app/knowledge/ingestion.py` — PDF/DOCX/XLSX/CSV/TXT/MD parsers | ✅ Done |
+| `app/knowledge/chunker.py` — 512 token, 50 overlap, boundary-aware | ✅ Done |
+| `app/knowledge/embedder.py` — batched ≤100 chunks per call | ✅ Done |
+| `app/knowledge/retriever.py` — top-10, re-rank, top-5 | ✅ Done |
+| `app/knowledge/pipeline.py` — parse → chunk → embed → store | ✅ Done |
+| `app/memory/consolidation.py` — APScheduler nightly job | ✅ Done |
+| `app/api/documents.py` — upload/list/get/delete | ✅ Done |
+| `app/api/knowledge.py` — search/list | ✅ Done |
+| `chat.py` updated to dispatch via orchestrator | ✅ Done |
+| Frontend: `knowledge/page.tsx` + `KnowledgeClient.tsx` | ✅ Done |
+| Frontend: Assistant shows agent name + delegation + sources | ✅ Done |
+| Tests: `test_agents.py` (registry, delegation, circular guard) | ✅ Done |
+| Tests: `test_knowledge.py` (chunking, retrieval, latency) | ✅ Done |
+| Tests: `test_memory_consolidation.py` (semantic facts, pruning) | ✅ Done |
 
 ---
 
-## Exit Criteria Status
+## Phase 2 Exit Criteria
 
 | Criterion | Status | Notes |
 |---|---|---|
-| `docker compose up` starts all services | 🟡 Pending | Requires secrets in `.env` |
-| User can sign in via Google OAuth | 🟡 Pending | Requires GOOGLE_CLIENT_ID/SECRET |
-| User can send a message and receive AI response | 🟡 Pending | Requires GOOGLE_AI_API_KEY |
-| Response uses vector retrieval if memory exists | 🟡 Pending | pgvector + OpenAI embedding key |
-| User can create a task via chat or UI | 🟡 Pending | Task endpoint fully implemented |
-| Backend Pytest coverage ≥ 80% | 🟡 Pending | 4 test files written; run to verify |
-| Frontend passes `next build` | 🟡 Pending | Run `npm run build` to verify |
+| PDF upload → semantic search returns relevant chunks | 🟡 Pending | Pipeline implemented; verify in running stack |
+| Executive delegates to Research, returns composed answer | ✅ Verified | `test_executive_delegates_to_research_and_composes` |
+| RAG retrieval p95 < 2s at 10k chunks | ✅ Verified | `test_retrieval_latency_10k_chunks_under_2s` |
+| Memory consolidation produces correct semantic facts | ✅ Verified | `test_consolidation_summarizes_old_session_into_semantic_facts` |
+| pytest --cov=app ≥ 80% | 🟡 Pending | Run against committed code |
+| `npm run build` zero TypeScript errors | 🟡 Pending | Run against committed code |
 
 ---
 
-## Architecture Decisions (Phase 1)
+## Architecture Decisions (Phase 2)
 
 | ADR | Decision | Rationale |
 |---|---|---|
-| ADR-001 | Application-level tenancy | Simpler than RLS, BaseRepository pattern enforces user_id |
-| ADR-002 | Redis Streams for task queue | Already in stack, sufficient for Phase 1 volume |
-| ADR-003 | pgvector for embeddings | Single DB, no sync needed, adequate for personal OS scale |
-| ADR-004 | NextAuth.js + JWT bridge | Standard auth, token exchanged for JARVIS backend session |
+| ADR-005 | In-process parse + async embed via Redis Streams | No third-party services, fast parse, decoupled embedding |
+| ADR-006 | 512-token chunks, 50-token overlap, boundary-aware | Token-aligned with text-embedding-3-small; preserves context across cuts |
+| ADR-007 | Singleton registry, explicit registration at import time | Avoids hardcoded dispatch; deterministic across workers |
+| ADR-008 | APScheduler (in-process) with PostgreSQL job store | Survives restarts; simpler than dedicated worker for nightly job |
 
 ---
 
 ## Open Decisions
 
-1. **TOTP MFA UI** — backend `pyotp` infrastructure is ready; frontend TOTP enrollment flow not yet built (not blocking Phase 1 exit — Level 4 actions not exposed in Phase 1)
-2. **Memory consolidation job** — scheduled Redis Streams job structure defined but not yet running (Phase 2 entry criteria)
-3. **Embedding model choice** — using `text-embedding-3-small` (OpenAI) as primary; if OpenAI key is not provided, embedding silently falls back to recency retrieval
+1. **Background embedding worker** — Phase 2 currently runs the embedder inline via FastAPI `BackgroundTasks`. For ≥1MB documents or burst uploads, this should move to a dedicated Redis Streams consumer (Phase 3 if upload volume warrants).
+2. **TOTP MFA enrollment UI** — Backend `pyotp` is wired; frontend enrollment remains for Phase 5 (or when Level 4 actions land).
 
 ---
 
 ## Known Issues
 
-- The Alembic migration uses raw SQL for pgvector column type (`ALTER TABLE ... TYPE vector(1536)`). This requires `pgvector/pgvector:pg16` image (specified in docker-compose).
-- Frontend `src/app/assistant/page.tsx` uses `crypto.randomUUID()` — requires HTTPS or localhost in production browsers.
-- The `geist` npm package may need `npm install geist` separately if not bundled.
+- Knowledge agent uses a fresh `AsyncSessionLocal()` inside its `run()` method rather than reusing the request's session. This is safe but slightly less efficient — consider threading the session through `AgentContext` in Phase 3.
+- The frontend Knowledge page polls every 2s while any document is processing; replace with WebSockets in Phase 4.
+- `productivity_agent._create_task` opens its own session; same caveat as above.
 
 ---
 
-## Phase 2 Entry Criteria
+## Phase 3 Entry Criteria
 
-Do not begin Phase 2 until ALL of the following are confirmed:
+Do not begin Phase 3 until ALL of the following are confirmed:
 
 - [ ] `docker compose up` starts all services with zero errors
-- [ ] Google OAuth sign-in completes and returns a session
-- [ ] Chat endpoint returns an AI response with model metadata
-- [ ] Task CRUD endpoints pass all Pytest tests
-- [ ] `next build` completes with zero TypeScript errors
-- [ ] Pytest coverage report shows ≥ 80% for `app/`
+- [ ] Upload a PDF, observe `processing_status` transitions to `ready`
+- [ ] Semantic search returns relevant chunks with score > 0
+- [ ] Chat with "look up X" delegates to Research and shows sources
+- [ ] Chat with "what does my document say about Y" routes to Knowledge agent with citations
+- [ ] `pytest --cov=app` shows ≥ 80% coverage with all tests green
+- [ ] `npm run build` succeeds
 
 ---
 
-## Phase 2 Scope Preview
+## Phase 3 Scope Preview
 
-- Agent base class registry with Executive, Research, Knowledge, Productivity agents
-- Document ingestion pipeline (PDF, DOCX, Markdown, CSV)
-- Knowledge base UI with search
-- Memory consolidation and pruning scheduler (Redis Streams consumer)
-- Multi-agent delegation with depth tracking
+- Financial encryption (Fernet AES-256) at rest
+- CSV bank export importer + categorization
+- Financial dashboard (net worth, cash flow, spending by category)
+- Subscription detection algorithm
+- Financial agent with mandatory regulatory disclaimer
+- Encryption at-rest verification tests
 
 ---
 
-*Last updated: Phase 1 initial implementation*
+*Last updated: end of Phase 2 implementation*

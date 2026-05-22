@@ -1,12 +1,13 @@
 import uuid
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth.middleware import get_current_user
 from app.auth.models import User
-from app.agents.executive import executive_agent
+from app.agents import registry  # noqa: F401 — ensures agents register
+from app.agents.orchestrator import orchestrator
 from app.agents.base import AgentContext, AgentTask
 from app.database import AsyncSession, get_db
 from app.memory.service import (
@@ -26,9 +27,12 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     message: str
     session_id: str
+    agent_name: str
+    delegated_to: Optional[str] = None
     model_used: str
     latency_ms: int
     memories_used: int
+    sources: list[dict[str, Any]] = []
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -39,7 +43,6 @@ async def chat(
 ) -> ChatResponse:
     session_id = request.session_id or str(uuid.uuid4())
 
-    # Retrieve relevant memories
     memories = await retrieve_relevant_memories(
         db,
         user_id=current_user.id,
@@ -47,7 +50,6 @@ async def chat(
     )
     memory_context = format_memory_context(memories)
 
-    # Build agent context
     context = AgentContext(
         user_id=current_user.id,
         session_id=session_id,
@@ -62,7 +64,7 @@ async def chat(
         content=request.message,
     )
 
-    result = await executive_agent.run(task, context)
+    result = await orchestrator.dispatch(task, context)
 
     if not result.success:
         raise HTTPException(
@@ -70,14 +72,22 @@ async def chat(
             detail=result.error or "Agent execution failed",
         )
 
-    # Store both turns in episodic memory (fire and forget pattern)
-    await store_episodic(db, user_id=current_user.id, role="user", content=request.message, session_id=session_id)
-    await store_episodic(db, user_id=current_user.id, role="assistant", content=result.content, session_id=session_id)
+    await store_episodic(
+        db, user_id=current_user.id, role="user", content=request.message, session_id=session_id
+    )
+    await store_episodic(
+        db, user_id=current_user.id, role="assistant", content=result.content, session_id=session_id
+    )
+
+    sources = result.metadata.get("sources", [])
 
     return ChatResponse(
         message=result.content,
         session_id=session_id,
+        agent_name=result.agent_name,
+        delegated_to=result.delegated_to,
         model_used=result.metadata.get("model_used", "unknown"),
         latency_ms=result.metadata.get("latency_ms", 0),
         memories_used=len(memories),
+        sources=sources,
     )
