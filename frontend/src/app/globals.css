@@ -16,52 +16,60 @@
   --color-accent-red: #EF5B8D;
   --color-success: #4EEF8D;
   --color-warning: #EFC94E;
+  --bottom-nav-height: 64px;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html {
   font-size: 14px;
   line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--color-bg-surface);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-hover);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
-}
+/* Safe-area insets for notched phones */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+.safe-top    { padding-top:    env(safe-area-inset-top,    0); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-hover); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
 /* Focus ring */
-:focus-visible {
-  outline: 2px solid var(--color-accent-blue);
-  outline-offset: 2px;
-}
+:focus-visible { outline: 2px solid var(--color-accent-blue); outline-offset: 2px; }
 
 /* Prose for AI responses */
-.prose-jarvis {
-  @apply text-text-primary leading-relaxed;
-}
+.prose-jarvis { @apply text-text-primary leading-relaxed; }
 .prose-jarvis p { @apply mb-3; }
+.prose-jarvis ul { @apply list-disc list-inside mb-3 space-y-1; }
+.prose-jarvis ol { @apply list-decimal list-inside mb-3 space-y-1; }
+.prose-jarvis h1,h2,h3 { @apply font-semibold text-text-primary mb-2 mt-4; }
+.prose-jarvis strong { @apply text-text-primary font-semibold; }
 .prose-jarvis code {
-  @apply font-mono text-accent-blue bg-background-surface px-1 py-0.5 rounded text-xs;
+  @apply font-mono text-accent-blue bg-background-elevated px-1.5 py-0.5 rounded text-xs;
 }
 .prose-jarvis pre {
-  @apply font-mono bg-background-surface border border-border-default rounded-card p-4 overflow-x-auto text-xs mb-4;
+  @apply font-mono bg-background-elevated border border-border-default rounded-card p-4 overflow-x-auto text-xs mb-4;
+}
+.prose-jarvis a { @apply text-accent-blue underline; }
+
+/* Touch-friendly tap targets */
+@media (max-width: 1023px) {
+  button, a { min-height: 44px; display: inline-flex; align-items: center; }
+  nav a, nav button { min-height: 44px; }
+}
+
+/* TV / large display scaling */
+@media (min-width: 1920px) {
+  html { font-size: 16px; }
 }
