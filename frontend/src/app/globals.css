@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg-base: #0A0A0F;
+  --color-bg-surface: #111118;
+  --color-bg-elevated: #1A1A24;
+  --color-border: #1E1E2E;
+  --color-border-hover: #2A2A3E;
+  --color-text-primary: #F0F0FF;
+  --color-text-secondary: #8888AA;
+  --color-text-muted: #4A4A6A;
+  --color-accent-blue: #5B8DEF;
+  --color-accent-violet: #7C5CEF;
+  --color-accent-red: #EF5B8D;
+  --color-success: #4EEF8D;
+  --color-warning: #EFC94E;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-hover);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+}
+
+/* Prose for AI responses */
+.prose-jarvis {
+  @apply text-text-primary leading-relaxed;
+}
+.prose-jarvis p { @apply mb-3; }
+.prose-jarvis code {
+  @apply font-mono text-accent-blue bg-background-surface px-1 py-0.5 rounded text-xs;
+}
+.prose-jarvis pre {
+  @apply font-mono bg-background-surface border border-border-default rounded-card p-4 overflow-x-auto text-xs mb-4;
+}
