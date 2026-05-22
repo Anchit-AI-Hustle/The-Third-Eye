@@ -9,8 +9,10 @@ const config: Config = {
   darkMode: "class",
   theme: {
     extend: {
+      screens: {
+        "3xl": "1920px",
+      },
       colors: {
-        // JARVIS OS Design System — Dark-first palette
         background: {
           base: "#0A0A0F",
           surface: "#111118",
@@ -54,7 +56,6 @@ const config: Config = {
         page: "300ms",
       },
       boxShadow: {
-        // Offset-based only — no blur-heavy shadows
         card: "2px 4px 0px rgba(0,0,0,0.4)",
         elevated: "4px 8px 0px rgba(0,0,0,0.5)",
       },
@@ -75,13 +76,6 @@ const config: Config = {
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
-    screens: {
-      sm: "640px",
-      md: "768px",
-      lg: "1024px",
-      xl: "1280px",
-      "2xl": "1536px",
-      "3xl": "1920px",
     },
   },
   plugins: [],
