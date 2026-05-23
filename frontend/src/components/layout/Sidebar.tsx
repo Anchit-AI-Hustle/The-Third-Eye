@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { label: "Assistant",  href: "/assistant",  icon: MessageSquare },
   { label: "Tasks",      href: "/tasks",      icon: CheckSquare },
   { label: "Knowledge",  href: "/knowledge",  icon: BookOpen },
-  { label: "Finance",    href: "/finance",    icon: BarChart2, phase: 3 },
+  { label: "Finance",    href: "/finance",    icon: BarChart2 },
 ];
 
 export function Sidebar() {
@@ -99,7 +99,7 @@ export function Sidebar() {
                 isActive
                   ? "bg-accent-blue/10 text-accent-blue"
                   : "text-text-secondary hover:text-text-primary hover:bg-background-elevated",
-                isDisabled && "opacity-30 cursor-not-allowed pointer-events-none"
+                isDisabled && "opacity-40 cursor-not-allowed pointer-events-none"
               )}
             >
               <Icon size={16} className="flex-none" />

@@ -38,6 +38,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${inter.variable} ${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >
         <Providers>{children}</Providers>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`,
+          }}
+        />
       </body>
     </html>
   );

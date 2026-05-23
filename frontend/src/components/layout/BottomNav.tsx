@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { label: "Assistant", href: "/assistant",  icon: MessageSquare },
   { label: "Tasks",     href: "/tasks",      icon: CheckSquare },
   { label: "Knowledge", href: "/knowledge",  icon: BookOpen },
-  { label: "Finance",   href: "/finance",    icon: BarChart2, disabled: true },
+  { label: "Finance",   href: "/finance",    icon: BarChart2 },
 ];
 
 export function BottomNav() {
