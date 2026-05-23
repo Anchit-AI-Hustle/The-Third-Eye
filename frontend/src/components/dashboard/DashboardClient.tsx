@@ -1,105 +1,88 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { fetchTasks } from "@/lib/api";
-import { CheckSquare, MessageSquare, Clock, Zap } from "lucide-react";
-import { STATUS_LABELS, formatRelativeTime } from "@/lib/utils";
+import { useLocalTasks } from "@/hooks/useLocalTasks";
+import { CheckSquare, MessageSquare, Zap, Brain, ArrowRight } from "lucide-react";
+import { formatRelativeTime, cn } from "@/lib/utils";
 import Link from "next/link";
 
-export function DashboardClient() {
-  const { data: tasks = [], isLoading, error } = useQuery({
-    queryKey: ["tasks"],
-    queryFn: () => fetchTasks(),
-  });
+const PRIORITY_DOT: Record<string, string> = {
+  low: "bg-text-muted", medium: "bg-accent-blue", high: "bg-warning", urgent: "bg-accent-red",
+};
 
-  const openTasks = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
-  const completedToday = tasks.filter((t) => {
+export function DashboardClient() {
+  const { allTasks, ready } = useLocalTasks();
+
+  const open = allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+  const doneToday = allTasks.filter((t) => {
     if (t.status !== "done" || !t.completed_at) return false;
-    const d = new Date(t.completed_at);
-    const now = new Date();
-    return d.toDateString() === now.toDateString();
+    return new Date(t.completed_at).toDateString() === new Date().toDateString();
   });
 
   return (
-    <div className="space-y-5 md:space-y-6">
+    <div className="space-y-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
-          label="Open Tasks"
-          value={isLoading ? "—" : String(openTasks.length)}
-          icon={<CheckSquare size={18} className="text-accent-blue" />}
-          color="blue"
           href="/tasks"
+          icon={<CheckSquare size={16} className="text-accent-blue" />}
+          label="Open Tasks"
+          value={ready ? String(open.length) : "—"}
+          accent="blue"
         />
         <StatCard
-          label="Completed Today"
-          value={isLoading ? "—" : String(completedToday.length)}
-          icon={<Zap size={18} className="text-success" />}
-          color="green"
+          icon={<Zap size={16} className="text-success" />}
+          label="Done Today"
+          value={ready ? String(doneToday.length) : "—"}
+          accent="green"
         />
         <StatCard
-          label="AI Sessions"
-          value="—"
-          icon={<MessageSquare size={18} className="text-accent-violet" />}
-          color="violet"
           href="/assistant"
+          icon={<MessageSquare size={16} className="text-accent-violet" />}
+          label="Ask JARVIS"
+          value="→"
+          accent="violet"
         />
         <StatCard
+          icon={<Brain size={16} className="text-text-muted" />}
           label="Automations"
           value="Soon"
-          icon={<Clock size={18} className="text-text-muted" />}
-          color="muted"
-          disabled
+          accent="muted"
+          muted
         />
       </div>
 
-      {/* Task list */}
+      {/* Recent tasks */}
       <div className="bg-background-surface border border-border-default rounded-card overflow-hidden">
         <div className="px-5 py-4 border-b border-border-default flex items-center justify-between">
-          <h2 className="text-text-primary font-semibold text-sm">Open Tasks</h2>
-          <Link href="/tasks" className="text-text-muted text-xs hover:text-accent-blue transition-colors">
-            View all →
+          <h2 className="text-sm font-semibold text-text-primary">Open Tasks</h2>
+          <Link href="/tasks" className="flex items-center gap-1 text-xs text-text-muted hover:text-accent-blue transition-colors">
+            View all <ArrowRight size={12} />
           </Link>
         </div>
 
-        {isLoading ? (
+        {!ready ? (
+          <div className="flex justify-center py-10">
+            <div className="w-5 h-5 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" />
+          </div>
+        ) : open.length === 0 ? (
           <div className="px-5 py-10 text-center">
-            <div className="w-5 h-5 border-2 border-accent-blue/30 border-t-accent-blue rounded-full animate-spin mx-auto" />
-          </div>
-        ) : error ? (
-          <div className="px-5 py-8 text-center text-accent-red text-sm">
-            Could not load tasks.
-          </div>
-        ) : openTasks.length === 0 ? (
-          <div className="px-5 py-10 text-center text-text-muted text-sm">
-            No open tasks.{" "}
-            <Link href="/assistant" className="text-accent-blue hover:underline">
-              Ask JARVIS to create one.
+            <p className="text-text-muted text-sm">No open tasks.</p>
+            <Link href="/tasks" className="text-accent-blue text-xs hover:underline mt-1 inline-block">
+              Create one →
             </Link>
           </div>
         ) : (
           <ul className="divide-y divide-border-default">
-            {openTasks.slice(0, 8).map((task) => (
-              <li
-                key={task.id}
-                className="px-5 py-3.5 flex items-center gap-4 hover:bg-background-elevated transition-colors"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full flex-none ${
-                    task.priority === "urgent"
-                      ? "bg-accent-red"
-                      : task.priority === "high"
-                      ? "bg-warning"
-                      : "bg-border-hover"
-                  }`}
-                />
-                <span className="flex-1 text-text-primary text-sm truncate">{task.title}</span>
-                <span className="text-text-muted text-xs font-mono flex-none hidden sm:block">
-                  {STATUS_LABELS[task.status]}
+            {open.slice(0, 7).map((t) => (
+              <li key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-background-elevated transition-colors">
+                <span className={cn("w-2 h-2 rounded-full flex-none", PRIORITY_DOT[t.priority])} />
+                <span className="flex-1 text-sm text-text-primary truncate">{t.title}</span>
+                <span className="text-text-muted text-xs flex-none hidden sm:block">
+                  {t.status === "in_progress" ? (
+                    <span className="text-accent-blue">In Progress</span>
+                  ) : "To Do"}
                 </span>
-                <span className="text-text-muted text-xs flex-none">
-                  {formatRelativeTime(task.created_at)}
-                </span>
+                <span className="text-text-muted text-xs flex-none">{formatRelativeTime(t.created_at)}</span>
               </li>
             ))}
           </ul>
@@ -107,78 +90,71 @@ export function DashboardClient() {
       </div>
 
       {/* Quick actions */}
-      <div className="bg-background-surface border border-border-default rounded-card px-5 py-4">
-        <h2 className="text-text-primary font-semibold text-sm mb-3">Quick Actions</h2>
-        <div className="flex flex-wrap gap-2">
-          <QuickAction href="/assistant" label="Ask JARVIS" accent />
-          <QuickAction href="/tasks" label="New Task" />
-          <QuickAction href="/knowledge" label="Knowledge Base" disabled />
-          <QuickAction href="/finance" label="Finance" disabled />
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <QuickLink href="/assistant" label="Ask JARVIS" sub="AI assistant" primary />
+        <QuickLink href="/tasks" label="Tasks" sub={ready ? `${open.length} open` : "Manage tasks"} />
+        <QuickLink href="/knowledge" label="Knowledge" sub="Upload & search" />
+        <QuickLink href="/finance" label="Finance" sub="Overview" />
       </div>
     </div>
   );
 }
 
 function StatCard({
-  label, value, icon, color, href, disabled,
+  href, icon, label, value, accent, muted,
 }: {
+  href?: string;
+  icon: React.ReactNode;
   label: string;
   value: string;
-  icon: React.ReactNode;
-  color: "blue" | "green" | "violet" | "muted";
-  href?: string;
-  disabled?: boolean;
+  accent: "blue" | "green" | "violet" | "muted";
+  muted?: boolean;
 }) {
-  const glowClass = {
-    blue:   "hover:border-accent-blue/30",
-    green:  "hover:border-success/30",
+  const border = {
+    blue: "hover:border-accent-blue/30",
+    green: "hover:border-success/30",
     violet: "hover:border-accent-violet/30",
-    muted:  "",
-  }[color];
+    muted: "",
+  }[accent];
 
-  const content = (
-    <div
-      className={`bg-background-surface border border-border-default rounded-card p-4 md:p-5 transition-colors ${!disabled ? glowClass : ""}`}
-    >
+  const valueColor = {
+    blue: "text-accent-blue",
+    green: "text-success",
+    violet: "text-accent-violet",
+    muted: "text-text-muted",
+  }[accent];
+
+  const inner = (
+    <div className={cn(
+      "bg-background-surface border border-border-default rounded-card p-4 transition-colors h-full",
+      !muted && border,
+      muted && "opacity-50"
+    )}>
       <div className="flex items-start justify-between mb-3">
         <div className="p-1.5 bg-background-elevated rounded-input">{icon}</div>
-        <span
-          className={`text-2xl md:text-3xl font-display font-bold ${
-            disabled ? "text-text-muted" : "text-text-primary"
-          }`}
-        >
-          {value}
-        </span>
+        <span className={cn("font-display text-2xl font-bold", valueColor)}>{value}</span>
       </div>
       <p className="text-text-muted text-xs">{label}</p>
     </div>
   );
 
-  if (href && !disabled) return <Link href={href} className="block">{content}</Link>;
-  return <div className={disabled ? "opacity-40" : ""}>{content}</div>;
+  if (href && !muted) return <Link href={href} className="block">{inner}</Link>;
+  return inner;
 }
 
-function QuickAction({ href, label, disabled, accent }: {
-  href: string; label: string; disabled?: boolean; accent?: boolean;
-}) {
-  if (disabled) {
-    return (
-      <span className="px-4 py-2 rounded-input border border-border-default text-text-muted text-xs opacity-40 cursor-not-allowed">
-        {label}
-      </span>
-    );
-  }
+function QuickLink({ href, label, sub, primary }: { href: string; label: string; sub: string; primary?: boolean }) {
   return (
     <Link
       href={href}
-      className={`px-4 py-2 rounded-input border text-xs transition-colors ${
-        accent
-          ? "border-accent-blue/40 text-accent-blue bg-accent-blue/5 hover:bg-accent-blue/10"
-          : "border-border-default text-text-secondary hover:border-border-hover hover:text-text-primary"
-      }`}
+      className={cn(
+        "rounded-card border px-4 py-3.5 transition-colors flex flex-col gap-1",
+        primary
+          ? "border-accent-blue/30 bg-accent-blue/5 hover:bg-accent-blue/10"
+          : "border-border-default bg-background-surface hover:border-border-hover"
+      )}
     >
-      {label}
+      <span className={cn("text-sm font-medium", primary ? "text-accent-blue" : "text-text-primary")}>{label}</span>
+      <span className="text-text-muted text-xs">{sub}</span>
     </Link>
   );
 }

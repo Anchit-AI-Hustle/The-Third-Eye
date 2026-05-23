@@ -10,13 +10,21 @@ export default async function AssistantPage() {
   if (!session) redirect("/auth/signin");
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="px-8 py-5 border-b border-border-default flex items-center gap-3">
-        <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-        <h1 className="font-display font-semibold text-text-primary">JARVIS</h1>
+    <div className="h-[100dvh] flex flex-col">
+      <div className="flex items-center gap-3 px-4 sm:px-8 py-4 border-b border-border-default flex-none bg-background-surface/80 backdrop-blur-sm">
+        <div className="relative">
+          <div className="w-2 h-2 rounded-full bg-success" />
+          <div className="absolute inset-0 w-2 h-2 rounded-full bg-success animate-ping opacity-60" />
+        </div>
+        <h1 className="font-display font-semibold text-text-primary tracking-tight">JARVIS</h1>
         <span className="text-text-muted text-xs font-mono">Executive Agent · Online</span>
+        <div className="ml-auto">
+          <span className="text-[10px] font-mono text-text-muted bg-background-elevated border border-border-default px-2 py-1 rounded">
+            claude-sonnet-4-6
+          </span>
+        </div>
       </div>
-      <AssistantClient />
+      <AssistantClient userName={session.user?.name?.split(" ")[0]} />
     </div>
   );
 }
