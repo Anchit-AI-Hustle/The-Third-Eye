@@ -1,67 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Target, Plus, Trash2, ChevronUp, ChevronDown, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocalGoals, Goal } from "@/hooks/useLocalGoals";
 
-interface Goal {
-  id: string;
-  title: string;
-  description?: string;
-  category: string;
-  target: number;
-  current: number;
-  unit: string;
-  deadline?: string;
-  created_at: string;
-}
-
-const KEY = "jarvis_goals_v1";
 const CATEGORIES = ["Career", "Health", "Finance", "Learning", "Personal", "Business"];
-
-function load(): Goal[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); }
-  catch { return []; }
-}
-
-function persist(goals: Goal[]) { localStorage.setItem(KEY, JSON.stringify(goals)); }
 
 const emptyForm = (): Omit<Goal, "id" | "created_at"> => ({
   title: "", description: "", category: "Career", target: 100, current: 0, unit: "%", deadline: "",
 });
 
 export function GoalsClient() {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [ready, setReady] = useState(false);
+  const { goals, ready, add, adjust, remove } = useLocalGoals();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
-
-  useEffect(() => { setGoals(load()); setReady(true); }, []);
 
   const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((p) => ({ ...p, [k]: k === "target" || k === "current" ? Number(e.target.value) : e.target.value }));
 
-  function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return;
-    const g: Goal = { ...form, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-    setGoals((prev) => { const next = [g, ...prev]; persist(next); return next; });
+    await add(form);
     setForm(emptyForm()); setShowForm(false);
-  }
-
-  function adjust(id: string, delta: number) {
-    setGoals((prev) => {
-      const next = prev.map((g) => g.id === id
-        ? { ...g, current: Math.max(0, Math.min(g.target, g.current + delta)) }
-        : g
-      );
-      persist(next); return next;
-    });
-  }
-
-  function remove(id: string) {
-    setGoals((prev) => { const next = prev.filter((g) => g.id !== id); persist(next); return next; });
   }
 
   if (!ready) return <div className="flex justify-center py-20"><div className="w-4 h-4 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
@@ -74,7 +36,6 @@ export function GoalsClient() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Header actions */}
       <div className="flex justify-between items-center">
         <div className="flex gap-3">
           <Stat label="Total goals" value={goals.length} />
@@ -88,7 +49,6 @@ export function GoalsClient() {
         </button>
       </div>
 
-      {/* New goal form */}
       {showForm && (
         <form onSubmit={handleAdd} className="bg-background-surface border border-border-default rounded-card p-5 space-y-4 animate-slide-up">
           <div className="grid grid-cols-2 gap-4">
@@ -128,7 +88,6 @@ export function GoalsClient() {
         </form>
       )}
 
-      {/* Goals by category */}
       {goals.length === 0 ? (
         <div className="py-20 text-center">
           <Target size={28} className="mx-auto text-text-muted mb-4 opacity-40" />
@@ -161,7 +120,6 @@ export function GoalsClient() {
                       </button>
                     </div>
 
-                    {/* Progress bar */}
                     <div className="h-1.5 bg-background-elevated rounded-full overflow-hidden mb-2">
                       <div
                         className={cn("h-full rounded-full transition-all duration-500", done ? "bg-success" : "bg-accent-blue")}

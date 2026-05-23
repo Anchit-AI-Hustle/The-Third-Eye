@@ -18,9 +18,9 @@ export function NotesClient() {
   const pinned = filtered.filter((n) => n.pinned);
   const rest = filtered.filter((n) => !n.pinned);
 
-  function handleNew() {
+  async function handleNew() {
     const title = newTitle.trim() || "Untitled";
-    const note = create(title);
+    const note = await create(title);
     setNewTitle("");
     setActive(note);
   }
