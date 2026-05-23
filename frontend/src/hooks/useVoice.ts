@@ -2,10 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export type VoiceMode = "off" | "ambient" | "activated" | "busy";
-export type AudioState = "idle" | "listening" | "speaking" | "transcribing";
+export type VoiceMode = "off" | "listening" | "busy";
+export type AudioState = "idle" | "waiting" | "speaking" | "transcribing";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -14,19 +12,22 @@ function getBestMimeType(): string {
   return types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) ?? "audio/webm";
 }
 
-const SPEECH_THRESHOLD = 12;    // 0-255 average frequency energy
-const SILENCE_DURATION = 1600;  // ms of silence before sending to Whisper
-const MIN_AUDIO_MS = 400;       // ignore clips shorter than this
+const SPEECH_THRESHOLD = 14;   // avg frequency energy (0-255) above = speech
+const SILENCE_DURATION = 1400; // ms of silence after speech → send to Whisper
+const MIN_AUDIO_MS = 300;      // ignore clips shorter than this
 
-// ─── Whisper STT with VAD ────────────────────────────────────────────────────
+// ─── Whisper VAD STT ─────────────────────────────────────────────────────────
 
-export interface WhisperSTTOptions {
+export interface WhisperSTTCallbacks {
   onTranscript: (text: string) => void;
-  onLevel?: (level: number) => void; // 0-100 audio level for waveform
+  onLevel?: (level: number) => void;
+  onSpeechStart?: () => void;
+  onSpeechEnd?: () => void;
+  onTranscribing?: () => void;
   lang?: string;
 }
 
-export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions) {
+export function useWhisperSTT(cb: WhisperSTTCallbacks) {
   const [audioState, setAudioState] = useState<AudioState>("idle");
   const [supported, setSupported] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -41,27 +42,17 @@ export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions
   const chunksRef = useRef<Blob[]>([]);
   const silenceStartRef = useRef<number | null>(null);
   const hasSpeechRef = useRef(false);
-  const recordingStartRef = useRef<number>(0);
-  const onTranscriptRef = useRef(onTranscript);
-  const onLevelRef = useRef(onLevel);
-  const langRef = useRef(lang);
-
-  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
-  useEffect(() => { onLevelRef.current = onLevel; }, [onLevel]);
-  useEffect(() => { langRef.current = lang; }, [lang]);
+  const recordingStartRef = useRef(0);
+  const cbRef = useRef(cb);
+  useEffect(() => { cbRef.current = cb; }, [cb]);
 
   useEffect(() => {
-    const ok =
+    setSupported(
       typeof window !== "undefined" &&
-      typeof navigator !== "undefined" &&
-      !!navigator.mediaDevices?.getUserMedia &&
+      !!navigator?.mediaDevices?.getUserMedia &&
       typeof MediaRecorder !== "undefined" &&
-      typeof AudioContext !== "undefined";
-    setSupported(ok);
-  }, []);
-
-  // Check if Whisper endpoint is available
-  useEffect(() => {
+      typeof AudioContext !== "undefined"
+    );
     fetch("/api/transcribe", { method: "POST", body: new FormData() })
       .then((r) => setWhisperAvailable(r.status !== 404))
       .catch(() => setWhisperAvailable(false));
@@ -69,21 +60,20 @@ export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions
 
   const sendToWhisper = useCallback(async (chunks: Blob[], mimeType: string) => {
     setAudioState("transcribing");
+    cbRef.current.onTranscribing?.();
     const blob = new Blob(chunks, { type: mimeType });
     try {
       const fd = new FormData();
       fd.append("audio", blob, "audio.webm");
-      if (langRef.current) fd.append("lang", langRef.current);
+      if (cbRef.current.lang) fd.append("lang", cbRef.current.lang);
       const res = await fetch("/api/transcribe", { method: "POST", body: fd });
       const data = await res.json();
-      if (data.text?.trim()) {
-        onTranscriptRef.current(data.text.trim());
-      }
-    } catch { /* network error — ignore */ }
+      if (data.text?.trim()) cbRef.current.onTranscript(data.text.trim());
+    } catch { /* ignore */ }
   }, []);
 
   const startCycle = useCallback(async () => {
-    if (!activeRef.current) return;
+    if (!activeRef.current || !streamRef.current || !analyserRef.current) return;
 
     chunksRef.current = [];
     silenceStartRef.current = null;
@@ -91,42 +81,40 @@ export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions
     recordingStartRef.current = Date.now();
 
     const mimeType = getBestMimeType();
-    const recorder = new MediaRecorder(streamRef.current!, { mimeType, audioBitsPerSecond: 16000 });
+    const recorder = new MediaRecorder(streamRef.current, { mimeType, audioBitsPerSecond: 16000 });
     recorderRef.current = recorder;
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.start(100);
-    setAudioState("listening");
+    setAudioState("waiting");
 
-    const analyser = analyserRef.current!;
+    const analyser = analyserRef.current;
     const dataArr = new Uint8Array(analyser.frequencyBinCount);
 
     const tick = async () => {
       if (!activeRef.current) return;
       analyser.getByteFrequencyData(dataArr);
       const level = Math.round((dataArr.reduce((s, v) => s + v, 0) / dataArr.length / 255) * 100);
-      onLevelRef.current?.(level);
+      cbRef.current.onLevel?.(level);
 
       const isSpeaking = level > SPEECH_THRESHOLD;
 
       if (isSpeaking) {
-        hasSpeechRef.current = true;
+        if (!hasSpeechRef.current) {
+          hasSpeechRef.current = true;
+          cbRef.current.onSpeechStart?.();
+        }
         silenceStartRef.current = null;
         setAudioState("speaking");
       } else if (hasSpeechRef.current) {
         if (!silenceStartRef.current) silenceStartRef.current = Date.now();
-        const silenceMs = Date.now() - silenceStartRef.current;
-        if (silenceMs >= SILENCE_DURATION) {
-          // Pause detected — stop recording and send to Whisper
+        if (Date.now() - silenceStartRef.current >= SILENCE_DURATION) {
           if (rafRef.current) cancelAnimationFrame(rafRef.current);
           recorder.stop();
+          cbRef.current.onSpeechEnd?.();
           const elapsed = Date.now() - recordingStartRef.current;
           if (elapsed >= MIN_AUDIO_MS) {
             await sendToWhisper([...chunksRef.current], mimeType);
           }
-          // Restart cycle immediately
           startCycle();
           return;
         }
@@ -145,7 +133,6 @@ export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
       });
       streamRef.current = stream;
-
       const audioCtx = new AudioContext({ sampleRate: 16000 });
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -153,7 +140,6 @@ export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions
       source.connect(analyser);
       audioCtxRef.current = audioCtx;
       analyserRef.current = analyser;
-
       activeRef.current = true;
       setPermissionDenied(false);
       startCycle();
@@ -167,110 +153,16 @@ export function useWhisperSTT({ onTranscript, onLevel, lang }: WhisperSTTOptions
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     try { recorderRef.current?.stop(); } catch {}
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    audioCtxRef.current?.close();
+    audioCtxRef.current?.close().catch(() => {});
     streamRef.current = null;
     recorderRef.current = null;
     audioCtxRef.current = null;
     analyserRef.current = null;
     setAudioState("idle");
-    onLevelRef.current?.(0);
+    cbRef.current.onLevel?.(0);
   }, []);
 
-  return {
-    audioState,
-    supported,
-    permissionDenied,
-    whisperAvailable,
-    enable,
-    disable,
-  };
-}
-
-// ─── Wake word state machine ──────────────────────────────────────────────────
-
-export interface AlwaysOnOptions {
-  onCommand: (text: string) => void;
-  lang?: string;
-}
-
-export function useAlwaysOn({ onCommand, lang }: AlwaysOnOptions) {
-  const [mode, setMode] = useState<VoiceMode>("off");
-  const [level, setLevel] = useState(0);
-  const modeRef = useRef<VoiceMode>("off");
-  const activationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onCommandRef = useRef(onCommand);
-  useEffect(() => { onCommandRef.current = onCommand; }, [onCommand]);
-
-  const updateMode = useCallback((m: VoiceMode) => {
-    modeRef.current = m;
-    setMode(m);
-  }, []);
-
-  const handleTranscript = useCallback((text: string) => {
-    const current = modeRef.current;
-    if (current === "off" || current === "busy") return;
-
-    const lower = text.toLowerCase().trim();
-    if (current === "ambient") {
-      const wakeMatch = lower.match(/(?:(?:hey|ok|hi|yo)\s+)?jarvis[,!.?]?\s*([\s\S]*)/);
-      if (wakeMatch) {
-        const command = wakeMatch[1].trim();
-        if (command.length > 1) {
-          updateMode("busy");
-          if (activationTimerRef.current) clearTimeout(activationTimerRef.current);
-          onCommandRef.current(command);
-        } else {
-          updateMode("activated");
-          if (activationTimerRef.current) clearTimeout(activationTimerRef.current);
-          activationTimerRef.current = setTimeout(() => {
-            if (modeRef.current === "activated") updateMode("ambient");
-          }, 6000);
-        }
-      }
-    } else if (current === "activated") {
-      if (activationTimerRef.current) clearTimeout(activationTimerRef.current);
-      updateMode("busy");
-      onCommandRef.current(text.trim());
-    }
-  }, [updateMode]);
-
-  const stt = useWhisperSTT({
-    onTranscript: handleTranscript,
-    onLevel: setLevel,
-    lang,
-  });
-
-  const enable = useCallback(async () => {
-    updateMode("ambient");
-    await stt.enable();
-  }, [stt, updateMode]);
-
-  const disable = useCallback(() => {
-    stt.disable();
-    updateMode("off");
-    if (activationTimerRef.current) clearTimeout(activationTimerRef.current);
-  }, [stt, updateMode]);
-
-  const setBusy = useCallback(() => {
-    updateMode("busy");
-  }, [updateMode]);
-
-  const resumeAmbient = useCallback(() => {
-    updateMode("ambient");
-  }, [updateMode]);
-
-  return {
-    mode,
-    audioState: stt.audioState,
-    level,
-    supported: stt.supported,
-    whisperAvailable: stt.whisperAvailable,
-    permissionDenied: stt.permissionDenied,
-    enable,
-    disable,
-    setBusy,
-    resumeAmbient,
-  };
+  return { audioState, supported, permissionDenied, whisperAvailable, enable, disable };
 }
 
 // ─── TTS ─────────────────────────────────────────────────────────────────────
@@ -293,11 +185,10 @@ function stripMarkdown(text: string): string {
 export function useTTS() {
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
-  // Default ON and persist preference
   const [enabled, setEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
-    const stored = localStorage.getItem("jarvis_tts_enabled");
-    return stored === null ? true : stored === "true";
+    const v = localStorage.getItem("jarvis_tts_enabled");
+    return v === null ? true : v === "true";
   });
 
   useEffect(() => {
@@ -310,9 +201,7 @@ export function useTTS() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("jarvis_tts_enabled", String(enabled));
-    }
+    if (typeof window !== "undefined") localStorage.setItem("jarvis_tts_enabled", String(enabled));
   }, [enabled]);
 
   const speak = useCallback((text: string, onEnd?: () => void) => {
@@ -321,19 +210,14 @@ export function useTTS() {
     if (!enabled) { onEnd?.(); return; }
     const clean = stripMarkdown(text);
     if (!clean.trim()) { onEnd?.(); return; }
-
     const u = new SpeechSynthesisUtterance(clean);
-    u.rate = 1.05;
-    u.pitch = 0.9;
-    u.volume = 1;
-
+    u.rate = 1.05; u.pitch = 0.9; u.volume = 1;
     const voices = window.speechSynthesis.getVoices();
     const preferred =
       voices.find((v) => /david|mark|google uk english male|daniel/i.test(v.name)) ??
       voices.find((v) => v.lang.startsWith("en") && /male/i.test(v.name)) ??
       voices.find((v) => v.lang === "en-US");
     if (preferred) u.voice = preferred;
-
     u.onstart = () => setSpeaking(true);
     u.onend = () => { setSpeaking(false); onEnd?.(); };
     u.onerror = () => { setSpeaking(false); onEnd?.(); };
