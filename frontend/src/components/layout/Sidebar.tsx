@@ -85,30 +85,23 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ label, href, icon: Icon, phase }) => {
+        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = pathname.startsWith(href);
-          const isDisabled = !!phase && phase > 1;
           return (
             <Link
               key={href}
-              href={isDisabled ? "#" : href}
+              href={href}
               title={collapsed ? label : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-input text-sm transition-colors duration-150 group",
+                "flex items-center gap-3 rounded-input text-sm transition-colors duration-150",
                 collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
                 isActive
                   ? "bg-accent-blue/10 text-accent-blue"
-                  : "text-text-secondary hover:text-text-primary hover:bg-background-elevated",
-                isDisabled && "opacity-40 cursor-not-allowed pointer-events-none"
+                  : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
               )}
             >
               <Icon size={16} className="flex-none" />
               {!collapsed && <span className="flex-1">{label}</span>}
-              {!collapsed && phase && phase > 1 && (
-                <span className="text-[10px] font-mono text-text-muted bg-background-elevated px-1.5 py-0.5 rounded">
-                  Soon
-                </span>
-              )}
             </Link>
           );
         })}
