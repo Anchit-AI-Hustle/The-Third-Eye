@@ -1,5 +1,6 @@
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
+import { VoiceOverlay } from "../voice/VoiceOverlay";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -19,6 +20,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
         {children}
       </main>
       <BottomNav />
+      <VoiceOverlay />
     </div>
   );
 }
