@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useSpeechToText, useTTS } from "@/hooks/useVoice";
 
 interface Message {
   id: string;
@@ -39,6 +40,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const historyRef = useRef<HistoryEntry[]>([]);
   const memoryRef = useRef<Record<string, string>>({});
   const abortRef = useRef<AbortController | null>(null);
+
+  const tts = useTTS();
+  const stt = useSpeechToText((transcript) => {
+    setInput(transcript);
+    // auto-focus textarea after transcript lands
+    textareaRef.current?.focus();
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -112,13 +120,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
                 ));
-              } else if (eventType === "done" && parsed.memory) {
-                memoryRef.current = parsed.memory;
+              } else if (eventType === "done") {
+                if (parsed.memory) memoryRef.current = parsed.memory;
                 historyRef.current = [
                   ...historyRef.current,
                   { role: "user", content: msg },
                   { role: "assistant", content: fullText },
                 ];
+                tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
             eventType = "";
@@ -187,6 +196,38 @@ export function AssistantClient({ userName }: { userName?: string }) {
               t.style.height = `${Math.min(t.scrollHeight, 128)}px`;
             }}
           />
+          {/* Mic button */}
+          {stt.supported && (
+            <button
+              onClick={stt.listening ? stt.stop : stt.start}
+              title={stt.listening ? "Stop listening" : "Voice input"}
+              className={cn(
+                "flex-none p-1.5 rounded-input transition-colors",
+                stt.listening
+                  ? "text-accent-red bg-accent-red/10 animate-pulse"
+                  : "text-text-muted hover:text-accent-blue"
+              )}
+            >
+              {stt.listening ? <MicOff size={15} /> : <Mic size={15} />}
+            </button>
+          )}
+
+          {/* TTS toggle */}
+          {tts.supported && (
+            <button
+              onClick={tts.toggle}
+              title={tts.enabled ? "Mute JARVIS voice" : "Enable JARVIS voice"}
+              className={cn(
+                "flex-none p-1.5 rounded-input transition-colors",
+                tts.enabled
+                  ? "text-accent-violet hover:text-accent-violet/70"
+                  : "text-text-muted hover:text-text-secondary"
+              )}
+            >
+              {tts.enabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+          )}
+
           {messages.length > 0 && (
             <button
               onClick={handleClear}
