@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { getSupabase } from "@/lib/supabase";
 
 export interface KnowledgeDoc {
   id: string;
@@ -17,15 +19,11 @@ export interface KnowledgeDoc {
 const KEY = "jarvis_knowledge_v1";
 const CHUNK_SIZE = 500;
 
-function load(): KnowledgeDoc[] {
+function ls(): KnowledgeDoc[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); }
-  catch { return []; }
+  try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); } catch { return []; }
 }
-
-function persist(docs: KnowledgeDoc[]) {
-  localStorage.setItem(KEY, JSON.stringify(docs));
-}
+function lsSet(v: KnowledgeDoc[]) { localStorage.setItem(KEY, JSON.stringify(v)); }
 
 function chunkText(text: string): string[] {
   const words = text.split(/\s+/);
@@ -65,32 +63,50 @@ export function searchDocs(docs: KnowledgeDoc[], query: string, topK = 5): Searc
   if (terms.length === 0 || docs.length === 0) return [];
 
   const results: SearchResult[] = [];
-
   for (const doc of docs) {
     if (doc.processing_status !== "ready") continue;
     const chunks = chunkText(doc.content);
     chunks.forEach((chunk, idx) => {
       const lower = chunk.toLowerCase();
       let score = 0;
-      for (const term of terms) {
-        const matches = lower.split(term).length - 1;
-        score += matches;
-      }
-      if (score > 0) {
-        results.push({ doc_id: doc.id, doc_title: doc.title, chunk_index: idx, content: chunk, score });
-      }
+      for (const term of terms) score += lower.split(term).length - 1;
+      if (score > 0) results.push({ doc_id: doc.id, doc_title: doc.title, chunk_index: idx, content: chunk, score });
     });
   }
-
   return results.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
 export function useLocalKnowledge() {
+  const { data: session } = useSession();
+  const userId = session?.user?.email ?? null;
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [ready, setReady] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { setDocs(load()); setReady(true); }, []);
+  useEffect(() => {
+    const sb = getSupabase();
+    if (sb && userId) {
+      sb.from("knowledge_docs").select("*").eq("user_id", userId).order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (error) { setDocs(ls()); } else { setDocs((data as KnowledgeDoc[]) ?? []); }
+          setReady(true);
+        });
+    } else {
+      setDocs(ls()); setReady(true);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb || !userId) return;
+    const ch = sb.channel(`knowledge_${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "knowledge_docs", filter: `user_id=eq.${userId}` },
+        (p) => setDocs((prev) => prev.find((d) => d.id === p.new.id) ? prev : [p.new as KnowledgeDoc, ...prev]))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "knowledge_docs", filter: `user_id=eq.${userId}` },
+        (p) => setDocs((prev) => prev.filter((d) => d.id !== (p.old as { id: string }).id)))
+      .subscribe();
+    return () => { sb.removeChannel(ch); };
+  }, [userId]);
 
   const upload = useCallback(async (files: FileList | File[]) => {
     setUploading(true);
@@ -124,27 +140,28 @@ export function useLocalKnowledge() {
         newDocs.push({
           id, title, content: "", file_type: ext.replace(".", ""),
           file_size_bytes: file.size, created_at: new Date().toISOString(),
-          chunk_count: 0, processing_status: "failed",
-          error: "Failed to read file.",
+          chunk_count: 0, processing_status: "failed", error: "Failed to read file.",
         });
       }
     }
 
-    setDocs((prev) => {
-      const next = [...newDocs, ...prev];
-      persist(next);
-      return next;
-    });
+    const sb = getSupabase();
+    if (sb && userId) {
+      await sb.from("knowledge_docs").insert(newDocs.map((d) => ({ ...d, user_id: userId })));
+    } else {
+      setDocs((prev) => { const next = [...newDocs, ...prev]; lsSet(next); return next; });
+    }
     setUploading(false);
-  }, []);
+  }, [userId]);
 
-  const remove = useCallback((id: string) => {
-    setDocs((prev) => {
-      const next = prev.filter((d) => d.id !== id);
-      persist(next);
-      return next;
-    });
-  }, []);
+  const remove = useCallback(async (id: string) => {
+    const sb = getSupabase();
+    if (sb && userId) {
+      await sb.from("knowledge_docs").delete().eq("id", id).eq("user_id", userId);
+    } else {
+      setDocs((prev) => { const next = prev.filter((d) => d.id !== id); lsSet(next); return next; });
+    }
+  }, [userId]);
 
   return { docs, ready, uploading, upload, remove };
 }
