@@ -5,8 +5,8 @@ import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { cn } from "@/lib/utils";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
-  Target, FileText, Cpu, Shield, Mic, Globe, TrendingUp, AlertTriangle,
-  Activity, Wifi, Database, Eye,
+  Target, FileText, Cpu, Shield, Mic, TrendingUp, AlertTriangle,
+  Activity, Database, Eye,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -78,11 +78,6 @@ export function DashboardClient() {
     if (insights.length === 0) insights.push("System ready. Ask JARVIS anything to get started.");
   }
 
-  const topTask = [...open].sort((a, b) => {
-    const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-    return (order[a.priority] ?? 4) - (order[b.priority] ?? 4);
-  })[0];
-
   return (
     <div className="space-y-5 animate-fade-in">
 
@@ -139,12 +134,12 @@ export function DashboardClient() {
 
           {/* System lines */}
           <div className="w-full space-y-2.5 mt-auto">
-            <SystemLine icon={<Cpu size={12} />} label="AI Engine" value="Gemini 2.5" status="online" />
-            <SystemLine icon={<Brain size={12} />} label="Memory" value="Active" status="online" />
-            <SystemLine icon={<Mic size={12} />} label="Voice I/O" value="Ready" status="online" />
-            <SystemLine icon={<Shield size={12} />} label="Auth" value="Secured" status="online" />
-            <SystemLine icon={<Database size={12} />} label="Knowledge" value="Indexed" status="idle" />
-            <SystemLine icon={<TrendingUp size={12} />} label="Finance" value="Phase 2" status="pending" />
+            <StatusRow icon={<Cpu size={12} />} label="AI Engine" value="Gemini 2.5" status="online" />
+            <StatusRow icon={<Brain size={12} />} label="Memory" value="Active" status="online" />
+            <StatusRow icon={<Mic size={12} />} label="Voice I/O" value="Ready" status="online" />
+            <StatusRow icon={<Shield size={12} />} label="Auth" value="Secured" status="online" />
+            <StatusRow icon={<Database size={12} />} label="Knowledge" value="Indexed" status="idle" />
+            <StatusRow icon={<TrendingUp size={12} />} label="Finance" value="Phase 2" status="pending" />
           </div>
         </div>
       </div>
@@ -284,7 +279,7 @@ export function DashboardClient() {
                 const od = t.due_date && new Date(t.due_date) < new Date(new Date().toDateString());
                 return (
                   <li key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-background-elevated/50 transition-colors">
-                    <span className={cn("w-1.5 h-1.5 rounded-full flex-none", PRIORITY_COLOR[t.priority] ?? "bg-text-muted")} />
+                    <span className={cn("w-1.5 h-1.5 rounded-full flex-none", PRIORITY_DOT[t.priority] ?? "bg-text-muted")} />
                     <span className="flex-1 text-sm text-text-primary truncate">{t.title}</span>
                     {t.assignee && (
                       <span className="text-text-muted text-xs hidden sm:block">{t.assignee}</span>

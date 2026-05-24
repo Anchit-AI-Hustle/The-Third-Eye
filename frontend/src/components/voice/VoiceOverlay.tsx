@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Mic, MicOff, Volume2, VolumeX, X, Send, Globe } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
@@ -17,29 +17,14 @@ interface LiveBubble {
   text?: string;
 }
 
-const LANGUAGES = [
-  { code: "", label: "Auto" },
-  { code: "en-US", label: "English (US)" },
-  { code: "en-GB", label: "English (UK)" },
-  { code: "hi-IN", label: "हिन्दी" },
-  { code: "es-ES", label: "Español" },
-  { code: "fr-FR", label: "Français" },
-  { code: "de-DE", label: "Deutsch" },
-  { code: "pt-BR", label: "Português" },
-  { code: "ja-JP", label: "日本語" },
-  { code: "zh-CN", label: "中文" },
-  { code: "ar-SA", label: "العربية" },
-  { code: "ko-KR", label: "한국어" },
-];
-
 export function VoiceOverlay() {
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const [open, setOpen] = useState(false);
-  const [lang, setLang] = useState("");
-  const [showLang, setShowLang] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [micOn, setMicOn] = useState(false);
   const [liveBubble, setLiveBubble] = useState<LiveBubble | null>(null);
+  const [lastQuery, setLastQuery] = useState("");
   const [response, setResponse] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState("");
@@ -51,24 +36,23 @@ export function VoiceOverlay() {
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const memoryRef = useRef<Record<string, string>>({});
   const sendRef = useRef<(text?: string) => Promise<void>>(async () => {});
-  const panelRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { allTasks, create: createTask } = useLocalTasks();
   const { docs } = useLocalKnowledge();
   const tts = useTTS();
 
   const stt = useVoiceSTT({
-    lang,
+    lang: "",
     shouldSuppress: useCallback(() => suppressRef.current, []),
     onLevel: useCallback((l: number) => {
       setLiveBubble((prev) =>
-        prev?.phase === "recording" || prev?.phase === "interim"
-          ? { ...prev, level: l }
-          : prev
+        prev?.phase === "recording" || prev?.phase === "interim" ? { ...prev, level: l } : prev
       );
     }, []),
     onSpeechStart: useCallback(() => {
       setLiveBubble({ phase: "recording", level: 0 });
+      setExpanded(true);
     }, []),
     onSpeechEnd: useCallback(() => {
       setLiveBubble((prev) => (prev ? { ...prev, phase: "transcribing" } : null));
@@ -86,34 +70,31 @@ export function VoiceOverlay() {
     }, []),
   });
 
-  // Echo suppression
   useEffect(() => {
     if (tts.speaking) {
       if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
       suppressRef.current = true;
     } else {
-      cooldownTimerRef.current = setTimeout(() => {
-        suppressRef.current = false;
-      }, 800);
+      cooldownTimerRef.current = setTimeout(() => { suppressRef.current = false; }, 800);
     }
   }, [tts.speaking]);
 
-  useEffect(() => {
-    isStreamingRef.current = isStreaming;
-  }, [isStreaming]);
+  useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
-  // Start/stop mic when overlay opens/closes
   useEffect(() => {
-    if (open && stt.supported) {
-      stt.enable();
-    } else {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [response, liveBubble]);
+
+  function toggleMic() {
+    if (micOn) {
       stt.disable();
-      tts.stop();
+      setMicOn(false);
       setLiveBubble(null);
+    } else {
+      stt.enable();
+      setMicOn(true);
     }
-    return () => stt.disable();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, stt.supported]);
+  }
 
   const sendMessage = useCallback(
     async (text?: string) => {
@@ -121,8 +102,10 @@ export function VoiceOverlay() {
       if (!msg || isStreamingRef.current) return;
 
       setInput("");
+      setLastQuery(msg);
       setResponse("");
       setLiveBubble(null);
+      setExpanded(true);
       setIsStreaming(true);
       abortRef.current = new AbortController();
 
@@ -162,10 +145,7 @@ export function VoiceOverlay() {
           buffer = lines.pop() ?? "";
 
           for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              eventType = line.slice(7).trim();
-              continue;
-            }
+            if (line.startsWith("event: ")) { eventType = line.slice(7).trim(); continue; }
             if (line.startsWith("data: ")) {
               try {
                 const parsed = JSON.parse(line.slice(6));
@@ -222,134 +202,114 @@ export function VoiceOverlay() {
     [input, session, allTasks, docs, createTask, tts]
   );
 
-  useEffect(() => {
-    sendRef.current = sendMessage;
-  }, [sendMessage]);
+  useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
-  // Hide on assistant page (it has its own voice UI)
   if (pathname === "/assistant") return null;
-
-  // Hide if browser doesn't support speech
   if (!stt.supported) return null;
 
+  const status = tts.speaking
+    ? "SPEAKING"
+    : isStreaming
+    ? "PROCESSING"
+    : liveBubble?.phase === "interim" || liveBubble?.phase === "recording"
+    ? "LISTENING"
+    : liveBubble?.phase === "transcribing"
+    ? "RECOGNISING"
+    : micOn
+    ? "READY"
+    : "STANDBY";
+
+  const statusColor = tts.speaking || isStreaming
+    ? "bg-accent-violet"
+    : liveBubble
+    ? "bg-[#4FC3F7]"
+    : micOn
+    ? "bg-success"
+    : "bg-text-muted";
+
   return (
-    <>
-      {/* Sticky "Hey JARVIS" pill — always visible when panel is closed */}
-      {!open && (
+    <div className={cn(
+      "fixed z-50 transition-all duration-300",
+      "bottom-20 right-3 lg:bottom-5 lg:right-5",
+      expanded ? "w-[340px] sm:w-[380px]" : "w-auto"
+    )}>
+      {/* ── Collapsed bubble ── */}
+      {!expanded && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group animate-border-glow"
-          title="Talk to JARVIS"
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group animate-border-glow"
         >
-          <span className="w-2 h-2 rounded-full bg-[#4FC3F7] shadow-[0_0_8px_rgba(79,195,247,0.5)] animate-pulse" />
-          <span className="text-xs font-mono text-text-secondary group-hover:text-[#4FC3F7] transition-colors tracking-wider">
-            JARVIS
-          </span>
+          <span className={cn("w-2 h-2 rounded-full animate-pulse", statusColor, micOn && "shadow-[0_0_8px_rgba(79,195,247,0.5)]")} />
+          {/* Show truncated last response or status */}
+          {response && !isStreaming ? (
+            <span className="text-xs font-mono text-text-secondary max-w-[160px] truncate">{response.slice(0, 50)}</span>
+          ) : (
+            <span className="text-xs font-mono text-text-secondary group-hover:text-[#4FC3F7] transition-colors tracking-wider">
+              {micOn ? status : "JARVIS"}
+            </span>
+          )}
           <div className="arc-reactor flex-none" style={{ width: 28, height: 28 }}>
             <div className="arc-reactor-core" style={{ width: 7, height: 7 }} />
           </div>
         </button>
       )}
 
-      {/* Voice panel */}
-      {open && (
-        <div
-          ref={panelRef}
-          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 w-80 sm:w-96 holo-card rounded-card shadow-2xl animate-slide-in flex flex-col max-h-[70vh] card-glow-arc hud-frame"
-        >
+      {/* ── Expanded panel ── */}
+      {expanded && (
+        <div className="holo-card rounded-card shadow-2xl animate-slide-in flex flex-col card-glow-arc hud-frame overflow-hidden"
+          style={{ maxHeight: "min(65vh, 480px)" }}>
+
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(79,195,247,0.1)]">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[rgba(79,195,247,0.1)] flex-none">
             <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  tts.speaking
-                    ? "bg-accent-violet animate-pulse"
-                    : liveBubble?.phase === "recording" || liveBubble?.phase === "interim"
-                    ? "bg-[#4FC3F7] animate-pulse shadow-[0_0_6px_rgba(79,195,247,0.5)]"
-                    : isStreaming
-                    ? "bg-accent-violet animate-pulse"
-                    : "bg-[#4FC3F7] animate-pulse shadow-[0_0_6px_rgba(79,195,247,0.5)]"
-                )}
-              />
-              <span className="hud-label text-[#4FC3F7]">
-                {tts.speaking
-                  ? "SPEAKING"
-                  : isStreaming
-                  ? "PROCESSING"
-                  : liveBubble?.phase === "interim"
-                  ? "LISTENING"
-                  : liveBubble?.phase === "recording"
-                  ? "LISTENING"
-                  : liveBubble?.phase === "transcribing"
-                  ? "RECOGNISING"
-                  : "READY"}
-              </span>
+              <div className="arc-reactor flex-none" style={{ width: 22, height: 22 }}>
+                <div className="arc-reactor-core" style={{ width: 5, height: 5 }} />
+              </div>
+              <div>
+                <span className="hud-label text-[#4FC3F7] text-[9px]">{status}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setShowLang((v) => !v)}
-                className={cn(
-                  "p-1.5 rounded-input transition-colors",
-                  showLang ? "text-accent-blue" : "text-text-muted hover:text-text-secondary"
-                )}
-              >
-                <Globe size={12} />
+            <div className="flex items-center gap-0.5">
+              <button onClick={tts.toggle} title={tts.enabled ? "Mute" : "Unmute"}
+                className={cn("p-1.5 rounded-input transition-colors",
+                  tts.enabled ? "text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
+                {tts.enabled ? <Volume2 size={11} /> : <VolumeX size={11} />}
               </button>
-              <button
-                onClick={tts.toggle}
-                className={cn(
-                  "p-1.5 rounded-input transition-colors",
-                  tts.enabled ? "text-accent-violet" : "text-text-muted hover:text-text-secondary"
-                )}
-              >
-                {tts.enabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+              <button onClick={toggleMic} title={micOn ? "Mic off" : "Mic on"}
+                className={cn("p-1.5 rounded-input transition-colors",
+                  micOn ? "text-[#4FC3F7]" : "text-text-muted hover:text-text-secondary")}>
+                {micOn ? <Mic size={11} /> : <MicOff size={11} />}
               </button>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors"
-              >
-                <X size={12} />
+              <button onClick={() => { setExpanded(false); }}
+                className="p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
+                <ChevronDown size={11} />
               </button>
             </div>
           </div>
 
-          {/* Language picker */}
-          {showLang && (
-            <div className="border-b border-border-default px-3 py-2 flex flex-wrap gap-1">
-              {LANGUAGES.map((l) => (
-                <button
-                  key={l.code}
-                  onClick={() => {
-                    setLang(l.code);
-                    setShowLang(false);
-                  }}
-                  className={cn(
-                    "px-2 py-1 text-[10px] rounded-badge transition-colors",
-                    lang === l.code
-                      ? "bg-accent-blue/20 text-accent-blue"
-                      : "text-text-muted hover:text-text-secondary hover:bg-background-surface"
-                  )}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Content */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2.5 space-y-2.5 min-h-[80px]">
 
-          {/* Content area */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[120px]">
+            {/* Last query */}
+            {lastQuery && (
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-card px-3 py-2 bg-[#4FC3F7]/8 border border-[#4FC3F7]/15 text-sm text-text-primary">
+                  {lastQuery}
+                </div>
+              </div>
+            )}
+
             {/* Live voice bubble */}
             {liveBubble && (
-              <div className="flex items-center gap-2">
-                <div className="rounded-card px-3 py-2 bg-accent-blue/10 border border-accent-blue/20">
+              <div className="flex justify-end">
+                <div className="rounded-card px-3 py-2 bg-[#4FC3F7]/8 border border-[#4FC3F7]/15">
                   {liveBubble.phase === "interim" && liveBubble.text ? (
                     <span className="text-sm text-text-primary italic">{liveBubble.text}</span>
                   ) : liveBubble.phase === "recording" ? (
                     <Waveform level={liveBubble.level} />
                   ) : (
                     <div className="flex items-center gap-2 text-text-muted text-xs">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
                       Recognising…
                     </div>
                   )}
@@ -357,79 +317,76 @@ export function VoiceOverlay() {
               </div>
             )}
 
-            {/* Response */}
+            {/* JARVIS response */}
             {response && (
-              <div className="rounded-card px-3 py-2 bg-background-surface border border-border-default text-sm text-text-primary">
-                <div className="prose-jarvis text-sm">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{response}</ReactMarkdown>
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center flex-none mt-0.5">
+                  <Cpu size={9} className="text-[#4FC3F7]" />
                 </div>
-                {isStreaming && (
-                  <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
-                )}
+                <div className="flex-1 min-w-0 rounded-card px-3 py-2 bg-background-surface border border-border-default text-text-primary">
+                  <div className="prose-jarvis text-[13px] leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{response}</ReactMarkdown>
+                  </div>
+                  {isStreaming && (
+                    <span className="inline-block w-0.5 h-3 bg-[#4FC3F7] ml-0.5 animate-pulse align-middle" />
+                  )}
+                </div>
               </div>
             )}
 
             {/* Empty state */}
-            {!liveBubble && !response && !isStreaming && (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mb-3">
-                  <Mic size={18} className="text-accent-blue" />
+            {!liveBubble && !response && !lastQuery && (
+              <div className="flex flex-col items-center justify-center py-5 text-center">
+                <div className="arc-reactor mb-3" style={{ width: 36, height: 36 }}>
+                  <div className="arc-reactor-core" style={{ width: 10, height: 10 }} />
                 </div>
-                <p className="text-text-muted text-xs">Speak or type below</p>
+                <p className="hud-label text-[#4FC3F7]/60 text-[9px]">
+                  {micOn ? "Listening — speak or type" : "Tap mic to start"}
+                </p>
+              </div>
+            )}
+
+            {/* Listening indicator */}
+            {micOn && !isStreaming && !tts.speaking && !liveBubble && response && (
+              <div className="flex items-center gap-1.5 justify-center py-1">
+                <span className="w-1 h-1 rounded-full bg-success animate-pulse" />
+                <span className="hud-label text-[9px]">listening</span>
               </div>
             )}
           </div>
 
-          {/* Text input */}
-          <div className="flex-none px-3 py-2 border-t border-border-default">
-            <div className="flex items-center gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2">
+          {/* Input bar */}
+          <div className="flex-none px-2.5 py-2 border-t border-[rgba(79,195,247,0.08)]">
+            <div className="flex items-center gap-2 bg-background-surface/50 border border-border-default rounded-card px-3 py-1.5">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder="Or type here…"
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                placeholder={micOn ? "Or type…" : "Ask JARVIS…"}
                 disabled={isStreaming}
-                className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-sm outline-none disabled:opacity-60"
+                className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-xs outline-none disabled:opacity-60 font-mono"
               />
-              <button
-                onClick={() => sendMessage()}
-                disabled={!input.trim() || isStreaming}
-                className={cn(
-                  "p-1 rounded-input transition-colors",
-                  input.trim() && !isStreaming
-                    ? "text-accent-blue hover:bg-accent-blue/10"
-                    : "text-text-muted cursor-not-allowed"
-                )}
-              >
-                <Send size={13} />
+              <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
+                className={cn("p-1 rounded-input transition-colors",
+                  input.trim() && !isStreaming ? "text-[#4FC3F7] hover:bg-[#4FC3F7]/10" : "text-text-muted cursor-not-allowed")}>
+                <Send size={11} />
               </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
 function Waveform({ level }: { level: number }) {
   const bars = [0.5, 0.8, 1.0, 0.9, 0.6, 0.4, 0.7];
   return (
-    <div className="flex items-center gap-1 h-5">
-      {bars.map((mult, i) => {
-        const h = Math.max(4, Math.round(level * mult * 0.22));
-        return (
-          <span
-            key={i}
-            className="w-1 rounded-full bg-accent-blue transition-all duration-75"
-            style={{ height: `${h}px` }}
-          />
-        );
-      })}
+    <div className="flex items-center gap-0.5 h-4">
+      {bars.map((mult, i) => (
+        <span key={i} className="w-[3px] rounded-full bg-[#4FC3F7] transition-all duration-75"
+          style={{ height: `${Math.max(3, Math.round(level * mult * 0.18))}px` }} />
+      ))}
     </div>
   );
 }
