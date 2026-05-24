@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { KnowledgeClient } from "@/components/knowledge/KnowledgeClient";
 
-export const metadata = { title: "Knowledge Base — JARVIS OS" };
+export const metadata = { title: "Knowledge Base — The Third Eye" };
 
 export default async function KnowledgePage() {
   const session = await getServerSession(authOptions);

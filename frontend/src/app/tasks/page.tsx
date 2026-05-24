@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { TasksClient } from "@/components/tasks/TasksClient";
 
-export const metadata = { title: "Action Tracker — JARVIS OS" };
+export const metadata = { title: "Action Tracker — The Third Eye" };
 
 export default async function TasksPage() {
   const session = await getServerSession(authOptions);

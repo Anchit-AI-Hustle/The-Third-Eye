@@ -109,7 +109,7 @@ export function TasksClient() {
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `jarvis-actions-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `thirdeye-actions-${new Date().toISOString().slice(0,10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
   }
 

@@ -47,17 +47,17 @@ export default function SignInPage() {
           <div className="w-20 h-20 rounded-2xl bg-accent-blue/10 border border-accent-blue/20 overflow-hidden mb-5 shadow-elevated">
             <img
               src="/logo.png"
-              alt="JARVIS OS"
+              alt="The Third Eye"
               className="w-full h-full object-cover"
               onError={(e) => {
                 const el = e.target as HTMLImageElement;
                 el.style.display = "none";
-                el.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center text-accent-blue font-bold text-2xl font-display">J</div>`;
+                el.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center text-accent-blue font-bold text-2xl font-display">👁</div>`;
               }}
             />
           </div>
           <h1 className="font-display text-3xl md:text-4xl font-bold text-text-primary tracking-tight">
-            JARVIS OS
+            The Third Eye
           </h1>
           <p className="text-text-secondary text-sm mt-2">
             Your AI-powered personal operating system

@@ -35,7 +35,7 @@ export function GoalsClient() {
     );
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `jarvis-goals-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `thirdeye-goals-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 
@@ -113,7 +113,7 @@ export function GoalsClient() {
         <div className="py-20 text-center">
           <Target size={28} className="mx-auto text-text-muted mb-4 opacity-40" />
           <p className="text-text-muted text-sm">No goals yet. Create your first one above.</p>
-          <p className="text-text-muted text-xs mt-1">JARVIS will help you track and achieve them.</p>
+          <p className="text-text-muted text-xs mt-1">Your AI will help you track and achieve them.</p>
         </div>
       ) : (
         Object.entries(byCategory).map(([cat, items]) => (

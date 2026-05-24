@@ -1,4 +1,4 @@
-const CACHE = "jarvis-v2";
+const CACHE = "thirdeye-v1";
 const PRECACHE = ["/", "/dashboard", "/assistant", "/manifest.json", "/icon-192.png", "/icon-512.png", "/logo.png"];
 
 self.addEventListener("install", (e) => {

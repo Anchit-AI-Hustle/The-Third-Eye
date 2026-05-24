@@ -1,6 +1,6 @@
 import { GoalsClient } from "@/components/goals/GoalsClient";
 
-export const metadata = { title: "Objectives — JARVIS OS" };
+export const metadata = { title: "Objectives — The Third Eye" };
 
 export default function GoalsPage() {
   return (
@@ -10,7 +10,7 @@ export default function GoalsPage() {
           <span className="hud-label text-[#4FC3F7]">// Objective Tracker</span>
         </div>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Goals</h1>
-        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">Track what matters · JARVIS monitors your progress</p>
+        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">Track what matters · Your AI monitors your progress</p>
       </div>
       <GoalsClient />
     </div>

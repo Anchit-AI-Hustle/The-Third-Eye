@@ -45,7 +45,7 @@ export function NotesClient() {
     const md = notes.map((n) => `# ${n.title}\n\n${n.content}\n\n---\n`).join("\n");
     const blob = new Blob([md], { type: "text/markdown" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `jarvis-notes-${new Date().toISOString().slice(0, 10)}.md`;
+    a.download = `thirdeye-notes-${new Date().toISOString().slice(0, 10)}.md`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 
@@ -89,7 +89,7 @@ export function NotesClient() {
         {/* List */}
         <div className="flex-1 overflow-y-auto space-y-1">
           {notes.length === 0 && (
-            <p className="text-text-muted text-xs text-center py-8">No notes yet. Create one above or ask JARVIS to take a note.</p>
+            <p className="text-text-muted text-xs text-center py-8">No notes yet. Create one above or ask your AI to take a note.</p>
           )}
           {pinned.length > 0 && (
             <>
@@ -133,7 +133,7 @@ export function NotesClient() {
               ref={textRef}
               value={active.content}
               onChange={(e) => handleBodyChange(e.target.value)}
-              placeholder="Start writing… JARVIS can also add notes for you via the Assistant."
+              placeholder="Start writing… Your AI can also add notes for you via the Assistant."
               className="flex-1 w-full bg-transparent text-text-primary text-sm leading-relaxed resize-none outline-none px-6 py-5 placeholder:text-text-muted"
             />
           </>
@@ -141,7 +141,7 @@ export function NotesClient() {
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <p className="text-text-muted text-sm">Select a note or create a new one.</p>
-              <p className="text-text-muted text-xs mt-1">You can also ask JARVIS: "Take a note about X"</p>
+              <p className="text-text-muted text-xs mt-1">You can also ask your AI: &quot;Take a note about X&quot;</p>
             </div>
           </div>
         )}

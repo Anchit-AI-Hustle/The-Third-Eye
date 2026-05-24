@@ -8,13 +8,13 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "JARVIS OS",
-  description: "Your Personal Intelligence Operating System",
+  title: "The Third Eye",
+  description: "Your Personal AI Operating System",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "JARVIS OS",
+    title: "The Third Eye",
   },
   icons: {
     icon: "/logo.png",

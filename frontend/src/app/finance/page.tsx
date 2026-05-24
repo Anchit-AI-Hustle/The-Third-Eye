@@ -1,6 +1,6 @@
 import { FinanceClient } from "@/components/finance/FinanceClient";
 
-export const metadata = { title: "Finance — JARVIS OS" };
+export const metadata = { title: "Finance — The Third Eye" };
 
 export default function FinancePage() {
   return (

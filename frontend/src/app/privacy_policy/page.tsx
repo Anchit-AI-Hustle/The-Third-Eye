@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Privacy Policy — JARVIS OS" };
+export const metadata = { title: "Privacy Policy — The Third Eye" };
 
 export default function PrivacyPolicyPage() {
   return (
@@ -10,7 +10,7 @@ export default function PrivacyPolicyPage() {
           href="/"
           className="text-text-muted text-sm font-mono hover:text-text-secondary transition-colors"
         >
-          ← JARVIS OS
+          ← The Third Eye
         </Link>
 
         <h1 className="font-display text-2xl font-semibold text-text-primary mt-8 mb-2">
@@ -22,7 +22,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Overview</h2>
             <p>
-              JARVIS OS is a personal AI operating system. This application is self-hosted and
+              The Third Eye is a personal AI operating system. This application is self-hosted and
               intended for use by the account owner only. No data is sold or shared with third
               parties.
             </p>
@@ -42,7 +42,7 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-text-primary font-semibold mb-2">How We Use Your Data</h2>
             <p>
               All data is stored in your self-hosted backend and is used solely to provide the
-              JARVIS OS service to you. Your data is never shared with third parties except as
+              the service to you. Your data is never shared with third parties except as
               required to fulfill requests (e.g., forwarding a query to an AI model provider).
             </p>
           </section>

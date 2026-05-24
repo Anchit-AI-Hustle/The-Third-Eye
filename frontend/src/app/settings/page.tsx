@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 
-export const metadata = { title: "Settings — JARVIS OS" };
+export const metadata = { title: "Settings — The Third Eye" };
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);

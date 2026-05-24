@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { label: "Home",   href: "/dashboard", icon: LayoutDashboard },
-  { label: "JARVIS", href: "/assistant", icon: MessageSquare },
+  { label: "AI", href: "/assistant", icon: MessageSquare },
   { label: "Tasks",  href: "/tasks",     icon: CheckSquare },
   { label: "Notes",  href: "/notes",     icon: FileText },
   { label: "Goals",  href: "/goals",     icon: Target },

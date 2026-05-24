@@ -1,7 +1,7 @@
 {
-  "name": "JARVIS OS",
-  "short_name": "JARVIS",
-  "description": "Your Personal Intelligence Operating System",
+  "name": "The Third Eye",
+  "short_name": "The Third Eye",
+  "description": "Your Personal AI Operating System",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
@@ -20,7 +20,7 @@
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "JARVIS OS — Personal Intelligence Operating System"
+      "label": "The Third Eye — Your Personal AI Operating System"
     }
   ]
 }

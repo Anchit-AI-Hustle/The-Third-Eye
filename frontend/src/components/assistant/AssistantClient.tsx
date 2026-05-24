@@ -446,7 +446,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={micOn ? "Or type here…" : "Ask JARVIS anything…"}
+            placeholder={micOn ? "Or type here…" : `Ask ${agent.name} anything…`}
             rows={1}
             disabled={isStreaming}
             className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"

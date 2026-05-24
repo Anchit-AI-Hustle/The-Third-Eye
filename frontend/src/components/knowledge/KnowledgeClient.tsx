@@ -46,7 +46,7 @@ export function KnowledgeClient() {
     const combined = docs.map((d) => `=== ${d.title} ===\n\n${d.content}`).join("\n\n" + "=".repeat(60) + "\n\n");
     const blob = new Blob([combined], { type: "text/plain" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `jarvis-knowledge-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `thirdeye-knowledge-${new Date().toISOString().slice(0, 10)}.txt`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 
@@ -157,7 +157,7 @@ export function KnowledgeClient() {
           <div className="px-5 py-12 text-center">
             <BookOpen size={24} className="mx-auto text-text-muted opacity-40 mb-3" />
             <p className="text-text-muted text-sm">No documents yet. Upload one above.</p>
-            <p className="text-text-muted text-xs mt-1">JARVIS will search them when you ask questions.</p>
+            <p className="text-text-muted text-xs mt-1">Your AI will search them when you ask questions.</p>
           </div>
         ) : (
           <ul className="divide-y divide-border-default">

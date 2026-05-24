@@ -47,7 +47,7 @@ export function Sidebar() {
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <div className="font-display font-semibold text-text-primary tracking-tight leading-none gradient-text-arc">
-              {agent.name} OS
+              The Third Eye
             </div>
             <div className="text-[10px] font-mono text-text-muted mt-0.5 tracking-wider">v0.1.0 · ONLINE</div>
           </div>

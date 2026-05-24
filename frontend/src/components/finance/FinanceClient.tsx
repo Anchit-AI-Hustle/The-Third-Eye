@@ -15,7 +15,7 @@ export function FinanceClient() {
           Financial Intelligence Module
         </h2>
         <p className="text-text-muted text-sm max-w-md mb-8">
-          Connect accounts, track spending, and let JARVIS surface financial insights automatically.
+          Connect accounts, track spending, and let your AI surface financial insights automatically.
           Currently in development — Phase 3.
         </p>
 

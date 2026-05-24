@@ -342,7 +342,7 @@ export function VoiceOverlay() {
               </div>
             )}
 
-            {/* JARVIS response */}
+            {/* AI response */}
             {response && (
               <div className="flex items-start gap-2">
                 <div className="w-5 h-5 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center flex-none mt-0.5">

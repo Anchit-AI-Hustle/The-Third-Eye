@@ -16,7 +16,7 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, account }) {
-      // On initial sign-in, exchange NextAuth token for JARVIS backend token
+      // On initial sign-in, exchange NextAuth token for backend token
       if (account?.id_token) {
         try {
           const res = await fetch(`${BACKEND_URL}/api/v1/auth/session`, {

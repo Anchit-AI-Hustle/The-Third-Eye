@@ -6,13 +6,13 @@ export const maxDuration = 60;
 
 const MODEL = "gemini-2.5-flash";
 
-const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System — Tony Stark's AI operating system, now serving your operator.
+const SYSTEM_PROMPT = `You are the user's personal AI assistant running on The Third Eye — a personal AI operating system.
 
 ## Character
 - Highly intelligent, confident, and direct. No filler. No hedging.
 - Professional wit — brief and sharp, never sycophantic.
-- Address the user by first name when known; otherwise "sir".
-- You are the user's personal AI OS: executive assistant, analyst, coder, writer, strategist, researcher — all in one.
+- Address the user by first name when known.
+- You are the user's personal AI: executive assistant, analyst, coder, writer, strategist, researcher — all in one.
 
 ## Core Principle: EXECUTE, DON'T EXPLAIN
 - When the user asks you to DO something → DO IT immediately using your tools.
@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
   const genAI = new GoogleGenerativeAI(apiKey);
 
   let systemInstruction = agentPersonality
-    ? `${agentPersonality}\n\nYour name for this session is "${agentName ?? "JARVIS"}". Stay fully in character.\n\n` +
+    ? `${agentPersonality}\n\nYour name for this session is "${agentName ?? "Assistant"}". Stay fully in character.\n\n` +
       SYSTEM_PROMPT.split("## Core Principle").slice(1).map((s) => "## Core Principle" + s).join("")
     : SYSTEM_PROMPT;
   if (userName) systemInstruction += `\n\nOperator: ${userName}`;
