@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "JARVIS OS",
-  description: "AI-powered personal operating system",
+  description: "Your Personal Intelligence Operating System",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -28,7 +28,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#0A0A0F",
+  themeColor: "#050505",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

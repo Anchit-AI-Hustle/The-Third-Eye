@@ -1,6 +1,6 @@
-// Generates icon-192.png and icon-512.png using only Node.js built-ins
+// Generates icon-192.png and icon-512.png — AJ monogram, Electric Cyan brand
 const zlib = require("zlib");
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 
 // ── CRC32 ──────────────────────────────────────────────────────────────────
@@ -13,35 +13,29 @@ const CRC_TABLE = (() => {
   }
   return t;
 })();
-
 function crc32(buf) {
   let crc = 0xffffffff;
   for (let i = 0; i < buf.length; i++) crc = CRC_TABLE[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
   return (crc ^ 0xffffffff) >>> 0;
 }
-
 function pngChunk(type, data) {
   const t = Buffer.from(type, "ascii");
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const crcInput = Buffer.concat([t, data]);
+  const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
   const crcBuf = Buffer.alloc(4);
-  crcBuf.writeUInt32BE(crc32(crcInput));
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([t, data])));
   return Buffer.concat([len, t, data, crcBuf]);
 }
 
-// ── Draw helpers ───────────────────────────────────────────────────────────
+// ── Canvas helpers ─────────────────────────────────────────────────────────
 function createCanvas(size) {
-  // RGBA pixel buffer
   const buf = new Uint8Array(size * size * 4);
   const set = (x, y, r, g, b, a = 255) => {
     if (x < 0 || x >= size || y < 0 || y >= size) return;
     const i = (y * size + x) * 4;
-    const fa = a / 255;
-    const bg_a = buf[i + 3] / 255;
+    const fa = a / 255, bg_a = buf[i + 3] / 255;
     const out_a = fa + bg_a * (1 - fa);
     if (out_a === 0) return;
-    buf[i    ] = Math.round((r * fa + buf[i    ] * bg_a * (1 - fa)) / out_a);
+    buf[i]     = Math.round((r * fa + buf[i]     * bg_a * (1 - fa)) / out_a);
     buf[i + 1] = Math.round((g * fa + buf[i + 1] * bg_a * (1 - fa)) / out_a);
     buf[i + 2] = Math.round((b * fa + buf[i + 2] * bg_a * (1 - fa)) / out_a);
     buf[i + 3] = Math.round(out_a * 255);
@@ -63,116 +57,121 @@ function createCanvas(size) {
         if (d2 <= o2 && d2 > i2) set(cx + dx, cy + dy, r, g, b, a);
       }
   };
-  return { buf, set, fillRect, fillCircle, fillRing, size };
+  const drawLine = (x0, y0, x1, y1, thickness, r, g, b) => {
+    const dx = x1 - x0, dy = y1 - y0;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
+    const half = Math.max(1, Math.floor(thickness / 2));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      fillCircle(Math.round(x0 + dx * t), Math.round(y0 + dy * t), half, r, g, b, 255);
+    }
+  };
+  return { buf, set, fillRect, fillCircle, fillRing, drawLine, size };
 }
 
+// ── AJ monogram icon ───────────────────────────────────────────────────────
 function drawIcon(size) {
   const c = createCanvas(size);
-  const s = size;
-  const cx = s >> 1, cy = s >> 1;
+  const cx = size >> 1, cy = size >> 1;
 
-  // Background: dark #07070F
-  c.fillRect(0, 0, s, s, 7, 7, 15, 255);
+  const [CR, CG, CB] = [0, 212, 255];   // #00D4FF Electric Cyan
+  const [SR, SG, SB] = [7, 17, 31];     // #07111F Deep Navy
 
-  // Outer glow ring (subtle, large)
-  const glowR = Math.round(s * 0.46);
-  for (let t = 0; t < 8; t++) {
-    const alpha = Math.round(12 - t * 1.3);
-    c.fillRing(cx, cy, glowR + t, glowR + t - 1, 59, 130, 246, Math.max(0, alpha));
+  // Background #050505
+  c.fillRect(0, 0, size, size, 5, 5, 5, 255);
+
+  // Outer glow (cyan fade)
+  const glowR = Math.round(size * 0.46);
+  for (let t = 0; t < 10; t++) {
+    const alpha = Math.round(18 - t * 1.7);
+    c.fillRing(cx, cy, glowR + t, glowR + t - 1, CR, CG, CB, Math.max(0, alpha));
   }
 
-  // Main circle border (blue #3B82F6)
-  const outerR = Math.round(s * 0.44);
-  const borderW = Math.max(2, Math.round(s * 0.035));
-  c.fillRing(cx, cy, outerR, outerR - borderW, 59, 130, 246, 255);
+  // Circle border
+  const outerR  = Math.round(size * 0.44);
+  const borderW = Math.max(2, Math.round(size * 0.034));
+  c.fillRing(cx, cy, outerR, outerR - borderW, CR, CG, CB, 255);
 
-  // Inner circle fill (slightly lighter dark)
-  c.fillCircle(cx, cy, outerR - borderW, 12, 12, 22, 255);
+  // Inner fill (deep navy)
+  c.fillCircle(cx, cy, outerR - borderW - 1, SR, SG, SB, 255);
 
-  // Draw "J" — scaled proportionally
-  const unit = Math.round(s * 0.06);  // base unit for stroke width
-  const jH = Math.round(s * 0.50);    // total height of the J
-  const jW = Math.round(s * 0.26);    // width
-  const jX = cx - Math.round(jW * 0.3); // horizontal center
-  const jY = cy - Math.round(jH * 0.5); // top of J
-  const sw = Math.max(2, unit);        // stroke width
+  // ── AJ Monogram ──────────────────────────────────────────────────────────
+  // A's right leg doubles as the J stem; J curls left at the bottom.
+  const sw  = Math.max(2, Math.round(size * 0.038));
+  const mH  = Math.round(size * 0.46);
+  const mW  = Math.round(size * 0.40);
+  const mX  = cx - Math.round(mW * 0.5);
+  const mY  = cy - Math.round(mH * 0.5);
 
-  // Blue colour for J: #60A5FA (slightly lighter)
-  const jr = 96, jg = 165, jb = 250;
+  const apexX = mX + Math.round(mW * 0.42);
+  const apexY = mY;
 
-  // Top horizontal bar of J
-  const barH = sw;
-  c.fillRect(jX, jY, jW, barH, jr, jg, jb, 255);
+  // A — left diagonal
+  c.drawLine(mX, mY + Math.round(mH * 0.68), apexX, apexY, sw, CR, CG, CB);
 
-  // Vertical stroke (right side of J, going down)
-  const vx = jX + jW - sw;
-  c.fillRect(vx, jY, sw, jH - Math.round(jH * 0.22), jr, jg, jb, 255);
+  // A — crossbar
+  c.drawLine(
+    mX + Math.round(mW * 0.17), mY + Math.round(mH * 0.52),
+    mX + Math.round(mW * 0.64), mY + Math.round(mH * 0.52),
+    sw, CR, CG, CB
+  );
 
-  // Bottom curve of J — approximate with rects
-  const curveY = jY + jH - Math.round(jH * 0.28);
-  const curveR = Math.round(jW * 0.42);
-  const curveCX = jX + jW - sw - curveR + Math.round(sw / 2);
-  const curveCY = curveY;
-  // Quarter circle (bottom-left of the J curl)
-  for (let angle = 90; angle <= 270; angle += 2) {
+  // J — top cross-stroke (completing the A apex)
+  const jStemX    = mX + Math.round(mW * 0.68);
+  const jStemBotY = mY + Math.round(mH * 0.74);
+  c.drawLine(apexX, apexY, jStemX, apexY, sw, CR, CG, CB);
+
+  // J — vertical stem
+  c.drawLine(jStemX, apexY, jStemX, jStemBotY, sw, CR, CG, CB);
+
+  // J — curl (half-circle arcing left)
+  const curveR  = Math.round(sw * 3.2);
+  const curveCX = jStemX - curveR;
+  for (let angle = 0; angle <= 180; angle += 2) {
     const rad = (angle * Math.PI) / 180;
     for (let dr = 0; dr < sw; dr++) {
-      const r = curveR + dr - Math.round(sw / 2);
-      const px = Math.round(curveCX + Math.cos(rad) * r);
-      const py = Math.round(curveCY + Math.sin(rad) * r);
-      c.set(px, py, jr, jg, jb, 255);
+      const r = curveR + dr - Math.floor(sw / 2);
+      c.set(
+        Math.round(curveCX + Math.cos(rad) * r),
+        Math.round(jStemBotY + Math.sin(rad) * r),
+        CR, CG, CB, 255
+      );
     }
   }
-
-  // Small dot / accent at bottom of J left foot
-  c.fillCircle(jX + Math.round(jW * 0.12), jY + jH - Math.round(sw / 2), Math.round(sw * 0.6), jr, jg, jb, 200);
 
   return c.buf;
 }
 
+// ── PNG encoder ────────────────────────────────────────────────────────────
 function encodePNG(pixels, size) {
-  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-
-  // IHDR
+  const sig  = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; ihdr[9] = 6; // RGBA
-
-  // Raw scanlines (filter byte 0 + RGBA per pixel)
+  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; ihdr[9] = 6;
   const raw = Buffer.alloc(size * (1 + size * 4));
   for (let y = 0; y < size; y++) {
-    raw[y * (1 + size * 4)] = 0; // filter None
+    raw[y * (1 + size * 4)] = 0;
     for (let x = 0; x < size; x++) {
       const src = (y * size + x) * 4;
       const dst = y * (1 + size * 4) + 1 + x * 4;
-      raw[dst]     = pixels[src];
-      raw[dst + 1] = pixels[src + 1];
-      raw[dst + 2] = pixels[src + 2];
-      raw[dst + 3] = pixels[src + 3];
+      raw[dst] = pixels[src]; raw[dst+1] = pixels[src+1];
+      raw[dst+2] = pixels[src+2]; raw[dst+3] = pixels[src+3];
     }
   }
-
-  const compressed = zlib.deflateSync(raw, { level: 9 });
-
   return Buffer.concat([
     sig,
     pngChunk("IHDR", ihdr),
-    pngChunk("IDAT", compressed),
+    pngChunk("IDAT", zlib.deflateSync(raw, { level: 9 })),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
 }
 
 const outDir = path.join(__dirname, "public");
-
 for (const size of [192, 512]) {
-  const pixels = drawIcon(size);
-  const png = encodePNG(pixels, size);
-  const outPath = path.join(outDir, `icon-${size}.png`);
-  fs.writeFileSync(outPath, png);
-  console.log(`✓ ${outPath} (${png.length} bytes)`);
+  const png = encodePNG(drawIcon(size), size);
+  const out = path.join(outDir, `icon-${size}.png`);
+  fs.writeFileSync(out, png);
+  console.log(`✓ ${out} (${png.length} bytes)`);
 }
-
-// Also write as logo.png (192 version) for backwards compat
 fs.copyFileSync(path.join(outDir, "icon-192.png"), path.join(outDir, "logo.png"));
-console.log("✓ logo.png (copy of icon-192.png)");
+console.log("✓ logo.png");

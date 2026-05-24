@@ -9,72 +9,60 @@ const config: Config = {
   darkMode: "class",
   theme: {
     extend: {
-      screens: {
-        "3xl": "1920px",
-      },
+      screens: { "3xl": "1920px" },
       colors: {
         background: {
-          base: "#0A0A0F",
-          surface: "#111118",
-          elevated: "#1A1A24",
+          base:     "#050505",
+          surface:  "#07111F",
+          elevated: "#0D1B30",
         },
         border: {
-          default: "#1E1E2E",
-          hover: "#2A2A3E",
+          default: "#0F2235",
+          hover:   "#1A3A5C",
         },
         text: {
-          primary: "#F0F0FF",
-          secondary: "#8888AA",
-          muted: "#4A4A6A",
+          primary:   "#FFFFFF",
+          secondary: "#A0AEC0",
+          muted:     "#4A6080",
         },
         accent: {
-          blue: "#5B8DEF",
+          blue:   "#00D4FF",   // Electric Cyan — primary brand
           violet: "#7C5CEF",
-          red: "#EF5B8D",
+          red:    "#EF4444",
         },
-        success: "#4EEF8D",
-        warning: "#EFC94E",
+        success: "#10B981",
+        warning: "#F59E0B",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans:    ["Inter", "system-ui", "sans-serif"],
         display: ["Geist", "Inter", "system-ui", "sans-serif"],
-        mono: ["Geist Mono", "ui-monospace", "monospace"],
+        mono:    ["Geist Mono", "ui-monospace", "monospace"],
       },
       fontSize: {
         base: ["14px", { lineHeight: "1.6" }],
       },
       borderRadius: {
-        card: "6px",
-        input: "4px",
-        badge: "2px",
+        card:  "8px",
+        input: "6px",
+        badge: "3px",
       },
-      transitionTimingFunction: {
-        jarvis: "cubic-bezier(0, 0, 0.2, 1)",
-      },
-      transitionDuration: {
-        interaction: "150ms",
-        page: "300ms",
-      },
+      transitionTimingFunction: { jarvis: "cubic-bezier(0, 0, 0.2, 1)" },
+      transitionDuration: { interaction: "150ms", page: "250ms" },
       boxShadow: {
-        card: "2px 4px 0px rgba(0,0,0,0.4)",
-        elevated: "4px 8px 0px rgba(0,0,0,0.5)",
+        card:     "0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,212,255,0.04)",
+        elevated: "0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.06)",
+        cyan:     "0 0 20px rgba(0,212,255,0.15), 0 0 60px rgba(0,212,255,0.05)",
       },
-      backdropBlur: {
-        modal: "12px",
-      },
+      backdropBlur: { modal: "16px" },
       animation: {
-        "fade-in": "fadeIn 150ms ease-out",
+        "fade-in":  "fadeIn 200ms ease-out",
         "slide-in": "slideIn 150ms ease-out",
+        "slide-up": "slideUp 200ms ease-out",
       },
       keyframes: {
-        fadeIn: {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        slideIn: {
-          "0%": { opacity: "0", transform: "translateY(4px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
+        fadeIn:  { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
+        slideIn: { "0%": { opacity: "0", transform: "translateY(4px)" },  "100%": { opacity: "1", transform: "translateY(0)" } },
+        slideUp: { "0%": { opacity: "0", transform: "translateY(8px)" },  "100%": { opacity: "1", transform: "translateY(0)" } },
       },
     },
   },
