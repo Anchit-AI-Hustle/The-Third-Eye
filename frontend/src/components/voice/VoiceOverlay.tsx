@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
@@ -28,6 +28,7 @@ export function VoiceOverlay() {
   const [response, setResponse] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; content: string; size: number }>>([]);
 
   const isStreamingRef = useRef(false);
   const suppressRef = useRef(false);
@@ -37,6 +38,7 @@ export function VoiceOverlay() {
   const memoryRef = useRef<Record<string, string>>({});
   const sendRef = useRef<(text?: string) => Promise<void>>(async () => {});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { allTasks, create: createTask } = useLocalTasks();
   const { docs } = useLocalKnowledge();
@@ -96,12 +98,29 @@ export function VoiceOverlay() {
     }
   }
 
+  async function handleFiles(files: FileList | File[]) {
+    const newFiles: Array<{ name: string; content: string; size: number }> = [];
+    for (const file of Array.from(files)) {
+      if (file.size > 5 * 1024 * 1024) continue;
+      const content = await new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.onerror = () => resolve(`[Could not read: ${file.name}]`);
+        r.readAsText(file);
+      });
+      newFiles.push({ name: file.name, content: content.slice(0, 50000), size: file.size });
+    }
+    setAttachedFiles((prev) => [...prev, ...newFiles]);
+  }
+
   const sendMessage = useCallback(
     async (text?: string) => {
       const msg = (text ?? input).trim();
       if (!msg || isStreamingRef.current) return;
 
+      const currentAttachments = [...attachedFiles];
       setInput("");
+      setAttachedFiles([]);
       setLastQuery(msg);
       setResponse("");
       setLiveBubble(null);
@@ -122,8 +141,10 @@ export function VoiceOverlay() {
             history: historyRef.current,
             memory: memoryRef.current,
             userName: session?.user?.name?.split(" ")[0],
+            userEmail: session?.user?.email,
             tasks: allTasks,
             docs: readyDocs,
+            attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
           }),
           signal: abortRef.current.signal,
         });
@@ -199,7 +220,7 @@ export function VoiceOverlay() {
         setIsStreaming(false);
       }
     },
-    [input, session, allTasks, docs, createTask, tts]
+    [input, session, allTasks, docs, createTask, tts, attachedFiles]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
@@ -355,9 +376,32 @@ export function VoiceOverlay() {
             )}
           </div>
 
+          {/* Attached files */}
+          {attachedFiles.length > 0 && (
+            <div className="flex-none px-2.5 py-1.5 border-t border-[rgba(79,195,247,0.06)]">
+              <div className="flex flex-wrap gap-1">
+                {attachedFiles.map((f, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-badge bg-[#4FC3F7]/8 border border-[#4FC3F7]/15 text-[10px] font-mono text-text-secondary">
+                    <FileText size={8} className="text-[#4FC3F7]" />
+                    <span className="max-w-[80px] truncate">{f.name}</span>
+                    <button onClick={() => setAttachedFiles((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-text-muted hover:text-accent-red"><X size={8} /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Input bar */}
           <div className="flex-none px-2.5 py-2 border-t border-[rgba(79,195,247,0.08)]">
-            <div className="flex items-center gap-2 bg-background-surface/50 border border-border-default rounded-card px-3 py-1.5">
+            <input type="file" ref={fileInputRef} className="hidden" multiple
+              accept=".txt,.md,.csv,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log,.sql,.sh"
+              onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }} />
+            <div className="flex items-center gap-1.5 bg-background-surface/50 border border-border-default rounded-card px-2.5 py-1.5">
+              <button onClick={() => fileInputRef.current?.click()} title="Attach file"
+                className="flex-none p-0.5 text-text-muted hover:text-[#4FC3F7] transition-colors">
+                <Paperclip size={11} />
+              </button>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -366,9 +410,9 @@ export function VoiceOverlay() {
                 disabled={isStreaming}
                 className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-xs outline-none disabled:opacity-60 font-mono"
               />
-              <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
-                className={cn("p-1 rounded-input transition-colors",
-                  input.trim() && !isStreaming ? "text-[#4FC3F7] hover:bg-[#4FC3F7]/10" : "text-text-muted cursor-not-allowed")}>
+              <button onClick={() => sendMessage()} disabled={(!input.trim() && !attachedFiles.length) || isStreaming}
+                className={cn("p-0.5 rounded-input transition-colors",
+                  (input.trim() || attachedFiles.length) && !isStreaming ? "text-[#4FC3F7] hover:bg-[#4FC3F7]/10" : "text-text-muted cursor-not-allowed")}>
                 <Send size={11} />
               </button>
             </div>
