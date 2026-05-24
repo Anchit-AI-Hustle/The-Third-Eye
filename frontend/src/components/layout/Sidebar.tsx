@@ -27,27 +27,27 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className={cn(
-      "hidden lg:flex flex-col h-screen sticky top-0 bg-background-surface border-r border-border-default transition-all duration-200 ease-in-out flex-none",
-      collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
-    )}>
-      {/* Brand */}
+    <aside
+      className={cn(
+        "hidden lg:flex flex-col h-screen sticky top-0 bg-background-surface border-r border-border-default transition-all duration-200 ease-in-out flex-none",
+        collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
+      )}
+    >
+      {/* Logo — Arc Reactor */}
       <div className={cn(
         "flex items-center gap-3 border-b border-border-default h-16 flex-none",
         collapsed ? "justify-center px-0" : "px-5"
       )}>
-        <div className="flex-none w-8 h-8 rounded-lg bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center">
-          <span className="font-display font-bold text-accent-blue text-sm tracking-tight leading-none">AJ</span>
+        <div className="arc-reactor flex-none" style={{ width: 32, height: 32 }}>
+          <div className="arc-reactor-core" style={{ width: 8, height: 8 }} />
         </div>
 
         {!collapsed && (
           <div className="flex-1 min-w-0">
-            <div className="font-display font-semibold text-text-primary tracking-tight leading-none text-sm">
+            <div className="font-display font-semibold text-text-primary tracking-tight leading-none gradient-text-arc">
               JARVIS OS
             </div>
-            <div className="text-[10px] font-mono text-text-muted mt-0.5 tracking-widest uppercase">
-              Intelligence OS
-            </div>
+            <div className="text-[10px] font-mono text-text-muted mt-0.5 tracking-wider">v0.1.0 · ONLINE</div>
           </div>
         )}
 
@@ -75,14 +75,18 @@ export function Sidebar() {
           return (
             <Link key={href} href={href} title={collapsed ? label : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-input text-sm transition-all duration-150",
+                "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
                 collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
                 isActive
-                  ? "bg-accent-blue/10 text-accent-blue border border-accent-blue/20"
-                  : "text-text-secondary hover:text-text-primary hover:bg-background-elevated border border-transparent"
-              )}>
-              <Icon size={15} className="flex-none" />
-              {!collapsed && <span className="flex-1">{label}</span>}
+                  ? "bg-[#4FC3F7]/8 text-[#4FC3F7]"
+                  : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
+              )}
+            >
+              {isActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#4FC3F7] rounded-r shadow-[0_0_8px_rgba(79,195,247,0.5)]" />
+              )}
+              <Icon size={16} className="flex-none" />
+              {!collapsed && <span className="flex-1 font-mono text-xs tracking-wide">{label}</span>}
             </Link>
           );
         })}
@@ -94,9 +98,10 @@ export function Sidebar() {
           className={cn(
             "flex items-center gap-3 rounded-input text-sm text-text-secondary hover:text-text-primary hover:bg-background-elevated transition-all border border-transparent",
             collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
-          )}>
-          <Settings size={15} className="flex-none" />
-          {!collapsed && <span>Settings</span>}
+          )}
+        >
+          <Settings size={16} className="flex-none" />
+          {!collapsed && <span className="font-mono text-xs tracking-wide">Settings</span>}
         </Link>
 
         {session?.user && (
@@ -105,16 +110,19 @@ export function Sidebar() {
             collapsed && "justify-center px-2"
           )}>
             {session.user.image ? (
-              <img src={session.user.image} alt=""
-                className="w-6 h-6 rounded-full flex-none object-cover ring-1 ring-border-hover" />
+              <img
+                src={session.user.image}
+                alt={session.user.name ?? ""}
+                className="w-6 h-6 rounded-full flex-none object-cover ring-1 ring-[#4FC3F7]/20"
+              />
             ) : (
-              <div className="w-6 h-6 rounded-full bg-accent-violet/20 border border-accent-violet/30 flex-none flex items-center justify-center text-xs text-accent-violet font-semibold">
+              <div className="w-6 h-6 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 flex-none flex items-center justify-center text-xs text-[#4FC3F7] font-semibold">
                 {session.user.name?.[0]?.toUpperCase() ?? "U"}
               </div>
             )}
             {!collapsed && (
               <>
-                <span className="text-text-secondary text-xs truncate flex-1">
+                <span className="text-text-secondary text-xs truncate flex-1 font-mono">
                   {session.user.name?.split(" ")[0] ?? session.user.email}
                 </span>
                 <button onClick={() => signOut({ callbackUrl: "/auth/signin" })}

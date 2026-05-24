@@ -42,8 +42,8 @@ export function SettingsClient({ user }: Props) {
       <Section icon={<Cpu size={15} />} title="AI Configuration">
         <div className="px-5 py-4 space-y-4">
           <Row label="Model" sub="Primary inference engine">
-            <span className="text-xs font-mono text-accent-blue bg-accent-blue/10 px-2 py-1 rounded">
-              claude-sonnet-4-6
+            <span className="text-xs font-mono text-[#4FC3F7] bg-[#4FC3F7]/10 px-2 py-1 rounded">
+              gemini-2.5-flash
             </span>
           </Row>
           <Row label="Prompt caching" sub="Reduces cost by caching system prompt">

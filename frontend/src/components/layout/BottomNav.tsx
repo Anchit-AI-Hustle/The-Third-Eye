@@ -23,7 +23,7 @@ export function BottomNav() {
           return (
             <Link key={href} href={href} className={cn(
               "flex-1 flex flex-col items-center justify-center gap-1 transition-colors",
-              isActive ? "text-accent-blue" : "text-text-muted hover:text-text-secondary"
+              isActive ? "text-[#4FC3F7]" : "text-text-muted"
             )}>
               <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
               <span className={cn(
