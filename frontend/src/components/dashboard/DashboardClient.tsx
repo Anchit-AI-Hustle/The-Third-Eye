@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
+import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { cn } from "@/lib/utils";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
@@ -55,6 +56,7 @@ function useUptime() {
 
 export function DashboardClient() {
   const { allTasks, ready } = useLocalTasks();
+  const { active: agent } = useAgentProfile();
   const { time, date, seconds } = useClock();
   const uptime = useUptime();
 
@@ -75,7 +77,7 @@ export function DashboardClient() {
     if (doneToday.length > 0)  insights.push(`${doneToday.length} task${doneToday.length > 1 ? "s" : ""} completed today — good momentum.`);
     if (inProgress.length > 0) insights.push(`${inProgress.length} task${inProgress.length > 1 ? "s" : ""} currently in progress.`);
     if (open.length === 0)     insights.push("All clear — no open tasks. Time to plan ahead.");
-    if (insights.length === 0) insights.push("System ready. Ask JARVIS anything to get started.");
+    if (insights.length === 0) insights.push(`System ready. Ask ${agent.name} anything to get started.`);
   }
 
   return (
@@ -130,7 +132,7 @@ export function DashboardClient() {
             <div className="arc-reactor-ring3" />
             <div className="arc-reactor-core" />
           </div>
-          <span className="hud-label mt-2 mb-4">J.A.R.V.I.S.</span>
+          <span className="hud-label mt-2 mb-4">{agent.name}</span>
 
           {/* System lines */}
           <div className="w-full space-y-2.5 mt-auto">
@@ -234,7 +236,7 @@ export function DashboardClient() {
           <QuickCard
             href="/assistant"
             icon={<MessageSquare size={16} />}
-            label="Talk to JARVIS"
+            label={`Talk to ${agent.name}`}
             sub="AI assistant · Voice ready"
             glow
           />

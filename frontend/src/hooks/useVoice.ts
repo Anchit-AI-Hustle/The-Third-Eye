@@ -180,7 +180,7 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-export function useTTS() {
+export function useTTS(voicePreference?: string) {
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
   const [enabled, setEnabled] = useState(() => {
@@ -211,8 +211,9 @@ export function useTTS() {
     const u = new SpeechSynthesisUtterance(clean);
     u.rate = 1.05; u.pitch = 0.9; u.volume = 1;
     const voices = window.speechSynthesis.getVoices();
+    const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
     const preferred =
-      voices.find((v) => /david|mark|google uk english male|daniel/i.test(v.name)) ??
+      voices.find((v) => pattern.test(v.name)) ??
       voices.find((v) => v.lang.startsWith("en") && /male/i.test(v.name)) ??
       voices.find((v) => v.lang === "en-US");
     if (preferred) u.voice = preferred;

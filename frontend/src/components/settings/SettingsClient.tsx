@@ -1,7 +1,8 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { User, Shield, Bell, Cpu, LogOut, ExternalLink, Check, Mic, Brain } from "lucide-react";
+import { User, Shield, Bell, Cpu, LogOut, ExternalLink, Check, Mic, Brain, Bot } from "lucide-react";
+import { AgentProfileManager } from "./AgentProfileManager";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,13 @@ export function SettingsClient({ user }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Agent Profiles */}
+      <Section icon={<Bot size={15} />} title="AI Agent Profiles">
+        <div className="p-5">
+          <AgentProfileManager />
+        </div>
+      </Section>
+
       {/* Profile */}
       <Section icon={<User size={15} />} title="Operator Profile">
         <div className="flex items-center gap-4 p-5">

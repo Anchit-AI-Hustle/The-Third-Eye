@@ -9,6 +9,7 @@ import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
+import { useAgentProfile } from "@/hooks/useAgentProfile";
 
 interface Message {
   id: string;
@@ -92,7 +93,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
   const { allTasks, create: createTask } = useLocalTasks();
   const { docs } = useLocalKnowledge();
-  const tts = useTTS();
+  const { active: agent } = useAgentProfile();
+  const tts = useTTS(agent.voicePreference);
 
   const stt = useVoiceSTT({
     lang,
@@ -178,6 +180,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           memory: memoryRef.current,
           userName: userName ?? session?.user?.name?.split(" ")[0],
           userEmail: session?.user?.email,
+          agentName: agent.name,
+          agentPersonality: agent.personality,
           tasks: allTasks,
           docs: readyDocs,
           attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
@@ -268,7 +272,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, session, userName, allTasks, docs, createTask, tts, attachedFiles]);
+  }, [input, session, userName, allTasks, docs, createTask, tts, attachedFiles, agent]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -376,7 +380,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Conversation */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5">
-        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} />}
+        {isEmpty && <EmptyState userName={userName} agentName={agent.name} greeting={agent.greeting} supported={stt.supported} onSuggest={sendMessage} />}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
 
@@ -481,7 +485,7 @@ function VoiceWaveform({ level }: { level: number }) {
   );
 }
 
-function EmptyState({ userName, supported, onSuggest }: { userName?: string; supported: boolean; onSuggest: (t: string) => void }) {
+function EmptyState({ userName, agentName, greeting, supported, onSuggest }: { userName?: string; agentName: string; greeting: string; supported: boolean; onSuggest: (t: string) => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
@@ -490,7 +494,7 @@ function EmptyState({ userName, supported, onSuggest }: { userName?: string; sup
           <div className="arc-reactor-core" />
         </div>
         <p className="text-text-primary font-semibold text-base mb-1">
-          {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
+          {userName ? `${greeting}, ${userName}.` : `${agentName} is online.`}
         </p>
         <p className="text-text-muted text-sm">
           {supported ? "Speak, type, or drop files — I'll handle the rest." : "Type below or drop files to begin."}

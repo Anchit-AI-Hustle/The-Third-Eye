@@ -276,6 +276,8 @@ interface ChatRequest {
   memory?: Record<string, string>;
   userName?: string;
   userEmail?: string;
+  agentName?: string;
+  agentPersonality?: string;
   tasks?: any[];
   docs?: Array<{ id: string; title: string; content: string; chunk_count: number }>;
   attachments?: Array<{ name: string; content: string }>;
@@ -288,7 +290,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json()) as ChatRequest;
-  const { message, history = [], memory = {}, userName, userEmail, tasks = [], docs = [], attachments = [] } = body;
+  const { message, history = [], memory = {}, userName, userEmail, agentName, agentPersonality, tasks = [], docs = [], attachments = [] } = body;
 
   if (!message?.trim()) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
@@ -296,7 +298,10 @@ export async function POST(req: NextRequest) {
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  let systemInstruction = SYSTEM_PROMPT;
+  let systemInstruction = agentPersonality
+    ? `${agentPersonality}\n\nYour name for this session is "${agentName ?? "JARVIS"}". Stay fully in character.\n\n` +
+      SYSTEM_PROMPT.split("## Core Principle").slice(1).map((s) => "## Core Principle" + s).join("")
+    : SYSTEM_PROMPT;
   if (userName) systemInstruction += `\n\nOperator: ${userName}`;
   if (userEmail) systemInstruction += ` (${userEmail})`;
   systemInstruction += ".";

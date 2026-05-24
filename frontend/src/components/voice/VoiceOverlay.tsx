@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
+import { useAgentProfile } from "@/hooks/useAgentProfile";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -42,7 +43,8 @@ export function VoiceOverlay() {
 
   const { allTasks, create: createTask } = useLocalTasks();
   const { docs } = useLocalKnowledge();
-  const tts = useTTS();
+  const { active: agent } = useAgentProfile();
+  const tts = useTTS(agent.voicePreference);
 
   const stt = useVoiceSTT({
     lang: "",
@@ -142,6 +144,8 @@ export function VoiceOverlay() {
             memory: memoryRef.current,
             userName: session?.user?.name?.split(" ")[0],
             userEmail: session?.user?.email,
+            agentName: agent.name,
+            agentPersonality: agent.personality,
             tasks: allTasks,
             docs: readyDocs,
             attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
@@ -220,7 +224,7 @@ export function VoiceOverlay() {
         setIsStreaming(false);
       }
     },
-    [input, session, allTasks, docs, createTask, tts, attachedFiles]
+    [input, session, allTasks, docs, createTask, tts, attachedFiles, agent]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
@@ -266,7 +270,7 @@ export function VoiceOverlay() {
             <span className="text-xs font-mono text-text-secondary max-w-[160px] truncate">{response.slice(0, 50)}</span>
           ) : (
             <span className="text-xs font-mono text-text-secondary group-hover:text-[#4FC3F7] transition-colors tracking-wider">
-              {micOn ? status : "JARVIS"}
+              {micOn ? status : agent.name}
             </span>
           )}
           <div className="arc-reactor flex-none" style={{ width: 28, height: 28 }}>
@@ -406,7 +410,7 @@ export function VoiceOverlay() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder={micOn ? "Or type…" : "Ask JARVIS…"}
+                placeholder={micOn ? "Or type…" : `Ask ${agent.name}…`}
                 disabled={isStreaming}
                 className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-xs outline-none disabled:opacity-60 font-mono"
               />
