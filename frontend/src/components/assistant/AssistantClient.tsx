@@ -307,8 +307,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
               : micOn ? "Ready — just speak"
               : "Mic off"}
           </span>
-          {apiError?.includes("ANTHROPIC_API_KEY") && (
-            <span className="text-[10px] font-mono text-accent-red ml-2">· Add ANTHROPIC_API_KEY in Vercel</span>
+          {apiError?.includes("GEMINI_API_KEY") && (
+            <span className="text-[10px] font-mono text-accent-red ml-2">· Add GEMINI_API_KEY in Vercel</span>
           )}
         </div>
         <div className="flex items-center gap-1 relative">
@@ -349,7 +349,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
       </div>
 
       {/* Error banner */}
-      {apiError && !apiError.includes("ANTHROPIC_API_KEY") && (
+      {apiError && !apiError.includes("GEMINI_API_KEY") && (
         <div className="flex-none flex items-center gap-2 px-4 sm:px-8 py-2 bg-accent-red/10 border-b border-accent-red/20">
           <AlertCircle size={12} className="text-accent-red flex-none" />
           <span className="text-xs text-accent-red">{apiError}</span>
@@ -497,9 +497,9 @@ function MessageBubble({ message, session }: { message: Message; session: any })
               <div>
                 <p className="text-accent-red text-sm font-medium">Error</p>
                 <p className="text-accent-red/80 text-xs mt-0.5">{message.error}</p>
-                {message.error.includes("ANTHROPIC_API_KEY") && (
+                {message.error.includes("GEMINI_API_KEY") && (
                   <p className="text-text-muted text-xs mt-2">
-                    Add <code className="font-mono bg-background-elevated px-1 rounded">ANTHROPIC_API_KEY</code> in Vercel → Settings → Environment Variables → Redeploy.
+                    Add <code className="font-mono bg-background-elevated px-1 rounded">GEMINI_API_KEY</code> in Vercel → Settings → Environment Variables → Redeploy.
                   </p>
                 )}
               </div>

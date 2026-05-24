@@ -234,14 +234,20 @@ export function VoiceOverlay() {
 
   return (
     <>
-      {/* Floating mic button */}
+      {/* Sticky "Hey JARVIS" pill — always visible when panel is closed */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 w-12 h-12 rounded-full bg-accent-blue text-white shadow-lg hover:bg-accent-blue/90 transition-all flex items-center justify-center hover:scale-105 active:scale-95"
+          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group animate-border-glow"
           title="Talk to JARVIS"
         >
-          <Mic size={20} />
+          <span className="w-2 h-2 rounded-full bg-[#4FC3F7] shadow-[0_0_8px_rgba(79,195,247,0.5)] animate-pulse" />
+          <span className="text-xs font-mono text-text-secondary group-hover:text-[#4FC3F7] transition-colors tracking-wider">
+            JARVIS
+          </span>
+          <div className="arc-reactor flex-none" style={{ width: 28, height: 28 }}>
+            <div className="arc-reactor-core" style={{ width: 7, height: 7 }} />
+          </div>
         </button>
       )}
 
@@ -249,10 +255,10 @@ export function VoiceOverlay() {
       {open && (
         <div
           ref={panelRef}
-          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 w-80 sm:w-96 bg-background-elevated border border-border-default rounded-card shadow-2xl animate-slide-in flex flex-col max-h-[70vh]"
+          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 w-80 sm:w-96 holo-card rounded-card shadow-2xl animate-slide-in flex flex-col max-h-[70vh] card-glow-arc hud-frame"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(79,195,247,0.1)]">
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -260,24 +266,24 @@ export function VoiceOverlay() {
                   tts.speaking
                     ? "bg-accent-violet animate-pulse"
                     : liveBubble?.phase === "recording" || liveBubble?.phase === "interim"
-                    ? "bg-accent-blue animate-pulse"
+                    ? "bg-[#4FC3F7] animate-pulse shadow-[0_0_6px_rgba(79,195,247,0.5)]"
                     : isStreaming
                     ? "bg-accent-violet animate-pulse"
-                    : "bg-success animate-pulse"
+                    : "bg-[#4FC3F7] animate-pulse shadow-[0_0_6px_rgba(79,195,247,0.5)]"
                 )}
               />
-              <span className="text-xs font-mono text-text-muted">
+              <span className="hud-label text-[#4FC3F7]">
                 {tts.speaking
-                  ? "JARVIS speaking…"
+                  ? "SPEAKING"
                   : isStreaming
-                  ? "Responding…"
+                  ? "PROCESSING"
                   : liveBubble?.phase === "interim"
-                  ? "Listening…"
+                  ? "LISTENING"
                   : liveBubble?.phase === "recording"
-                  ? "Listening…"
+                  ? "LISTENING"
                   : liveBubble?.phase === "transcribing"
-                  ? "Recognising…"
-                  : "Ready — speak"}
+                  ? "RECOGNISING"
+                  : "READY"}
               </span>
             </div>
             <div className="flex items-center gap-1">
