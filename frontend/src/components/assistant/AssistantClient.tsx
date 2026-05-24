@@ -9,6 +9,8 @@ import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
+import { useLocalNotes } from "@/hooks/useLocalNotes";
+import { useLocalGoals } from "@/hooks/useLocalGoals";
 
 interface Message {
   id: string;
@@ -72,7 +74,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [liveBubble, setLiveBubble] = useState<LiveBubble | null>(null);
   const [micOn, setMicOn] = useState(false);
-  const [serviceStatus, setServiceStatus] = useState<{ anthropic: boolean; openai: boolean; supabase: boolean } | null>(null);
+  const [serviceStatus, setServiceStatus] = useState<{ ai: boolean; openai: boolean; supabase: boolean; serper: boolean } | null>(null);
   const [systemOnline, setSystemOnline] = useState(false);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [idleIdx, setIdleIdx] = useState(0);
@@ -89,8 +91,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const suppressRef = useRef(false);
   const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { allTasks, create: createTask } = useLocalTasks();
+  const { allTasks, create: createTask, update: updateTask } = useLocalTasks();
   const { docs } = useLocalKnowledge();
+  const { notes } = useLocalNotes();
+  const { goals, add: addGoal, adjust: adjustGoal } = useLocalGoals();
   const tts = useTTS();
 
   const stt = useVoiceSTT({
@@ -136,11 +140,22 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }
   }, [tts.speaking]);
 
+  // Persistent memory: load from localStorage on session ready
+  useEffect(() => {
+    const email = session?.user?.email;
+    if (!email) return;
+    const key = `jarvis_memory_v1_${email}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+      if (Object.keys(saved).length > 0) memoryRef.current = { ...saved, ...memoryRef.current };
+    } catch {}
+  }, [session?.user?.email]);
+
   // Check service status on mount; show "all systems online" banner briefly
   useEffect(() => {
     fetch("/api/status").then((r) => r.json()).then((d) => {
       setServiceStatus(d);
-      if (d.anthropic) {
+      if (d.ai) {
         setSystemOnline(true);
         setTimeout(() => setSystemOnline(false), 4000);
       }
@@ -153,6 +168,25 @@ export function AssistantClient({ userName }: { userName?: string }) {
     const t = setInterval(() => setIdleIdx((i) => (i + 1) % IDLE_TAGLINES.length), 9000);
     return () => clearInterval(t);
   }, [micOn, isStreaming, tts.speaking, liveBubble]);
+
+  // Proactive morning briefing (6am–10am, once per day)
+  const briefingFiredRef = useRef(false);
+  useEffect(() => {
+    if (briefingFiredRef.current || !serviceStatus?.ai || messages.length > 0) return;
+    const hour = new Date().getHours();
+    if (hour < 6 || hour >= 11) return;
+    const today = new Date().toDateString();
+    const email = session?.user?.email ?? "anon";
+    const lastBriefing = localStorage.getItem(`jarvis_briefing_${email}`);
+    if (lastBriefing === today) return;
+    briefingFiredRef.current = true;
+    localStorage.setItem(`jarvis_briefing_${email}`, today);
+    setTimeout(() => {
+      if (!isStreamingRef.current) {
+        sendRef.current("Morning briefing: summarise my tasks, any overdue items, goals progress, and top priorities for today. Keep it sharp.");
+      }
+    }, 2500);
+  }, [serviceStatus, messages.length, session?.user?.email]);
 
   // Show a "done" tagline for 3s after each response
   const prevStreamingRef = useRef(false);
@@ -220,8 +254,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
           history: historyRef.current,
           memory: memoryRef.current,
           userName: userName ?? session?.user?.name?.split(" ")[0],
+          email: session?.user?.email ?? undefined,
           tasks: allTasks,
           docs: readyDocs,
+          goals,
+          notes: notes.map((n) => ({ id: n.id, title: n.title, content: n.content })),
+          accessToken: (session as any)?.accessToken ?? undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -270,7 +308,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setApiError(errMsg);
                 return;
               } else if (eventType === "done") {
-                if (parsed.memory) memoryRef.current = parsed.memory;
+                if (parsed.memory) {
+                  memoryRef.current = parsed.memory;
+                  // Persist memory to localStorage keyed by user email
+                  const email = session?.user?.email;
+                  if (email) {
+                    localStorage.setItem(`jarvis_memory_v1_${email}`, JSON.stringify(parsed.memory));
+                  }
+                }
                 historyRef.current = [
                   ...historyRef.current,
                   { role: "user", content: msg },
@@ -281,14 +326,22 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     if (fx.type === "task_create" && fx.data?.title) {
                       createTask({ title: fx.data.title, priority: fx.data.priority ?? "medium", status: "todo", assignee: fx.data.assignee, due_date: fx.data.due_date, description: fx.data.description });
                     }
+                    if (fx.type === "task_update" && fx.data?.id) {
+                      updateTask(fx.data.id, fx.data.patch ?? {});
+                    }
                     if (fx.type === "note_create" && fx.data?.title) {
-                      const notes = JSON.parse(localStorage.getItem("jarvis_notes_v1") ?? "[]");
-                      notes.unshift({ id: crypto.randomUUID(), title: fx.data.title, content: fx.data.content, pinned: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-                      localStorage.setItem("jarvis_notes_v1", JSON.stringify(notes));
+                      const savedNotes = JSON.parse(localStorage.getItem("jarvis_notes_v1") ?? "[]");
+                      savedNotes.unshift({ id: crypto.randomUUID(), title: fx.data.title, content: fx.data.content, pinned: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+                      localStorage.setItem("jarvis_notes_v1", JSON.stringify(savedNotes));
+                    }
+                    if (fx.type === "goal_create" && fx.data?.title) {
+                      addGoal({ title: fx.data.title, category: fx.data.category ?? "Personal", target: fx.data.target ?? 100, current: fx.data.current ?? 0, unit: fx.data.unit ?? "%", deadline: fx.data.deadline, description: fx.data.description });
+                    }
+                    if (fx.type === "goal_update" && fx.data?.id) {
+                      if (fx.data.delta !== undefined) adjustGoal(fx.data.id, fx.data.delta);
                     }
                   }
                 }
-                // Suppress VAD while TTS speaks (useEffect on tts.speaking handles this)
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -410,15 +463,15 @@ export function AssistantClient({ userName }: { userName?: string }) {
       </div>
 
       {/* Setup required banner */}
-      {serviceStatus && !serviceStatus.anthropic && (
+      {serviceStatus && !serviceStatus.ai && (
         <div className="flex-none px-4 sm:px-8 py-3 bg-warning/5 border-b border-warning/20">
           <div className="flex items-start gap-3">
             <AlertCircle size={14} className="text-warning flex-none mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-warning">JARVIS needs configuration</p>
               <p className="text-xs text-text-muted mt-0.5">
-                <code className="font-mono bg-background-elevated px-1 rounded">ANTHROPIC_API_KEY</code> is not set.
-                {" "}Go to Vercel → your project → Settings → Environment Variables → add the key → Redeploy.
+                <code className="font-mono bg-background-elevated px-1 rounded">GEMINI_API_KEY</code> is not set.
+                {" "}Go to Vercel → Settings → Environment Variables → add it → Redeploy.
               </p>
             </div>
             <a href="/settings" className="flex-none text-text-muted hover:text-text-secondary transition-colors p-0.5 rounded">

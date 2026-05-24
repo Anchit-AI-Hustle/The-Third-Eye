@@ -10,10 +10,11 @@ interface Props {
 }
 
 interface ServiceStatus {
-  anthropic: boolean;
+  ai: boolean;
   openai: boolean;
   supabase: boolean;
   google_oauth: boolean;
+  serper: boolean;
 }
 
 export function SettingsClient({ user }: Props) {
@@ -123,15 +124,16 @@ export function SettingsClient({ user }: Props) {
             </div>
           ) : (
             <>
-              <StatusRow label="Anthropic API" ok={status?.anthropic} hint="Required — powers AI responses" />
-              <StatusRow label="OpenAI API" ok={status?.openai} hint="Optional — Whisper transcription" />
+              <StatusRow label="Gemini AI" ok={status?.ai} hint="Required — GEMINI_API_KEY" />
+              <StatusRow label="OpenAI (Whisper)" ok={status?.openai} hint="Optional — OPENAI_API_KEY" />
+              <StatusRow label="Web Search" ok={status?.serper} hint="Optional — SERPER_API_KEY" />
               <StatusRow label="Supabase" ok={status?.supabase} hint="Optional — cross-device sync" />
-              <StatusRow label="Google OAuth" ok={status?.google_oauth} hint="Required — sign-in" />
+              <StatusRow label="Google OAuth" ok={status?.google_oauth} hint="Required — sign-in + calendar/email" />
             </>
           )}
-          {status && !status.anthropic && (
+          {status && !status.ai && (
             <p className="text-xs text-text-muted mt-2 pt-2 border-t border-border-default">
-              Add <code className="font-mono bg-background-elevated px-1 rounded text-accent-blue">ANTHROPIC_API_KEY</code> in Vercel → Settings → Environment Variables → Redeploy.
+              Add <code className="font-mono bg-background-elevated px-1 rounded text-accent-blue">GEMINI_API_KEY</code> in Vercel → Settings → Environment Variables → Redeploy.
             </p>
           )}
         </div>

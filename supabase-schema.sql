@@ -87,3 +87,17 @@ alter publication supabase_realtime add table team_members;
 alter publication supabase_realtime add table notes;
 alter publication supabase_realtime add table goals;
 alter publication supabase_realtime add table knowledge_docs;
+
+-- Persistent memory (key-value facts JARVIS learns about the user)
+create table if not exists jarvis_memory (
+  id text primary key default gen_random_uuid()::text,
+  user_id text not null,
+  key text not null,
+  value text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, key)
+);
+create index if not exists jarvis_memory_user_id_idx on jarvis_memory(user_id);
+alter table jarvis_memory enable row level security;
+create policy "users own memory" on jarvis_memory for all using (auth.jwt() ->> 'email' = user_id);
