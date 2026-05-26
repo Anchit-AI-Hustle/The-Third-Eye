@@ -45,6 +45,24 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
   const startMeter = useCallback(async () => {
     if (streamRef.current) return;
+    // On touch devices (iOS Safari, mobile Chrome), calling getUserMedia
+    // here on top of SpeechRecognition's implicit mic acquisition produces
+    // a second permission prompt. Skip the visualisation stream on mobile;
+    // we emit a synthetic level instead so the existing UI doesn't break.
+    const isTouch = typeof window !== "undefined"
+      && (window.matchMedia?.("(pointer: coarse)").matches
+        || /iPad|iPhone|iPod|Android/i.test(navigator.userAgent));
+    if (isTouch) {
+      const tick = () => {
+        if (!activeRef.current) return;
+        // Pulse 25..65 while listening so the bars animate without a real stream.
+        const level = 25 + Math.round(Math.sin(Date.now() / 200) * 20 + 20);
+        cbRef.current.onLevel?.(level);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },

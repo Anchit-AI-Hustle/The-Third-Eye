@@ -89,13 +89,14 @@ export async function requestConsent(key: ConsentKey): Promise<ConsentState> {
     if (key === "notifications") {
       const result = await Notification.requestPermission();
       state = result === "granted" ? "granted" : result === "denied" ? "denied" : "prompt";
-    } else if (key === "microphone") {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());
-      state = "granted";
-    } else if (key === "camera") {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((t) => t.stop());
+    } else if (key === "microphone" || key === "camera") {
+      // We deliberately DO NOT acquire a stream here. iOS Safari and several
+      // Android Chrome builds count every getUserMedia() invocation as a fresh
+      // permission prompt — eager-probing here and then opening the mic again
+      // from useVoice.ts produces two prompts back-to-back. Instead we mark
+      // this consent as "user agreed in dialog" and let the actual feature
+      // (useVoice / camera capture) trigger the single real prompt at the
+      // moment it needs the stream.
       state = "granted";
     } else if (key === "location") {
       state = await new Promise<ConsentState>((resolve) => {
