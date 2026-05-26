@@ -180,6 +180,59 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
+// Cross-browser TTS hardening:
+// - iOS Safari requires a user-gesture-initiated speak() before any TTS
+//   works for the session. The previous unlock immediately cancel()ed the
+//   warm-up utterance which silently kills the unlock itself.
+// - iOS Safari often returns 0 voices for the first ~200ms; await
+//   voiceschanged with a polling fallback (the event sometimes never fires).
+// - Chrome kills long utterances after ~15s without activity; we pause +
+//   resume every 10s while speaking to keep the queue alive.
+// - Defensive cancel + resume before each speak to prevent the iOS
+//   paused-after-cancel deadlock.
+
+const isIOS = typeof navigator !== "undefined"
+  && /iPad|iPhone|iPod/.test(navigator.userAgent)
+  && !(window as any).MSStream;
+const isChrome = typeof navigator !== "undefined"
+  && /Chrome|CriOS/.test(navigator.userAgent);
+
+let ttsUnlocked = false;
+
+function unlockTTS() {
+  if (ttsUnlocked || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    u.onend = () => { ttsUnlocked = true; };
+    u.onerror = () => { ttsUnlocked = true; };
+    window.speechSynthesis.speak(u);
+  } catch { /* noop */ }
+}
+
+async function waitForVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
+  let voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) return voices;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.speechSynthesis.removeEventListener("voiceschanged", finish);
+      resolve(window.speechSynthesis.getVoices());
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", finish);
+    const start = Date.now();
+    const tick = () => {
+      voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0 || Date.now() - start > timeoutMs) finish();
+      else setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
+
 export function useTTS(voicePreference?: string) {
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -188,27 +241,21 @@ export function useTTS(voicePreference?: string) {
     const v = localStorage.getItem("jarvis_tts_enabled");
     return v === null ? true : v === "true";
   });
+  const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const ok = typeof window !== "undefined" && "speechSynthesis" in window;
     setSupported(ok);
     if (!ok) return;
     window.speechSynthesis.getVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", () => window.speechSynthesis.getVoices());
-
-    // iOS Safari requires a user gesture before speechSynthesis will work.
-    // Unlock it silently on the first interaction.
-    const unlock = () => {
-      const u = new SpeechSynthesisUtterance("");
-      u.volume = 0;
-      window.speechSynthesis.speak(u);
-      window.speechSynthesis.cancel();
-    };
-    window.addEventListener("click", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, { once: true });
+    const arm = () => { unlockTTS(); };
+    window.addEventListener("pointerdown", arm, { once: true });
+    window.addEventListener("touchstart", arm, { once: true });
+    window.addEventListener("keydown", arm, { once: true });
     return () => {
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("pointerdown", arm);
+      window.removeEventListener("touchstart", arm);
+      window.removeEventListener("keydown", arm);
     };
   }, []);
 
@@ -216,34 +263,70 @@ export function useTTS(voicePreference?: string) {
     if (typeof window !== "undefined") localStorage.setItem("jarvis_tts_enabled", String(enabled));
   }, [enabled]);
 
-  const speak = useCallback((text: string, onEnd?: () => void) => {
+  const startKeepalive = useCallback(() => {
+    if (!isChrome || keepaliveRef.current) return;
+    keepaliveRef.current = setInterval(() => {
+      if (!window.speechSynthesis.speaking) return;
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }, 10_000);
+  }, []);
+
+  const stopKeepalive = useCallback(() => {
+    if (keepaliveRef.current) {
+      clearInterval(keepaliveRef.current);
+      keepaliveRef.current = null;
+    }
+  }, []);
+
+  const speak = useCallback(async (text: string, onEnd?: () => void) => {
     if (!supported) { onEnd?.(); return; }
-    window.speechSynthesis.cancel();
     if (!enabled) { onEnd?.(); return; }
     const clean = stripMarkdown(text);
     if (!clean.trim()) { onEnd?.(); return; }
+
+    try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    try { window.speechSynthesis.resume(); } catch { /* noop */ }
+
+    const voices = await waitForVoices(1500);
     const u = new SpeechSynthesisUtterance(clean);
-    u.rate = 1.05; u.pitch = 0.9; u.volume = 1;
-    const voices = window.speechSynthesis.getVoices();
+    u.rate = isIOS ? 1.0 : 1.05;
+    u.pitch = 0.9;
+    u.volume = 1;
     const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
     const preferred =
       voices.find((v) => pattern.test(v.name)) ??
-      voices.find((v) => v.lang.startsWith("en") && /male/i.test(v.name)) ??
-      voices.find((v) => v.lang === "en-US");
+      voices.find((v) => v.lang?.startsWith("en") && /male/i.test(v.name)) ??
+      voices.find((v) => v.lang === "en-US") ??
+      voices.find((v) => v.lang?.startsWith("en")) ??
+      voices[0];
     if (preferred) u.voice = preferred;
-    u.onstart = () => setSpeaking(true);
-    u.onend = () => { setSpeaking(false); onEnd?.(); };
-    u.onerror = () => { setSpeaking(false); onEnd?.(); };
-    window.speechSynthesis.speak(u);
-  }, [enabled, supported]);
+
+    u.onstart = () => { setSpeaking(true); startKeepalive(); };
+    const finish = () => { setSpeaking(false); stopKeepalive(); onEnd?.(); };
+    u.onend = finish;
+    u.onerror = finish;
+
+    setTimeout(() => {
+      try { window.speechSynthesis.speak(u); } catch { finish(); }
+    }, isIOS ? 80 : 0);
+  }, [enabled, supported, voicePreference, startKeepalive, stopKeepalive]);
 
   const stop = useCallback(() => {
-    if (supported) window.speechSynthesis.cancel();
+    if (supported) {
+      try { window.speechSynthesis.cancel(); } catch { /* noop */ }
+    }
+    stopKeepalive();
     setSpeaking(false);
-  }, [supported]);
+  }, [supported, stopKeepalive]);
 
   const toggle = useCallback(() => {
-    setEnabled((v) => { if (v) window.speechSynthesis?.cancel(); return !v; });
+    setEnabled((v) => {
+      if (v && typeof window !== "undefined") {
+        try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+      }
+      return !v;
+    });
   }, []);
 
   return { speaking, enabled, supported, speak, stop, toggle };

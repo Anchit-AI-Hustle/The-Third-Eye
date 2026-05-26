@@ -71,20 +71,6 @@ export const authOptions: NextAuthOptions = {
               token.backendToken = data.access_token;
             }
           } catch {}
-      // On initial sign-in, exchange NextAuth token for backend token
-      if (account?.id_token) {
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/v1/auth/session`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: account.id_token }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            token.backendToken = data.access_token;
-          }
-        } catch {
-          // Non-fatal: backend token exchange failed; user can still browse
         }
         return token;
       }
