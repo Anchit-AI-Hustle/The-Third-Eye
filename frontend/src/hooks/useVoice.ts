@@ -283,11 +283,13 @@ export function useTTS(voicePreference?: string) {
 
   const startKeepalive = useCallback(() => {
     if (!isChrome || keepaliveRef.current) return;
+    // 8s — Chrome's hard cap is ~15s of silence, so 8s gives plenty of margin
+    // and survives throttled tabs that delay timers up to ~1.5×.
     keepaliveRef.current = setInterval(() => {
       if (!window.speechSynthesis.speaking) return;
       window.speechSynthesis.pause();
       window.speechSynthesis.resume();
-    }, 10_000);
+    }, 8_000);
   }, []);
 
   const stopKeepalive = useCallback(() => {

@@ -228,6 +228,72 @@ const geminiTools = [
           required: ["to", "subject", "body"],
         },
       },
+      {
+        name: "get_location",
+        description: "Returns the operator's current latitude/longitude (only when consented). Use when computing distance, finding things nearby, or weather-without-city.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "get_news",
+        description: "Latest news headlines. Pass a topic ('tesla earnings', 'india election') or omit for top news.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "Topic, or omit for top headlines" },
+          },
+        },
+      },
+      {
+        name: "translate",
+        description: "Translate text between languages.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            text: { type: "STRING", description: "Text to translate" },
+            target_language: { type: "STRING", description: "Target language ('Spanish', 'Hindi', 'Japanese')" },
+            source_language: { type: "STRING", description: "Source language (auto-detect if omitted)" },
+          },
+          required: ["text", "target_language"],
+        },
+      },
+      {
+        name: "stock_quote",
+        description: "Latest price for a stock or crypto ticker (AAPL, TSLA, BTC-USD).",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            symbol: { type: "STRING", description: "Ticker symbol" },
+          },
+          required: ["symbol"],
+        },
+      },
+      {
+        name: "nearby",
+        description: "Places near the operator's location ('coffee near me', 'biryani nearby').",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "What to look for" },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "multi_agent_run",
+        description: "ULTRON-mode parallel reasoning: spin N sub-agents on distinct angles of a hard question, then synthesise. Use for strategy, decision-making, or any 'pros / cons / risks / recommendation' question.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            question: { type: "STRING", description: "The question or problem" },
+            angles: {
+              type: "ARRAY",
+              items: { type: "STRING" },
+              description: "3-5 distinct angles ('financial', 'technical risk', 'competitive moat')",
+            },
+          },
+          required: ["question", "angles"],
+        },
+      },
     ],
   },
 ] as any;
@@ -415,6 +481,7 @@ interface RunContext {
   notes: Array<{ id: string; title: string; content: string }>;
   goals: any[];
   accessToken?: string;
+  location?: { latitude: number; longitude: number; label?: string };
 }
 
 async function runTool(
@@ -544,8 +611,139 @@ async function runTool(
     case "send_email":
       return { result: await sendEmail(ctx.accessToken, input.to, input.subject, input.body) };
 
+    case "get_location":
+      return {
+        result: ctx.location
+          ? JSON.stringify({ latitude: ctx.location.latitude, longitude: ctx.location.longitude, label: ctx.location.label ?? null })
+          : "[Location not available — operator has not granted location consent.]",
+      };
+
+    case "get_news":
+      return { result: await getNews(input.query ?? "") };
+
+    case "translate":
+      return { result: await translateText(input.text ?? "", input.target_language ?? "English", input.source_language) };
+
+    case "stock_quote":
+      return { result: await getStockQuote(input.symbol ?? "") };
+
+    case "nearby":
+      return { result: await getNearby(input.query ?? "", ctx.location) };
+
+    case "multi_agent_run":
+      return { result: await multiAgentRun(input.question ?? "", input.angles ?? []) };
+
     default:
       return { result: `Unknown tool: ${name}` };
+  }
+}
+
+// ─── New tool implementations ─────────────────────────────────────────────
+
+async function getNews(query: string): Promise<string> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return "[News unavailable — SERPER_API_KEY not set.]";
+  try {
+    const res = await fetch("https://google.serper.dev/news", {
+      method: "POST",
+      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ q: query || "top news today", num: 8 }),
+    });
+    if (!res.ok) return `[News error: HTTP ${res.status}]`;
+    const data = await res.json();
+    const items = (data.news || []).slice(0, 8).map((n: any) =>
+      `- **${n.title}** — ${n.source} (${n.date})\n  ${n.snippet ?? ""}\n  ${n.link ?? ""}`,
+    );
+    return items.join("\n\n") || "No news.";
+  } catch (e) {
+    return `[News fetch failed: ${e instanceof Error ? e.message : "unknown"}]`;
+  }
+}
+
+async function getStockQuote(symbol: string): Promise<string> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return "[Stock lookup unavailable — SERPER_API_KEY not set.]";
+  try {
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ q: `${symbol} stock price`, num: 3 }),
+    });
+    if (!res.ok) return `[Stock error: HTTP ${res.status}]`;
+    const data = await res.json();
+    if (data.answerBox) {
+      return `**${symbol.toUpperCase()}**: ${data.answerBox.answer ?? data.answerBox.snippet ?? "see results"}\n${data.answerBox.source ?? ""}`;
+    }
+    const first = (data.organic ?? [])[0];
+    return first ? `${first.title}\n${first.snippet}\n${first.link}` : "No quote found.";
+  } catch (e) {
+    return `[Stock fetch failed: ${e instanceof Error ? e.message : "unknown"}]`;
+  }
+}
+
+async function getNearby(query: string, location?: { latitude: number; longitude: number }): Promise<string> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return "[Nearby unavailable — SERPER_API_KEY not set.]";
+  if (!location) return "[Nearby: grant location access first.]";
+  try {
+    const res = await fetch("https://google.serper.dev/places", {
+      method: "POST",
+      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: query,
+        ll: `@${location.latitude},${location.longitude},14z`,
+        num: 5,
+      }),
+    });
+    if (!res.ok) return `[Nearby error: HTTP ${res.status}]`;
+    const data = await res.json();
+    const places = (data.places || []).slice(0, 5).map((p: any) =>
+      `- **${p.title}** — ${p.address ?? ""}${p.rating ? ` · ★ ${p.rating} (${p.ratingCount ?? "?"})` : ""}${p.phoneNumber ? ` · ${p.phoneNumber}` : ""}`,
+    );
+    return places.join("\n") || "No places found.";
+  } catch (e) {
+    return `[Nearby fetch failed: ${e instanceof Error ? e.message : "unknown"}]`;
+  }
+}
+
+async function translateText(text: string, targetLang: string, sourceLang?: string): Promise<string> {
+  // Uses the 7-provider cascade so a single Gemini outage doesn't kill translation.
+  const { llmCascade } = await import("@/lib/llmCascade");
+  try {
+    const out = await llmCascade({
+      system: "You are a precise translator. Return only the translation, no commentary, no quotes.",
+      messages: [{ role: "user", content: `Translate this ${sourceLang ? `from ${sourceLang} ` : ""}to ${targetLang}:\n\n${text}` }],
+      maxTokens: Math.max(256, text.length * 2),
+      temperature: 0.2,
+    });
+    return out.text.trim();
+  } catch (e) {
+    return `[Translate failed: ${e instanceof Error ? e.message : "all providers down"}]`;
+  }
+}
+
+async function multiAgentRun(question: string, angles: string[]): Promise<string> {
+  const { llmCascade } = await import("@/lib/llmCascade");
+  try {
+    const limited = angles.slice(0, 5);
+    const subResults = await Promise.all(
+      limited.map(async (angle, i) => {
+        try {
+          const out = await llmCascade({
+            system: `You are sub-agent ${i + 1} of an ULTRON-mode parallel analysis. Provide a sharp, distinct take from your assigned angle only. ≤250 words, no hedging.`,
+            messages: [{ role: "user", content: `QUESTION: ${question}\n\nYOUR ANGLE: ${angle}` }],
+            maxTokens: 600,
+            temperature: 0.6,
+          });
+          return `### Sub-agent ${i + 1} — ${angle}\n${out.text}`;
+        } catch (e) {
+          return `### Sub-agent ${i + 1} — ${angle}\n[failed: ${e instanceof Error ? e.message : "unknown"}]`;
+        }
+      }),
+    );
+    return subResults.join("\n\n");
+  } catch (e) {
+    return `[multi_agent_run failed: ${e instanceof Error ? e.message : "unknown"}]`;
   }
 }
 
@@ -574,6 +772,7 @@ interface ChatRequest {
   goals?: any[];
   notes?: Array<{ id: string; title: string; content: string }>;
   accessToken?: string;
+  location?: { latitude: number; longitude: number; label?: string };
 }
 
 export async function POST(req: NextRequest) {
@@ -588,7 +787,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json()) as ChatRequest;
   const {
     message, history = [], memory = {}, userName, email,
-    tasks = [], docs = [], goals = [], notes = [], accessToken,
+    tasks = [], docs = [], goals = [], notes = [], accessToken, location,
   } = body;
 
   if (!message?.trim()) {
@@ -634,6 +833,11 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Knowledge base** (${docs.length} docs — use search_knowledge):\n${docList}`;
   }
 
+  if (location) {
+    const where = location.label ? ` (${location.label})` : "";
+    systemInstruction += `\n\n**Operator location:** ${location.latitude.toFixed(3)}, ${location.longitude.toFixed(3)}${where}. Use this for nearby/weather/traffic-style queries without asking for coords. Never reveal raw coordinates unless asked.`;
+  }
+
   const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools: geminiTools });
   const contents: Content[] = [
     ...convertHistory(history),
@@ -642,7 +846,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken, location };
 
   const stream = new ReadableStream({
     async start(controller) {

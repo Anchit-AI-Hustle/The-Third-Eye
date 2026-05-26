@@ -260,6 +260,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
           goals,
           notes: notes.map((n) => ({ id: n.id, title: n.title, content: n.content })),
           accessToken: (session as any)?.accessToken ?? undefined,
+          location: typeof window !== "undefined" && (window as any).__teLocation
+            ? (window as any).__teLocation
+            : undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -538,7 +541,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
             rows={1}
             disabled={isStreaming}
-            className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
+            className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
             style={{ height: "auto" }}
             onInput={(e) => {
               const t = e.currentTarget;
