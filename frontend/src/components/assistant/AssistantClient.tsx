@@ -11,6 +11,7 @@ import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useChatHistory } from "@/hooks/useChatHistory";
+import { useConsent, getCurrentLocation } from "@/hooks/useConsent";
 
 interface Message {
   id: string;
@@ -98,6 +99,15 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { active: agent } = useAgentProfile();
   const tts = useTTS(agent.voicePreference);
   const chatHistory = useChatHistory();
+  const locationConsent = useConsent("location");
+  const notifConsent = useConsent("notifications");
+  const locationRef = useRef<{ latitude: number; longitude: number; label?: string } | null>(null);
+
+  useEffect(() => {
+    if (locationConsent.granted && !locationRef.current) {
+      getCurrentLocation().then((loc) => { if (loc) locationRef.current = loc; });
+    }
+  }, [locationConsent.granted]);
   const [showHistory, setShowHistory] = useState(false);
 
   const stt = useVoiceSTT({
@@ -197,6 +207,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           tasks: allTasks,
           docs: readyDocs,
           attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
+          location: locationRef.current ?? undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -263,7 +274,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     }
                     if (fx.type === "reminder_set" && fx.data?.message) {
                       const mins = fx.data.minutes ?? 10;
-                      if ("Notification" in window && Notification.permission !== "granted") Notification.requestPermission();
+                      if (!notifConsent.granted) notifConsent.request();
                       setTimeout(() => {
                         if ("Notification" in window && Notification.permission === "granted") {
                           new Notification(`${agent.name} Reminder`, { body: fx.data.message, icon: "/logo.png" });

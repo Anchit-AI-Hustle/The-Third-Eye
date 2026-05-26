@@ -37,9 +37,20 @@ const SYSTEM_PROMPT = `You are the user's personal AI assistant running on The T
 - **search_knowledge**: search user's uploaded documents — always search before saying you don't know
 - **web_search**: search the web for current information, news, answers, research. Use for ANY factual question.
 - **calculate**: math expressions, unit conversions, currency, percentages — use for ANY math question
-- **get_weather**: current weather and forecast for any city
+- **get_weather**: current weather and forecast (auto-uses the operator's location if no city given)
 - **set_reminder**: create a timed reminder that triggers a browser notification
 - **daily_briefing**: generate a morning briefing with date, tasks summary, weather, and a motivational quote
+- **get_location**: returns the operator's current latitude/longitude (only when consented)
+- **get_news**: latest news headlines for a topic or general top news
+- **translate**: translate text between languages — be the human-in-the-loop translator
+- **stock_quote**: latest stock or crypto price by ticker symbol
+- **nearby**: places near the operator's location ("coffee shops near me", "best biryani nearby")
+- **multi_agent_run**: ULTRON-mode parallel reasoning — kick off N sub-agents on independent angles of a hard question and synthesize
+
+## Location awareness
+- The operator's coarse location is sometimes included in this prompt as "Operator location: lat, lon (city, country)".
+- For "near me", "what's the weather", "traffic to X", "best <thing> nearby" — assume operator's location, no need to ask.
+- Never reveal raw coordinates unless asked.
 
 ## Task creation guidelines
 - If the user says "add X to my tasks", "remind me to X" → call create_task immediately
@@ -187,6 +198,72 @@ const geminiTools = [
           },
         },
       },
+      {
+        name: "get_location",
+        description: "Returns the operator's current latitude and longitude. Use when the user explicitly asks where they are or to compute distance.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "get_news",
+        description: "Latest news headlines. Defaults to top news; pass a query for a specific topic ('tesla earnings', 'tech layoffs', 'india election').",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "Topic, or omit for top headlines" },
+          },
+        },
+      },
+      {
+        name: "translate",
+        description: "Translate text between languages. Use when user says 'translate X to Spanish', 'what does Y mean in Hindi', etc.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            text: { type: "STRING", description: "Text to translate" },
+            target_language: { type: "STRING", description: "Target language (e.g. 'Spanish', 'Hindi', 'Japanese')" },
+            source_language: { type: "STRING", description: "Source language (optional; auto-detect if omitted)" },
+          },
+          required: ["text", "target_language"],
+        },
+      },
+      {
+        name: "stock_quote",
+        description: "Latest price for a stock or crypto ticker. Use for 'AAPL price', 'how is TSLA doing', 'BTC price', etc.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            symbol: { type: "STRING", description: "Ticker symbol — AAPL, TSLA, BTC-USD, etc." },
+          },
+          required: ["symbol"],
+        },
+      },
+      {
+        name: "nearby",
+        description: "Places near the operator's location. Use for 'coffee near me', 'best biryani nearby', 'gas station closest'.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "What to look for ('coffee', 'biryani', 'pharmacy')" },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "multi_agent_run",
+        description: "ULTRON-mode parallel reasoning. Kicks off N sub-agents on different angles of a hard question and returns their findings. Use for strategy, research, decision-making, complex analysis.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            question: { type: "STRING", description: "The question or problem" },
+            angles: {
+              type: "ARRAY",
+              items: { type: "STRING" },
+              description: "3-5 distinct angles to attack the problem from (e.g., 'financial impact', 'technical risk', 'competitive moat')",
+            },
+          },
+          required: ["question", "angles"],
+        },
+      },
     ],
   },
 ] as any;
@@ -194,16 +271,25 @@ const geminiTools = [
 interface TaskData { title: string; priority?: string; assignee?: string; due_date?: string; description?: string; }
 interface NoteData { title: string; content: string; }
 
-async function getWeather(city: string): Promise<string> {
+async function getWeather(city: string, location?: { latitude: number; longitude: number }): Promise<string> {
   const key = process.env.OPENWEATHER_API_KEY;
   if (!key) {
-    return `[Weather API unavailable — OPENWEATHER_API_KEY not set. Use web_search as fallback to find weather for "${city}".]`;
+    return `[Weather API unavailable — OPENWEATHER_API_KEY not set. Use web_search as fallback to find weather for "${city || "operator location"}".]`;
   }
   try {
-    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${key}&units=metric`);
-    if (!res.ok) return `[Weather error: city "${city}" not found]`;
+    const url = city
+      ? `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${key}&units=metric`
+      : location
+      ? `https://api.openweathermap.org/data/2.5/weather?lat=${location.latitude}&lon=${location.longitude}&appid=${key}&units=metric`
+      : null;
+    if (!url) return `[Weather: provide a city or grant location access.]`;
+    const res = await fetch(url);
+    if (!res.ok) return `[Weather error: ${city ? `city "${city}" not found` : "lookup failed"}]`;
     const d = await res.json();
-    const forecast = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${key}&units=metric&cnt=8`);
+    const forecastUrl = city
+      ? `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${key}&units=metric&cnt=8`
+      : `https://api.openweathermap.org/data/2.5/forecast?lat=${location!.latitude}&lon=${location!.longitude}&appid=${key}&units=metric&cnt=8`;
+    const forecast = await fetch(forecastUrl);
     let forecastStr = "";
     if (forecast.ok) {
       const fd = await forecast.json();
@@ -223,6 +309,103 @@ async function getWeather(city: string): Promise<string> {
     });
   } catch (err) {
     return `[Weather fetch failed: ${err instanceof Error ? err.message : "unknown"}]`;
+  }
+}
+
+async function getNews(query: string): Promise<string> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return `[News unavailable — SERPER_API_KEY not set.]`;
+  try {
+    const res = await fetch("https://google.serper.dev/news", {
+      method: "POST",
+      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ q: query || "top news today", num: 8 }),
+    });
+    if (!res.ok) return `[News error: HTTP ${res.status}]`;
+    const data = await res.json();
+    const items = (data.news || []).slice(0, 8).map((n: any) =>
+      `- **${n.title}** — ${n.source} (${n.date})\n  ${n.snippet ?? ""}\n  ${n.link ?? ""}`,
+    );
+    return items.join("\n\n") || "No news.";
+  } catch (err) {
+    return `[News fetch failed: ${err instanceof Error ? err.message : "unknown"}]`;
+  }
+}
+
+async function getStockQuote(symbol: string): Promise<string> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return `[Stock lookup unavailable — SERPER_API_KEY not set.]`;
+  try {
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+      body: JSON.stringify({ q: `${symbol} stock price`, num: 3 }),
+    });
+    if (!res.ok) return `[Stock error: HTTP ${res.status}]`;
+    const data = await res.json();
+    if (data.answerBox) {
+      return `**${symbol.toUpperCase()}**: ${data.answerBox.answer ?? data.answerBox.snippet ?? "see results"}\n${data.answerBox.source ?? ""}`;
+    }
+    const first = (data.organic ?? [])[0];
+    return first ? `${first.title}\n${first.snippet}\n${first.link}` : "No quote found.";
+  } catch (err) {
+    return `[Stock fetch failed: ${err instanceof Error ? err.message : "unknown"}]`;
+  }
+}
+
+async function getNearby(query: string, location?: { latitude: number; longitude: number }): Promise<string> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return `[Nearby unavailable — SERPER_API_KEY not set.]`;
+  if (!location) return `[Nearby: grant location access first.]`;
+  try {
+    const res = await fetch("https://google.serper.dev/places", {
+      method: "POST",
+      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: query,
+        ll: `@${location.latitude},${location.longitude},14z`,
+        num: 5,
+      }),
+    });
+    if (!res.ok) return `[Nearby error: HTTP ${res.status}]`;
+    const data = await res.json();
+    const places = (data.places || []).slice(0, 5).map((p: any) =>
+      `- **${p.title}** — ${p.address ?? ""}${p.rating ? ` · ★ ${p.rating} (${p.ratingCount ?? "?"})` : ""}${p.phoneNumber ? ` · ${p.phoneNumber}` : ""}`,
+    );
+    return places.join("\n") || "No places found.";
+  } catch (err) {
+    return `[Nearby fetch failed: ${err instanceof Error ? err.message : "unknown"}]`;
+  }
+}
+
+async function translate(genAI: any, text: string, targetLang: string, sourceLang?: string): Promise<string> {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = `Translate the following text ${sourceLang ? `from ${sourceLang} ` : ""}to ${targetLang}. Return only the translation, no commentary.\n\nTEXT:\n${text}`;
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (err) {
+    return `[Translate failed: ${err instanceof Error ? err.message : "unknown"}]`;
+  }
+}
+
+async function multiAgentRun(genAI: any, question: string, angles: string[]): Promise<string> {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const subResults = await Promise.all(
+      angles.slice(0, 5).map(async (angle, i) => {
+        const prompt = `You are sub-agent ${i + 1} of an ULTRON-mode parallel analysis.\n\nQUESTION: ${question}\n\nYOUR ANGLE: ${angle}\n\nProvide a sharp, distinct analysis from this angle only. Concise but substantive (≤250 words). No hedging.`;
+        try {
+          const res = await model.generateContent(prompt);
+          return `### Sub-agent ${i + 1} — ${angle}\n${res.response.text()}`;
+        } catch (e) {
+          return `### Sub-agent ${i + 1} — ${angle}\n[failed: ${e instanceof Error ? e.message : "unknown"}]`;
+        }
+      }),
+    );
+    return subResults.join("\n\n");
+  } catch (err) {
+    return `[multi_agent_run failed: ${err instanceof Error ? err.message : "unknown"}]`;
   }
 }
 
@@ -347,6 +530,10 @@ function runTool(
     return { result: "", async: true };
   }
 
+  if (name === "get_location" || name === "get_news" || name === "stock_quote" || name === "nearby" || name === "translate" || name === "multi_agent_run") {
+    return { result: "", async: true };
+  }
+
   if (name === "set_reminder") {
     const mins = parseInt(input.minutes ?? "10", 10);
     return {
@@ -416,6 +603,7 @@ interface ChatRequest {
   tasks?: any[];
   docs?: Array<{ id: string; title: string; content: string; chunk_count: number }>;
   attachments?: Array<{ name: string; content: string }>;
+  location?: { latitude: number; longitude: number; label?: string };
 }
 
 export async function POST(req: NextRequest) {
@@ -425,7 +613,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json()) as ChatRequest;
-  const { message, history = [], memory = {}, userName, userEmail, agentName, agentPersonality, tasks = [], docs = [], attachments = [] } = body;
+  const { message, history = [], memory = {}, userName, userEmail, agentName, agentPersonality, tasks = [], docs = [], attachments = [], location } = body;
 
   if (!message?.trim()) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
@@ -455,6 +643,10 @@ export async function POST(req: NextRequest) {
   if (docs.length > 0) {
     const docList = docs.map((d) => `- ${d.title} (${d.chunk_count} chunks)`).join("\n");
     systemInstruction += `\n\nKnowledge base (${docs.length} docs):\n${docList}\nUse search_knowledge when relevant.`;
+  }
+  if (location) {
+    const where = location.label ? ` (${location.label})` : "";
+    systemInstruction += `\n\nOperator location: ${location.latitude.toFixed(3)}, ${location.longitude.toFixed(3)}${where}.`;
   }
 
   const model = genAI.getGenerativeModel({
@@ -527,7 +719,21 @@ export async function POST(req: NextRequest) {
               if (fc.name === "web_search") {
                 resultStr = await webSearch(fc.args?.query ?? "");
               } else if (fc.name === "get_weather") {
-                resultStr = await getWeather(fc.args?.city ?? "");
+                resultStr = await getWeather(fc.args?.city ?? "", location);
+              } else if (fc.name === "get_location") {
+                resultStr = location
+                  ? JSON.stringify({ latitude: location.latitude, longitude: location.longitude, label: location.label ?? null })
+                  : "[Location not available — operator has not granted location consent.]";
+              } else if (fc.name === "get_news") {
+                resultStr = await getNews(fc.args?.query ?? "");
+              } else if (fc.name === "stock_quote") {
+                resultStr = await getStockQuote(fc.args?.symbol ?? "");
+              } else if (fc.name === "nearby") {
+                resultStr = await getNearby(fc.args?.query ?? "", location);
+              } else if (fc.name === "translate") {
+                resultStr = await translate(genAI, fc.args?.text ?? "", fc.args?.target_language ?? "English", fc.args?.source_language);
+              } else if (fc.name === "multi_agent_run") {
+                resultStr = await multiAgentRun(genAI, fc.args?.question ?? "", fc.args?.angles ?? []);
               }
 
               toolResponseParts.push({

@@ -6,7 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target,
+  FileText, Target, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { label: "Goals",      href: "/goals",      icon: Target },
   { label: "Knowledge",  href: "/knowledge",  icon: BookOpen },
   { label: "Finance",    href: "/finance",    icon: BarChart2 },
+  { label: "Capabilities", href: "/capabilities", icon: Sparkles },
 ];
 
 export function Sidebar() {
