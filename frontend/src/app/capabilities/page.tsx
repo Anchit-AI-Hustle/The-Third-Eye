@@ -1,5 +1,4 @@
 "use client";
-
 import { Check, X, Lock, Mic, Camera, MapPin, Bell, RotateCcw } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useAllConsents, useConsentBundle } from "@/hooks/useConsent";

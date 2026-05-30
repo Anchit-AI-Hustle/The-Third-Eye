@@ -15,8 +15,11 @@ os.environ.setdefault("NEXTAUTH_SECRET", "test-nextauth-secret-with-32-chars")
 os.environ.setdefault("GOOGLE_AI_API_KEY", "test-google-ai-key")
 
 # ─── pgvector compatibility shim for SQLite ───────────────────────────────────
+# pyrefly: ignore [missing-import]
 import pgvector.sqlalchemy
+# pyrefly: ignore [missing-import]
 from sqlalchemy import Text
+# pyrefly: ignore [missing-import]
 from sqlalchemy.types import TypeDecorator
 
 
@@ -48,10 +51,12 @@ pgvector.sqlalchemy.Vector = _SQLiteVector
 import uuid
 from typing import AsyncGenerator
 
-import pytest
-import pytest_asyncio
+# pyrefly: ignore [missing-import]
+from pytest import pytest, pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# pyrefly: ignore [missing-import]
 from sqlalchemy.pool import StaticPool
 
 # Now safe to import models / app — they will use the patched Vector type

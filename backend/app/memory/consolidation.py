@@ -14,8 +14,11 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+# pyrefly: ignore [missing-import]
 import structlog
+# pyrefly: ignore [missing-import]
 from sqlalchemy import delete, select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.service import append_audit_log
