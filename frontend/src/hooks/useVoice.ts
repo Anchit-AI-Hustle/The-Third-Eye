@@ -195,6 +195,8 @@ function stripMarkdown(text: string): string {
     .replace(/^\d+\.\s+/gm, "")
     .replace(/\n{2,}/g, ". ")
     .replace(/\n/g, " ")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F0FF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{200D}]+/gu, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
