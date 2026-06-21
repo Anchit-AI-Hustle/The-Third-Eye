@@ -299,9 +299,9 @@ export function useTTS(voicePreference?: string) {
     }
   }, []);
 
-  const speak = useCallback(async (text: string, onEnd?: () => void) => {
+  const speak = useCallback(async (text: string, onEnd?: () => void, force = false) => {
     if (!supported) { onEnd?.(); return; }
-    if (!enabled) { onEnd?.(); return; }
+    if (!enabled && !force) { onEnd?.(); return; }   // force = one-shot Narrate, ignores the ambient toggle
     const clean = stripMarkdown(text);
     if (!clean.trim()) { onEnd?.(); return; }
 
