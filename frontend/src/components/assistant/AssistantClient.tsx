@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -390,6 +390,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
     else { stt.enable(); setMicOn(true); }
   }
 
+  // ── Composer reply mode (Option B) ──────────────────────────────────────────
+  // One control governs how JARVIS answers, derived from the existing voice flags:
+  //   text  → silent (TTS off)      voice → reply read aloud (TTS on)
+  //   call  → read aloud + mic on (hands-free conversation)
+  const replyMode: "text" | "voice" | "call" = micOn ? "call" : tts.enabled ? "voice" : "text";
+  function setReplyMode(mode: "text" | "voice" | "call") {
+    if (mode === "text") { if (tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
+    else if (mode === "voice") { if (!tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
+    else { // call — needs the mic; fall back to voice if STT is unavailable
+      if (!tts.enabled) tts.toggle();
+      if (stt.supported && !micOn) toggleMic();
+    }
+  }
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  function narrateLastReply() {
+    setModeMenuOpen(false);
+    const last = [...messages].reverse().find((m) => m.role === "assistant" && m.content?.trim());
+    const text = last?.content
+      || "Ask me anything about your tasks, notes, knowledge base, or schedule, and I will help you get it done.";
+    if (!tts.enabled) tts.toggle();
+    tts.speak(text, undefined, true);  // force: read aloud once even if the ambient toggle is off
+  }
+
   const isEmpty = messages.length === 0 && !liveBubble;
 
   return (
@@ -443,18 +466,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 </button>
               ))}
             </div>
-          )}
-          <button onClick={tts.toggle} title={tts.enabled ? "Mute JARVIS" : "Unmute JARVIS"}
-            className={cn("p-1.5 rounded-input transition-colors",
-              tts.enabled ? tts.speaking ? "text-accent-violet animate-pulse" : "text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
-            {tts.enabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
-          </button>
-          {stt.supported && (
-            <button onClick={toggleMic} title={micOn ? "Mute mic" : "Unmute mic"}
-              className={cn("p-1.5 rounded-input transition-colors",
-                micOn ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
-              {micOn ? <Mic size={13} /> : <MicOff size={13} />}
-            </button>
           )}
           {messages.length > 0 && (
             <button onClick={handleClear} title="Clear conversation"
@@ -530,9 +541,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Text input */}
+      {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div className="flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base">
-        <div className="flex items-end gap-3 bg-background-surface border border-border-default rounded-card px-4 py-3 focus-within:border-border-hover transition-colors">
+        <div className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
+          {/* Mode chip: Chat ▾ → Narrate */}
+          <div className="relative flex-none self-stretch flex items-center">
+            {modeMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />}
+            <button type="button" onClick={() => setModeMenuOpen((v) => !v)} aria-haspopup="true" aria-expanded={modeMenuOpen}
+              className="flex items-center gap-1.5 text-accent-blue bg-accent-blue/10 border border-accent-blue/25 rounded-input px-2.5 py-1.5 text-xs font-medium transition-colors hover:border-accent-blue/50">
+              <MessageSquare size={13} /> Chat <ChevronDown size={11} className="opacity-70" />
+            </button>
+            {modeMenuOpen && (
+              <div className="absolute bottom-10 left-0 z-50 w-52 bg-background-elevated border border-border-default rounded-card shadow-xl p-1.5">
+                <button type="button" onClick={() => setModeMenuOpen(false)}
+                  className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-accent-blue hover:bg-background-surface">
+                  <MessageSquare size={14} /><span><span className="block text-[13px] font-medium">Chat</span><span className="block text-[11px] text-text-muted">Type &amp; read answers</span></span>
+                </button>
+                <button type="button" onClick={narrateLastReply}
+                  className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-text-secondary hover:bg-background-surface">
+                  <Volume2 size={14} /><span><span className="block text-[13px] font-medium text-text-primary">Narrate</span><span className="block text-[11px] text-text-muted">Read the last reply aloud</span></span>
+                </button>
+              </div>
+            )}
+          </div>
           <textarea
             ref={textareaRef}
             value={input}
@@ -549,6 +580,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
               t.style.height = `${Math.min(t.scrollHeight, 128)}px`;
             }}
           />
+          {/* Reply selector: how answers come back */}
+          <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5 self-stretch" role="group" aria-label="How replies come back">
+            <button type="button" onClick={() => setReplyMode("text")} title="Text only — silent answers"
+              className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
+              <Type size={13} />
+            </button>
+            <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply — answers read aloud"
+              className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "voice" ? "bg-accent-violet/15 text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
+              <Volume2 size={13} />
+            </button>
+            {stt.supported && (
+              <button type="button" onClick={() => setReplyMode("call")} title="Call — hands-free voice conversation"
+                className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "call" ? "bg-success/15 text-success" : "text-text-muted hover:text-text-secondary")}>
+                <Phone size={13} />
+              </button>
+            )}
+          </div>
+          {stt.supported && (
+            <button onClick={toggleMic} title={micOn ? "Mute mic" : "Dictate"}
+              className={cn("flex-none p-1.5 rounded-input transition-colors", micOn ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
+              {micOn ? <Mic size={15} /> : <MicOff size={15} />}
+            </button>
+          )}
           <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
             className={cn("flex-none p-1.5 rounded-input transition-colors",
               input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
@@ -556,7 +610,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
           </button>
         </div>
         <p className="text-text-muted text-[11px] mt-2 text-center">
-          {micOn ? "Speak naturally · pause to send · or type + Enter" : "Enter to send · Shift+Enter for new line"}
+          {replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
+            : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
+            : "Enter to send · Shift+Enter for new line"}
         </p>
       </div>
     </div>
