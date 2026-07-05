@@ -1,5 +1,5 @@
 "use client";
-import { Check, X, Lock, Mic, Camera, MapPin, Bell, RotateCcw } from "lucide-react";
+import { Check, X, Lock, Mic, Camera, MapPin, Bell, RotateCcw, Crown } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useAllConsents, useConsentBundle } from "@/hooks/useConsent";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
@@ -12,16 +12,17 @@ interface Capability {
   required: Array<"mic" | "cam" | "loc" | "notif" | "key">;
   envKey?: string;
   status: "live" | "partial" | "planned";
+  premium?: boolean; // badged only — fully usable during launch
 }
 
 const CAPS: Capability[] = [
   // — JARVIS canon —
   { group: "JARVIS",  name: "Natural conversation",        blurb: "Streaming voice + text dialog with personality (JARVIS / FRIDAY / EDITH / ULTRON)", inspiration: "Iron Man, IM 2, 3",            required: ["mic"],           status: "live" },
-  { group: "JARVIS",  name: "Daily briefing",              blurb: "Date, tasks, weather, motivational quote on demand",                                inspiration: "Iron Man 2 — morning routine", required: [],                status: "live" },
+  { group: "JARVIS",  name: "Daily briefing",              blurb: "Date, tasks, weather, motivational quote on demand",                                inspiration: "Iron Man 2 — morning routine", required: [],                status: "live", premium: true },
   { group: "JARVIS",  name: "Calculation & conversions",   blurb: "Math, currency, unit conversions in-line",                                          inspiration: "ubiquitous",                   required: [],                status: "live" },
-  { group: "JARVIS",  name: "Reminders & alarms",          blurb: "Browser-native notifications with countdown",                                       inspiration: "Iron Man — meeting reminders", required: ["notif"],         status: "live" },
-  { group: "JARVIS",  name: "Calendar integration",        blurb: "Read & write events on Google Calendar",                                            inspiration: "Iron Man 2 — pepper schedule", required: ["key"], envKey: "GOOGLE_CALENDAR_OAUTH", status: "planned" },
-  { group: "JARVIS",  name: "Email summarization",         blurb: "Triage Gmail and draft replies",                                                    inspiration: "Iron Man 2",                   required: ["key"], envKey: "GMAIL_OAUTH", status: "planned" },
+  { group: "JARVIS",  name: "Reminders & alarms",          blurb: "Browser-native notifications with countdown",                                       inspiration: "Iron Man — meeting reminders", required: ["notif"],         status: "live", premium: true },
+  { group: "JARVIS",  name: "Calendar integration",        blurb: "Read & write events on Google Calendar",                                            inspiration: "Iron Man 2 — pepper schedule", required: ["key"], envKey: "GOOGLE_CALENDAR_OAUTH", status: "planned", premium: true },
+  { group: "JARVIS",  name: "Email summarization",         blurb: "Triage Gmail and draft replies",                                                    inspiration: "Iron Man 2",                   required: ["key"], envKey: "GMAIL_OAUTH", status: "planned", premium: true },
   { group: "JARVIS",  name: "Document Q&A",                blurb: "Upload PDFs/text; chat asks them via RAG",                                          inspiration: "Iron Man — schematics",        required: [],                status: "live" },
   { group: "JARVIS",  name: "Notes capture",               blurb: "Voice or text → titled notes, searchable",                                          inspiration: "Tony's voice memos",           required: [],                status: "live" },
   { group: "JARVIS",  name: "Task tracking",               blurb: "Priorities, due dates, status — voice creates them",                                inspiration: "Iron Man 3 — workshop list",   required: [],                status: "live" },
@@ -50,7 +51,7 @@ const CAPS: Capability[] = [
   { group: "E.D.I.T.H.", name: "Encrypted memory",         blurb: "Fernet-encrypted persistent memory of facts",                                        inspiration: "Stark security",               required: [],                status: "live" },
 
   // — ULTRON canon —
-  { group: "ULTRON",  name: "Parallel multi-agent reasoning", blurb: "N sub-agents tackle distinct angles in parallel, synthesize",                    inspiration: "Age of Ultron",                required: [],                status: "live" },
+  { group: "ULTRON",  name: "Parallel multi-agent reasoning", blurb: "N sub-agents tackle distinct angles in parallel, synthesize",                    inspiration: "Age of Ultron",                required: [],                status: "live", premium: true },
   { group: "ULTRON",  name: "Internet-wide sift",          blurb: "Wide-net research across web + news + docs at once",                                inspiration: "Age of Ultron",                required: ["key"], envKey: "SERPER_API_KEY", status: "partial" },
   { group: "ULTRON",  name: "Strategic decision tree",     blurb: "Pros/cons/risks → recommendation with confidence",                                  inspiration: "Age of Ultron",                required: [],                status: "live" },
   { group: "ULTRON",  name: "Self-monitoring telemetry",   blurb: "Latency, cost, token usage dashboard",                                              inspiration: "Stark systems",                required: [],                status: "planned" },
@@ -100,6 +101,9 @@ export default function CapabilitiesPage() {
             <span className={`px-2 py-1 rounded-full border ${STATUS_STYLE.partial}`}>{counts.partial} partial</span>
             <span className={`px-2 py-1 rounded-full border ${STATUS_STYLE.planned}`}>{counts.planned} planned</span>
           </div>
+          <p className="text-xs text-amber-300/80 flex items-center gap-1.5 pt-1">
+            <Crown size={12} /> Premium features are unlocked for everyone during launch — the badge just marks what becomes paid later.
+          </p>
         </header>
 
         <section className="rounded-2xl border border-border-default bg-background-surface/30 p-4 sm:p-5 space-y-3">
@@ -145,7 +149,14 @@ export default function CapabilitiesPage() {
                 <div key={c.name} className="rounded-xl border border-border-default bg-background-surface/30 p-4 space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-sm font-medium">{c.name}</h3>
+                      <h3 className="text-sm font-medium flex items-center gap-1.5">
+                        {c.name}
+                        {c.premium && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-300">
+                            <Crown size={9} /> Premium
+                          </span>
+                        )}
+                      </h3>
                       <p className="text-xs text-text-muted leading-snug mt-0.5">{c.blurb}</p>
                     </div>
                     <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap ${STATUS_STYLE[c.status]}`}>

@@ -56,6 +56,12 @@ export const PRICING = {
   yearly: { amount: 6000, label: "$60/yr" },
 } as const;
 
+// Launch mode: everything is unlocked for everyone and premium features are only
+// *badged*, not gated. Set ENFORCE_PREMIUM=1 to switch on real paywall behavior.
+export function premiumEnforced(): boolean {
+  return process.env.ENFORCE_PREMIUM === "1";
+}
+
 export function limitsFor(tier: Tier): TierLimits {
   return TIERS[tier] ?? TIERS.free;
 }
