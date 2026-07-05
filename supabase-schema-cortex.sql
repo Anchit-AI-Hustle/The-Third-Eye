@@ -25,7 +25,9 @@ create policy "users own cortex memories" on cortex_memories for all using (auth
 create table if not exists cortex_doc_chunks (
   id text primary key default gen_random_uuid()::text,
   user_id text not null,
-  doc_id text not null,
+  -- Cascade so deleting a knowledge doc removes its chunks even if the
+  -- app-side cleanup call is interrupted (no orphaned content in search).
+  doc_id text not null references knowledge_docs(id) on delete cascade,
   doc_title text not null,
   chunk_index integer not null,
   content text not null,
