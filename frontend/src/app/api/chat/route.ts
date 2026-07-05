@@ -5,6 +5,8 @@ import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -899,13 +901,20 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as ChatRequest;
   const {
-    message, history = [], memory = {}, userName, email,
-    tasks = [], docs = [], goals = [], notes = [], accessToken, location,
+    message, history = [], memory = {}, userName,
+    tasks = [], docs = [], goals = [], notes = [], location,
   } = body;
 
   if (!message?.trim()) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
   }
+
+  // Identity and OAuth token come from the server session — never the request
+  // body — so a caller can't read/write another user's Cortex memory, reminders,
+  // or usage by supplying someone else's email (service-role bypasses RLS).
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email ?? undefined;
+  const accessToken = (session as any)?.accessToken as string | undefined;
 
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
