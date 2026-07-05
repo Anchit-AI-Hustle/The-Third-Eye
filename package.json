@@ -14,15 +14,15 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@capacitor/cli": "^8.3.4",
+    "@capacitor/cli": "^8.4.1",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.4",
+    "@capacitor/android": "^8.4.1",
     "@capacitor/app": "^8.0.0",
-    "@capacitor/core": "^8.3.4",
-    "@capacitor/ios": "^8.3.4",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
     "@capacitor/push-notifications": "^8.0.0",
     "@capacitor/splash-screen": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0"

@@ -4,6 +4,9 @@ import { consume } from "@/lib/usage";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
+import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -633,8 +636,17 @@ async function runTool(
       };
     }
 
-    case "search_knowledge":
-      return { result: simpleSearch(ctx.docs, input.query ?? "") };
+    case "search_knowledge": {
+      // Cortex semantic search + keyword scan over inline docs, merged — so docs
+      // uploaded before Cortex indexing (not yet embedded) are still findable.
+      const query = input.query ?? "";
+      const hits = ctx.email ? await searchChunks(ctx.email, query) : [];
+      const cortexText = hits.map((h, i) => `[${i + 1}] ${h.doc_title}\n${h.content.slice(0, 600)}`).join("\n\n---\n\n");
+      const keywordText = simpleSearch(ctx.docs, query);
+      const keywordMeaningful = keywordText && !/^No (documents|relevant)/.test(keywordText);
+      if (cortexText && keywordMeaningful) return { result: `${cortexText}\n\n---\n\n${keywordText}` };
+      return { result: cortexText || keywordText };
+    }
 
     case "get_calendar_events":
       return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10) };
@@ -892,12 +904,25 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as ChatRequest;
   const {
-    message, history = [], memory = {}, userName, email,
-    tasks = [], docs = [], goals = [], notes = [], accessToken, location,
+    message, history = [], memory = {}, userName,
+    tasks = [], docs = [], goals = [], notes = [], location,
   } = body;
 
   if (!message?.trim()) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
+  }
+
+  // Identity and OAuth token come from the server session — never the request
+  // body — so a caller can't read/write another user's Cortex memory, reminders,
+  // or usage by supplying someone else's email (service-role bypasses RLS).
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email ?? undefined;
+  const accessToken = (session as any)?.accessToken as string | undefined;
+
+  // /api/chat isn't covered by the middleware matcher, so guard here: no session
+  // means no metering context and would burn Gemini quota / bypass limits.
+  if (!email) {
+    return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
   }
 
   const enforced = premiumEnforced();
@@ -927,6 +952,12 @@ export async function POST(req: NextRequest) {
   const memoryEntries = Object.entries(memory);
   if (memoryEntries.length > 0) {
     systemInstruction += `\n\n**Persistent memory about this user:**\n${memoryEntries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}`;
+  }
+
+  // Cortex: semantic recall from past conversations (native pgvector memory).
+  const recall = email ? await retrieveMemories(email, message, 5) : [];
+  if (recall.length > 0) {
+    systemInstruction += `\n\n**Relevant recall from earlier conversations:**\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
   }
 
   if (tasks.length > 0) {
@@ -1036,6 +1067,9 @@ export async function POST(req: NextRequest) {
           }
 
           send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
+          // Best-effort, non-blocking: don't hold the stream open (which keeps the
+          // client's composer locked) while the embedding + insert run.
+          if (email && fullText) void rememberExchange(email, message, fullText).catch(() => {});
           break;
         }
 

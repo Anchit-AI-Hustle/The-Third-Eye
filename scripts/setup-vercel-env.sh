@@ -16,7 +16,7 @@ ENVS=(
   "NEXT_PUBLIC_SUPABASE_URL:Supabase project URL (from supabase.com → Settings → API)"
   "NEXT_PUBLIC_SUPABASE_ANON_KEY:Supabase anon key (from supabase.com → Settings → API)"
   "NEXTAUTH_SECRET:Random secret — run: openssl rand -base64 32"
-  "NEXTAUTH_URL:Your production URL, e.g. https://jarvis-anchit.vercel.app"
+  "NEXTAUTH_URL:Your production URL, e.g. https://third-eye.anchit-tandon.com"
   "GOOGLE_CLIENT_ID:Google OAuth client ID (from console.cloud.google.com)"
   "GOOGLE_CLIENT_SECRET:Google OAuth client secret"
 )
