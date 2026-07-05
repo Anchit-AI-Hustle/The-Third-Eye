@@ -916,6 +916,12 @@ export async function POST(req: NextRequest) {
   const email = session?.user?.email ?? undefined;
   const accessToken = (session as any)?.accessToken as string | undefined;
 
+  // /api/chat isn't covered by the middleware matcher, so guard here: no session
+  // means no metering context and would burn Gemini quota / bypass limits.
+  if (!email) {
+    return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
+  }
+
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
   if (enforced && !gate.allowed) {
