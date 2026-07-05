@@ -4,18 +4,27 @@
   "description": "The Third Eye — Your Personal AI Operating System",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "cap:sync": "cap sync",
+    "cap:add:ios": "cap add ios",
+    "cap:add:android": "cap add android",
+    "cap:ios": "cap sync ios && cap open ios",
+    "cap:android": "cap sync android && cap open android"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@capacitor/cli": "^8.3.4",
-    "@capacitor/core": "^8.3.4",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "lucide-react": "^1.17.0"
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
+    "@capacitor/push-notifications": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0"
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 import { Check, X, Lock, Mic, Camera, MapPin, Bell, RotateCcw, Crown } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { BRAND_LOGOS } from "@/components/BrandLogos";
 import { useAllConsents, useConsentBundle } from "@/hooks/useConsent";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 
@@ -13,6 +14,7 @@ interface Capability {
   envKey?: string;
   status: "live" | "partial" | "planned";
   premium?: boolean; // badged only — fully usable during launch
+  logo?: keyof typeof BRAND_LOGOS;
 }
 
 const CAPS: Capability[] = [
@@ -21,8 +23,8 @@ const CAPS: Capability[] = [
   { group: "JARVIS",  name: "Daily briefing",              blurb: "Date, tasks, weather, motivational quote on demand",                                inspiration: "Iron Man 2 — morning routine", required: [],                status: "live", premium: true },
   { group: "JARVIS",  name: "Calculation & conversions",   blurb: "Math, currency, unit conversions in-line",                                          inspiration: "ubiquitous",                   required: [],                status: "live" },
   { group: "JARVIS",  name: "Reminders & alarms",          blurb: "Browser-native notifications with countdown",                                       inspiration: "Iron Man — meeting reminders", required: ["notif"],         status: "live", premium: true },
-  { group: "JARVIS",  name: "Calendar integration",        blurb: "Read & write events on Google Calendar",                                            inspiration: "Iron Man 2 — pepper schedule", required: ["key"], envKey: "GOOGLE_CALENDAR_OAUTH", status: "planned", premium: true },
-  { group: "JARVIS",  name: "Email summarization",         blurb: "Triage Gmail and draft replies",                                                    inspiration: "Iron Man 2",                   required: ["key"], envKey: "GMAIL_OAUTH", status: "planned", premium: true },
+  { group: "JARVIS",  name: "Calendar integration",        blurb: "Read & write events on Google Calendar",                                            inspiration: "Iron Man 2 — pepper schedule", required: ["key"], envKey: "GOOGLE_CALENDAR_OAUTH", status: "planned", premium: true, logo: "gcal" },
+  { group: "JARVIS",  name: "Email summarization",         blurb: "Triage Gmail and draft replies",                                                    inspiration: "Iron Man 2",                   required: ["key"], envKey: "GMAIL_OAUTH", status: "planned", premium: true, logo: "gmail" },
   { group: "JARVIS",  name: "Document Q&A",                blurb: "Upload PDFs/text; chat asks them via RAG",                                          inspiration: "Iron Man — schematics",        required: [],                status: "live" },
   { group: "JARVIS",  name: "Notes capture",               blurb: "Voice or text → titled notes, searchable",                                          inspiration: "Tony's voice memos",           required: [],                status: "live" },
   { group: "JARVIS",  name: "Task tracking",               blurb: "Priorities, due dates, status — voice creates them",                                inspiration: "Iron Man 3 — workshop list",   required: [],                status: "live" },
@@ -34,7 +36,7 @@ const CAPS: Capability[] = [
   { group: "JARVIS",  name: "Traffic & navigation",        blurb: "ETA, route, current traffic to a destination",                                      inspiration: "Iron Man — workshop to office", required: ["loc", "key"], envKey: "GOOGLE_MAPS_API_KEY", status: "planned" },
 
   // — Information —
-  { group: "JARVIS",  name: "Web search live",             blurb: "Serper-backed Google search for any factual question",                              inspiration: "ambient",                      required: ["key"], envKey: "SERPER_API_KEY", status: "live" },
+  { group: "JARVIS",  name: "Web search live",             blurb: "Serper-backed Google search for any factual question",                              inspiration: "ambient",                      required: ["key"], envKey: "SERPER_API_KEY", status: "live", logo: "google" },
   { group: "JARVIS",  name: "News briefing",               blurb: "Top headlines or topic-specific news",                                              inspiration: "Iron Man 3 — newscast",        required: ["key"], envKey: "SERPER_API_KEY", status: "live" },
   { group: "JARVIS",  name: "Stock & crypto quotes",       blurb: "Live ticker lookup — AAPL, TSLA, BTC-USD",                                          inspiration: "Iron Man — Stark Industries",  required: ["key"], envKey: "SERPER_API_KEY", status: "live" },
   { group: "JARVIS",  name: "Real-time translation",       blurb: "Translate any text between languages",                                              inspiration: "Iron Man 3 — Mandarin",        required: [],                status: "live" },
@@ -150,6 +152,7 @@ export default function CapabilitiesPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-medium flex items-center gap-1.5">
+                        {c.logo && (() => { const Logo = BRAND_LOGOS[c.logo]; return <Logo size={15} />; })()}
                         {c.name}
                         {c.premium && (
                           <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-300">
