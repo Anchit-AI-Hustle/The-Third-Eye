@@ -637,12 +637,15 @@ async function runTool(
     }
 
     case "search_knowledge": {
-      // Cortex semantic search first; fall back to keyword scan over inline docs.
-      const hits = ctx.email ? await searchChunks(ctx.email, input.query ?? "") : [];
-      if (hits.length) {
-        return { result: hits.map((h, i) => `[${i + 1}] ${h.doc_title}\n${h.content.slice(0, 600)}`).join("\n\n---\n\n") };
-      }
-      return { result: simpleSearch(ctx.docs, input.query ?? "") };
+      // Cortex semantic search + keyword scan over inline docs, merged — so docs
+      // uploaded before Cortex indexing (not yet embedded) are still findable.
+      const query = input.query ?? "";
+      const hits = ctx.email ? await searchChunks(ctx.email, query) : [];
+      const cortexText = hits.map((h, i) => `[${i + 1}] ${h.doc_title}\n${h.content.slice(0, 600)}`).join("\n\n---\n\n");
+      const keywordText = simpleSearch(ctx.docs, query);
+      const keywordMeaningful = keywordText && !/^No (documents|relevant)/.test(keywordText);
+      if (cortexText && keywordMeaningful) return { result: `${cortexText}\n\n---\n\n${keywordText}` };
+      return { result: cortexText || keywordText };
     }
 
     case "get_calendar_events":
@@ -1064,7 +1067,9 @@ export async function POST(req: NextRequest) {
           }
 
           send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
-          if (email && fullText) await rememberExchange(email, message, fullText);
+          // Best-effort, non-blocking: don't hold the stream open (which keeps the
+          // client's composer locked) while the embedding + insert run.
+          if (email && fullText) void rememberExchange(email, message, fullText).catch(() => {});
           break;
         }
 
