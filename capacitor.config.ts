@@ -6,9 +6,9 @@ const config: CapacitorConfig = {
   // CLI requires a webDir even when loading a remote URL; www/ holds a splash
   // fallback shown before the live app loads.
   webDir: "www",
-  // Points to the live Vercel deployment — no static export needed.
+  // Points to the live production domain — no static export needed.
   server: {
-    url: "https://jarvis-anchit.vercel.app",
+    url: "https://third-eye.anchit-tandon.com",
     cleartext: false,
   },
   backgroundColor: "#0A0A0F",
