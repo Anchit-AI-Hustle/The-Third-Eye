@@ -67,14 +67,16 @@ async function runReminders(sb: Sb) {
     await logNotification(sb, r.user_id, "reminder", r.id, "email", emailed ? "sent" : "failed");
     if (pushed) await logNotification(sb, r.user_id, "reminder", r.id, "push", "sent");
 
-    // Reschedule recurring; otherwise mark sent.
+    // Only advance the reminder once it actually reached the user through some
+    // channel; otherwise leave it pending so the next run retries it.
+    if (!(emailed || pushed)) continue;
     const next = nextOccurrence(r.fire_at, r.recurrence);
     if (next) {
       await sb.from("reminders").update({ fire_at: next }).eq("id", r.id);
     } else {
       await sb.from("reminders").update({ status: "sent", sent_at: now }).eq("id", r.id);
     }
-    if (emailed || pushed) fired++;
+    fired++;
   }
   return { due: due.length, fired };
 }
