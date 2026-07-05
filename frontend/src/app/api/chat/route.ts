@@ -1,10 +1,11 @@
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
+import { consume } from "@/lib/usage";
+import { getAdminSupabase } from "@/lib/serverSupabase";
+import { PREMIUM_TOOLS, PAYWALL_MESSAGE, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const MODEL = "gemini-2.5-flash";
 
 const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System — Tony Stark's AI operating system, now serving a new user.
 
@@ -279,6 +280,33 @@ const geminiTools = [
         },
       },
       {
+        name: "set_reminder",
+        description: "Schedule a reminder at an absolute date/time. Use for 'remind me at 5pm', 'remind me tomorrow morning', 'every Monday'. Resolve relative times to an absolute ISO timestamp yourself using get_current_time first.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "What to remind the user about" },
+            fire_at: { type: "STRING", description: "Absolute ISO-8601 timestamp (e.g. 2026-07-06T17:00:00Z)" },
+            recurrence: { type: "STRING", enum: ["none", "daily", "weekly", "monthly"], description: "Repeat cadence (default none). Recurring reminders are a premium feature." },
+          },
+          required: ["title", "fire_at"],
+        },
+      },
+      {
+        name: "list_reminders",
+        description: "List the user's pending reminders.",
+        parameters: { type: "OBJECT", properties: {} },
+      },
+      {
+        name: "cancel_reminder",
+        description: "Cancel a pending reminder by its id (from list_reminders).",
+        parameters: {
+          type: "OBJECT",
+          properties: { id: { type: "STRING", description: "Reminder id" } },
+          required: ["id"],
+        },
+      },
+      {
         name: "multi_agent_run",
         description: "ULTRON-mode parallel reasoning: spin N sub-agents on distinct angles of a hard question, then synthesise. Use for strategy, decision-making, or any 'pros / cons / risks / recommendation' question.",
         parameters: {
@@ -482,6 +510,8 @@ interface RunContext {
   goals: any[];
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
+  tier: Tier;
+  email?: string;
 }
 
 async function runTool(
@@ -489,6 +519,9 @@ async function runTool(
   input: any,
   ctx: RunContext,
 ): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
+  if (ctx.tier !== "premium" && PREMIUM_TOOLS.has(name)) {
+    return { result: PAYWALL_MESSAGE };
+  }
   switch (name) {
     case "get_current_time": {
       const tz = input?.timezone ?? "UTC";
@@ -630,6 +663,15 @@ async function runTool(
     case "nearby":
       return { result: await getNearby(input.query ?? "", ctx.location) };
 
+    case "set_reminder":
+      return { result: await setReminder(ctx, input) };
+
+    case "list_reminders":
+      return { result: await listReminders(ctx) };
+
+    case "cancel_reminder":
+      return { result: await cancelReminder(ctx, input.id) };
+
     case "multi_agent_run":
       return { result: await multiAgentRun(input.question ?? "", input.angles ?? []) };
 
@@ -722,6 +764,69 @@ async function translateText(text: string, targetLang: string, sourceLang?: stri
   }
 }
 
+// ─── Reminder tools (persisted to Supabase; delivery/firing is a later phase) ──
+
+async function setReminder(
+  ctx: RunContext,
+  input: { title?: string; fire_at?: string; recurrence?: string },
+): Promise<string> {
+  const sb = getAdminSupabase();
+  if (!sb || !ctx.email) return "Reminders need cloud sync — ask the user to connect Supabase in settings.";
+  if (!input.title || !input.fire_at) return "I need both what to remind you about and when.";
+
+  const recurrence = input.recurrence && input.recurrence !== "none" ? input.recurrence : null;
+  const limits = limitsFor(ctx.tier);
+  if (recurrence && !limits.recurringReminders) {
+    return "Recurring reminders are a JARVIS Premium feature. I can set a one-time reminder now, or you can upgrade in Settings → Upgrade.";
+  }
+
+  if (!isUnlimited(limits.activeReminders)) {
+    const { count } = await sb
+      .from("reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", ctx.email)
+      .eq("status", "pending");
+    if ((count ?? 0) >= limits.activeReminders) {
+      return `You're at the free plan's ${limits.activeReminders}-reminder limit. Upgrade to Premium for unlimited reminders, or cancel one first.`;
+    }
+  }
+
+  const { data, error } = await sb
+    .from("reminders")
+    .insert({ user_id: ctx.email, title: input.title, fire_at: input.fire_at, recurrence })
+    .select("id, fire_at")
+    .single();
+  if (error) return `Could not save the reminder: ${error.message}`;
+  return `Reminder set for ${new Date(data.fire_at).toLocaleString()}${recurrence ? ` (repeats ${recurrence})` : ""}. (id: ${data.id})`;
+}
+
+async function listReminders(ctx: RunContext): Promise<string> {
+  const sb = getAdminSupabase();
+  if (!sb || !ctx.email) return "Reminders need cloud sync configured.";
+  const { data } = await sb
+    .from("reminders")
+    .select("id, title, fire_at, recurrence")
+    .eq("user_id", ctx.email)
+    .eq("status", "pending")
+    .order("fire_at", { ascending: true });
+  if (!data?.length) return "No pending reminders.";
+  return data
+    .map((r) => `- ${r.title} · ${new Date(r.fire_at).toLocaleString()}${r.recurrence ? ` (${r.recurrence})` : ""} (id: ${r.id})`)
+    .join("\n");
+}
+
+async function cancelReminder(ctx: RunContext, id: string): Promise<string> {
+  const sb = getAdminSupabase();
+  if (!sb || !ctx.email) return "Reminders need cloud sync configured.";
+  if (!id) return "Which reminder? Give me its id from list_reminders.";
+  const { error } = await sb
+    .from("reminders")
+    .update({ status: "canceled" })
+    .eq("user_id", ctx.email)
+    .eq("id", id);
+  return error ? `Could not cancel: ${error.message}` : "Reminder canceled.";
+}
+
 async function multiAgentRun(question: string, angles: string[]): Promise<string> {
   const { llmCascade } = await import("@/lib/llmCascade");
   try {
@@ -794,6 +899,20 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
   }
 
+  const gate = await consume(email, "chatPerDay");
+  if (!gate.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: `You've hit the free plan's ${gate.limit} messages/day. Upgrade to JARVIS Premium for unlimited access.`,
+        paywall: true,
+        tier: gate.tier,
+        limit: gate.limit,
+      }),
+      { status: 402 },
+    );
+  }
+  const MODEL = gate.limits.chatModel;
+
   const genAI = new GoogleGenerativeAI(apiKey);
 
   // Build system instruction with full user context
@@ -846,7 +965,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken, location };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken, location, tier: gate.tier, email };
 
   const stream = new ReadableStream({
     async start(controller) {
