@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
 import { getAdminSupabase } from "@/lib/serverSupabase";
-import { PREMIUM_TOOLS, PAYWALL_MESSAGE, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
+import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -899,8 +899,9 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
   }
 
+  const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
-  if (!gate.allowed) {
+  if (enforced && !gate.allowed) {
     return new Response(
       JSON.stringify({
         error: `You've hit the free plan's ${gate.limit} messages/day. Upgrade to JARVIS Premium for unlimited access.`,
@@ -911,7 +912,9 @@ export async function POST(req: NextRequest) {
       { status: 402 },
     );
   }
-  const MODEL = gate.limits.chatModel;
+  // Launch mode: everyone gets full capabilities; premium is badged, not gated.
+  const effectiveTier: Tier = enforced ? gate.tier : "premium";
+  const MODEL = enforced ? gate.limits.chatModel : "gemini-2.5-flash";
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -965,7 +968,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken, location, tier: gate.tier, email };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken, location, tier: effectiveTier, email };
 
   const stream = new ReadableStream({
     async start(controller) {

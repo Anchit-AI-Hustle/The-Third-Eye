@@ -1,5 +1,5 @@
 import { getAdminSupabase } from "@/lib/serverSupabase";
-import { limitsFor, isUnlimited, type Tier, type TierLimits } from "@/lib/entitlements";
+import { limitsFor, isUnlimited, premiumEnforced, type Tier, type TierLimits } from "@/lib/entitlements";
 
 // Resolve a user's tier from the profiles table. Unknown / unconfigured → free,
 // but callers treat "billing not configured" as unlimited (see consume()).
@@ -38,7 +38,7 @@ export async function consume(
   const limits = limitsFor(tier);
   const limit = limits[metric] as number;
 
-  if (!sb || !email || isUnlimited(limit)) {
+  if (!premiumEnforced() || !sb || !email || isUnlimited(limit)) {
     return { allowed: true, tier, limit, used: 0, limits };
   }
 
