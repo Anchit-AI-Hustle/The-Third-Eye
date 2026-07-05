@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { usePush } from "@/hooks/usePush";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
@@ -25,6 +26,15 @@ interface LiveBubble {
   phase: "recording" | "transcribing" | "interim";
   level: number;
   text?: string;
+}
+
+interface PendingAction {
+  id: string;
+  tool: string;
+  args: any;
+  summary: string;
+  status: "pending" | "running" | "done" | "canceled";
+  result?: string;
 }
 
 interface HistoryEntry {
@@ -78,6 +88,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [systemOnline, setSystemOnline] = useState(false);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [idleIdx, setIdleIdx] = useState(0);
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+
+  usePush();
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -303,6 +316,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
                 ));
+              } else if (eventType === "confirm" && parsed.tool) {
+                setPendingActions((prev) => [...prev, {
+                  id: parsed.id, tool: parsed.tool, args: parsed.args,
+                  summary: parsed.summary, status: "pending",
+                }]);
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
                 setMessages((prev) => prev.map((m) =>
@@ -382,8 +400,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setApiError(null);
     historyRef.current = [];
     memoryRef.current = {};
+    setPendingActions([]);
     setIsStreaming(false);
   }
+
+  const confirmAction = useCallback(async (action: PendingAction) => {
+    setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "running" } : a));
+    try {
+      const res = await fetch("/api/act", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: action.tool, args: action.args }),
+      });
+      const data = await res.json();
+      const result = data.result ?? data.error ?? "Done.";
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result } : a));
+    } catch {
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: "Failed to execute." } : a));
+    }
+  }, []);
+
+  const cancelAction = useCallback((id: string) => {
+    setPendingActions((prev) => prev.map((a) => a.id === id ? { ...a, status: "canceled" } : a));
+  }, []);
 
   function toggleMic() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
@@ -508,6 +547,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
         {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} />}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
+
+        {pendingActions.map((a) => (
+          <ActionCard key={a.id} action={a} onConfirm={() => confirmAction(a)} onCancel={() => cancelAction(a.id)} />
+        ))}
 
         {/* Live voice bubble — waveform or interim text */}
         {liveBubble && (
@@ -707,6 +750,49 @@ function MessageBubble({ message, session }: { message: Message; session: any })
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
             </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; onConfirm: () => void; onCancel: () => void }) {
+  const a = action;
+  return (
+    <div className="flex items-start gap-3 animate-slide-in">
+      <div className="w-7 h-7 rounded-full bg-amber-400/20 border border-amber-400/30 flex-none flex items-center justify-center">
+        <ShieldCheck size={13} className="text-amber-300" />
+      </div>
+      <div className="max-w-[85%] sm:max-w-[75%] w-full">
+        <div className="rounded-card border border-amber-400/30 bg-amber-400/5 px-4 py-3">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-amber-300/80 mb-1">Confirm before I act</p>
+          <p className="text-sm text-text-primary font-medium">{a.summary}</p>
+          {a.tool === "send_email" && (
+            <div className="mt-2 space-y-1 text-xs text-text-secondary bg-background-base/50 rounded-input p-2 border border-border-default">
+              <div><span className="text-text-muted">To:</span> {a.args?.to}</div>
+              <div><span className="text-text-muted">Subject:</span> {a.args?.subject}</div>
+              <div className="whitespace-pre-wrap"><span className="text-text-muted">Body:</span> {a.args?.body}</div>
+            </div>
+          )}
+          {a.status === "pending" && (
+            <div className="flex items-center gap-2 mt-3">
+              <button onClick={onConfirm} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-success/15 text-success border border-success/30 text-xs font-medium hover:bg-success/25 transition-colors">
+                <Check size={13} /> Confirm & do it
+              </button>
+              <button onClick={onCancel} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-muted border border-border-default text-xs hover:text-text-secondary transition-colors">
+                <X size={13} /> Cancel
+              </button>
+            </div>
+          )}
+          {a.status === "running" && (
+            <div className="flex items-center gap-2 mt-3 text-xs text-accent-blue"><Loader2 size={13} className="animate-spin" /> Doing it…</div>
+          )}
+          {a.status === "done" && (
+            <div className="flex items-center gap-2 mt-3 text-xs text-success"><Check size={13} /> {a.result}</div>
+          )}
+          {a.status === "canceled" && (
+            <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>
           )}
         </div>
       </div>

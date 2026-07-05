@@ -38,10 +38,12 @@
     "rehype-highlight": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "stripe": "^18.5.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^20.14.2",
+    "@types/web-push": "^3.6.4",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",

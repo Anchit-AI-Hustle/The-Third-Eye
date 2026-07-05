@@ -1,7 +1,20 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { getAdminSupabase } from "@/lib/serverSupabase";
+import { encrypt } from "@/lib/crypto";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
+
+async function persistRefreshToken(email: string | undefined, refreshToken: string | undefined, scope: string | undefined) {
+  if (!email || !refreshToken) return;
+  const sb = getAdminSupabase();
+  const enc = encrypt(refreshToken);
+  if (!sb || !enc) return;
+  await sb.from("google_tokens").upsert(
+    { user_id: email, refresh_token_enc: enc, scope, updated_at: new Date().toISOString() },
+    { onConflict: "user_id" },
+  );
+}
 
 async function refreshAccessToken(token: any) {
   try {
@@ -54,11 +67,16 @@ export const authOptions: NextAuthOptions = {
     maxAge: 24 * 60 * 60,
   },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, profile }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : 0;
+        await persistRefreshToken(
+          (profile as { email?: string } | undefined)?.email ?? token.email ?? undefined,
+          account.refresh_token,
+          account.scope,
+        );
         if (account.id_token) {
           try {
             const res = await fetch(`${BACKEND_URL}/api/v1/auth/session`, {

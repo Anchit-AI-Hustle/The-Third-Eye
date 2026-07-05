@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
+import { isSensitive, summarizeAction } from "@/lib/actions";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1005,7 +1006,15 @@ export async function POST(req: NextRequest) {
             }
 
             const toolResults = await Promise.all(
-              functionCalls.map((fc) => runTool(fc.name, fc.args, ctx))
+              functionCalls.map(async (fc) => {
+                // Confirm-then-act: never run world-changing actions silently.
+                if (isSensitive(fc.name)) {
+                  const summary = summarizeAction(fc.name, fc.args);
+                  send("confirm", { id: crypto.randomUUID(), tool: fc.name, args: fc.args, summary });
+                  return { result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
+                }
+                return runTool(fc.name, fc.args, ctx);
+              })
             );
 
             const toolResponseParts: Part[] = toolResults.map((tr, i) => {
