@@ -4,6 +4,7 @@ import { consume } from "@/lib/usage";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
+import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -633,8 +634,14 @@ async function runTool(
       };
     }
 
-    case "search_knowledge":
+    case "search_knowledge": {
+      // Cortex semantic search first; fall back to keyword scan over inline docs.
+      const hits = ctx.email ? await searchChunks(ctx.email, input.query ?? "") : [];
+      if (hits.length) {
+        return { result: hits.map((h, i) => `[${i + 1}] ${h.doc_title}\n${h.content.slice(0, 600)}`).join("\n\n---\n\n") };
+      }
       return { result: simpleSearch(ctx.docs, input.query ?? "") };
+    }
 
     case "get_calendar_events":
       return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10) };
@@ -929,6 +936,12 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Persistent memory about this user:**\n${memoryEntries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}`;
   }
 
+  // Cortex: semantic recall from past conversations (native pgvector memory).
+  const recall = email ? await retrieveMemories(email, message, 5) : [];
+  if (recall.length > 0) {
+    systemInstruction += `\n\n**Relevant recall from earlier conversations:**\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
+  }
+
   if (tasks.length > 0) {
     const open = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
     const overdue = open.filter((t) => t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()));
@@ -1036,6 +1049,7 @@ export async function POST(req: NextRequest) {
           }
 
           send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
+          if (email && fullText) await rememberExchange(email, message, fullText);
           break;
         }
 

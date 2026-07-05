@@ -151,6 +151,14 @@ export function useLocalKnowledge() {
     } else {
       setDocs((prev) => { const next = [...newDocs, ...prev]; lsSet(next); return next; });
     }
+    // Cortex: embed ready docs for semantic search (best-effort, no-op if unconfigured).
+    for (const d of newDocs) {
+      if (d.processing_status !== "ready" || !d.content) continue;
+      fetch("/api/cortex/ingest", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docId: d.id, title: d.title, content: d.content }),
+      }).catch(() => {});
+    }
     setUploading(false);
   }, [userId]);
 
@@ -161,6 +169,7 @@ export function useLocalKnowledge() {
     } else {
       setDocs((prev) => { const next = prev.filter((d) => d.id !== id); lsSet(next); return next; });
     }
+    fetch(`/api/cortex/ingest?docId=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
   }, [userId]);
 
   return { docs, ready, uploading, upload, remove };

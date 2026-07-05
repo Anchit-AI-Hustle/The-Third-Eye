@@ -70,7 +70,7 @@ async function runReminders(sb: Sb) {
     // Only advance the reminder once it actually reached the user through some
     // channel; otherwise leave it pending so the next run retries it.
     if (!(emailed || pushed)) continue;
-    const next = nextOccurrence(r.fire_at, r.recurrence);
+    const next = nextOccurrence(r.fire_at, r.recurrence, now);
     if (next) {
       await sb.from("reminders").update({ fire_at: next }).eq("id", r.id);
     } else {
@@ -139,13 +139,22 @@ async function logNotification(sb: Sb, userId: string, kind: string, refId: stri
   await sb.from("notification_log").insert({ user_id: userId, kind, ref_id: refId, channel, status }).select().maybeSingle();
 }
 
-function nextOccurrence(fireAt: string, recurrence: string | null): string | null {
+function nextOccurrence(fireAt: string, recurrence: string | null, nowIso: string): string | null {
   if (!recurrence || recurrence === "none") return null;
+  const step = (d: Date) => {
+    if (recurrence === "daily") d.setUTCDate(d.getUTCDate() + 1);
+    else if (recurrence === "weekly") d.setUTCDate(d.getUTCDate() + 7);
+    else if (recurrence === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
+    else return false;
+    return true;
+  };
+  const now = new Date(nowIso).getTime();
   const d = new Date(fireAt);
-  if (recurrence === "daily") d.setUTCDate(d.getUTCDate() + 1);
-  else if (recurrence === "weekly") d.setUTCDate(d.getUTCDate() + 7);
-  else if (recurrence === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
-  else return null;
+  // Skip past any missed intervals (cron downtime) so we don't re-fire on catch-up.
+  for (let i = 0; i < 1000; i++) {
+    if (!step(d)) return null;
+    if (d.getTime() > now) return d.toISOString();
+  }
   return d.toISOString();
 }
 
