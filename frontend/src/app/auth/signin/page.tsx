@@ -2,6 +2,7 @@
 
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function SignInPage() {
@@ -96,7 +97,15 @@ export default function SignInPage() {
           </button>
 
           <p className="text-text-muted text-xs text-center mt-5 leading-relaxed">
-            By signing in, you agree to our terms. Your data is self-hosted and never shared.
+            By signing in, you agree to our{" "}
+            <Link href="/terms_of_service" className="text-accent-blue hover:underline">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy_policy" className="text-accent-blue hover:underline">
+              Privacy Policy
+            </Link>
+            . Your data is self-hosted and never shared.
           </p>
         </div>
 
