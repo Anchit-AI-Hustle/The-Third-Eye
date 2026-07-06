@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { DashboardClient } from "@/components/dashboard/DashboardClient";
@@ -27,6 +28,16 @@ export default async function DashboardPage() {
         </p>
       </div>
       <DashboardClient />
+
+      <footer className="mt-10 pt-6 border-t border-border-default flex items-center justify-center gap-4 text-text-muted text-xs font-mono">
+        <Link href="/privacy_policy" className="hover:text-text-secondary transition-colors">
+          Privacy Policy
+        </Link>
+        <span className="text-border-default">·</span>
+        <Link href="/terms_of_service" className="hover:text-text-secondary transition-colors">
+          Terms of Service
+        </Link>
+      </footer>
     </div>
   );
 }
