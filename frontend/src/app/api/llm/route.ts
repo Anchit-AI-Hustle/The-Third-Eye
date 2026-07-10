@@ -23,13 +23,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const out = await llmCascade(body);
+    // Forward only whitelisted fields — never let the request body set
+    // transport internals like timeoutMs (would be an unbounded user-timer).
+    const out = await llmCascade({
+      system: body.system,
+      messages: body.messages,
+      jsonMode: body.jsonMode,
+      preferProvider: body.preferProvider,
+      maxTokens: body.maxTokens,
+      temperature: body.temperature,
+    });
     return new Response(JSON.stringify(out), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ error: msg }), { status: 503 });
+    console.error("llm route error:", e);
+    return new Response(JSON.stringify({ error: "Upstream LLM providers unavailable" }), { status: 503 });
   }
 }

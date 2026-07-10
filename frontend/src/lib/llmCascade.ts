@@ -65,9 +65,14 @@ function isQuotaError(status: number, body: string): boolean {
   return false;
 }
 
+const MAX_TIMEOUT_MS = 120_000;
+
 function withTimeout(ms: number): { signal: AbortSignal; clear: () => void } {
+  // Bound the duration: timeoutMs can originate from the request body, so an
+  // unclamped value would let a caller schedule an arbitrarily long timer.
+  const bounded = Math.min(Math.max(0, Number(ms) || 0), MAX_TIMEOUT_MS);
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
+  const t = setTimeout(() => ctrl.abort(), bounded);
   return { signal: ctrl.signal, clear: () => clearTimeout(t) };
 }
 
