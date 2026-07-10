@@ -48,16 +48,13 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: [
-            "openid",
-            "email",
-            "profile",
-            "https://www.googleapis.com/auth/calendar.readonly",
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/gmail.send",
-          ].join(" "),
+          // Basic sign-in only. Sensitive/restricted Google scopes
+          // (gmail.*, calendar.*) force OAuth app verification before
+          // non-test users can sign in, which blocks login. They are
+          // re-added alongside the Gmail/Chat ingestion feature, when
+          // restricted-scope verification is completed.
+          scope: ["openid", "email", "profile"].join(" "),
           access_type: "offline",
-          prompt: "consent",
         },
       },
     }),
