@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     return Response.json({ text: typeof result === "string" ? result : (result as any).text ?? "" });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return Response.json({ error: msg }, { status: 500 });
+    console.error("transcribe route error:", err);
+    return Response.json({ error: "Transcription failed" }, { status: 500 });
   }
 }
