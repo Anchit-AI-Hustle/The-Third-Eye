@@ -108,6 +108,26 @@ export default async function Home() {
           </div>
         </section>
 
+        {/* data transparency */}
+        <section className="pb-16">
+          <div className="bg-background-surface border border-border-default rounded-card p-6 max-w-3xl mx-auto">
+            <h2 className="font-display text-lg font-semibold mb-3">Your data & why we ask for it</h2>
+            <p className="text-text-secondary text-sm leading-relaxed">
+              The Third Eye uses your Google account solely to sign you in and identify your private
+              workspace — we request your basic profile (name and email) for authentication only.
+              Anything you create in the app — tasks, notes, and documents — is stored so it is
+              available to you across your devices, and is visible only to you. We never sell your
+              data or share it with third parties for advertising. If you enable optional
+              integrations in the future, any additional access will be requested explicitly and
+              used only to power features you turn on. Full details are in our{" "}
+              <Link href="/privacy_policy" className="text-accent-blue hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          </div>
+        </section>
+
         {/* footer */}
         <footer className="border-t border-border-default py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-text-muted text-xs">
           <span>© {new Date().getFullYear()} The Third Eye</span>
