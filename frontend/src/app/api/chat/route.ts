@@ -7,6 +7,7 @@ import { isSensitive, summarizeAction } from "@/lib/actions";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getGoogleAccessToken } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -452,7 +453,7 @@ async function getWeather(location: string): Promise<string> {
 }
 
 async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7, maxResults = 10): Promise<string> {
-  if (!accessToken) return "Google Calendar not connected. Please sign out and sign back in to grant calendar access.";
+  if (!accessToken) return "Google Calendar not connected. Connect your Google account (with Calendar access) from Profile Setup to enable this.";
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + daysAhead * 86400000).toISOString();
   try {
@@ -481,7 +482,7 @@ async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7,
 }
 
 async function readEmails(accessToken: string | undefined, query = "is:unread", maxResults = 5): Promise<string> {
-  if (!accessToken) return "Gmail not connected. Please sign out and sign back in to grant email access.";
+  if (!accessToken) return "Gmail not connected. Connect your Google account (with Gmail access) from Profile Setup to enable this.";
   try {
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(maxResults) })}`,
@@ -511,7 +512,7 @@ async function readEmails(accessToken: string | undefined, query = "is:unread", 
 }
 
 async function sendEmail(accessToken: string | undefined, to: string, subject: string, body: string): Promise<string> {
-  if (!accessToken) return "Gmail not connected. Please sign out and sign back in to grant email access.";
+  if (!accessToken) return "Gmail not connected. Connect your Google account (with Gmail access) from Profile Setup to enable this.";
   try {
     const message = [`To: ${to}`, `Subject: ${subject}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\r\n");
     const encoded = Buffer.from(message).toString("base64url");
@@ -520,7 +521,7 @@ async function sendEmail(accessToken: string | undefined, to: string, subject: s
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: encoded }),
     });
-    if (res.status === 401 || res.status === 403) return "Email sending failed — permissions needed. Please sign out and sign back in.";
+    if (res.status === 401 || res.status === 403) return "Email sending failed — Gmail send permission missing. Re-connect your Google account (grant Gmail send access) from Profile Setup.";
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       return `Failed to send: ${err.error?.message ?? res.statusText}`;
@@ -966,13 +967,22 @@ export async function POST(req: NextRequest) {
   // or usage by supplying someone else's email (service-role bypasses RLS).
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
-  const accessToken = (session as any)?.accessToken as string | undefined;
+  // Sign-in only grants basic scopes, so the session token can't touch
+  // Gmail/Calendar. Prefer the token minted from the "Connect Google" flow
+  // (which carries gmail.send + calendar scopes); fall back to the session.
+  let accessToken = (session as any)?.accessToken as string | undefined;
 
   // /api/chat isn't covered by the middleware matcher, so guard here: no session
   // means no metering context and would burn Gemini quota / bypass limits.
   if (!email) {
     return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
   }
+
+  // Use the connected Google token (gmail/calendar scopes) when available.
+  try {
+    const connected = await getGoogleAccessToken(email);
+    if (connected?.accessToken) accessToken = connected.accessToken;
+  } catch { /* fall back to session token */ }
 
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
