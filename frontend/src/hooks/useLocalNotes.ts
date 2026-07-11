@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { useSession } from "next-auth/react";
 import { getSupabase } from "@/lib/supabase";
 
@@ -21,6 +21,9 @@ function ls(): LocalNote[] {
 function lsSet(v: LocalNote[]) { localStorage.setItem(KEY, JSON.stringify(v)); }
 
 export function useLocalNotes() {
+  // Unique per instance to avoid realtime channel-name collisions across
+  // components mounting this hook simultaneously.
+  const channelId = useId();
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
   const [notes, setNotes] = useState<LocalNote[]>([]);
@@ -42,7 +45,7 @@ export function useLocalNotes() {
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !userId) return;
-    const ch = sb.channel(`notes_${userId}`)
+    const ch = sb.channel(`notes_${userId}_${channelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notes", filter: `user_id=eq.${userId}` },
         (p) => setNotes((prev) => prev.find((n) => n.id === p.new.id) ? prev : [p.new as LocalNote, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notes", filter: `user_id=eq.${userId}` },
@@ -51,7 +54,7 @@ export function useLocalNotes() {
         (p) => setNotes((prev) => prev.filter((n) => n.id !== (p.old as any).id)))
       .subscribe();
     return () => { sb.removeChannel(ch); };
-  }, [userId]);
+  }, [userId, channelId]);
 
   const create = useCallback(async (title: string, content = "") => {
     const n: LocalNote = { id: crypto.randomUUID(), title, content, pinned: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
