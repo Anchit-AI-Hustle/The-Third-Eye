@@ -49,6 +49,9 @@ export async function getGoogleAccessToken(
 /** Google scopes the ingestion features need — requested via the connect flow. */
 export const INGESTION_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.messages.readonly",
 ].join(" ");
