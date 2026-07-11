@@ -1,0 +1,3 @@
+# Supabase CLI project config. project_id is the project ref
+# (Dashboard → Project Settings → General → Reference ID).
+project_id = "cnbxarfuyicyjbtvbmtv"
