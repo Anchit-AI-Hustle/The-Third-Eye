@@ -90,6 +90,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [idleIdx, setIdleIdx] = useState(0);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  // How the mic behaves: "call" = hands-free, each utterance auto-sends and the
+  // reply is read aloud; "dictate" = speech fills the input box for review and
+  // is NOT sent until the user presses send.
+  const [voiceMode, setVoiceMode] = useState<"dictate" | "call">("call");
+  const voiceModeRef = useRef<"dictate" | "call">("call");
+  useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
   usePush();
 
@@ -138,6 +144,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
+      // Dictate: drop the transcript into the composer for review, don't send.
+      if (voiceModeRef.current === "dictate") {
+        setInput((prev) => (prev ? prev.replace(/\s+$/, "") + " " : "") + text);
+        return;
+      }
       if (!isStreamingRef.current) sendRef.current(text);
     }, []),
   });
@@ -411,15 +422,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     else { stt.enable(); setMicOn(true); }
   }
 
+  // Dictation: mic on in "dictate" mode — speech fills the composer, no auto-send.
+  function toggleDictate() {
+    if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
+    else { setVoiceMode("dictate"); stt.enable(); setMicOn(true); }
+  }
+
   // ── Composer reply mode (Option B) ──────────────────────────────────────────
   // One control governs how JARVIS answers, derived from the existing voice flags:
   //   text  → silent (TTS off)      voice → reply read aloud (TTS on)
-  //   call  → read aloud + mic on (hands-free conversation)
-  const replyMode: "text" | "voice" | "call" = micOn ? "call" : tts.enabled ? "voice" : "text";
+  //   call  → read aloud + mic on, hands-free (voiceMode "call", auto-send)
+  const replyMode: "text" | "voice" | "call" =
+    micOn && voiceMode === "call" ? "call" : tts.enabled ? "voice" : "text";
   function setReplyMode(mode: "text" | "voice" | "call") {
     if (mode === "text") { if (tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
     else if (mode === "voice") { if (!tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
-    else { // call — needs the mic; fall back to voice if STT is unavailable
+    else { // call — hands-free auto-send + read aloud; needs the mic
+      setVoiceMode("call");
       if (!tts.enabled) tts.toggle();
       if (stt.supported && !micOn) toggleMic();
     }
@@ -623,9 +642,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
             )}
           </div>
           {stt.supported && (
-            <button onClick={toggleMic} title={micOn ? "Mute mic" : "Dictate"}
-              className={cn("flex-none p-1.5 rounded-input transition-colors", micOn ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
-              {micOn ? <Mic size={15} /> : <MicOff size={15} />}
+            <button onClick={toggleDictate}
+              title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate — speech fills the box, doesn't send"}
+              className={cn("flex-none p-1.5 rounded-input transition-colors",
+                micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
+              {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
             </button>
           )}
           <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
@@ -635,7 +656,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           </button>
         </div>
         <p className="text-text-muted text-[11px] mt-2 text-center">
-          {replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
+          {micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
+            : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
             : "Enter to send · Shift+Enter for new line"}
         </p>
