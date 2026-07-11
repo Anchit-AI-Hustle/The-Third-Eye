@@ -7,6 +7,7 @@
     { "path": "/api/cron/dispatch?job=reminders", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/dispatch?job=digest", "schedule": "30 1 * * *" },
     { "path": "/api/cron/scrape-gmail", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/scrape-chat", "schedule": "7-59/15 * * * *" }
+    { "path": "/api/cron/scrape-chat", "schedule": "7-59/15 * * * *" },
+    { "path": "/api/cron/sync-shopify", "schedule": "3-59/20 * * * *" }
   ]
 }
