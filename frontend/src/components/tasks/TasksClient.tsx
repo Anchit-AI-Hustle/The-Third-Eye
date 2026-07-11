@@ -109,7 +109,7 @@ export function TasksClient() {
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `thirdeye-actions-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `thirdeye-tasks-${new Date().toISOString().slice(0,10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
   }
 
@@ -153,7 +153,7 @@ export function TasksClient() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2.5">
           <div className="w-2 h-2 rounded-full bg-success" />
-          <span className="text-text-muted text-sm font-mono">{allTasks.length} actions</span>
+          <span className="text-text-muted text-sm font-mono">{allTasks.length} tasks</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={exportCSV} className={btn}>
@@ -174,7 +174,7 @@ export function TasksClient() {
           </button>
           <button onClick={openNew}
             className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors">
-            <Plus size={14} /> New Action
+            <Plus size={14} /> New Task
           </button>
         </div>
       </div>
@@ -184,7 +184,7 @@ export function TasksClient() {
         <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
           <Search size={14} className="text-text-muted flex-none" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search actions…"
+            placeholder="Search tasks…"
             className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none" />
           {search && <button onClick={() => setSearch("")}><X size={12} className="text-text-muted hover:text-text-primary" /></button>}
         </div>
@@ -270,7 +270,7 @@ function TableView({ tasks, sortKey, sortAsc, onSort, onEdit, onDelete }: {
         <table className="w-full text-sm">
           <thead className="border-b border-border-default bg-background-elevated/50">
             <tr>
-              <TH label="Action" k="title" />
+              <TH label="Task" k="title" />
               <TH label="Assignee" k="assignee" />
               <TH label="Started" k="start_date" />
               <TH label="Due" k="due_date" />
@@ -425,7 +425,7 @@ function ActionModal({ task, team, onSave, onClose }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bg-background-elevated border border-border-default rounded-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-5 border-b border-border-default">
-          <h2 className="font-semibold text-text-primary">{task ? "Edit action" : "New action"}</h2>
+          <h2 className="font-semibold text-text-primary">{task ? "Edit task" : "New task"}</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
         </div>
 
@@ -592,11 +592,11 @@ function EmptyState({ hasFilters, onNew }: { hasFilters: boolean; onNew: () => v
     <div className="py-16 text-center">
       <AlertCircle size={24} className="mx-auto text-text-muted mb-3 opacity-40" />
       <p className="text-text-muted text-sm">
-        {hasFilters ? "No actions match your filters." : "No actions yet."}
+        {hasFilters ? "No tasks match your filters." : "No tasks yet."}
       </p>
       {!hasFilters && (
         <button onClick={onNew} className="mt-3 text-accent-blue text-sm hover:underline">
-          + Create your first action
+          + Create your first task
         </button>
       )}
     </div>
