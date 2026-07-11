@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
+import { useAgentActions } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -41,7 +42,8 @@ export function VoiceOverlay() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { allTasks, create: createTask } = useLocalTasks();
+  const { allTasks } = useLocalTasks();
+  const applyActions = useAgentActions();
   const { docs } = useLocalKnowledge();
   const { active: agent } = useAgentProfile();
   const tts = useTTS(agent.voicePreference);
@@ -184,32 +186,7 @@ export function VoiceOverlay() {
                     { role: "user", content: msg },
                     { role: "assistant", content: fullText },
                   ];
-                  if (parsed.sideEffects) {
-                    for (const fx of parsed.sideEffects) {
-                      if (fx.type === "task_create" && fx.data?.title) {
-                        createTask({
-                          title: fx.data.title,
-                          priority: fx.data.priority ?? "medium",
-                          status: "todo",
-                          assignee: fx.data.assignee,
-                          due_date: fx.data.due_date,
-                          description: fx.data.description,
-                        });
-                      }
-                      if (fx.type === "note_create" && fx.data?.title) {
-                        const notes = JSON.parse(localStorage.getItem("jarvis_notes_v1") ?? "[]");
-                        notes.unshift({
-                          id: crypto.randomUUID(),
-                          title: fx.data.title,
-                          content: fx.data.content,
-                          pinned: false,
-                          created_at: new Date().toISOString(),
-                          updated_at: new Date().toISOString(),
-                        });
-                        localStorage.setItem("jarvis_notes_v1", JSON.stringify(notes));
-                      }
-                    }
-                  }
+                  applyActions(parsed.sideEffects);
                   tts.speak(fullText);
                 }
               } catch {}
@@ -224,7 +201,7 @@ export function VoiceOverlay() {
         setIsStreaming(false);
       }
     },
-    [input, session, allTasks, docs, createTask, tts, attachedFiles, agent]
+    [input, session, allTasks, docs, applyActions, tts, attachedFiles, agent]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);

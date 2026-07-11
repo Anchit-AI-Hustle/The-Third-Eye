@@ -135,6 +135,33 @@ const geminiTools = [
         },
       },
       {
+        name: "delete_task",
+        description: "Permanently delete a task. Use only when the user explicitly asks to remove/delete a task (to mark it finished, prefer update_task with status 'done'). Call search_tasks first to get the id.",
+        parameters: {
+          type: "OBJECT",
+          properties: { id: { type: "STRING", description: "Task ID to delete (from search_tasks)" } },
+          required: ["id"],
+        },
+      },
+      {
+        name: "delete_note",
+        description: "Permanently delete a note by id.",
+        parameters: {
+          type: "OBJECT",
+          properties: { id: { type: "STRING", description: "Note ID to delete" } },
+          required: ["id"],
+        },
+      },
+      {
+        name: "delete_goal",
+        description: "Permanently delete a goal by id.",
+        parameters: {
+          type: "OBJECT",
+          properties: { id: { type: "STRING", description: "Goal ID to delete" } },
+          required: ["id"],
+        },
+      },
+      {
         name: "create_note",
         description: "Save a note for the user.",
         parameters: {
@@ -581,6 +608,28 @@ async function runTool(
           ? `Updated task "${task.title}": ${JSON.stringify(patch)}`
           : `Task ${input.id} not found — update queued.`,
         sideEffect: { type: "task_update", data: { id: input.id, patch } },
+      };
+    }
+
+    case "delete_task": {
+      const task = ctx.tasks.find((t) => t.id === input.id);
+      return {
+        result: task ? `Deleted task "${task.title}".` : `Task ${input.id} not found — delete queued.`,
+        sideEffect: { type: "task_delete", data: { id: input.id } },
+      };
+    }
+
+    case "delete_note":
+      return {
+        result: `Deleted note ${input.id}.`,
+        sideEffect: { type: "note_delete", data: { id: input.id } },
+      };
+
+    case "delete_goal": {
+      const goal = ctx.goals.find((g) => g.id === input.id);
+      return {
+        result: goal ? `Deleted goal "${goal.title}".` : `Goal ${input.id} not found — delete queued.`,
+        sideEffect: { type: "goal_delete", data: { id: input.id } },
       };
     }
 

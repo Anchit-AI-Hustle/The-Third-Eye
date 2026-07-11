@@ -12,6 +12,7 @@ import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
+import { useAgentActions } from "@/hooks/useAgentActions";
 
 interface Message {
   id: string;
@@ -104,10 +105,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const suppressRef = useRef(false);
   const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { allTasks, create: createTask, update: updateTask } = useLocalTasks();
+  const { allTasks } = useLocalTasks();
   const { docs } = useLocalKnowledge();
   const { notes } = useLocalNotes();
-  const { goals, add: addGoal, adjust: adjustGoal } = useLocalGoals();
+  const { goals } = useLocalGoals();
+  const applyActions = useAgentActions();
   const tts = useTTS();
 
   const stt = useVoiceSTT({
@@ -342,27 +344,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "user", content: msg },
                   { role: "assistant", content: fullText },
                 ];
-                if (parsed.sideEffects) {
-                  for (const fx of parsed.sideEffects) {
-                    if (fx.type === "task_create" && fx.data?.title) {
-                      createTask({ title: fx.data.title, priority: fx.data.priority ?? "medium", status: "todo", assignee: fx.data.assignee, due_date: fx.data.due_date, description: fx.data.description });
-                    }
-                    if (fx.type === "task_update" && fx.data?.id) {
-                      updateTask(fx.data.id, fx.data.patch ?? {});
-                    }
-                    if (fx.type === "note_create" && fx.data?.title) {
-                      const savedNotes = JSON.parse(localStorage.getItem("jarvis_notes_v1") ?? "[]");
-                      savedNotes.unshift({ id: crypto.randomUUID(), title: fx.data.title, content: fx.data.content, pinned: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-                      localStorage.setItem("jarvis_notes_v1", JSON.stringify(savedNotes));
-                    }
-                    if (fx.type === "goal_create" && fx.data?.title) {
-                      addGoal({ title: fx.data.title, category: fx.data.category ?? "Personal", target: fx.data.target ?? 100, current: fx.data.current ?? 0, unit: fx.data.unit ?? "%", deadline: fx.data.deadline, description: fx.data.description });
-                    }
-                    if (fx.type === "goal_update" && fx.data?.id) {
-                      if (fx.data.delta !== undefined) adjustGoal(fx.data.id, fx.data.delta);
-                    }
-                  }
-                }
+                applyActions(parsed.sideEffects);
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -384,7 +366,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, session, userName, allTasks, docs, createTask, tts]);
+  }, [input, session, userName, allTasks, docs, applyActions, tts]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
