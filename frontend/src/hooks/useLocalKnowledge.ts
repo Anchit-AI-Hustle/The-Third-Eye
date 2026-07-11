@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { useSession } from "next-auth/react";
 import { getSupabase } from "@/lib/supabase";
 
@@ -77,6 +77,9 @@ export function searchDocs(docs: KnowledgeDoc[], query: string, topK = 5): Searc
 }
 
 export function useLocalKnowledge() {
+  // Unique per instance so the always-mounted VoiceOverlay and a page that
+  // also uses this hook don't collide on the same realtime channel name.
+  const channelId = useId();
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
@@ -99,14 +102,14 @@ export function useLocalKnowledge() {
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !userId) return;
-    const ch = sb.channel(`knowledge_${userId}`)
+    const ch = sb.channel(`knowledge_${userId}_${channelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "knowledge_docs", filter: `user_id=eq.${userId}` },
         (p) => setDocs((prev) => prev.find((d) => d.id === p.new.id) ? prev : [p.new as KnowledgeDoc, ...prev]))
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "knowledge_docs", filter: `user_id=eq.${userId}` },
         (p) => setDocs((prev) => prev.filter((d) => d.id !== (p.old as { id: string }).id)))
       .subscribe();
     return () => { sb.removeChannel(ch); };
-  }, [userId]);
+  }, [userId, channelId]);
 
   const upload = useCallback(async (files: FileList | File[]) => {
     setUploading(true);

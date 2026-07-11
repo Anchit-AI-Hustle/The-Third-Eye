@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { useSession } from "next-auth/react";
 import { getSupabase } from "@/lib/supabase";
 
@@ -25,6 +25,9 @@ function ls(): Goal[] {
 function lsSet(v: Goal[]) { localStorage.setItem(KEY, JSON.stringify(v)); }
 
 export function useLocalGoals() {
+  // Unique per instance to avoid realtime channel-name collisions across
+  // components mounting this hook simultaneously.
+  const channelId = useId();
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -46,7 +49,7 @@ export function useLocalGoals() {
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !userId) return;
-    const ch = sb.channel(`goals_${userId}`)
+    const ch = sb.channel(`goals_${userId}_${channelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "goals", filter: `user_id=eq.${userId}` },
         (p) => setGoals((prev) => prev.find((g) => g.id === p.new.id) ? prev : [p.new as Goal, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "goals", filter: `user_id=eq.${userId}` },
@@ -55,7 +58,7 @@ export function useLocalGoals() {
         (p) => setGoals((prev) => prev.filter((g) => g.id !== (p.old as { id: string }).id)))
       .subscribe();
     return () => { sb.removeChannel(ch); };
-  }, [userId]);
+  }, [userId, channelId]);
 
   const add = useCallback(async (goal: Omit<Goal, "id" | "created_at">) => {
     const g: Goal = { ...goal, id: crypto.randomUUID(), created_at: new Date().toISOString() };

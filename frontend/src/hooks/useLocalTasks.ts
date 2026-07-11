@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { useSession } from "next-auth/react";
 import { getSupabase } from "@/lib/supabase";
 
@@ -35,6 +35,12 @@ function ls<T>(key: string): T[] {
 function lsSet(key: string, v: unknown) { localStorage.setItem(key, JSON.stringify(v)); }
 
 export function useLocalTasks(statusFilter?: TaskStatus) {
+  // Unique per hook instance so multiple components using this hook on the
+  // same page (e.g. the dashboard + the always-mounted VoiceOverlay) don't
+  // open realtime channels with the same name. Reusing a channel name returns
+  // the already-subscribed channel, and adding listeners to it throws
+  // "cannot add postgres_changes callbacks ... after subscribe()".
+  const channelId = useId();
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
   const [tasks, setTasks] = useState<LocalTask[]>([]);
@@ -66,7 +72,7 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !userId) return;
-    const ch = sb.channel(`tasks_${userId}`)
+    const ch = sb.channel(`tasks_${userId}_${channelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks", filter: `user_id=eq.${userId}` },
         (p) => setTasks((prev) => prev.find((t) => t.id === p.new.id) ? prev : [p.new as LocalTask, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tasks", filter: `user_id=eq.${userId}` },
@@ -75,7 +81,7 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
         (p) => setTasks((prev) => prev.filter((t) => t.id !== (p.old as any).id)))
       .subscribe();
     return () => { sb.removeChannel(ch); };
-  }, [userId]);
+  }, [userId, channelId]);
 
   const create = useCallback(async (data: Omit<LocalTask, "id" | "created_at">) => {
     const t: LocalTask = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
