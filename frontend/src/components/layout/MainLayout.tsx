@@ -14,7 +14,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       <main
         className={
           mainClassName ??
-          "flex-1 overflow-y-auto pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pb-0"
+          "flex-1 overflow-y-auto pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pb-10"
         }
       >
         {children}
