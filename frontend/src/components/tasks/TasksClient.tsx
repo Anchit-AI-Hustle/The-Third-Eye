@@ -340,12 +340,27 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
   onEdit: (t: LocalTask) => void;
   onStatusChange: (id: string, s: TaskStatus) => void;
 }) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<TaskStatus | null>(null);
+
+  const drop = (status: TaskStatus) => {
+    if (dragId) onStatusChange(dragId, status);
+    setDragId(null); setOverCol(null);
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {KANBAN_COLS.map(({ status, label }) => {
         const col = tasks.filter((t) => t.status === status);
         return (
-          <div key={status} className="bg-background-surface border border-border-default rounded-card overflow-hidden">
+          <div key={status}
+            onDragOver={(e) => { e.preventDefault(); setOverCol(status); }}
+            onDragLeave={() => setOverCol((c) => (c === status ? null : c))}
+            onDrop={() => drop(status)}
+            className={cn(
+              "bg-background-surface border rounded-card overflow-hidden transition-colors",
+              overCol === status ? "border-accent-blue/60 bg-accent-blue/5" : "border-border-default",
+            )}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
               <div className="flex items-center gap-2">
                 <StatusBadge status={status} />
@@ -357,7 +372,13 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
                 const overdue = isOverdue(t.due_date, t.status);
                 return (
                   <div key={t.id}
-                    className="bg-background-elevated border border-border-default rounded-input p-3 hover:border-border-hover transition-colors cursor-pointer"
+                    draggable
+                    onDragStart={() => setDragId(t.id)}
+                    onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                    className={cn(
+                      "bg-background-elevated border border-border-default rounded-input p-3 hover:border-border-hover transition-colors cursor-grab active:cursor-grabbing",
+                      dragId === t.id && "opacity-50",
+                    )}
                     onClick={() => onEdit(t)}>
                     <p className="text-text-primary text-sm leading-snug mb-2">{t.title}</p>
                     <div className="flex items-center justify-between gap-2">

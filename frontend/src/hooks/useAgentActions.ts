@@ -20,20 +20,29 @@ export interface AgentSideEffect {
  * Returns an `apply(sideEffects)` function; call it with `parsed.sideEffects`
  * from the chat stream's `done` event.
  */
+// An action the user can reverse right after the agent applies it.
+export interface UndoableAction {
+  label: string;
+  undo: () => void;
+}
+
 export function useAgentActions() {
   const { create: createTask, update: updateTask, remove: removeTask } = useLocalTasks();
   const { add: addGoal, adjust: adjustGoal, remove: removeGoal } = useLocalGoals();
   const { create: createNote, remove: removeNote } = useLocalNotes();
 
+  // Returns the list of undoable actions applied (created items), so the caller
+  // can offer a short-lived "Undo" — the agent's writes are no longer one-way.
   return useCallback(
-    (sideEffects: AgentSideEffect[] | undefined) => {
-      if (!sideEffects?.length) return;
+    async (sideEffects: AgentSideEffect[] | undefined): Promise<UndoableAction[]> => {
+      if (!sideEffects?.length) return [];
+      const undoables: UndoableAction[] = [];
       for (const fx of sideEffects) {
         const d = fx.data ?? {};
         switch (fx.type) {
           case "task_create":
             if (d.title) {
-              createTask({
+              const t = await createTask({
                 title: d.title,
                 priority: d.priority ?? "medium",
                 status: "todo",
@@ -41,6 +50,7 @@ export function useAgentActions() {
                 due_date: d.due_date,
                 description: d.description,
               });
+              if (t?.id) undoables.push({ label: `task "${d.title}"`, undo: () => removeTask(t.id) });
             }
             break;
           case "task_update":
@@ -50,14 +60,17 @@ export function useAgentActions() {
             if (d.id) removeTask(d.id);
             break;
           case "note_create":
-            if (d.title) createNote(d.title, d.content ?? "");
+            if (d.title) {
+              const n = await createNote(d.title, d.content ?? "");
+              if (n?.id) undoables.push({ label: `note "${d.title}"`, undo: () => removeNote(n.id) });
+            }
             break;
           case "note_delete":
             if (d.id) removeNote(d.id);
             break;
           case "goal_create":
             if (d.title) {
-              addGoal({
+              const g = await addGoal({
                 title: d.title,
                 category: d.category ?? "Personal",
                 target: d.target ?? 100,
@@ -66,6 +79,7 @@ export function useAgentActions() {
                 deadline: d.deadline,
                 description: d.description,
               });
+              if (g?.id) undoables.push({ label: `goal "${d.title}"`, undo: () => removeGoal(g.id) });
             }
             break;
           case "goal_update":
@@ -79,6 +93,7 @@ export function useAgentActions() {
             break;
         }
       }
+      return undoables;
     },
     [createTask, updateTask, removeTask, createNote, removeNote, addGoal, adjustGoal, removeGoal],
   );

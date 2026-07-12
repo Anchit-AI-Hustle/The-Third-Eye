@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { dataList, dataInsert, dataDelete } from "@/lib/dataClient";
+import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export interface Expense {
   id: string;
@@ -63,6 +63,15 @@ export function useLocalExpenses() {
     return e;
   }, []);
 
+  const update = useCallback(async (id: string, patch: Partial<Omit<Expense, "id" | "created_at">>) => {
+    setExpenses((prev) => {
+      const next = prev.map((x) => (x.id === id ? { ...x, ...patch } : x)).sort(sortDesc);
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataUpdate("expenses", id, patch);
+  }, []);
+
   const remove = useCallback(async (id: string) => {
     setExpenses((prev) => {
       const next = prev.filter((x) => x.id !== id);
@@ -72,5 +81,5 @@ export function useLocalExpenses() {
     if (remote.current) await dataDelete("expenses", id);
   }, []);
 
-  return { expenses, ready, add, remove };
+  return { expenses, ready, add, update, remove };
 }
