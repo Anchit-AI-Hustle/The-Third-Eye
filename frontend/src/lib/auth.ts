@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
+import { resolveAuthSecret } from "@/lib/authSecret";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
 
@@ -102,7 +103,7 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/signin",
     error: "/auth/error",
   },
-  secret: process.env.NEXTAUTH_SECRET ?? "set-NEXTAUTH_SECRET-env-var-in-vercel",
+  secret: resolveAuthSecret(),
 };
 
 declare module "next-auth" {
