@@ -543,7 +543,7 @@ const Kolab = (function(){
     const badge = p.aadhaarVerified?'<span class="pill ok">✓ Aadhaar verified</span>':'<span class="pill warn">Unverified</span>';
     const sub = p.privileged?'<span class="pill ok">Complimentary · Pro</span>':(p.sub.active?`<span class="pill ok">${TIERS[p.sub.tier]?.name||'Active'} · ${p.sub.cycle}</span>`:'<span class="pill lock">No plan</span>');
     const soc = Object.entries(p.socials||{}).filter(([,x])=>x).map(([k,x])=>`<span class="pill">${CH[k]?CH[k].n:k}: ${esc(x)}</span>`).join("")||'<span class="pill lock">No channels linked</span>';
-    const avImg = p.pic?`<img src="${esc(p.pic)}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${initials(p.name||p.handle)}'">`:initials(p.name||p.handle);
+    const avImg = p.pic?`<img src="${esc(p.pic)}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${esc(initials(p.name||p.handle))}'">`:esc(initials(p.name||p.handle));
     v.innerHTML = `<div class="card pcard">
       <div class="big-av">${avImg}</div>
       <div class="pinfo">
