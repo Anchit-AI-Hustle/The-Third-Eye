@@ -543,9 +543,14 @@ const Kolab = (function(){
     const badge = p.aadhaarVerified?'<span class="pill ok">✓ Aadhaar verified</span>':'<span class="pill warn">Unverified</span>';
     const sub = p.privileged?'<span class="pill ok">Complimentary · Pro</span>':(p.sub.active?`<span class="pill ok">${TIERS[p.sub.tier]?.name||'Active'} · ${p.sub.cycle}</span>`:'<span class="pill lock">No plan</span>');
     const soc = Object.entries(p.socials||{}).filter(([,x])=>x).map(([k,x])=>`<span class="pill">${CH[k]?CH[k].n:k}: ${esc(x)}</span>`).join("")||'<span class="pill lock">No channels linked</span>';
-    const avImg = p.pic?`<img src="${esc(p.pic)}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${esc(initials(p.name||p.handle))}'">`:esc(initials(p.name||p.handle));
+    const ini = esc(initials(p.name||p.handle));
+    // Initials sit under the image; onerror just removes the image (no
+    // user data in the inline handler) so the initials show on load failure.
+    const avImg = p.pic
+      ? `${ini}<img src="${esc(p.pic)}" alt="" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit">`
+      : ini;
     v.innerHTML = `<div class="card pcard">
-      <div class="big-av">${avImg}</div>
+      <div class="big-av" style="position:relative">${avImg}</div>
       <div class="pinfo">
         <h2>${esc(p.name||"New creator")}</h2>
         <div class="handle">${esc(p.handle||"@—")}${p.web?' · '+esc(p.web):''}</div>
