@@ -485,7 +485,11 @@ const Kolab = (function(){
       safe.users[k]={...rest, aadhaarLast4: aadhaar?String(aadhaar).replace(/\D/g,"").slice(-4):""}; }
     localStorage.setItem(DB_KEY,JSON.stringify(safe));
   }catch(e){}}
-  function saveSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
+  // Session is NOT persisted to localStorage: the identifier is an email/phone
+  // (sensitive), and reload restores the session from the same-origin Third Eye
+  // NextAuth session instead (see tryThirdEyeSession). We only clear any legacy
+  // stored key here.
+  function saveSession(){try{ localStorage.removeItem(SESSION_KEY); }catch(e){}}
   const norm = s => (s||"").replace(/\D/g,"").slice(-10);
 
   /* ============ UI HELPERS ============ */
@@ -503,7 +507,8 @@ const Kolab = (function(){
       socials:{}, aadhaar:"", aadhaarVerified:false, sub:{tier:null,cycle:null,active:false},
       privileged:false, complete:false}, patch||{});
   }
-  function loginByKey(key, seedName){
+  function loginByKey(key, seedName, persist){
+    if(persist===undefined) persist=true;
     const phone = norm(key);
     const priv = PRIVILEGED.includes(phone);
     if(!db.users[key]){
@@ -514,9 +519,36 @@ const Kolab = (function(){
       db.users[key].privileged = priv || db.users[key].privileged;
       if(priv) db.users[key].sub.active = true;
     }
-    sessionKey = key; user = db.users[key]; saveDB(); saveSession(); enterApp();
+    sessionKey = key; user = db.users[key];
+    // persist=false keeps the record in memory only (used for the Third Eye
+    // session path, which never writes the email/identity to localStorage).
+    if(persist){ saveDB(); saveSession(); }
+    enterApp();
   }
   function oauth(provider){ const em = "user."+provider.toLowerCase()+"@example.com"; toast(provider+" sign-in (demo)"); loginByKey(em); }
+
+  // When embedded inside The Third Eye, the user is already authenticated with
+  // Google. Read that same-origin NextAuth session and enter Kolab directly —
+  // no separate Kolab sign-in. Falls through to the manual screen only when
+  // there is no Third Eye session (e.g. standalone use).
+  async function tryThirdEyeSession(){
+    try{
+      const r = await fetch("/api/auth/session", { credentials:"same-origin" });
+      if(!r.ok) return false;
+      const s = await r.json();
+      const email = s && s.user && s.user.email;
+      if(!email) return false;
+      const key = String(email).toLowerCase();
+      loginByKey(key, (s.user.name || "").trim(), false);
+      if(s.user.name && !user.name) user.name = s.user.name;
+      if(s.user.image && !user.pic)  user.pic  = s.user.image;
+      user.email = email;
+      // in-memory only — the identity comes from the Third Eye session on every
+      // load, so it is never written to clear-text localStorage here.
+      refreshAll();
+      return true;
+    }catch(e){ return false; }
+  }
 
   /* ============ APP RENDER ============ */
   function refreshBadges(){
@@ -816,7 +848,10 @@ const Kolab = (function(){
     fetch("/api/kolab/config").then(r=>r.ok?r.json():{}).catch(()=>({})).then(cfg=>{
       if(cfg && Array.isArray(cfg.privileged)) PRIVILEGED = cfg.privileged.map(x=>norm(String(x)));
       if(cfg && cfg.seed && typeof cfg.seed==="object") SEED = cfg.seed;
-    }).finally(()=>{
+    }).finally(async ()=>{
+      // Prefer the Third Eye Google session (no extra sign-in). Only if that's
+      // absent do we restore a locally-saved Kolab session.
+      if(await tryThirdEyeSession()) return;
       const sk=read(SESSION_KEY,null);
       if(sk && db.users[sk]){ sessionKey=sk; user=db.users[sk]; enterApp(); }
     });
