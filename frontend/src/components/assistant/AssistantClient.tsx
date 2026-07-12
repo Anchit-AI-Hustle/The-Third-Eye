@@ -14,6 +14,7 @@ import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
+import { VisionButton } from "./VisionButton";
 
 interface Message {
   id: string;
@@ -416,6 +417,17 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setIsStreaming(false);
   }
 
+  // Vision (E.D.I.T.H.): a captured screen/camera frame was analyzed — record
+  // it in the conversation as a Q&A turn so it reads naturally in the thread.
+  const handleVisionResult = useCallback((q: string, _image: string, answer: string) => {
+    setInput("");
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: `👁️ ${q}` },
+      { id: crypto.randomUUID(), role: "assistant", content: answer },
+    ]);
+  }, []);
+
   // Instant interrupt (JARVIS-style): stop the in-flight response + any speech
   // immediately, WITHOUT wiping the conversation. Wired to Escape and the stop
   // control so the user can cut the assistant off mid-answer.
@@ -703,6 +715,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
               {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
             </button>
           )}
+          <VisionButton question={input} disabled={isStreaming} onResult={handleVisionResult} />
           {(isStreaming || tts.speaking) ? (
             <button onClick={interrupt} title="Stop (Esc)"
               className="flex-none flex items-center gap-1 px-2 py-1.5 rounded-input text-accent-red hover:bg-accent-red/10 transition-colors">
