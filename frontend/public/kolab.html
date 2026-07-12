@@ -560,7 +560,7 @@ const Kolab = (function(){
         <div class="kv">
           <div><div class="k">Age</div><div class="v">${p.dob?ageFrom(p.dob)+" yrs":"—"}</div></div>
           <div><div class="k">DOB</div><div class="v">${p.dob||"—"}</div></div>
-          <div><div class="k">Location</div><div class="v">${[p.city,p.state,p.country].filter(Boolean).join(", ")||"—"}</div></div>
+          <div><div class="k">Location</div><div class="v">${[esc(p.city),esc(p.state),esc(p.country)].filter(Boolean).join(", ")||"—"}</div></div>
           <div><div class="k">Pincode</div><div class="v">${esc(p.pin)||"—"}</div></div>
         </div>
         <div style="margin-top:16px"><div class="k" style="font-family:'JetBrains Mono';font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Channels</div><div class="row" style="display:flex;gap:8px;flex-wrap:wrap">${soc}</div></div>
