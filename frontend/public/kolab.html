@@ -476,7 +476,14 @@ const Kolab = (function(){
   let db = read(DB_KEY, {users:{}});     // users keyed by normalized phone or email
   let sessionKey = null, user = null;
   function read(k,def){try{const r=localStorage.getItem(k);return r?JSON.parse(r):def;}catch(e){return def;}}
-  function saveDB(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch(e){}}
+  // Persist without clear-text secrets: strip password and full Aadhaar before
+  // writing to localStorage (kept in memory for the session only).
+  function saveDB(){try{
+    const safe={users:{}};
+    for(const k in db.users){ const {pw,aadhaar,...rest}=db.users[k];
+      safe.users[k]={...rest, aadhaarLast4: aadhaar?String(aadhaar).replace(/\D/g,"").slice(-4):""}; }
+    localStorage.setItem(DB_KEY,JSON.stringify(safe));
+  }catch(e){}}
   function saveSession(){try{localStorage.setItem(SESSION_KEY,sessionKey||"");}catch(e){}}
   const norm = s => (s||"").replace(/\D/g,"").slice(-10);
 
@@ -484,7 +491,7 @@ const Kolab = (function(){
   let tT; function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("on"),1900);}
   function copy(txt,msg){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast(msg)).catch(()=>toast(msg));}else toast(msg);}
   const $ = id => document.getElementById(id);
-  const esc = s => (s||"").replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+  const esc = s => (s||"").replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
   const initials = n => (n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
 
   /* ============ AUTH ============ */
