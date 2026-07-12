@@ -59,3 +59,15 @@ export const INGESTION_SCOPES = [
 export function appBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
+
+/**
+ * The public origin of the current request (e.g. https://the-third-eye.anchit-tandon.com),
+ * derived from the proxy headers Vercel sets. Used for OAuth redirect_uri so the
+ * connect flow works without depending on NEXT_PUBLIC_APP_URL (which otherwise
+ * falls back to localhost and breaks the Google callback).
+ */
+export function originFromRequest(req: Request): string {
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  return host ? `${proto}://${host}` : appBaseUrl();
+}
