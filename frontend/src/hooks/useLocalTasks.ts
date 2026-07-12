@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useId } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { getSupabase } from "@/lib/supabase";
+import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export type TaskStatus = "todo" | "in_progress" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -35,103 +35,83 @@ function ls<T>(key: string): T[] {
 function lsSet(key: string, v: unknown) { localStorage.setItem(key, JSON.stringify(v)); }
 
 export function useLocalTasks(statusFilter?: TaskStatus) {
-  // Unique per hook instance so multiple components using this hook on the
-  // same page (e.g. the dashboard + the always-mounted VoiceOverlay) don't
-  // open realtime channels with the same name. Reusing a channel name returns
-  // the already-subscribed channel, and adding listeners to it throws
-  // "cannot add postgres_changes callbacks ... after subscribe()".
-  const channelId = useId();
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [ready, setReady] = useState(false);
+  // Whether persistence is server-backed. A ref so mutation callbacks always
+  // read the current value without being re-created on every load.
+  const remote = useRef(false);
 
   useEffect(() => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      Promise.all([
-        sb.from("tasks").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
-        sb.from("team_members").select("*").eq("user_id", userId),
-      ]).then(([{ data: t }, { data: m }]) => {
-        setTasks((t as LocalTask[]) ?? []);
-        setTeam((m as TeamMember[]) ?? []);
-        setReady(true);
-      }).catch(() => {
+    let cancelled = false;
+    setReady(false);
+    Promise.all([
+      dataList<LocalTask>("tasks"),
+      dataList<TeamMember>("team_members"),
+    ]).then(([t, m]) => {
+      if (cancelled) return;
+      remote.current = t.remote;
+      if (t.remote) {
+        setTasks(t.rows);
+        setTeam(m.rows);
+      } else {
         setTasks(ls<LocalTask>(TASK_KEY));
         setTeam(ls<TeamMember>(TEAM_KEY));
-        setReady(true);
-      });
-    } else {
-      setTasks(ls<LocalTask>(TASK_KEY));
-      setTeam(ls<TeamMember>(TEAM_KEY));
+      }
       setReady(true);
-    }
+    });
+    return () => { cancelled = true; };
   }, [userId]);
-
-  useEffect(() => {
-    const sb = getSupabase();
-    if (!sb || !userId) return;
-    const ch = sb.channel(`tasks_${userId}_${channelId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks", filter: `user_id=eq.${userId}` },
-        (p) => setTasks((prev) => prev.find((t) => t.id === p.new.id) ? prev : [p.new as LocalTask, ...prev]))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tasks", filter: `user_id=eq.${userId}` },
-        (p) => setTasks((prev) => prev.map((t) => t.id === p.new.id ? p.new as LocalTask : t)))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "tasks", filter: `user_id=eq.${userId}` },
-        (p) => setTasks((prev) => prev.filter((t) => t.id !== (p.old as any).id)))
-      .subscribe();
-    return () => { sb.removeChannel(ch); };
-  }, [userId, channelId]);
 
   const create = useCallback(async (data: Omit<LocalTask, "id" | "created_at">) => {
     const t: LocalTask = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("tasks").insert({ ...t, user_id: userId });
-    } else {
-      setTasks((prev) => { const next = [t, ...prev]; lsSet(TASK_KEY, next); return next; });
-    }
+    setTasks((prev) => {
+      const next = [t, ...prev];
+      if (!remote.current) lsSet(TASK_KEY, next);
+      return next;
+    });
+    if (remote.current) await dataInsert("tasks", t);
     return t;
-  }, [userId]);
+  }, []);
 
   const update = useCallback(async (id: string, data: Partial<LocalTask>) => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("tasks").update(data).eq("id", id).eq("user_id", userId);
-    } else {
-      setTasks((prev) => { const next = prev.map((t) => t.id === id ? { ...t, ...data } : t); lsSet(TASK_KEY, next); return next; });
-    }
-  }, [userId]);
+    setTasks((prev) => {
+      const next = prev.map((t) => t.id === id ? { ...t, ...data } : t);
+      if (!remote.current) lsSet(TASK_KEY, next);
+      return next;
+    });
+    if (remote.current) await dataUpdate("tasks", id, data);
+  }, []);
 
   const remove = useCallback(async (id: string) => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("tasks").delete().eq("id", id).eq("user_id", userId);
-    } else {
-      setTasks((prev) => { const next = prev.filter((t) => t.id !== id); lsSet(TASK_KEY, next); return next; });
-    }
-  }, [userId]);
+    setTasks((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      if (!remote.current) lsSet(TASK_KEY, next);
+      return next;
+    });
+    if (remote.current) await dataDelete("tasks", id);
+  }, []);
 
   const addMember = useCallback(async (name: string) => {
     const m: TeamMember = { id: crypto.randomUUID(), name };
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("team_members").insert({ ...m, user_id: userId });
-      setTeam((prev) => [...prev, m]);
-    } else {
-      setTeam((prev) => { const next = [...prev, m]; lsSet(TEAM_KEY, next); return next; });
-    }
-  }, [userId]);
+    setTeam((prev) => {
+      const next = [...prev, m];
+      if (!remote.current) lsSet(TEAM_KEY, next);
+      return next;
+    });
+    if (remote.current) await dataInsert("team_members", m);
+  }, []);
 
   const removeMember = useCallback(async (id: string) => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("team_members").delete().eq("id", id).eq("user_id", userId);
-      setTeam((prev) => prev.filter((m) => m.id !== id));
-    } else {
-      setTeam((prev) => { const next = prev.filter((m) => m.id !== id); lsSet(TEAM_KEY, next); return next; });
-    }
-  }, [userId]);
+    setTeam((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      if (!remote.current) lsSet(TEAM_KEY, next);
+      return next;
+    });
+    if (remote.current) await dataDelete("team_members", id);
+  }, []);
 
   const allTasks = tasks;
   const filtered = statusFilter ? tasks.filter((t) => t.status === statusFilter) : tasks;

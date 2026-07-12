@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useId } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { getSupabase } from "@/lib/supabase";
+import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export interface LocalNote {
   id: string;
@@ -21,70 +21,54 @@ function ls(): LocalNote[] {
 function lsSet(v: LocalNote[]) { localStorage.setItem(KEY, JSON.stringify(v)); }
 
 export function useLocalNotes() {
-  // Unique per instance to avoid realtime channel-name collisions across
-  // components mounting this hook simultaneously.
-  const channelId = useId();
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
   const [notes, setNotes] = useState<LocalNote[]>([]);
   const [ready, setReady] = useState(false);
+  const remote = useRef(false);
 
   useEffect(() => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      sb.from("notes").select("*").eq("user_id", userId).order("pinned", { ascending: false }).order("updated_at", { ascending: false })
-        .then(({ data, error }) => {
-          if (error) { setNotes(ls()); } else { setNotes((data as LocalNote[]) ?? []); }
-          setReady(true);
-        });
-    } else {
-      setNotes(ls()); setReady(true);
-    }
+    let cancelled = false;
+    setReady(false);
+    dataList<LocalNote>("notes").then((r) => {
+      if (cancelled) return;
+      remote.current = r.remote;
+      setNotes(r.remote ? r.rows : ls());
+      setReady(true);
+    });
+    return () => { cancelled = true; };
   }, [userId]);
-
-  useEffect(() => {
-    const sb = getSupabase();
-    if (!sb || !userId) return;
-    const ch = sb.channel(`notes_${userId}_${channelId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notes", filter: `user_id=eq.${userId}` },
-        (p) => setNotes((prev) => prev.find((n) => n.id === p.new.id) ? prev : [p.new as LocalNote, ...prev]))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notes", filter: `user_id=eq.${userId}` },
-        (p) => setNotes((prev) => prev.map((n) => n.id === p.new.id ? p.new as LocalNote : n)))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "notes", filter: `user_id=eq.${userId}` },
-        (p) => setNotes((prev) => prev.filter((n) => n.id !== (p.old as any).id)))
-      .subscribe();
-    return () => { sb.removeChannel(ch); };
-  }, [userId, channelId]);
 
   const create = useCallback(async (title: string, content = "") => {
-    const n: LocalNote = { id: crypto.randomUUID(), title, content, pinned: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("notes").insert({ ...n, user_id: userId });
-    } else {
-      setNotes((prev) => { const next = [n, ...prev]; lsSet(next); return next; });
-    }
+    const now = new Date().toISOString();
+    const n: LocalNote = { id: crypto.randomUUID(), title, content, pinned: false, created_at: now, updated_at: now };
+    setNotes((prev) => {
+      const next = [n, ...prev];
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataInsert("notes", n);
     return n;
-  }, [userId]);
+  }, []);
 
   const update = useCallback(async (id: string, data: Partial<LocalNote>) => {
     const patch = { ...data, updated_at: new Date().toISOString() };
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("notes").update(patch).eq("id", id).eq("user_id", userId);
-    } else {
-      setNotes((prev) => { const next = prev.map((n) => n.id === id ? { ...n, ...patch } : n); lsSet(next); return next; });
-    }
-  }, [userId]);
+    setNotes((prev) => {
+      const next = prev.map((n) => n.id === id ? { ...n, ...patch } : n);
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataUpdate("notes", id, patch);
+  }, []);
 
   const remove = useCallback(async (id: string) => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("notes").delete().eq("id", id).eq("user_id", userId);
-    } else {
-      setNotes((prev) => { const next = prev.filter((n) => n.id !== id); lsSet(next); return next; });
-    }
-  }, [userId]);
+    setNotes((prev) => {
+      const next = prev.filter((n) => n.id !== id);
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataDelete("notes", id);
+  }, []);
 
   return { notes, ready, create, update, remove };
 }
