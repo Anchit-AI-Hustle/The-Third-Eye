@@ -44,7 +44,7 @@ const CAPS: Capability[] = [
   // — Voice —
   { group: "JARVIS",  name: "Voice STT (Web Speech)",      blurb: "Live transcription with interim text",                                              inspiration: "core",                         required: ["mic"],           status: "live" },
   { group: "JARVIS",  name: "Voice TTS",                   blurb: "Agent-matched voice (David / Zira / Samantha)",                                     inspiration: "core",                         required: [],                status: "live" },
-  { group: "JARVIS",  name: "Wake word detection",         blurb: "Passive listening for \"Hey JARVIS\" / agent name",                                  inspiration: "Iron Man — hands-free",        required: ["mic"],           status: "planned" },
+  { group: "JARVIS",  name: "Wake word detection",         blurb: "Passive listening for your agent's name → hands-free call mode",                     inspiration: "Iron Man — hands-free",        required: ["mic"],           status: "live" },
 
   // — EDITH canon —
   { group: "E.D.I.T.H.", name: "Vision analysis",          blurb: "Share your screen or webcam → AI describes it & extracts text/data",                 inspiration: "Far From Home — HUD",          required: ["cam"],           status: "live" },
