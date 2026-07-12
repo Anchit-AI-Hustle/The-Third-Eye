@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2 } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2, Ear } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -15,6 +15,7 @@ import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { VisionButton } from "./VisionButton";
+import { useWakeWord } from "@/hooks/useWakeWord";
 
 interface Message {
   id: string;
@@ -96,6 +97,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // reply is read aloud; "dictate" = speech fills the input box for review and
   // is NOT sent until the user presses send.
   const [voiceMode, setVoiceMode] = useState<"dictate" | "call">("call");
+  const [wakeEnabled, setWakeEnabled] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") setWakeEnabled(localStorage.getItem("jarvis_wakeword") === "1");
+  }, []);
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
@@ -170,6 +175,17 @@ export function AssistantClient({ userName }: { userName?: string }) {
       if (!isStreamingRef.current) sendRef.current(text);
     }, []),
   });
+
+  // Wake word: passive listening for the agent's name. Only runs while the mic
+  // is OFF, so it never fights the main recognizer for the microphone; saying
+  // "JARVIS" (or the active agent's name) flips into hands-free call mode.
+  const onWake = useCallback(() => {
+    if (isStreamingRef.current) return;
+    setVoiceMode("call");
+    stt.enable();
+    setMicOn(true);
+  }, [stt]);
+  useWakeWord({ agentName: agent?.name ?? "JARVIS", enabled: wakeEnabled && !micOn, onWake, cooldownMs: 2000 });
 
   // Track TTS state in a ref so callbacks can see it
   useEffect(() => {
@@ -742,6 +758,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
               {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
             </button>
           )}
+          <button
+            onClick={() => setWakeEnabled((v) => { const n = !v; try { localStorage.setItem("jarvis_wakeword", n ? "1" : "0"); } catch { /* noop */ } return n; })}
+            title={wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free` : "Enable wake word (\"Hey JARVIS\")"}
+            className={cn("flex-none p-1.5 rounded-input transition-colors",
+              wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
+            <Ear size={15} />
+          </button>
           <VisionButton question={input} disabled={isStreaming} onResult={handleVisionResult} />
           {(isStreaming || tts.speaking) ? (
             <button onClick={interrupt} title="Stop (Esc)"

@@ -136,10 +136,10 @@ const AUDITS: Audit[] = [
   {
     page: "Capabilities",
     href: "/capabilities",
-    current: 9.0,
+    current: 9.5,
     target: 9.5,
-    dims: { accuracy: 9, implementation: 9, execution: 9, results: 9 },
-    verdict: "An honest inventory of live/partial/planned — gated behind auth, RAG badges corrected, and Vision analysis is now genuinely live (screen/webcam → AI).",
+    dims: { accuracy: 10, implementation: 9, execution: 10, results: 9 },
+    verdict: "An honest inventory — gated behind auth, RAG badges corrected, and two former 'planned' items now genuinely live: Vision analysis (screen/webcam → AI) and wake-word detection (hands-free on the agent's name).",
     issues: [
       { severity: "high", text: "Page had no auth guard (deployment info exposed to anon).", fix: "Added /capabilities (and other app routes) to the middleware matcher.", status: "fixed" },
       { severity: "medium", text: "Knowledge/Document Q&A were badged 'live' as RAG, but run keyword search.", fix: "Downgraded to 'partial' and relabelled as keyword search until embeddings land.", status: "fixed" },
