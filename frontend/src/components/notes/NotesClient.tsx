@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useLocalNotes, LocalNote } from "@/hooks/useLocalNotes";
 import { Plus, Trash2, Pin, PinOff, Search, X, Download } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -11,6 +11,28 @@ export function NotesClient() {
   const [search, setSearch] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const textRef = useRef<HTMLTextAreaElement>(null);
+
+  // Debounced autosave: keystrokes update local state immediately but persist
+  // at most once every ~500ms, instead of one write per character. The latest
+  // patch per note is coalesced and flushed on the timer, on note switch, and
+  // on unmount so nothing is lost.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<{ id: string; patch: Partial<LocalNote> } | null>(null);
+
+  function flushSave() {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    if (pending.current) { update(pending.current.id, pending.current.patch); pending.current = null; }
+  }
+
+  function scheduleSave(id: string, patch: Partial<LocalNote>) {
+    const merged = pending.current && pending.current.id === id ? { ...pending.current.patch, ...patch } : patch;
+    pending.current = { id, patch: merged };
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushSave, 500);
+  }
+
+  // Flush the previous note's pending edits before switching, and on unmount.
+  useEffect(() => flushSave, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = notes.filter((n) =>
     !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase())
@@ -31,13 +53,13 @@ export function NotesClient() {
 
   function handleBodyChange(content: string) {
     if (!active) return;
-    update(active.id, { content });
+    scheduleSave(active.id, { content });
     setActive((prev) => prev ? { ...prev, content } : null);
   }
 
   function handleTitleChange(title: string) {
     if (!active) return;
-    update(active.id, { title });
+    scheduleSave(active.id, { title });
     setActive((prev) => prev ? { ...prev, title } : null);
   }
 
