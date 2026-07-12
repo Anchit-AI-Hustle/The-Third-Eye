@@ -492,6 +492,8 @@ const Kolab = (function(){
   function copy(txt,msg){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast(msg)).catch(()=>toast(msg));}else toast(msg);}
   const $ = id => document.getElementById(id);
   const esc = s => (s||"").replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  // Only allow http(s) links — blocks javascript:/data: schemes in href.
+  const safeUrl = u => { u=(u||"").trim(); return /^https?:\/\//i.test(u) ? u : ""; };
   const initials = n => (n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
 
   /* ============ AUTH ============ */
@@ -640,7 +642,7 @@ const Kolab = (function(){
       <div class="body"><span class="bn">${esc(x.brand)}${x.cat?' · '+esc(x.cat):''}</span><span class="pn">${esc(x.product)}</span>
       ${x.price?`<span class="price">${esc(x.price)}</span>`:''}
       ${x.code?`<div style="display:flex;gap:6px;align-items:center;margin-top:2px"><code>${esc(x.code)}</code>${shop?`<button class="btn" style="padding:6px 9px;font-size:10px" onclick="Kolab.copyCode('${encodeURIComponent(x.code)}')">Copy</button>`:''}</div>`:''}
-      <div class="acts">${shop?`<a class="btn primary" style="flex:1;padding:8px" href="${esc(x.url)||'#'}" target="_blank" rel="noopener">Shop ↗</a>`:`<button class="btn" style="padding:6px 10px;font-size:10px" onclick="Kolab.delDeal(${i})">Delete</button>`}</div></div></div>`;
+      <div class="acts">${shop?`<a class="btn primary" style="flex:1;padding:8px" href="${esc(safeUrl(x.url))||'#'}" target="_blank" rel="noopener">Shop ↗</a>`:`<button class="btn" style="padding:6px 10px;font-size:10px" onclick="Kolab.delDeal(${i})">Delete</button>`}</div></div></div>`;
   }
   function delDeal(i){ user.deals.splice(i,1); saveDB(); renderDeals(); }
   function copyCode(c){ c=decodeURIComponent(c); copy(c,"Code "+c+" copied"); }
