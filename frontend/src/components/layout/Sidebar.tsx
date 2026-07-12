@@ -15,7 +15,7 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Assistant",  href: "/assistant",  icon: MessageSquare },
-  { label: "Tasks",      href: "/tasks",      icon: CheckSquare },
+  { label: "Task Tracker", href: "/tasks",     icon: CheckSquare },
   { label: "Notes",      href: "/notes",      icon: FileText },
   { label: "Goals",      href: "/goals",      icon: Target },
   { label: "Knowledge",  href: "/knowledge",  icon: BookOpen },
