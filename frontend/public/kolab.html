@@ -484,7 +484,7 @@ const Kolab = (function(){
       safe.users[k]={...rest, aadhaarLast4: aadhaar?String(aadhaar).replace(/\D/g,"").slice(-4):""}; }
     localStorage.setItem(DB_KEY,JSON.stringify(safe));
   }catch(e){}}
-  function saveSession(){try{localStorage.setItem(SESSION_KEY,sessionKey||"");}catch(e){}}
+  function saveSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
   const norm = s => (s||"").replace(/\D/g,"").slice(-10);
 
   /* ============ UI HELPERS ============ */
