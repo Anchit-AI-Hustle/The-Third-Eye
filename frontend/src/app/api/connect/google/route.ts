@@ -2,14 +2,14 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { INGESTION_SCOPES, appBaseUrl } from "@/lib/googleToken";
+import { INGESTION_SCOPES, originFromRequest } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
 // Opt-in: start an OAuth flow that requests the Gmail/Chat ingestion scopes for
 // the signed-in user. Kept separate from sign-in so basic login stays free of
 // sensitive scopes (which would otherwise force OAuth verification).
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return new NextResponse("Not authenticated", { status: 401 });
@@ -20,7 +20,7 @@ export async function GET() {
   const state = randomUUID();
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: `${appBaseUrl()}/api/connect/google/callback`,
+    redirect_uri: `${originFromRequest(req)}/api/connect/google/callback`,
     response_type: "code",
     scope: INGESTION_SCOPES,
     access_type: "offline",
