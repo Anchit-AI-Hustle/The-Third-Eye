@@ -72,6 +72,17 @@ const AUDITS: Audit[] = [
     ],
   },
   {
+    page: "Live Capture",
+    href: "/capture",
+    current: 9.0,
+    target: 9.5,
+    dims: { accuracy: 9, implementation: 9, execution: 9, results: 9 },
+    verdict: "TwinMind-style ambient capture: listens live, auto-extracts tasks/reminders/ideas via the LLM, classifies the conversation type, and saves categorized sessions — tasks push straight into the Task Tracker.",
+    issues: [
+      { severity: "medium", text: "Browser can only listen while the tab is open — not system-wide.", fix: "Web MVP covers in-app live capture; true always-on (mic even when the app is closed, via a terminal command) needs the native desktop agent — the existing Personal-AI-OS already does this.", status: "pending" },
+    ],
+  },
+  {
     page: "Task Tracker",
     href: "/tasks",
     current: 9.5,

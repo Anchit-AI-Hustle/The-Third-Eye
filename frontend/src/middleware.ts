@@ -11,6 +11,7 @@ export const config = {
     "/dashboard/:path*",
     "/tasks/:path*",
     "/assistant/:path*",
+    "/capture/:path*",
     "/knowledge/:path*",
     "/finance/:path*",
     "/notes/:path*",

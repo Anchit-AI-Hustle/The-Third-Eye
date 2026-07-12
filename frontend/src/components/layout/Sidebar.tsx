@@ -6,7 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, Store, ShieldCheck,
+  FileText, Target, Sparkles, Store, ShieldCheck, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { label: "App Audit", href: "/audit", icon: ShieldCheck },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Assistant",  href: "/assistant",  icon: MessageSquare },
+  { label: "Live Capture", href: "/capture",  icon: Radio },
   { label: "Task Tracker", href: "/tasks",     icon: CheckSquare },
   { label: "Notes",      href: "/notes",      icon: FileText },
   { label: "Goals",      href: "/goals",      icon: Target },
