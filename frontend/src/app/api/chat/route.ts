@@ -1142,7 +1142,34 @@ export async function POST(req: NextRequest) {
 
         controller.close();
       } catch (err) {
-        send("error", { message: err instanceof Error ? err.message : String(err) });
+        // The primary model (Gemini) failed — most often a free-tier 429/quota.
+        // Fall back to the multi-provider cascade for a plain-text answer so the
+        // assistant stays usable instead of erroring. Tools are unavailable on
+        // this path (it's a text completion), and it needs at least one other
+        // provider key (e.g. GROQ_API_KEY / CEREBRAS_API_KEY) configured.
+        try {
+          const { llmCascade } = await import("@/lib/llmCascade");
+          const fbMessages = [
+            ...history
+              .map((h) => ({
+                role: (h.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
+                content: typeof h.content === "string" ? h.content : "",
+              }))
+              .filter((m) => m.content),
+            { role: "user" as const, content: message },
+          ];
+          const out = await llmCascade({
+            system: systemInstruction,
+            messages: fbMessages,
+            temperature: 0.6,
+            maxTokens: 1200,
+          });
+          send("text", { text: out.text });
+          send("done", { stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
+          if (email && out.text) void rememberExchange(email, message, out.text).catch(() => {});
+        } catch {
+          send("error", { message: err instanceof Error ? err.message : String(err) });
+        }
         controller.close();
       }
     },
