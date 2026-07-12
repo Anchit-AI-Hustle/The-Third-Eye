@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kolab — Creator & Brand Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --base:#141210; --surface:#1D1A17; --surface2:#26221E; --line:#332D27;
+  --ink:#F4EFE8; --muted:#9C9186; --faint:#6F665C;
+  --lime:#C2F04A; --clay:#E8604A; --gold:#E8B84A; --sky:#5BC8E8; --violet:#B98CFF;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--base);color:var(--ink);font-family:'Inter',system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3,h4{font-family:'Archivo',sans-serif;font-weight:900;letter-spacing:-.02em;line-height:1.05}
+.mono{font-family:'JetBrains Mono',monospace}
+.wrap{max-width:1120px;margin:0 auto;padding:0 clamp(16px,4vw,30px)}
+button{font-family:inherit;cursor:pointer}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--lime);color:var(--base)}
+.hide{display:none!important}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:11px 18px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.primary{background:var(--lime);color:var(--base);border-color:var(--lime)}
+.btn.block{width:100%}
+.btn:hover{opacity:.92}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.inp{width:100%;font-family:'Inter',sans-serif;font-size:14px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:11px 13px}
+.inp:focus{outline:none;border-color:var(--lime)}
+.lbl{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;display:block}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--lime);margin-bottom:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px;border-radius:100px;border:1px solid var(--line)}
+.pill.ok{color:var(--lime);border-color:rgba(194,240,74,.4)}
+.pill.warn{color:var(--gold);border-color:rgba(232,184,74,.4)}
+.pill.lock{color:var(--faint)}
+
+/* ===== AUTH ===== */
+#authScreen{min-height:100vh;display:grid;grid-template-columns:1.1fr .9fr}
+@media(max-width:860px){#authScreen{grid-template-columns:1fr}}
+.auth-left{background:var(--surface);border-right:1px solid var(--line);padding:clamp(28px,5vw,56px);display:flex;flex-direction:column;justify-content:center}
+@media(max-width:860px){.auth-left{border-right:none;border-bottom:1px solid var(--line)}}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:34px}
+.logo .mark{width:38px;height:38px;border-radius:11px;background:var(--lime);display:grid;place-items:center;font-family:'Archivo';font-weight:900;color:var(--base);font-size:20px}
+.logo b{font-family:'Archivo';font-weight:900;font-size:20px;letter-spacing:-.02em}
+.auth-left h1{font-size:clamp(30px,5vw,50px);margin-bottom:16px}
+.auth-left h1 .lime{color:var(--lime)}
+.auth-left p{color:var(--muted);font-size:16px;max-width:44ch;margin-bottom:26px}
+.two{display:flex;gap:26px;flex-wrap:wrap}
+.two div{max-width:200px}
+.two h4{font-size:14px;margin-bottom:4px}
+.two p{font-size:13px;margin:0}
+.auth-right{padding:clamp(24px,5vw,48px);display:flex;flex-direction:column;justify-content:center}
+.auth-card{max-width:400px;margin:0 auto;width:100%}
+.auth-card h2{font-size:24px;margin-bottom:4px}
+.auth-card .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+.methods{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:5px;margin-bottom:20px;flex-wrap:wrap}
+.method{flex:1;min-width:70px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:9px 6px;border:none;background:transparent;color:var(--muted);border-radius:8px}
+.method.on{background:var(--lime);color:var(--base)}
+.field{margin-bottom:14px}
+.hintbox{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--faint);background:var(--surface2);border:1px dashed var(--line);border-radius:8px;padding:9px 11px;margin-bottom:14px;line-height:1.5}
+.oauth{display:flex;gap:8px;margin-top:10px}
+.oauth .btn{flex:1;font-size:11px;padding:10px 8px}
+
+/* ===== APP SHELL ===== */
+#app{display:none}
+.topbar{position:sticky;top:0;z-index:40;background:rgba(20,18,16,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;gap:14px;padding:11px 0}
+.topbar .logo{margin-bottom:0}
+.topbar .logo .mark{width:30px;height:30px;font-size:16px;border-radius:9px}
+.topbar .logo b{font-size:16px}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.uchip{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:5px 6px 5px 12px}
+.uchip .un{font-size:13px;font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uchip .av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--lime),var(--violet));display:grid;place-items:center;font-family:'Archivo';font-weight:900;color:var(--base);font-size:12px}
+.modewrap{display:flex;gap:3px;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:3px}
+.modebtn{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;padding:7px 11px;border:none;background:transparent;color:var(--muted);border-radius:100px}
+.modebtn.on{background:var(--lime);color:var(--base)}
+
+/* the MENU BAR — sticky + highlighted */
+.menubar{position:sticky;top:53px;z-index:35;background:linear-gradient(180deg,var(--surface),var(--surface2));border-bottom:2px solid var(--lime);box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.menubar .wrap{display:flex;align-items:center;gap:8px;padding:0}
+.menu-tag{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--base);background:var(--lime);padding:5px 10px;border-radius:0 0 8px 0;align-self:flex-start}
+.menu-scroll{display:flex;gap:4px;overflow-x:auto;padding:9px 0;scrollbar-width:none;flex:1}
+.menu-scroll::-webkit-scrollbar{display:none}
+.mtab{flex:0 0 auto;display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--muted);padding:9px 15px;border-radius:9px;border:1px solid transparent;background:transparent;white-space:nowrap}
+.mtab .ic{font-size:14px}
+.mtab:hover{color:var(--ink);border-color:var(--line)}
+.mtab.on{background:var(--lime);color:var(--base);box-shadow:0 2px 10px rgba(194,240,74,.3)}
+.mtab .lk{font-size:11px;opacity:.7}
+
+/* panels */
+main{padding:clamp(24px,4vw,44px) 0 60px}
+.panel{display:none}
+.panel.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.phead{max-width:64ch;margin-bottom:26px}
+.phead h2{font-size:clamp(24px,4vw,36px);margin-bottom:8px}
+.phead p{color:var(--muted);font-size:15px}
+.grid{display:grid;gap:16px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+
+/* gate banner */
+.gate{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(232,96,74,.14),rgba(232,184,74,.08));border:1px solid rgba(232,184,74,.35);border-radius:12px;padding:16px 18px;margin-bottom:24px;flex-wrap:wrap}
+.gate .gi{font-size:24px}
+.gate .gt{flex:1;min-width:220px}
+.gate .gt b{display:block;font-size:15px;margin-bottom:2px}
+.gate .gt span{font-size:13px;color:var(--muted)}
+.locked{position:relative}
+.locked::after{content:"🔒 Verify Aadhaar + subscribe to unlock";position:absolute;inset:0;background:rgba(20,18,16,.82);backdrop-filter:blur(2px);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gold);border-radius:12px;z-index:5;text-align:center;padding:12px}
+
+/* offerings */
+.offer{padding:22px}
+.offer .oi{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;margin-bottom:14px;background:var(--surface2)}
+.offer h3{font-size:18px;margin-bottom:8px}
+.offer p{font-size:14px;color:var(--muted)}
+.offer .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+
+/* connectors */
+.conn{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.conn .ci{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-family:'Archivo';font-weight:900;font-size:13px;color:#fff}
+.conn .cn{flex:1}
+.conn .cn b{font-size:14px}
+.conn .cn div{font-size:12px;color:var(--muted)}
+
+/* pricing */
+.tier{padding:24px;display:flex;flex-direction:column}
+.tier.pro{border-color:var(--lime);box-shadow:0 0 0 1px var(--lime)}
+.tier h3{font-size:20px;margin-bottom:4px}
+.tier .price{font-family:'Archivo';font-weight:900;font-size:38px;margin:10px 0 2px}
+.tier .price small{font-size:14px;color:var(--muted);font-weight:600}
+.tier .cyc{font-size:12px;color:var(--lime);margin-bottom:16px}
+.tier ul{list-style:none;margin:8px 0 20px;flex:1}
+.tier li{font-size:13.5px;padding:7px 0 7px 22px;position:relative;border-top:1px solid var(--line);color:#d8d0c6}
+.tier li:first-child{border-top:none}
+.tier li::before{content:"✓";position:absolute;left:0;color:var(--lime);font-weight:700}
+.cyctoggle{display:inline-flex;gap:3px;background:var(--surface);border:1px solid var(--line);border-radius:100px;padding:3px;margin-bottom:20px}
+.cyctoggle button{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;text-transform:uppercase;padding:8px 16px;border:none;background:transparent;color:var(--muted);border-radius:100px}
+.cyctoggle button.on{background:var(--lime);color:var(--base)}
+
+/* studio bits */
+.chgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.chcard{padding:15px;border-top:3px solid var(--cc,#888)}
+.chcard .ch-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.chcard .ci{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-family:'Archivo';font-weight:900;font-size:12px;color:#fff}
+.chcard h4{font-size:14px}
+.chcard .st{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;color:var(--faint)}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
+.qitem,.dealrow{display:grid;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px}
+.qitem{grid-template-columns:auto 1fr auto;border-left:4px solid var(--qc,var(--lime))}
+.qitem .when{font-family:'JetBrains Mono',monospace;font-size:11px;text-align:center;min-width:56px}
+.qitem .when b{display:block;font-family:'Archivo';font-size:15px}
+.qchip{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:5px;color:#fff;margin-right:4px}
+.del{background:none;border:none;color:var(--faint);font-size:19px}.del:hover{color:var(--clay)}
+.dealgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.deal{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.deal .top{height:80px;display:grid;place-items:center;font-size:34px;background:linear-gradient(135deg,var(--surface2),var(--base));position:relative}
+.deal .badge{position:absolute;top:8px;right:8px;background:var(--lime);color:var(--base);font-family:'JetBrains Mono';font-size:9px;font-weight:700;padding:3px 7px;border-radius:5px}
+.deal .body{padding:13px;display:flex;flex-direction:column;gap:5px;flex:1}
+.deal .bn{font-family:'JetBrains Mono';font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.deal .pn{font-size:14px;font-weight:600}
+.deal .price{font-family:'Archivo';font-weight:900;font-size:15px}
+.deal code{font-family:'JetBrains Mono';font-size:11px;background:var(--surface2);border:1px dashed var(--line);border-radius:5px;padding:5px 7px;color:var(--lime)}
+.deal .acts{display:flex;gap:6px;margin-top:6px;align-items:center}
+
+/* profile view */
+.pcard{padding:24px;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+.pcard .big-av{width:88px;height:88px;border-radius:20px;background:linear-gradient(135deg,var(--lime),var(--violet));display:grid;place-items:center;font-family:'Archivo';font-weight:900;font-size:34px;color:var(--base);flex:0 0 auto;object-fit:cover;overflow:hidden}
+.pcard .big-av img{width:100%;height:100%;object-fit:cover}
+.pinfo h2{font-size:26px}
+.pinfo .handle{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);margin:4px 0 10px}
+.pinfo .row{display:flex;gap:8px;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:18px}
+.kv .k{font-family:'JetBrains Mono';font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.kv .v{font-size:14px;font-weight:600}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(8,7,6,.72);backdrop-filter:blur(4px);z-index:80;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 16px}
+.modal.on{display:flex}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:16px;max-width:560px;width:100%;padding:26px;margin:auto}
+.sheet h2{font-size:22px;margin-bottom:4px}
+.sheet .msub{color:var(--muted);font-size:13px;margin-bottom:20px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:520px){.mgrid{grid-template-columns:1fr}}
+.full{grid-column:1/-1}
+.autoloc{font-family:'JetBrains Mono';font-size:11px;color:var(--lime);margin-top:4px;min-height:14px}
+.mnote{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);line-height:1.5;background:var(--surface2);border:1px dashed var(--line);border-radius:8px;padding:9px 11px;margin:6px 0 14px}
+.sochip{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.sochip .sl{width:78px;font-family:'JetBrains Mono';font-size:10px;text-transform:uppercase;color:var(--muted)}
+
+/* toast */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--lime);color:var(--base);font-family:'JetBrains Mono';font-size:12px;font-weight:700;padding:11px 20px;border-radius:9px;opacity:0;pointer-events:none;transition:.25s;z-index:200;box-shadow:0 8px 30px rgba(0,0,0,.4);text-align:center;max-width:90vw}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+footer{border-top:1px solid var(--line);padding:22px 0;text-align:center;color:var(--faint);font-family:'JetBrains Mono';font-size:11px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH ================= -->
+<div id="authScreen">
+  <div class="auth-left">
+    <div class="logo"><span class="mark">K</span><b>Kolab</b></div>
+    <h1>Where <span class="lime">creators</span> and brands grow together.</h1>
+    <p>One place for influencers to run their content, link every channel, launch a coupon storefront, and get paid — and for brands to find and partner with them.</p>
+    <div class="two">
+      <div><h4>For creators</h4><p>Plan, schedule, sell with affiliate codes, build a site — all in one subscription.</p></div>
+      <div><h4>For brands</h4><p>Discover verified creators with linked channels and run commission deals.</p></div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <div class="auth-card">
+      <h2>Sign in</h2>
+      <div class="sub">No sign-up needed — signing in creates your space.</div>
+      <div class="methods" id="methods">
+        <button class="method on" data-m="mobile">Mobile</button>
+        <button class="method" data-m="aadhaar">Aadhaar</button>
+        <button class="method" data-m="email">Email</button>
+        <button class="method" data-m="test">Test</button>
+      </div>
+
+      <div id="m_mobile" class="mform">
+        <div class="field"><span class="lbl">Mobile number</span><input class="inp" id="mob_num" inputmode="numeric" placeholder="+91 ..."></div>
+        <div class="hintbox" id="mob_otpbox" style="display:none">Prototype OTP sent to mobile + email. Enter <b>any 6 digits</b> to continue.</div>
+        <div class="field" id="mob_otpfield" style="display:none"><span class="lbl">Enter OTP</span><input class="inp" id="mob_otp" inputmode="numeric" placeholder="6-digit code"></div>
+        <button class="btn primary block" id="mob_go">Send OTP</button>
+      </div>
+
+      <div id="m_aadhaar" class="mform" style="display:none">
+        <div class="field"><span class="lbl">Aadhaar number</span><input class="inp" id="aad_num" inputmode="numeric" maxlength="14" placeholder="XXXX XXXX XXXX"></div>
+        <div class="hintbox">Simulated eKYC (prototype). Real Aadhaar auth requires a UIDAI-licensed KYC provider + your consent. OTP goes to your Aadhaar-linked mobile/email — enter <b>any 6 digits</b> here.</div>
+        <div class="field" id="aad_otpfield" style="display:none"><span class="lbl">Enter OTP</span><input class="inp" id="aad_otp" inputmode="numeric" placeholder="6-digit code"></div>
+        <button class="btn primary block" id="aad_go">Send OTP</button>
+      </div>
+
+      <div id="m_email" class="mform" style="display:none">
+        <div class="field"><span class="lbl">Email</span><input class="inp" id="em_id" type="email" placeholder="you@gmail.com"></div>
+        <div class="field"><span class="lbl">Password</span><input class="inp" id="em_pw" type="password" placeholder="Your password"></div>
+        <div class="hintbox">Prototype auth (stored locally). New email? Signing in creates it. Real version verifies against your DB / Google · Apple · Facebook.</div>
+        <button class="btn primary block" id="em_go">Sign in / Create</button>
+        <div class="oauth">
+          <button class="btn" onclick="Kolab.oauth('Google')">Google</button>
+          <button class="btn" onclick="Kolab.oauth('Apple')">Apple</button>
+          <button class="btn" onclick="Kolab.oauth('Facebook')">Facebook</button>
+        </div>
+      </div>
+
+      <div id="m_test" class="mform" style="display:none">
+        <div class="field"><span class="lbl">Any mobile number</span><input class="inp" id="test_num" inputmode="numeric" placeholder="Enter any number"></div>
+        <div class="hintbox">Test Sign-In — no OTP. For demos only.</div>
+        <button class="btn primary block" id="test_go">Sign in</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="topbar"><div class="wrap">
+    <div class="logo"><span class="mark">K</span><b>Kolab</b></div>
+    <div class="tb-right">
+      <div class="modewrap">
+        <button class="modebtn on" data-mode="creator">Studio</button>
+        <button class="modebtn" data-mode="public">Storefront</button>
+      </div>
+      <div class="uchip"><span class="un" id="tb_name">—</span><span class="av" id="tb_av">?</span></div>
+      <button class="btn" id="signout" title="Sign out" style="padding:9px 12px">Exit</button>
+    </div>
+  </div></div>
+
+  <div class="menubar"><div class="wrap">
+    <span class="menu-tag">Menu</span>
+    <div class="menu-scroll" id="menu">
+      <button class="mtab on" data-t="home"><span class="ic">🏠</span>Home</button>
+      <button class="mtab" data-t="studio"><span class="ic">🎬</span>Creator Studio</button>
+      <button class="mtab" data-t="profile"><span class="ic">👤</span>Profile</button>
+      <button class="mtab" data-t="setup"><span class="ic">⚙️</span>Profile Setup</button>
+      <button class="mtab" data-t="pricing"><span class="ic">💳</span>Subscription</button>
+    </div>
+  </div></div>
+
+  <main class="wrap">
+    <!-- HOME / OFFERINGS -->
+    <section class="panel on" id="p_home">
+      <div id="gateHost"></div>
+      <div class="phead"><div class="eyebrow">Everything Kolab does</div>
+        <h2>Your whole creator business, in one place</h2>
+        <p>Browse every offering below. Complete your profile and verify to unlock the tools — until then this is a full preview of what's inside.</p>
+      </div>
+      <div class="grid g3" id="offerGrid"></div>
+
+      <div class="phead" style="margin-top:44px"><div class="eyebrow">Two-sided model</div><h2>How Kolab makes money — and makes you money</h2></div>
+      <div class="grid g2">
+        <div class="card offer"><div class="oi">🎯</div><h3>Creators subscribe</h3><p>Basic or Pro plans to run content, schedule to every channel, build a coupon storefront, and launch a marketing site. You keep 100% of your affiliate commissions.</p></div>
+        <div class="card offer"><div class="oi">🤝</div><h3>Brands subscribe</h3><p>Because every creator's channels are linked and verified, brands pay to discover them and run commission deals — a live two-way marketplace.</p></div>
+      </div>
+    </section>
+
+    <!-- CREATOR STUDIO -->
+    <section class="panel" id="p_studio">
+      <div class="phead"><div class="eyebrow">Plan · schedule · sell</div><h2>Creator Studio</h2>
+        <p>Your content calendar, multi-channel scheduler, and coupon deals — all feeding your public storefront.</p></div>
+      <div id="studioGate"></div>
+      <div id="studioBody">
+        <h3 style="margin-bottom:12px">Channels</h3>
+        <div class="chgrid" id="chgrid" style="margin-bottom:28px"></div>
+
+        <h3 style="margin-bottom:12px">Schedule a post</h3>
+        <div class="card" style="padding:18px;margin-bottom:16px">
+          <div class="formgrid">
+            <div><span class="lbl">Title / caption</span><input class="inp" id="q_title" placeholder="Post idea"></div>
+            <div><span class="lbl">Date</span><input class="inp" id="q_date" type="date"></div>
+            <div><span class="lbl">Time (IST)</span><input class="inp" id="q_time" type="time" value="19:30"></div>
+          </div>
+          <span class="lbl">Channels</span><div id="q_channels" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <button class="btn primary" id="q_add">+ Add to queue</button>
+        </div>
+        <div id="queue" style="margin-bottom:30px"></div>
+
+        <h3 style="margin-bottom:12px">Brand deals &amp; coupons</h3>
+        <div class="card" style="padding:18px;margin-bottom:16px">
+          <div class="formgrid">
+            <div><span class="lbl">Brand</span><input class="inp" id="b_brand" placeholder="MyProtein"></div>
+            <div><span class="lbl">Emoji</span><input class="inp" id="b_emoji" maxlength="2" placeholder="🥤"></div>
+            <div><span class="lbl">Product</span><input class="inp" id="b_product" placeholder="Whey 1kg"></div>
+            <div><span class="lbl">Category</span><input class="inp" id="b_cat" placeholder="Supplements"></div>
+            <div><span class="lbl">Code</span><input class="inp" id="b_code" placeholder="SAVE20"></div>
+            <div><span class="lbl">Discount</span><input class="inp" id="b_disc" placeholder="20% off"></div>
+            <div><span class="lbl">Price</span><input class="inp" id="b_price" placeholder="₹1,999"></div>
+            <div><span class="lbl">Buy / affiliate link</span><input class="inp" id="b_url" placeholder="https://…"></div>
+          </div>
+          <button class="btn primary" id="b_add">+ Add deal</button>
+        </div>
+        <div class="dealgrid" id="dealadmin"></div>
+      </div>
+    </section>
+
+    <!-- PROFILE VIEW -->
+    <section class="panel" id="p_profile">
+      <div class="phead"><div class="eyebrow">As followers &amp; brands see you</div><h2>Your profile</h2></div>
+      <div id="profileView"></div>
+    </section>
+
+    <!-- PROFILE SETUP -->
+    <section class="panel" id="p_setup">
+      <div class="phead"><div class="eyebrow">Manage everything</div><h2>Profile setup</h2>
+        <p>Edit your details, link social channels, connect your website and marketing tools. Website + ad connectors unlock on Pro (or for privileged accounts).</p></div>
+      <div style="margin-bottom:16px"><button class="btn primary" id="openProfile">Edit profile &amp; KYC</button></div>
+
+      <h3 style="margin:22px 0 12px">Social channels (Store Manager)</h3>
+      <div class="grid g3" id="socialCards"></div>
+
+      <h3 style="margin:26px 0 12px">Website &amp; marketing connectors</h3>
+      <div id="proGate"></div>
+      <div class="grid g3" id="connGrid"></div>
+    </section>
+
+    <!-- PRICING -->
+    <section class="panel" id="p_pricing">
+      <div class="phead"><div class="eyebrow">Simple, creator-friendly pricing</div><h2>Choose your plan</h2>
+        <p>Every feature is paid. Your account may already be on the house — check your badge. Aadhaar verification is required to use features on any plan.</p></div>
+      <div class="cyctoggle" id="cyctoggle"><button class="on" data-c="monthly">Monthly</button><button data-c="annual">Annual · save more</button></div>
+      <div class="grid g2" id="tiers"></div>
+    </section>
+
+    <!-- STOREFRONT (public mode) -->
+    <section class="panel" id="p_store">
+      <div class="phead"><div class="eyebrow">Public storefront preview</div><h2 id="sf_title">Shop the edit</h2>
+        <p>This is the follower-facing page generated from your brand deals. Share the link; they shop on each brand's own site with your code.</p></div>
+      <div class="dealgrid" id="sf_grid"></div>
+      <div id="sf_empty" style="display:none;color:var(--muted);padding:30px 0;text-align:center">No live deals yet — add some in Creator Studio.</div>
+    </section>
+  </main>
+
+  <footer>Kolab · prototype build · Aadhaar KYC, OTP &amp; payments are simulated for demo — swap in Supabase, a UIDAI-licensed KYC provider &amp; Razorpay to go live.</footer>
+</div>
+
+<!-- PROFILE MODAL -->
+<div class="modal" id="profileModal"><div class="sheet">
+  <h2>Complete your profile</h2>
+  <div class="msub">You can browse offerings without this, but features stay locked until your profile is complete and Aadhaar is verified.</div>
+  <div class="mgrid">
+    <div><span class="lbl">Full name</span><input class="inp" id="pf_name"></div>
+    <div><span class="lbl">Influencer / brand name</span><input class="inp" id="pf_handle" placeholder="@yourhandle"></div>
+    <div><span class="lbl">Date of birth</span><input class="inp" id="pf_dob" type="date"></div>
+    <div><span class="lbl">Age</span><input class="inp" id="pf_age" disabled placeholder="—"></div>
+    <div><span class="lbl">Profile picture URL</span><input class="inp" id="pf_pic" placeholder="https://…"></div>
+    <div><span class="lbl">Pincode</span><input class="inp" id="pf_pin" inputmode="numeric" maxlength="6" placeholder="6-digit"><div class="autoloc" id="pf_loc"></div></div>
+    <div><span class="lbl">Country</span><input class="inp" id="pf_country" disabled></div>
+    <div><span class="lbl">State</span><input class="inp" id="pf_state" disabled></div>
+    <div><span class="lbl">City / District</span><input class="inp" id="pf_city" disabled></div>
+    <div class="full"><span class="lbl">Address (house no., street, area)</span><input class="inp" id="pf_addr"></div>
+    <div class="full"><span class="lbl">Website URL <span id="pf_web_lock" class="pill lock">Pro</span></span><input class="inp" id="pf_web" placeholder="https://yoursite.com"></div>
+  </div>
+
+  <span class="lbl" style="margin-top:6px">Social channels</span>
+  <div style="margin-bottom:8px">
+    <div class="sochip"><span class="sl">Instagram</span><input class="inp" id="so_ig" placeholder="@handle"></div>
+    <div class="sochip"><span class="sl">YouTube</span><input class="inp" id="so_yt" placeholder="channel"></div>
+    <div class="sochip"><span class="sl">TikTok</span><input class="inp" id="so_tt" placeholder="@handle"></div>
+  </div>
+
+  <span class="lbl" style="margin-top:10px">Aadhaar verification (required to use features)</span>
+  <div class="mgrid" style="margin-bottom:4px">
+    <div><input class="inp" id="pf_aadhaar" inputmode="numeric" maxlength="14" placeholder="XXXX XXXX XXXX"></div>
+    <div><button class="btn block" id="pf_verify">Verify via OTP</button></div>
+    <div class="full" id="pf_aad_otp_wrap" style="display:none"><span class="lbl">OTP sent to your mobile + email — enter any 6 digits</span><input class="inp" id="pf_aad_otp" placeholder="6-digit code"></div>
+  </div>
+  <div class="mnote">Simulated KYC for the prototype. Real Aadhaar eKYC must run through a UIDAI-licensed provider with your consent; on success your name/DOB/address auto-fill from the Aadhaar record.</div>
+  <div id="pf_verified_badge"></div>
+
+  <div style="display:flex;gap:10px;margin-top:14px">
+    <button class="btn primary block" id="pf_save">Save profile</button>
+    <button class="btn" id="pf_close">Later</button>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const Kolab = (function(){
+  /* ============ CONFIG ============ */
+  const PLATFORM = "Kolab";
+
+  // Privileged numbers + seed accounts are injected at runtime from a server
+  // env var via /api/kolab/config — never committed to this repo. Empty until
+  // loaded (see init), so no personal data lives in source.
+  let PRIVILEGED = [];
+  let SEED = {};
+
+  const TIERS = {
+    basic:{name:"Basic", monthly:599, annualPM:500, feats:["Content calendar & scheduler","Link up to 3 channels","Coupon storefront","Basic analytics","Email support"]},
+    pro:{name:"Pro", monthly:999, annualPM:800, feats:["Everything in Basic","Unlimited channels","Your own marketing website","Google / Meta / TikTok ad connectors","Brand marketplace access","Priority support"]}
+  };
+
+  const CHANNELS = [
+    {k:"ig",n:"Instagram",c:"#E1306C",ini:"IG"},
+    {k:"yt",n:"YouTube",c:"#FF0000",ini:"YT"},
+    {k:"fb",n:"Facebook",c:"#1877F2",ini:"FB"},
+    {k:"tt",n:"TikTok",c:"#111",ini:"TT"},
+    {k:"gg",n:"Google",c:"#34A853",ini:"G"}
+  ];
+  const CH = Object.fromEntries(CHANNELS.map(c=>[c.k,c]));
+
+  const CONNECTORS = [
+    {n:"Google Ads",c:"#4285F4",ini:"GA",d:"Run & track search / display campaigns for your site."},
+    {n:"Meta Ads",c:"#0866FF",ini:"M",d:"Instagram + Facebook ad campaigns from one place."},
+    {n:"TikTok Ads",c:"#111",ini:"TT",d:"Spark & in-feed campaign manager."},
+    {n:"Print / OOH",c:"#E8604A",ini:"PR",d:"Brief and track offline print & billboard runs."},
+    {n:"Windsor.ai",c:"#7A3FF2",ini:"W",d:"Unified marketing analytics across every channel."},
+    {n:"SEO Suite",c:"#1E9E6A",ini:"SE",d:"Keywords, on-page checks & content briefs for your site."}
+  ];
+
+  const OFFERINGS = [
+    {i:"🎬",t:"Content Studio",d:"Plan a rolling content calendar and never stare at a blank page again."},
+    {i:"📅",t:"Multi-channel Scheduler",d:"Queue posts once; publish to Instagram, YouTube, Facebook, TikTok & Google."},
+    {i:"🏷️",t:"Coupon Storefront",d:"Turn your affiliate codes into a shoppable page followers can buy from."},
+    {i:"🌐",t:"Marketing Website",d:"A ready-made site for awareness and to drive your commission sales."},
+    {i:"📈",t:"Ad Managers & SEO",d:"Google, Meta, TikTok, print campaigns + SEO, all connected."},
+    {i:"🤝",t:"Brand Marketplace",d:"Get discovered by brands and land commission deals with verified reach."},
+    {i:"💰",t:"Commissions & Payouts",d:"Track affiliate earnings from your codes in one dashboard."},
+    {i:"🔒",t:"Verified Identity",d:"Aadhaar-verified creators earn brand trust and higher-value deals."},
+    {i:"📊",t:"Analytics",d:"See what's working across every channel and double down."}
+  ];
+
+  /* ============ STORAGE (mock DB) ============ */
+  const DB_KEY="kolab_db_v1", SESSION_KEY="kolab_session_v1";
+  let db = read(DB_KEY, {users:{}});     // users keyed by normalized phone or email
+  let sessionKey = null, user = null;
+  function read(k,def){try{const r=localStorage.getItem(k);return r?JSON.parse(r):def;}catch(e){return def;}}
+  // Persist without clear-text secrets: strip password and full Aadhaar before
+  // writing to localStorage (kept in memory for the session only).
+  function saveDB(){try{
+    const safe={users:{}};
+    for(const k in db.users){ const {pw,aadhaar,...rest}=db.users[k];
+      safe.users[k]={...rest, aadhaarLast4: aadhaar?String(aadhaar).replace(/\D/g,"").slice(-4):""}; }
+    localStorage.setItem(DB_KEY,JSON.stringify(safe));
+  }catch(e){}}
+  function saveSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
+  const norm = s => (s||"").replace(/\D/g,"").slice(-10);
+
+  /* ============ UI HELPERS ============ */
+  let tT; function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("on"),1900);}
+  function copy(txt,msg){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast(msg)).catch(()=>toast(msg));}else toast(msg);}
+  const $ = id => document.getElementById(id);
+  const esc = s => (s||"").replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  // Only allow http(s) links — blocks javascript:/data: schemes in href.
+  const safeUrl = u => { u=(u||"").trim(); return /^https?:\/\//i.test(u) ? u : ""; };
+  const initials = n => (n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+
+  /* ============ AUTH ============ */
+  function newUser(patch){
+    return Object.assign({name:"",handle:"",dob:"",pic:"",pin:"",country:"",state:"",city:"",addr:"",web:"",
+      socials:{}, aadhaar:"", aadhaarVerified:false, sub:{tier:null,cycle:null,active:false},
+      privileged:false, complete:false}, patch||{});
+  }
+  function loginByKey(key, seedName){
+    const phone = norm(key);
+    const priv = PRIVILEGED.includes(phone);
+    if(!db.users[key]){
+      const seed = SEED[phone] || {};
+      db.users[key] = newUser({name:seed.name||seedName||"", handle:seed.handle||"", phone:phone, privileged:priv,
+        sub: priv?{tier:"pro",cycle:"complimentary",active:true}:{tier:null,cycle:null,active:false}});
+    } else {
+      db.users[key].privileged = priv || db.users[key].privileged;
+      if(priv) db.users[key].sub.active = true;
+    }
+    sessionKey = key; user = db.users[key]; saveDB(); saveSession(); enterApp();
+  }
+  function oauth(provider){ const em = "user."+provider.toLowerCase()+"@example.com"; toast(provider+" sign-in (demo)"); loginByKey(em); }
+
+  /* ============ APP RENDER ============ */
+  function refreshBadges(){
+    $("tb_name").textContent = user.name || user.handle || "New creator";
+    $("tb_av").textContent = initials(user.name||user.handle);
+  }
+  const canUseFeatures = () => user.aadhaarVerified && (user.sub.active || user.privileged);
+  const canPro = () => user.privileged || user.sub.tier==="pro";
+
+  function renderGate(hostId){
+    const host = $(hostId); if(!host) return;
+    if(canUseFeatures()){ host.innerHTML=""; return; }
+    const needKyc = !user.aadhaarVerified, needSub = !(user.sub.active||user.privileged);
+    host.innerHTML = `<div class="gate"><div class="gi">🔒</div><div class="gt">
+      <b>${needKyc&&needSub?"Verify Aadhaar & subscribe to unlock features":needKyc?"Verify your Aadhaar to unlock features":"Subscribe to unlock features"}</b>
+      <span>You can explore every offering below. ${needKyc?"Aadhaar verification is required on every plan. ":""}${needSub?"Pick a plan to activate the tools.":""}</span>
+    </div>
+    ${needKyc?'<button class="btn primary" onclick="Kolab.openProfile()">Verify now</button>':''}
+    ${needSub?'<button class="btn" onclick="Kolab.go(\'pricing\')">See plans</button>':''}</div>`;
+  }
+
+  function renderOfferings(){ $("offerGrid").innerHTML = OFFERINGS.map(o=>
+    `<div class="card offer"><div class="oi">${o.i}</div><h3>${o.t}</h3><p>${o.d}</p></div>`).join(""); }
+
+  function renderProfileView(){
+    const v=$("profileView"); const p=user;
+    const badge = p.aadhaarVerified?'<span class="pill ok">✓ Aadhaar verified</span>':'<span class="pill warn">Unverified</span>';
+    const sub = p.privileged?'<span class="pill ok">Complimentary · Pro</span>':(p.sub.active?`<span class="pill ok">${TIERS[p.sub.tier]?.name||'Active'} · ${p.sub.cycle}</span>`:'<span class="pill lock">No plan</span>');
+    const soc = Object.entries(p.socials||{}).filter(([,x])=>x).map(([k,x])=>`<span class="pill">${CH[k]?CH[k].n:k}: ${esc(x)}</span>`).join("")||'<span class="pill lock">No channels linked</span>';
+    const ini = esc(initials(p.name||p.handle));
+    // Initials sit under the image; onerror just removes the image (no
+    // user data in the inline handler) so the initials show on load failure.
+    const avImg = p.pic
+      ? `${ini}<img src="${esc(p.pic)}" alt="" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit">`
+      : ini;
+    v.innerHTML = `<div class="card pcard">
+      <div class="big-av" style="position:relative">${avImg}</div>
+      <div class="pinfo">
+        <h2>${esc(p.name||"New creator")}</h2>
+        <div class="handle">${esc(p.handle||"@—")}${p.web?' · '+esc(p.web):''}</div>
+        <div class="row">${badge} ${sub}</div>
+      </div></div>
+      <div class="card" style="padding:22px;margin-top:16px">
+        <div class="kv">
+          <div><div class="k">Age</div><div class="v">${p.dob?ageFrom(p.dob)+" yrs":"—"}</div></div>
+          <div><div class="k">DOB</div><div class="v">${p.dob||"—"}</div></div>
+          <div><div class="k">Location</div><div class="v">${[esc(p.city),esc(p.state),esc(p.country)].filter(Boolean).join(", ")||"—"}</div></div>
+          <div><div class="k">Pincode</div><div class="v">${esc(p.pin)||"—"}</div></div>
+        </div>
+        <div style="margin-top:16px"><div class="k" style="font-family:'JetBrains Mono';font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Channels</div><div class="row" style="display:flex;gap:8px;flex-wrap:wrap">${soc}</div></div>
+      </div>`;
+  }
+
+  function renderSocialCards(){
+    $("socialCards").innerHTML = CHANNELS.map(c=>{
+      const linked = user.socials && user.socials[c.k];
+      return `<div class="card conn"><div class="ci" style="background:${c.c}">${c.ini}</div>
+        <div class="cn"><b>${c.n}</b><div>${linked?esc(linked):"Not linked"}</div></div>
+        <span class="pill ${linked?'ok':'lock'}">${linked?'Linked':'—'}</span></div>`;
+    }).join("");
+  }
+  function renderConnectors(){
+    $("connGrid").innerHTML = CONNECTORS.map(c=>
+      `<div class="card conn"><div class="ci" style="background:${c.c}">${c.ini}</div>
+        <div class="cn"><b>${c.n}</b><div>${c.d}</div></div>
+        <button class="btn" onclick="Kolab.connect('${c.n}')" ${canPro()?'':'disabled'}>Connect</button></div>`).join("");
+    const pg=$("proGate");
+    pg.innerHTML = canPro()?'' : `<div class="gate"><div class="gi">✨</div><div class="gt"><b>Website & ad connectors are a Pro feature</b><span>Upgrade to Pro to build your site and connect marketing tools.</span></div><button class="btn" onclick="Kolab.go('pricing')">Go Pro</button></div>`;
+  }
+
+  /* ============ PRICING ============ */
+  let cycle="monthly";
+  function renderTiers(){
+    $("tiers").innerHTML = Object.entries(TIERS).map(([k,t])=>{
+      const pm = cycle==="monthly"?t.monthly:t.annualPM;
+      const cyc = cycle==="monthly"?"billed monthly":`₹${t.annualPM*12}/yr · billed annually`;
+      const isCur = user.sub.active && user.sub.tier===k && !user.privileged;
+      return `<div class="card tier ${k==='pro'?'pro':''}">
+        <h3>${t.name}${k==='pro'?' <span class="pill ok">Popular</span>':''}</h3>
+        <div class="price">₹${pm}<small>/mo</small></div><div class="cyc">${cyc}</div>
+        <ul>${t.feats.map(f=>`<li>${f}</li>`).join("")}</ul>
+        <button class="btn ${k==='pro'?'primary':''} block" onclick="Kolab.subscribe('${k}')" ${user.privileged?'disabled':''}>
+          ${user.privileged?'Complimentary access':isCur?'Current plan':'Choose '+t.name}</button></div>`;
+    }).join("");
+  }
+  function subscribe(k){
+    if(user.privileged){toast("You already have complimentary access");return;}
+    user.sub={tier:k,cycle:cycle,active:true}; saveDB();
+    toast(TIERS[k].name+" activated (prototype — real billing via Razorpay)");
+    refreshAll();
+    if(!user.aadhaarVerified) toast("Now verify Aadhaar to start using features");
+  }
+
+  /* ============ STUDIO ============ */
+  function renderChannels(){
+    $("chgrid").innerHTML = CHANNELS.map(c=>{
+      const linked = user.socials && user.socials[c.k];
+      return `<div class="card chcard" style="--cc:${c.c}"><div class="ch-h"><span class="ci" style="background:${c.c}">${c.ini}</span>
+        <div><h4>${c.n}</h4><div class="st">${linked?'Linked · '+esc(linked):'Not connected'}</div></div></div></div>`;
+    }).join("");
+    $("q_channels").innerHTML = CHANNELS.map(c=>`<label class="pill" style="cursor:pointer;text-transform:none"><input type="checkbox" value="${c.k}" ${c.k==='ig'?'checked':''} style="accent-color:var(--lime)"> ${c.n}</label>`).join("");
+  }
+  function renderQueue(){
+    const q = user.queue||[];
+    q.sort((a,b)=>(a.dt||"").localeCompare(b.dt||""));
+    const el=$("queue");
+    if(!q.length){el.innerHTML='<p style="color:var(--muted);font-size:14px">Queue is empty.</p>';return;}
+    el.innerHTML=q.map((it,i)=>{
+      let d="—",m="";const dt=it.dt&&it.dt.includes("T")?new Date(it.dt):null;if(dt&&!isNaN(dt)){d=String(dt.getDate()).padStart(2,"0");m=dt.toLocaleDateString("en-GB",{month:"short"});}
+      const fc=it.chans[0]?CH[it.chans[0]].c:"var(--lime)";
+      return `<div class="qitem" style="--qc:${fc}"><div class="when"><b>${d}</b>${m}<br>${esc(it.time)||''}</div>
+        <div><div style="font-weight:600">${esc(it.title)}</div><div style="margin-top:5px">${it.chans.map(k=>`<span class="qchip" style="background:${CH[k].c}">${CH[k].n}</span>`).join("")}</div></div>
+        <button class="del" onclick="Kolab.delQ(${i})">×</button></div>`;
+    }).join("");
+  }
+  function delQ(i){ user.queue.splice(i,1); saveDB(); renderQueue(); }
+  function renderDeals(){
+    const d=user.deals||[];
+    $("dealadmin").innerHTML = d.length?d.map((x,i)=>dealCard(x,i,false)).join(""):'<p style="color:var(--muted);font-size:14px">No deals yet.</p>';
+    renderStore();
+  }
+  function dealCard(x,i,shop){
+    return `<div class="deal"><div class="top">${esc(x.emoji)||'🏷️'}${x.disc?`<span class="badge">${esc(x.disc)}</span>`:''}</div>
+      <div class="body"><span class="bn">${esc(x.brand)}${x.cat?' · '+esc(x.cat):''}</span><span class="pn">${esc(x.product)}</span>
+      ${x.price?`<span class="price">${esc(x.price)}</span>`:''}
+      ${x.code?`<div style="display:flex;gap:6px;align-items:center;margin-top:2px"><code>${esc(x.code)}</code>${shop?`<button class="btn" style="padding:6px 9px;font-size:10px" onclick="Kolab.copyCode('${encodeURIComponent(x.code)}')">Copy</button>`:''}</div>`:''}
+      <div class="acts">${shop?`<a class="btn primary" style="flex:1;padding:8px" href="${esc(safeUrl(x.url))||'#'}" target="_blank" rel="noopener">Shop ↗</a>`:`<button class="btn" style="padding:6px 10px;font-size:10px" onclick="Kolab.delDeal(${i})">Delete</button>`}</div></div></div>`;
+  }
+  function delDeal(i){ user.deals.splice(i,1); saveDB(); renderDeals(); }
+  function copyCode(c){ c=decodeURIComponent(c); copy(c,"Code "+c+" copied"); }
+  function renderStore(){
+    const d=(user.deals||[]);
+    $("sf_title").textContent = (user.handle||user.name?("Shop "+ (user.name?user.name.split(' ')[0]+"'s":user.handle)+" edit"):"Shop the edit");
+    $("sf_empty").style.display = d.length?"none":"block";
+    $("sf_grid").innerHTML = d.map((x)=>dealCard(x,0,true)).join("");
+  }
+
+  /* ============ PROFILE MODAL ============ */
+  const ageFrom = dob => { if(!dob) return ""; const b=new Date(dob),n=new Date(); let a=n.getFullYear()-b.getFullYear(); if(n<new Date(n.getFullYear(),b.getMonth(),b.getDate()))a--; return a>=0&&a<130?a:""; };
+  function openProfile(){
+    const p=user;
+    $("pf_name").value=p.name||""; $("pf_handle").value=p.handle||""; $("pf_dob").value=p.dob||"";
+    $("pf_age").value=p.dob?ageFrom(p.dob):""; $("pf_pic").value=p.pic||""; $("pf_pin").value=p.pin||"";
+    $("pf_country").value=p.country||""; $("pf_state").value=p.state||""; $("pf_city").value=p.city||"";
+    $("pf_addr").value=p.addr||""; $("pf_web").value=p.web||"";
+    $("so_ig").value=(p.socials&&p.socials.ig)||""; $("so_yt").value=(p.socials&&p.socials.yt)||""; $("so_tt").value=(p.socials&&p.socials.tt)||"";
+    $("pf_aadhaar").value=p.aadhaar||"";
+    $("pf_web").disabled = !canPro();
+    $("pf_web_lock").style.display = canPro()?"none":"inline-flex";
+    renderVerifiedBadge();
+    $("profileModal").classList.add("on");
+  }
+  function renderVerifiedBadge(){
+    $("pf_verified_badge").innerHTML = user.aadhaarVerified
+      ? '<span class="pill ok" style="margin-top:6px">✓ Aadhaar verified</span>'
+      : '';
+  }
+  function closeProfile(){ $("profileModal").classList.remove("on"); }
+
+  async function lookupPin(pin){
+    const loc=$("pf_loc");
+    if(!/^\d{6}$/.test(pin)){loc.textContent="";return;}
+    loc.textContent="Looking up…";
+    try{
+      const r=await fetch("https://api.postalpincode.in/pincode/"+pin);
+      const j=await r.json();
+      if(j&&j[0]&&j[0].Status==="Success"&&j[0].PostOffice&&j[0].PostOffice.length){
+        const po=j[0].PostOffice[0];
+        $("pf_country").value=po.Country||"India"; $("pf_state").value=po.State||""; $("pf_city").value=po.District||"";
+        loc.textContent="✓ "+po.District+", "+po.State;
+      } else { loc.textContent="Pincode not found — enter city/state manually"; $("pf_city").disabled=false;$("pf_state").disabled=false;$("pf_country").disabled=false; }
+    }catch(e){ loc.textContent="Offline — enter city/state manually"; $("pf_city").disabled=false;$("pf_state").disabled=false;$("pf_country").disabled=false; }
+  }
+
+  let pendingAadhaar=false;
+  function startAadhaarVerify(){
+    const a=($("pf_aadhaar").value||"").replace(/\s/g,"");
+    if(!/^\d{12}$/.test(a)){toast("Enter a valid 12-digit Aadhaar");return;}
+    pendingAadhaar=true; $("pf_aad_otp_wrap").style.display="block";
+    toast("Prototype OTP sent to your mobile + email");
+  }
+  function confirmAadhaar(){
+    const otp=($("pf_aad_otp").value||"").replace(/\D/g,"");
+    if(otp.length<4){toast("Enter the OTP");return;}
+    user.aadhaar=$("pf_aadhaar").value; user.aadhaarVerified=true;
+    // Simulated: in a real KYC the name/DOB/address would come back from the Aadhaar record.
+    saveDB(); renderVerifiedBadge(); refreshAll();
+    toast("Aadhaar verified (simulated)");
+  }
+  function saveProfile(){
+    const p=user;
+    p.name=$("pf_name").value.trim(); p.handle=$("pf_handle").value.trim(); p.dob=$("pf_dob").value;
+    p.pic=$("pf_pic").value.trim(); p.pin=$("pf_pin").value.trim(); p.addr=$("pf_addr").value.trim();
+    p.country=$("pf_country").value; p.state=$("pf_state").value; p.city=$("pf_city").value;
+    if(canPro()) p.web=$("pf_web").value.trim();
+    p.socials=Object.assign({},p.socials,{ig:$("so_ig").value.trim(),yt:$("so_yt").value.trim(),tt:$("so_tt").value.trim()});
+    p.aadhaar=$("pf_aadhaar").value;
+    p.complete = !!(p.name && p.dob && p.pin);
+    saveDB(); closeProfile(); refreshAll();
+    toast(p.complete?"Profile saved":"Saved — add name, DOB & pincode to complete");
+  }
+
+  /* ============ NAV / MODE ============ */
+  let mode="creator";
+  function go(t){
+    document.querySelectorAll(".mtab").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
+    document.querySelectorAll("#app .panel").forEach(p=>p.classList.remove("on"));
+    const map={home:"p_home",studio:"p_studio",profile:"p_profile",setup:"p_setup",pricing:"p_pricing",store:"p_store"};
+    $(map[t]||"p_home").classList.add("on");
+    if(t==="studio"){ $("studioGate").innerHTML=""; renderGate("studioGate");
+      $("studioBody").classList.toggle("locked", !canUseFeatures()); }
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+  function setMode(m){
+    mode=m; document.querySelectorAll(".modebtn").forEach(b=>b.classList.toggle("on",b.dataset.mode===m));
+    if(m==="public"){ document.querySelectorAll(".mtab").forEach(b=>b.classList.remove("on"));
+      document.querySelectorAll("#app .panel").forEach(p=>p.classList.remove("on"));
+      $("p_store").classList.add("on"); renderStore(); document.querySelector(".menubar").style.display="none"; }
+    else { document.querySelector(".menubar").style.display=""; go("home"); }
+    window.scrollTo(0,0);
+  }
+
+  function refreshAll(){ refreshBadges(); renderGate("gateHost"); renderProfileView(); renderSocialCards(); renderConnectors(); renderTiers(); renderChannels(); renderQueue(); renderDeals(); if($("p_studio").classList.contains("on")){$("studioBody").classList.toggle("locked",!canUseFeatures());renderGate("studioGate");} }
+
+  function enterApp(){
+    $("authScreen").classList.add("hide"); $("app").style.display="block";
+    if(!user.queue)user.queue=[]; if(!user.deals)user.deals=[]; if(!user.socials)user.socials={};
+    refreshAll(); go("home");
+    if(!user.complete){ setTimeout(openProfile,400); }
+  }
+
+  /* ============ WIRING ============ */
+  function bind(){
+    // auth method tabs
+    document.querySelectorAll(".method").forEach(b=>b.onclick=()=>{
+      document.querySelectorAll(".method").forEach(x=>x.classList.toggle("on",x===b));
+      document.querySelectorAll(".mform").forEach(f=>f.style.display="none");
+      $("m_"+b.dataset.m).style.display="block";
+    });
+    // mobile
+    $("mob_go").onclick=()=>{
+      const n=$("mob_num").value.trim();
+      if($("mob_otpfield").style.display==="none"){ if(norm(n).length<10){toast("Enter a valid mobile number");return;} $("mob_otpbox").style.display="block";$("mob_otpfield").style.display="block";$("mob_go").textContent="Verify & sign in"; toast("Prototype OTP sent"); }
+      else { if(($("mob_otp").value||"").replace(/\D/g,"").length<4){toast("Enter the OTP");return;} loginByKey(n); }
+    };
+    // aadhaar
+    $("aad_go").onclick=()=>{
+      const a=($("aad_num").value||"").replace(/\s/g,"");
+      if($("aad_otpfield").style.display==="none"){ if(!/^\d{12}$/.test(a)){toast("Enter a valid 12-digit Aadhaar");return;} $("aad_otpfield").style.display="block";$("aad_go").textContent="Verify & sign in";toast("Prototype OTP sent to Aadhaar-linked mobile/email"); }
+      else { if(($("aad_otp").value||"").replace(/\D/g,"").length<4){toast("Enter the OTP");return;} loginByKey("aadhaar:"+a); user.aadhaar=a; user.aadhaarVerified=true; saveDB(); refreshAll(); toast("Signed in & Aadhaar verified (simulated)"); }
+    };
+    // email
+    $("em_go").onclick=()=>{
+      const e=$("em_id").value.trim().toLowerCase(), pw=$("em_pw").value;
+      if(!/^[^@]+@[^@]+\.[^@]+$/.test(e)){toast("Enter a valid email");return;}
+      if(pw.length<4){toast("Password too short");return;}
+      if(db.users[e] && db.users[e].pw && db.users[e].pw!==pw){toast("Wrong password");return;}
+      loginByKey(e); user.email=e; user.pw=pw; saveDB();
+    };
+    // test
+    $("test_go").onclick=()=>{ const n=$("test_num").value.trim(); if(!norm(n)){toast("Enter a number");return;} loginByKey(n); toast("Test sign-in"); };
+
+    // app
+    $("signout").onclick=()=>{ sessionKey=null;user=null;saveSession(); $("app").style.display="none";$("authScreen").classList.remove("hide"); };
+    document.querySelectorAll(".mtab").forEach(b=>b.onclick=()=>go(b.dataset.t));
+    document.querySelectorAll(".modebtn").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+    $("openProfile").onclick=openProfile;
+    $("pf_close").onclick=closeProfile; $("pf_save").onclick=saveProfile;
+    $("pf_dob").oninput=()=>$("pf_age").value=ageFrom($("pf_dob").value);
+    $("pf_pin").oninput=e=>lookupPin(e.target.value.trim());
+    $("pf_verify").onclick=()=>{ if(!pendingAadhaar) startAadhaarVerify(); else confirmAadhaar(); };
+    $("pf_aad_otp").oninput=()=>{ if(($("pf_aad_otp").value||"").replace(/\D/g,"").length>=4) $("pf_verify").textContent="Confirm OTP"; };
+
+    // cycle toggle
+    document.querySelectorAll("#cyctoggle button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#cyctoggle button").forEach(x=>x.classList.toggle("on",x===b));cycle=b.dataset.c;renderTiers();});
+
+    // studio add
+    $("q_add").onclick=()=>{
+      if(!canUseFeatures()){toast("Verify & subscribe to schedule");return;}
+      const title=$("q_title").value.trim(),date=$("q_date").value,time=$("q_time").value;
+      const chans=[...document.querySelectorAll("#q_channels input:checked")].map(x=>x.value);
+      if(!title){toast("Add a title");return;} if(!chans.length){toast("Pick a channel");return;}
+      user.queue.push({title,dt:(date||"0000-01-01")+"T"+(time||"00:00"),time,chans}); saveDB(); renderQueue(); $("q_title").value=""; toast("Added to queue");
+    };
+    $("b_add").onclick=()=>{
+      if(!canUseFeatures()){toast("Verify & subscribe to add deals");return;}
+      const g=id=>$(id).value.trim();
+      const d={brand:g("b_brand"),emoji:g("b_emoji"),product:g("b_product"),cat:g("b_cat"),code:g("b_code"),disc:g("b_disc"),price:g("b_price"),url:g("b_url")};
+      if(!d.brand&&!d.product){toast("Add a brand or product");return;}
+      user.deals.unshift(d); saveDB(); renderDeals(); ["b_brand","b_emoji","b_product","b_cat","b_code","b_disc","b_price","b_url"].forEach(id=>$(id).value=""); toast("Deal added");
+    };
+  }
+
+  function init(){
+    bind(); renderOfferings();
+    // Load privileged numbers + seed accounts from the server env (never in source).
+    fetch("/api/kolab/config").then(r=>r.ok?r.json():{}).catch(()=>({})).then(cfg=>{
+      if(cfg && Array.isArray(cfg.privileged)) PRIVILEGED = cfg.privileged.map(x=>norm(String(x)));
+      if(cfg && cfg.seed && typeof cfg.seed==="object") SEED = cfg.seed;
+    }).finally(()=>{
+      const sk=read(SESSION_KEY,null);
+      if(sk && db.users[sk]){ sessionKey=sk; user=db.users[sk]; enterApp(); }
+    });
+  }
+
+  return { init, go, setMode, subscribe, openProfile, connect:(n)=>toast(n+" — connect needs API keys (prototype)"),
+    oauth, delQ, delDeal, copyCode, connectChannel:()=>{} , };
+})();
+document.addEventListener("DOMContentLoaded", Kolab.init);
+</script>
+</body>
+</html>
