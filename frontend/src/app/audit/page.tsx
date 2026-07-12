@@ -136,13 +136,14 @@ const AUDITS: Audit[] = [
   {
     page: "Capabilities",
     href: "/capabilities",
-    current: 8.5,
+    current: 9.0,
     target: 9.5,
-    dims: { accuracy: 9, implementation: 8, execution: 9, results: 8 },
-    verdict: "An honest inventory of live/partial/planned — now gated behind auth, with the overstated RAG badges corrected to match reality.",
+    dims: { accuracy: 9, implementation: 9, execution: 9, results: 9 },
+    verdict: "An honest inventory of live/partial/planned — gated behind auth, RAG badges corrected, and Vision analysis is now genuinely live (screen/webcam → AI).",
     issues: [
       { severity: "high", text: "Page had no auth guard (deployment info exposed to anon).", fix: "Added /capabilities (and other app routes) to the middleware matcher.", status: "fixed" },
       { severity: "medium", text: "Knowledge/Document Q&A were badged 'live' as RAG, but run keyword search.", fix: "Downgraded to 'partial' and relabelled as keyword search until embeddings land.", status: "fixed" },
+      { severity: "low", text: "Vision analysis was badged 'planned'.", fix: "Shipped it — /api/vision analyzes a shared screen or webcam frame; badge is now 'live'.", status: "fixed" },
     ],
   },
   {

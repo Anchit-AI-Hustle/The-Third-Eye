@@ -47,7 +47,7 @@ const CAPS: Capability[] = [
   { group: "JARVIS",  name: "Wake word detection",         blurb: "Passive listening for \"Hey JARVIS\" / agent name",                                  inspiration: "Iron Man — hands-free",        required: ["mic"],           status: "planned" },
 
   // — EDITH canon —
-  { group: "E.D.I.T.H.", name: "Vision analysis",          blurb: "Camera or upload → AI describes / extracts text",                                   inspiration: "Far From Home — HUD",          required: ["cam"],           status: "planned" },
+  { group: "E.D.I.T.H.", name: "Vision analysis",          blurb: "Share your screen or webcam → AI describes it & extracts text/data",                 inspiration: "Far From Home — HUD",          required: ["cam"],           status: "live" },
   { group: "E.D.I.T.H.", name: "Threat & anomaly scanning", blurb: "Continuously evaluates incoming info for risk patterns",                           inspiration: "Far From Home — drones",       required: [],                status: "planned" },
   { group: "E.D.I.T.H.", name: "Predictive routine",       blurb: "\"You usually do X at this time\" suggestions",                                     inspiration: "Iron Man 3 — JARVIS habits",   required: [],                status: "planned" },
   { group: "E.D.I.T.H.", name: "Encrypted memory",         blurb: "Fernet-encrypted persistent memory of facts",                                        inspiration: "Stark security",               required: [],                status: "live" },
