@@ -416,6 +416,27 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setIsStreaming(false);
   }
 
+  // Instant interrupt (JARVIS-style): stop the in-flight response + any speech
+  // immediately, WITHOUT wiping the conversation. Wired to Escape and the stop
+  // control so the user can cut the assistant off mid-answer.
+  const interrupt = useCallback(() => {
+    if (isStreamingRef.current) abortRef.current?.abort();
+    tts.stop();
+    setIsStreaming(false);
+    setLiveBubble(null);
+  }, [tts]);
+
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape" && (isStreamingRef.current || tts.speaking)) {
+        e.preventDefault();
+        interrupt();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [interrupt, tts.speaking]);
+
   const confirmAction = useCallback(async (action: PendingAction) => {
     setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "running" } : a));
     try {
@@ -682,11 +703,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
               {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
             </button>
           )}
-          <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
-            className={cn("flex-none p-1.5 rounded-input transition-colors",
-              input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
-            <Send size={15} />
-          </button>
+          {(isStreaming || tts.speaking) ? (
+            <button onClick={interrupt} title="Stop (Esc)"
+              className="flex-none flex items-center gap-1 px-2 py-1.5 rounded-input text-accent-red hover:bg-accent-red/10 transition-colors">
+              <X size={15} /><span className="text-[11px] font-mono">Esc</span>
+            </button>
+          ) : (
+            <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
+              className={cn("flex-none p-1.5 rounded-input transition-colors",
+                input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
+              <Send size={15} />
+            </button>
+          )}
         </div>
         <p className="text-text-muted text-[11px] mt-2 text-center">
           {micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
