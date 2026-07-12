@@ -13,6 +13,7 @@ import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useAgentActions } from "@/hooks/useAgentActions";
+import { useAgentProfile } from "@/hooks/useAgentProfile";
 
 interface Message {
   id: string;
@@ -116,7 +117,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { notes } = useLocalNotes();
   const { goals } = useLocalGoals();
   const applyActions = useAgentActions();
-  const tts = useTTS();
+  const { active: agent } = useAgentProfile();
+  const tts = useTTS(agent?.voicePreference);
 
   const stt = useVoiceSTT({
     lang,
@@ -289,6 +291,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           location: typeof window !== "undefined" && (window as any).__teLocation
             ? (window as any).__teLocation
             : undefined,
+          agentName: agent?.name,
+          agentPersona: agent?.personality,
         }),
         signal: abortRef.current.signal,
       });

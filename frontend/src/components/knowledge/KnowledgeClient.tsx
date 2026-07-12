@@ -12,6 +12,7 @@ export function KnowledgeClient() {
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [semantic, setSemantic] = useState(false);
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -25,12 +26,32 @@ export function KnowledgeClient() {
     upload(e.dataTransfer?.files ?? new DataTransfer().files);
   }
 
-  function handleSearch() {
+  async function handleSearch() {
     const q = searchQuery.trim();
     if (!q) return;
     setSearching(true);
-    const r = searchDocs(docs, q, 5);
-    setResults(r);
+    // Prefer real semantic (pgvector) search; fall back to local keyword search
+    // when embeddings aren't configured or the request fails.
+    try {
+      const res = await fetch("/api/cortex/search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.enabled && Array.isArray(data.hits) && data.hits.length > 0) {
+          setResults(data.hits.map((h: any) => ({
+            doc_id: h.doc_id, doc_title: h.doc_title, chunk_index: h.chunk_index,
+            content: h.content, score: h.similarity,
+          })));
+          setSemantic(true);
+          setSearching(false);
+          return;
+        }
+      }
+    } catch { /* fall back */ }
+    setSemantic(false);
+    setResults(searchDocs(docs, q, 5));
     setSearching(false);
   }
 
@@ -120,7 +141,13 @@ export function KnowledgeClient() {
 
         {results !== null && (
           <div className="px-4 py-3 space-y-3">
-            <p className="text-text-muted text-xs font-mono">{results.length} results</p>
+            <p className="text-text-muted text-xs font-mono flex items-center gap-2">
+              {results.length} results
+              <span className={cn("px-1.5 py-0.5 rounded text-[10px] border",
+                semantic ? "text-[#4FC3F7] border-[#4FC3F7]/30 bg-[#4FC3F7]/10" : "text-text-muted border-border-default")}>
+                {semantic ? "semantic" : "keyword"}
+              </span>
+            </p>
             {results.length === 0 ? (
               <p className="text-text-muted text-sm py-3">No matching passages found.</p>
             ) : (

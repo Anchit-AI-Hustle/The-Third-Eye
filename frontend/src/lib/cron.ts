@@ -3,13 +3,15 @@ import { getAdminSupabase } from "@/lib/serverSupabase";
 
 export type Sb = NonNullable<ReturnType<typeof getAdminSupabase>>;
 
-/** Mirror of the /api/cron/dispatch auth: Bearer CRON_SECRET or ?secret=. */
+/**
+ * Cron auth via the Authorization header only (Bearer CRON_SECRET). Vercel Cron
+ * sends this header automatically. We deliberately do NOT accept ?secret= in the
+ * query string — query strings leak into access logs, proxies and referrers.
+ */
 export function cronAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return process.env.NODE_ENV !== "production"; // dev only
-  const auth = req.headers.get("authorization");
-  const q = new URL(req.url).searchParams.get("secret");
-  return auth === `Bearer ${secret}` || q === secret;
+  return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
 /** Emails of users who have connected Google (via the opt-in connect flow). */

@@ -69,5 +69,22 @@ export function appBaseUrl(): string {
 export function originFromRequest(req: Request): string {
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
   const proto = req.headers.get("x-forwarded-proto") || "https";
-  return host ? `${proto}://${host}` : appBaseUrl();
+  // Only trust the forwarded Host when it matches a configured host — otherwise
+  // an attacker-controlled Host header could steer the OAuth redirect off-site.
+  // When no host is configured (e.g. local dev), fall back to trusting it.
+  const allowed = allowedHosts();
+  if (host && (allowed.length === 0 || allowed.includes(host.toLowerCase()))) {
+    return `${proto}://${host}`;
+  }
+  return appBaseUrl();
+}
+
+// Hosts we're willing to build redirect origins for, from configured env URLs.
+function allowedHosts(): string[] {
+  const hosts = new Set<string>();
+  for (const v of [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL]) {
+    if (!v) continue;
+    try { hosts.add(new URL(v).host.toLowerCase()); } catch { /* ignore */ }
+  }
+  return [...hosts];
 }

@@ -260,51 +260,6 @@ export function DashboardClient() {
             sub="Track progress"
           />
         </div>
-
-        {!ready ? (
-          <div className="flex justify-center py-10">
-            <div className="w-4 h-4 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" />
-          </div>
-        ) : open.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <p className="text-text-muted text-sm">No open tasks.</p>
-            <Link href="/tasks" className="text-accent-blue text-xs hover:underline mt-1 inline-block">Create one →</Link>
-          </div>
-        ) : (
-          <ul className="divide-y divide-border-default">
-            {[...open]
-              .sort((a, b) => {
-                const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-                return (order[a.priority] ?? 4) - (order[b.priority] ?? 4);
-              })
-              .slice(0, 8)
-              .map((t) => {
-                const od = t.due_date && new Date(t.due_date) < new Date(new Date().toDateString());
-                return (
-                  <li key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-background-elevated/50 transition-colors">
-                    <span className={cn("w-1.5 h-1.5 rounded-full flex-none", PRIORITY_DOT[t.priority] ?? "bg-text-muted")} />
-                    <span className="flex-1 text-sm text-text-primary truncate">{t.title}</span>
-                    {t.assignee && (
-                      <span className="text-text-muted text-xs hidden sm:block">{t.assignee}</span>
-                    )}
-                    {t.due_date && (
-                      <span className={cn("text-xs flex-none font-mono", od ? "text-accent-red" : "text-text-muted")}>
-                        {od ? "overdue" : new Date(t.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </span>
-                    )}
-                    <span className={cn(
-                      "hidden md:inline text-[10px] font-mono px-1.5 py-0.5 rounded border",
-                      t.status === "in_progress"
-                        ? "text-accent-blue border-accent-blue/20 bg-accent-blue/5"
-                        : "text-text-muted border-border-default"
-                    )}>
-                      {t.status === "in_progress" ? "In progress" : "To do"}
-                    </span>
-                  </li>
-                );
-              })}
-          </ul>
-        )}
       </div>
 
       {/* ── Row 3: Capabilities ──────────────────────────────── */}

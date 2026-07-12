@@ -332,6 +332,7 @@ const KANBAN_COLS: { status: TaskStatus; label: string }[] = [
   { status: "todo", label: "To Do" },
   { status: "in_progress", label: "In Progress" },
   { status: "done", label: "Done" },
+  { status: "cancelled", label: "Cancelled" },
 ];
 
 function KanbanView({ tasks, onEdit, onStatusChange }: {
@@ -340,7 +341,7 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
   onStatusChange: (id: string, s: TaskStatus) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {KANBAN_COLS.map(({ status, label }) => {
         const col = tasks.filter((t) => t.status === status);
         return (
