@@ -561,7 +561,7 @@ const Kolab = (function(){
           <div><div class="k">Age</div><div class="v">${p.dob?ageFrom(p.dob)+" yrs":"—"}</div></div>
           <div><div class="k">DOB</div><div class="v">${p.dob||"—"}</div></div>
           <div><div class="k">Location</div><div class="v">${[p.city,p.state,p.country].filter(Boolean).join(", ")||"—"}</div></div>
-          <div><div class="k">Pincode</div><div class="v">${p.pin||"—"}</div></div>
+          <div><div class="k">Pincode</div><div class="v">${esc(p.pin)||"—"}</div></div>
         </div>
         <div style="margin-top:16px"><div class="k" style="font-family:'JetBrains Mono';font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Channels</div><div class="row" style="display:flex;gap:8px;flex-wrap:wrap">${soc}</div></div>
       </div>`;
@@ -624,7 +624,7 @@ const Kolab = (function(){
     el.innerHTML=q.map((it,i)=>{
       let d="—",m="";const dt=it.dt&&it.dt.includes("T")?new Date(it.dt):null;if(dt&&!isNaN(dt)){d=String(dt.getDate()).padStart(2,"0");m=dt.toLocaleDateString("en-GB",{month:"short"});}
       const fc=it.chans[0]?CH[it.chans[0]].c:"var(--lime)";
-      return `<div class="qitem" style="--qc:${fc}"><div class="when"><b>${d}</b>${m}<br>${it.time||''}</div>
+      return `<div class="qitem" style="--qc:${fc}"><div class="when"><b>${d}</b>${m}<br>${esc(it.time)||''}</div>
         <div><div style="font-weight:600">${esc(it.title)}</div><div style="margin-top:5px">${it.chans.map(k=>`<span class="qchip" style="background:${CH[k].c}">${CH[k].n}</span>`).join("")}</div></div>
         <button class="del" onclick="Kolab.delQ(${i})">×</button></div>`;
     }).join("");
@@ -636,7 +636,7 @@ const Kolab = (function(){
     renderStore();
   }
   function dealCard(x,i,shop){
-    return `<div class="deal"><div class="top">${x.emoji||'🏷️'}${x.disc?`<span class="badge">${esc(x.disc)}</span>`:''}</div>
+    return `<div class="deal"><div class="top">${esc(x.emoji)||'🏷️'}${x.disc?`<span class="badge">${esc(x.disc)}</span>`:''}</div>
       <div class="body"><span class="bn">${esc(x.brand)}${x.cat?' · '+esc(x.cat):''}</span><span class="pn">${esc(x.product)}</span>
       ${x.price?`<span class="price">${esc(x.price)}</span>`:''}
       ${x.code?`<div style="display:flex;gap:6px;align-items:center;margin-top:2px"><code>${esc(x.code)}</code>${shop?`<button class="btn" style="padding:6px 9px;font-size:10px" onclick="Kolab.copyCode('${encodeURIComponent(x.code)}')">Copy</button>`:''}</div>`:''}
