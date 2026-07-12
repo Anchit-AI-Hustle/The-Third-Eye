@@ -64,13 +64,13 @@ export function SettingsClient({ user }: Props) {
             </span>
           </Row>
           <Row label="Prompt caching" sub="Reduces cost by caching system prompt">
-            <Toggle enabled={true} disabled />
+            <span className="text-xs text-success font-mono">On</span>
           </Row>
-          <Row label="Memory" sub="JARVIS remembers facts within a session">
-            <Toggle enabled={true} disabled />
+          <Row label="Memory" sub="Remembers facts within a session">
+            <span className="text-xs text-success font-mono">On</span>
           </Row>
           <Row label="Streaming" sub="Token-by-token response rendering">
-            <Toggle enabled={true} disabled />
+            <span className="text-xs text-success font-mono">On</span>
           </Row>
         </div>
       </Section>
@@ -81,8 +81,8 @@ export function SettingsClient({ user }: Props) {
           <Row label="Notifications" sub="Browser notification prompts">
             <Toggle enabled={notifs} onChange={setNotifs} />
           </Row>
-          <Row label="Sound effects" sub="UI interaction sounds">
-            <Toggle enabled={false} disabled />
+          <Row label="Sound effects" sub="UI interaction sounds — coming soon">
+            <span className="text-xs text-text-muted font-mono">Soon</span>
           </Row>
         </div>
         <div className="px-5 pb-4">
@@ -109,8 +109,8 @@ export function SettingsClient({ user }: Props) {
           <Row label="Session duration" sub="JWT token lifetime">
             <span className="text-xs text-text-muted font-mono">24 hours</span>
           </Row>
-          <Row label="Data storage" sub="Conversations are not persisted server-side">
-            <span className="text-xs text-text-muted font-mono">Local only</span>
+          <Row label="Data storage" sub="Your tasks/notes/goals/expenses sync to your private Supabase when configured; otherwise this device only">
+            <span className="text-xs text-text-muted font-mono">Private / per-user</span>
           </Row>
         </div>
       </Section>

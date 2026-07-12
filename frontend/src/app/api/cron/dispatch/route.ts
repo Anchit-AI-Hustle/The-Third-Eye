@@ -25,9 +25,9 @@ export async function GET(req: NextRequest) {
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return process.env.NODE_ENV !== "production"; // allow in dev only
-  const auth = req.headers.get("authorization");
-  const q = new URL(req.url).searchParams.get("secret");
-  return auth === `Bearer ${secret}` || q === secret;
+  // Header only — query-string secrets leak into logs/proxies. Vercel Cron
+  // sends Authorization: Bearer <CRON_SECRET> automatically.
+  return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
 // Cache one access token per user across a run.
