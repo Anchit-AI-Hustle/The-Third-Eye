@@ -124,12 +124,13 @@ const AUDITS: Audit[] = [
   {
     page: "Finance",
     href: "/finance",
-    current: 3.0,
+    current: 8.0,
     target: 9.5,
-    dims: { accuracy: 3, implementation: 3, execution: 3, results: 3 },
-    verdict: "Largely a placeholder — charts render but there is no real data source wired. Lowest-scoring page.",
+    dims: { accuracy: 8, implementation: 8, execution: 8, results: 8 },
+    verdict: "Was a placeholder; now a working expense tracker — log by natural language (\"250 coffee\") or voice, one-tap categories, month totals, category breakdown and recent transactions, all persisted per-user. Bank/card sync is the remaining stretch.",
     issues: [
-      { severity: "critical", text: "No connected data source; numbers are static/sample.", fix: "Define the finance data model + ingestion, or clearly mark as a preview.", status: "pending" },
+      { severity: "critical", text: "No connected data source; numbers were static/sample.", fix: "Built a real expense tracker (amount/category/note/date) persisted via the server data route, with NL + voice quick-add.", status: "fixed" },
+      { severity: "low", text: "No automatic bank/card import yet.", fix: "Optional: add statement import or an aggregator; manual + NL entry covers the core need.", status: "pending" },
     ],
   },
   {
