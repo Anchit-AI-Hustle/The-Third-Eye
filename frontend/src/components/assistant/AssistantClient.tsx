@@ -232,6 +232,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }, 2500);
   }, [serviceStatus, messages.length, session?.user?.email]);
 
+  // Proactive idle check-in (JARVIS-style): after a stretch of inactivity in an
+  // active conversation, offer a gentle nudge — without nagging. Resets on any
+  // send; capped per session; only while the tab is visible and idle.
+  const lastActivityRef = useRef(Date.now());
+  const nudgeCountRef = useRef(0);
+  useEffect(() => {
+    const IDLE_MS = 8 * 60 * 1000;   // 8 minutes
+    const id = setInterval(() => {
+      if (isStreamingRef.current || tts.speaking) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (messages.length === 0 || nudgeCountRef.current >= 2) return;
+      if (Date.now() - lastActivityRef.current < IDLE_MS) return;
+      lastActivityRef.current = Date.now();
+      nudgeCountRef.current += 1;
+      const who = userName ? `, ${userName}` : "";
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(), role: "assistant",
+        content: `Still here${who}. Want a quick task summary, a fresh briefing, or help with something else? Just say the word.`,
+      }]);
+    }, 60 * 1000);
+    return () => clearInterval(id);
+  }, [messages.length, tts.speaking, userName]);
+
   // Show a "done" tagline for 3s after each response
   const prevStreamingRef = useRef(false);
   useEffect(() => {
@@ -271,6 +294,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || isStreamingRef.current) return;
+
+    // Activity → reset the proactive idle timer and re-arm nudges.
+    lastActivityRef.current = Date.now();
+    nudgeCountRef.current = 0;
 
     setInput("");
     setApiError(null);
