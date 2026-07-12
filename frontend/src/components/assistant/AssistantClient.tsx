@@ -34,7 +34,7 @@ interface PendingAction {
   tool: string;
   args: any;
   summary: string;
-  status: "pending" | "running" | "done" | "canceled";
+  status: "pending" | "running" | "done" | "failed" | "canceled";
   result?: string;
 }
 
@@ -405,11 +405,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool: action.tool, args: action.args }),
       });
-      const data = await res.json();
-      const result = data.result ?? data.error ?? "Done.";
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result } : a));
+      const data = await res.json().catch(() => ({}));
+      // The action truly succeeded only if the HTTP call is ok AND the endpoint
+      // didn't report a failure (ok:false / error). Otherwise it's a rejection.
+      const succeeded = res.ok && data.ok !== false && !data.error;
+      const result = data.result ?? data.error ?? (succeeded ? "Done." : "The action was rejected.");
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: succeeded ? "done" : "failed", result } : a));
     } catch {
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: "Failed to execute." } : a));
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "failed", result: "Couldn't reach the server — nothing was done." } : a));
     }
   }, []);
 
@@ -794,6 +797,9 @@ function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; on
           )}
           {a.status === "done" && (
             <div className="flex items-center gap-2 mt-3 text-xs text-success"><Check size={13} /> {a.result}</div>
+          )}
+          {a.status === "failed" && (
+            <div className="flex items-start gap-2 mt-3 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it — {a.result}</span></div>
           )}
           {a.status === "canceled" && (
             <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>

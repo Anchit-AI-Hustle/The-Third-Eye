@@ -3,14 +3,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
-import { appBaseUrl } from "@/lib/googleToken";
+import { originFromRequest } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
 // Completes the opt-in Google connect flow: exchanges the code for a refresh
 // token carrying the Gmail/Chat scopes and stores it (encrypted) for the user.
 export async function GET(req: Request) {
-  const base = appBaseUrl();
+  const base = originFromRequest(req);
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return NextResponse.redirect(`${base}/auth/signin`);
