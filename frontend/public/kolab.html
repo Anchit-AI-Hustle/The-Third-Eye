@@ -485,12 +485,11 @@ const Kolab = (function(){
       safe.users[k]={...rest, aadhaarLast4: aadhaar?String(aadhaar).replace(/\D/g,"").slice(-4):""}; }
     localStorage.setItem(DB_KEY,JSON.stringify(safe));
   }catch(e){}}
-  // Persist only the session KEY (email/phone id, never a secret) so the space
-  // is restored on reload.
-  function saveSession(){try{
-    if(sessionKey) localStorage.setItem(SESSION_KEY, JSON.stringify(sessionKey));
-    else localStorage.removeItem(SESSION_KEY);
-  }catch(e){}}
+  // Session is NOT persisted to localStorage: the identifier is an email/phone
+  // (sensitive), and reload restores the session from the same-origin Third Eye
+  // NextAuth session instead (see tryThirdEyeSession). We only clear any legacy
+  // stored key here.
+  function saveSession(){try{ localStorage.removeItem(SESSION_KEY); }catch(e){}}
   const norm = s => (s||"").replace(/\D/g,"").slice(-10);
 
   /* ============ UI HELPERS ============ */
@@ -508,7 +507,8 @@ const Kolab = (function(){
       socials:{}, aadhaar:"", aadhaarVerified:false, sub:{tier:null,cycle:null,active:false},
       privileged:false, complete:false}, patch||{});
   }
-  function loginByKey(key, seedName){
+  function loginByKey(key, seedName, persist){
+    if(persist===undefined) persist=true;
     const phone = norm(key);
     const priv = PRIVILEGED.includes(phone);
     if(!db.users[key]){
@@ -519,7 +519,11 @@ const Kolab = (function(){
       db.users[key].privileged = priv || db.users[key].privileged;
       if(priv) db.users[key].sub.active = true;
     }
-    sessionKey = key; user = db.users[key]; saveDB(); saveSession(); enterApp();
+    sessionKey = key; user = db.users[key];
+    // persist=false keeps the record in memory only (used for the Third Eye
+    // session path, which never writes the email/identity to localStorage).
+    if(persist){ saveDB(); saveSession(); }
+    enterApp();
   }
   function oauth(provider){ const em = "user."+provider.toLowerCase()+"@example.com"; toast(provider+" sign-in (demo)"); loginByKey(em); }
 
@@ -535,11 +539,13 @@ const Kolab = (function(){
       const email = s && s.user && s.user.email;
       if(!email) return false;
       const key = String(email).toLowerCase();
-      loginByKey(key, (s.user.name || "").trim());
+      loginByKey(key, (s.user.name || "").trim(), false);
       if(s.user.name && !user.name) user.name = s.user.name;
       if(s.user.image && !user.pic)  user.pic  = s.user.image;
       user.email = email;
-      saveDB(); refreshAll();
+      // in-memory only — the identity comes from the Third Eye session on every
+      // load, so it is never written to clear-text localStorage here.
+      refreshAll();
       return true;
     }catch(e){ return false; }
   }

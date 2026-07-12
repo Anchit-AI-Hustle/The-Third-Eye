@@ -163,7 +163,7 @@ const AUDITS: Audit[] = [
     dims: { accuracy: 7, implementation: 7, execution: 7, results: 7 },
     verdict: "Embedded cleanly and re-themed to The Third Eye; XSS sinks were hardened and privileged data moved to env. One session-persistence bug remains.",
     issues: [
-      { severity: "high", text: "saveSession removes the storage key instead of writing it, so sessions don't persist.", fix: "Correct saveSession to write the serialized session.", status: "pending" },
+      { severity: "high", text: "Sessions didn't survive a reload, and the local sign-in was separate from the app's Google login.", fix: "Restore the session from the same-origin Third Eye NextAuth session on every load (no separate Kolab sign-in, no PII written to localStorage).", status: "fixed" },
       { severity: "critical", text: "/api/kolab/config exposed real personal numbers to anonymous callers.", fix: "Auth-gate the route (401 without a session).", status: "fixed" },
     ],
   },
