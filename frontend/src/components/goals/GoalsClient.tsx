@@ -121,8 +121,10 @@ export function GoalsClient() {
             <p className="text-[10px] font-mono text-text-muted tracking-widest uppercase mb-3">{cat}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {items.map((g) => {
-                const pct = Math.min(100, Math.round((g.current / g.target) * 100));
-                const done = g.current >= g.target;
+                // Guard against a 0 (or missing) target — otherwise progress
+                // is NaN%/Infinity. An empty target reads as 0% until set.
+                const pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
+                const done = g.target > 0 && g.current >= g.target;
                 return (
                   <div key={g.id} className={cn(
                     "bg-background-surface border rounded-card p-4 transition-colors",

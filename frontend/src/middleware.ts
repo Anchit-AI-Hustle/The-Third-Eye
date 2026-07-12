@@ -13,5 +13,10 @@ export const config = {
     "/assistant/:path*",
     "/knowledge/:path*",
     "/finance/:path*",
+    "/notes/:path*",
+    "/goals/:path*",
+    "/capabilities/:path*",
+    "/kolab/:path*",
+    "/audit/:path*",
   ],
 };
