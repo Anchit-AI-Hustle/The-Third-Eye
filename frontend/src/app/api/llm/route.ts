@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { llmCascade, LlmMessage } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
@@ -14,6 +16,12 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
+  // Auth gate: this route spends real provider credits — never leave it open.
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
+  }
+
   let body: Body;
   try { body = (await req.json()) as Body; }
   catch { return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 }); }

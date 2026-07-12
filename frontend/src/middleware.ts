@@ -1,7 +1,8 @@
 import { withAuth } from "next-auth/middleware";
+import { resolveAuthSecret } from "@/lib/authSecret";
 
 export default withAuth({
-  secret: process.env.NEXTAUTH_SECRET ?? "set-NEXTAUTH_SECRET-env-var-in-vercel",
+  secret: resolveAuthSecret(),
   pages: { signIn: "/auth/signin" },
 });
 
