@@ -51,6 +51,7 @@ export function useLocalGoals() {
       return next;
     });
     if (remote.current) await dataInsert("goals", g);
+    return g;
   }, []);
 
   const adjust = useCallback(async (id: string, delta: number) => {

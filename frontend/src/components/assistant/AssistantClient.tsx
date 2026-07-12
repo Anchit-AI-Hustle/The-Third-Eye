@@ -12,7 +12,7 @@ import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
-import { useAgentActions } from "@/hooks/useAgentActions";
+import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 
 interface Message {
@@ -117,7 +117,22 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { notes } = useLocalNotes();
   const { goals } = useLocalGoals();
   const applyActions = useAgentActions();
+  const [undoable, setUndoable] = useState<UndoableAction[]>([]);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { active: agent } = useAgentProfile();
+
+  const offerUndo = useCallback((actions: UndoableAction[]) => {
+    if (!actions.length) return;
+    setUndoable(actions);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndoable([]), 12000);
+  }, []);
+
+  const runUndo = useCallback(() => {
+    undoable.forEach((a) => a.undo());
+    setUndoable([]);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, [undoable]);
   const tts = useTTS(agent?.voicePreference);
 
   const stt = useVoiceSTT({
@@ -359,7 +374,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "user", content: msg },
                   { role: "assistant", content: fullText },
                 ];
-                applyActions(parsed.sideEffects);
+                applyActions(parsed.sideEffects).then(offerUndo);
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -594,6 +609,17 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div className="flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base">
+        {undoable.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-2 px-3 py-2 rounded-input bg-accent-blue/10 border border-accent-blue/25 animate-fade-in">
+            <span className="text-xs text-text-secondary">
+              {agent.name} added {undoable.map((u) => u.label).join(", ")}.
+            </span>
+            <button onClick={runUndo}
+              className="flex items-center gap-1.5 text-xs font-medium text-accent-blue hover:underline flex-none">
+              <RotateCcw size={12} /> Undo
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
           {/* Mode chip: Chat ▾ → Narrate */}
           <div className="relative flex-none self-stretch flex items-center">

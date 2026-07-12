@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import {
   Utensils, ShoppingCart, Bus, ShoppingBag, Receipt, HeartPulse,
-  Clapperboard, Plane, Wallet, Mic, Sparkles, Trash2, Plus, Loader2,
+  Clapperboard, Plane, Wallet, Mic, Sparkles, Trash2, Plus, Loader2, Pencil,
 } from "lucide-react";
 import { useLocalExpenses, type Expense } from "@/hooks/useLocalExpenses";
 
@@ -30,7 +30,7 @@ const money = (n: number) => `₹${inr.format(Math.round(n))}`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export function FinanceClient() {
-  const { expenses, ready, add, remove } = useLocalExpenses();
+  const { expenses, ready, add, update, remove } = useLocalExpenses();
 
   // form state
   const [nl, setNl] = useState("");
@@ -40,7 +40,21 @@ export function FinanceClient() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
   const [listening, setListening] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const recRef = useRef<any>(null);
+
+  function startEdit(e: Expense) {
+    setEditingId(e.id);
+    setAmount(String(e.amount));
+    setCategory((CATEGORIES as readonly string[]).includes(e.category) ? (e.category as Category) : "Other");
+    setNote(e.note ?? "");
+    setDate(e.spent_on);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function resetForm() {
+    setEditingId(null); setNl(""); setAmount(""); setNote(""); setDate(todayISO());
+  }
 
   const month = todayISO().slice(0, 7);
   const stats = useMemo(() => {
@@ -92,8 +106,12 @@ export function FinanceClient() {
   async function submit() {
     const amt = Number(amount);
     if (!amt || amt <= 0) return;
-    await add({ amount: amt, category, note, spent_on: date });
-    setNl(""); setAmount(""); setNote(""); setDate(todayISO());
+    if (editingId) {
+      await update(editingId, { amount: amt, category, note: note.trim() || undefined, spent_on: date });
+    } else {
+      await add({ amount: amt, category, note, spent_on: date });
+    }
+    resetForm();
   }
 
   const maxCat = stats.cats[0]?.[1] ?? 0;
@@ -110,9 +128,14 @@ export function FinanceClient() {
 
       {/* Add expense */}
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <Sparkles size={14} className="text-[#4FC3F7]" />
-          <span className="hud-label text-[#4FC3F7]">Quick add</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-[#4FC3F7]" />
+            <span className="hud-label text-[#4FC3F7]">{editingId ? "Edit expense" : "Quick add"}</span>
+          </div>
+          {editingId && (
+            <button onClick={resetForm} className="text-xs text-text-muted hover:text-text-primary font-mono">Cancel</button>
+          )}
         </div>
 
         {/* Natural language */}
@@ -185,7 +208,7 @@ export function FinanceClient() {
           disabled={!Number(amount)}
           className="w-full sm:w-auto px-5 py-2.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-sm font-semibold hover:brightness-110 disabled:opacity-40 flex items-center justify-center gap-2"
         >
-          <Plus size={15} /> Add expense
+          <Plus size={15} /> {editingId ? "Save changes" : "Add expense"}
         </button>
       </div>
 
@@ -226,7 +249,7 @@ export function FinanceClient() {
           <p className="text-sm text-text-muted py-4 text-center">Nothing logged yet.</p>
         ) : (
           <div className="divide-y divide-border-default">
-            {expenses.slice(0, 40).map((e) => <Row key={e.id} e={e} onDelete={() => remove(e.id)} />)}
+            {expenses.slice(0, 40).map((e) => <Row key={e.id} e={e} editing={editingId === e.id} onEdit={() => startEdit(e)} onDelete={() => remove(e.id)} />)}
           </div>
         )}
       </div>
@@ -243,19 +266,22 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent?: 
   );
 }
 
-function Row({ e, onDelete }: { e: Expense; onDelete: () => void }) {
+function Row({ e, editing, onEdit, onDelete }: { e: Expense; editing?: boolean; onEdit: () => void; onDelete: () => void }) {
   const M = META[e.category as Category] ?? META.Other;
   const Icon = M.icon;
   return (
-    <div className="flex items-center gap-3 py-2.5">
+    <div className={`flex items-center gap-3 py-2.5 ${editing ? "bg-[#4FC3F7]/5 -mx-2 px-2 rounded" : ""}`}>
       <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-none" style={{ background: `${M.color}1A`, color: M.color }}>
         <Icon size={15} />
       </span>
-      <div className="flex-1 min-w-0">
+      <button onClick={onEdit} className="flex-1 min-w-0 text-left" title="Edit">
         <div className="text-sm text-text-primary truncate">{e.note || e.category}</div>
         <div className="text-[11px] text-text-muted font-mono">{e.category} · {e.spent_on}</div>
-      </div>
+      </button>
       <span className="text-sm text-text-primary tabular-nums flex-none">{money(e.amount)}</span>
+      <button onClick={onEdit} title="Edit" className="text-text-muted hover:text-[#4FC3F7] p-1 flex-none">
+        <Pencil size={13} />
+      </button>
       <button onClick={onDelete} title="Delete" className="text-text-muted hover:text-rose-400 p-1 flex-none">
         <Trash2 size={14} />
       </button>

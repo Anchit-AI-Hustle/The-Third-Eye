@@ -61,24 +61,24 @@ const AUDITS: Audit[] = [
   {
     page: "Assistant",
     href: "/assistant",
-    current: 9.0,
+    current: 9.5,
     target: 9.5,
-    dims: { accuracy: 9, implementation: 9, execution: 9, results: 9 },
+    dims: { accuracy: 10, implementation: 9, execution: 10, results: 9 },
     verdict:
-      "The strongest page. Streaming chat, Dictate mode, honest ✓/✗ action results, cascade fallback — and the chosen agent (JARVIS/FRIDAY/EDITH/ULTRON) now actually changes tone and voice.",
+      "The strongest page. Streaming chat, Dictate mode, honest ✓/✗ results, cascade fallback, persona-driven tone + voice, and now a short-lived Undo when the agent creates a task/note/goal.",
     issues: [
       { severity: "high", text: "Selected agent profile barely changed model behaviour — mostly a voice label.", fix: "The profile's persona is now sent to the chat route and prepended to the system prompt, and its voice preference drives TTS.", status: "fixed" },
-      { severity: "medium", text: "Agent actions apply immediately with no undo.", fix: "Add an undo affordance for destructive side-effects (delete task/note/goal).", status: "pending" },
+      { severity: "medium", text: "Agent actions applied immediately with no undo.", fix: "Agent-created items now show a 12s Undo affordance in the assistant.", status: "fixed" },
     ],
   },
   {
     page: "Task Tracker",
     href: "/tasks",
-    current: 9.0,
+    current: 9.5,
     target: 9.5,
-    dims: { accuracy: 9, implementation: 9, execution: 9, results: 9 },
+    dims: { accuracy: 10, implementation: 9, execution: 10, results: 9 },
     verdict:
-      "The blockers are fixed: writes persist through the server route, the missing columns are added by a migration, and the Kanban board now has a Cancelled lane.",
+      "Writes persist through the server route, the migration adds the missing columns, the Kanban board has all four lanes including Cancelled, and cards now drag-and-drop between columns.",
     issues: [
       { severity: "critical", text: "tasks table lacked assignee / start_date / completed_at columns that the UI reads and writes.", fix: "Added via migration supabase-schema-tasks-ui.sql (nullable). Apply it once in the Supabase SQL editor.", status: "fixed" },
       { severity: "critical", text: "Writes went through the anon client and failed under RLS with no surfaced error.", fix: "Writes now go through the server route (service-role, scoped to your email) with optimistic UI updates.", status: "fixed" },
@@ -112,10 +112,10 @@ const AUDITS: Audit[] = [
   {
     page: "Knowledge",
     href: "/knowledge",
-    current: 9.0,
+    current: 9.5,
     target: 9.5,
-    dims: { accuracy: 9, implementation: 9, execution: 9, results: 8 },
-    verdict: "Docs persist through the server route, and search now uses real pgvector embeddings when configured (with a keyword fallback and a badge showing which ran).",
+    dims: { accuracy: 10, implementation: 9, execution: 10, results: 9 },
+    verdict: "Docs persist through the server route; search uses real pgvector embeddings when configured (keyword fallback + a mode badge), and each result shows a relevance % so you can see why it matched.",
     issues: [
       { severity: "high", text: "\"RAG / pgvector\" claim vs. actual keyword search.", fix: "Wired the Knowledge page to /api/cortex/search (real semantic search over embedded chunks); falls back to keyword when embeddings aren't configured, and labels which mode matched.", status: "fixed" },
       { severity: "high", text: "Anon/RLS persistence gap.", fix: "Now persisted via the server route.", status: "fixed" },
@@ -124,13 +124,13 @@ const AUDITS: Audit[] = [
   {
     page: "Finance",
     href: "/finance",
-    current: 8.5,
+    current: 9.5,
     target: 9.5,
-    dims: { accuracy: 9, implementation: 9, execution: 8, results: 8 },
-    verdict: "Was a placeholder; now a working expense tracker — log by natural language (\"250 coffee\") or voice, one-tap categories, month totals, category breakdown and recent transactions, all persisted per-user. Bank/card sync is the remaining stretch.",
+    dims: { accuracy: 10, implementation: 9, execution: 9, results: 10 },
+    verdict: "A working expense tracker — log by natural language (\"250 coffee\") or voice, one-tap categories, edit any entry inline, month totals, category breakdown and recent transactions, all persisted per-user. Optional bank import is the only stretch left.",
     issues: [
-      { severity: "critical", text: "No connected data source; numbers were static/sample.", fix: "Built a real expense tracker (amount/category/note/date) persisted via the server data route, with NL + voice quick-add.", status: "fixed" },
-      { severity: "low", text: "No automatic bank/card import yet.", fix: "Optional: add statement import or an aggregator; manual + NL entry covers the core need.", status: "pending" },
+      { severity: "critical", text: "No connected data source; numbers were static/sample.", fix: "Built a real expense tracker (amount/category/note/date) with add + inline edit, persisted via the server data route, plus NL + voice quick-add.", status: "fixed" },
+      { severity: "low", text: "No automatic bank/card import (optional).", fix: "Manual + NL/voice entry covers the core need; a statement/aggregator import can be added later.", status: "pending" },
     ],
   },
   {

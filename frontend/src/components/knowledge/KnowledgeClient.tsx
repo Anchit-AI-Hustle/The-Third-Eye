@@ -154,9 +154,21 @@ export function KnowledgeClient() {
               results.map((r, i) => (
                 <div key={`${r.doc_id}-${r.chunk_index}`}
                   className="bg-background-elevated border border-border-default rounded-input px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-accent-blue text-xs font-mono">[{i + 1}] {r.doc_title}</span>
-                    <span className="text-text-muted text-xs font-mono">chunk {r.chunk_index} · score {r.score}</span>
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <span className="text-accent-blue text-xs font-mono truncate">[{i + 1}] {r.doc_title}</span>
+                    <span className="flex items-center gap-2 flex-none">
+                      {semantic ? (
+                        <>
+                          <span className="w-16 h-1.5 rounded-full bg-background-base overflow-hidden hidden sm:block">
+                            <span className="block h-full bg-gradient-to-r from-[#4FC3F7] to-emerald-400"
+                              style={{ width: `${Math.round(Math.max(0, Math.min(1, r.score)) * 100)}%` }} />
+                          </span>
+                          <span className="text-text-muted text-xs font-mono">{Math.round(Math.max(0, Math.min(1, r.score)) * 100)}% match</span>
+                        </>
+                      ) : (
+                        <span className="text-text-muted text-xs font-mono">{r.score}× keyword</span>
+                      )}
+                    </span>
                   </div>
                   <p className="text-text-primary text-sm leading-relaxed line-clamp-4">{r.content}</p>
                 </div>
