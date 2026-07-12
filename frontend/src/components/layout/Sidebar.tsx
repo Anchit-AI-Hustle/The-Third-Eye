@@ -6,13 +6,14 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, Store,
+  FileText, Target, Sparkles, Store, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 
 const NAV_ITEMS = [
+  { label: "App Audit", href: "/audit", icon: ShieldCheck },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Assistant",  href: "/assistant",  icon: MessageSquare },
   { label: "Task Tracker", href: "/tasks",     icon: CheckSquare },
