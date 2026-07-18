@@ -15,6 +15,7 @@ function read(key: ConsentKey): ConsentState {
 function write(key: ConsentKey, state: ConsentState) {
   if (typeof window === "undefined") return;
   localStorage.setItem(LS_PREFIX + key, state);
+  window.dispatchEvent(new CustomEvent("te:consent", { detail: { key, state } }));
 }
 
 export function getConsent(key: ConsentKey): ConsentState {

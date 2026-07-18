@@ -4,6 +4,8 @@ import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { ConsentDialog } from "@/components/layout/ConsentDialog";
+import { CaptureProvider } from "@/components/capture/CaptureContext";
+import { IngestBridge } from "@/components/tasks/IngestBridge";
 import { getConsent, getCurrentLocation } from "@/lib/consent";
 
 function LocationBridge() {
@@ -45,9 +47,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        {children}
-        <ConsentDialog />
-        <LocationBridge />
+        <CaptureProvider>
+          {children}
+          <ConsentDialog />
+          <LocationBridge />
+          <IngestBridge />
+        </CaptureProvider>
       </QueryClientProvider>
     </SessionProvider>
   );
