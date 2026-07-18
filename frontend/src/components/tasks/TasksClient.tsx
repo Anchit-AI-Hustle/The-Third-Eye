@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TeamMember } from "@/hooks/useLocalTasks";
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
-  LayoutGrid, List, AlertCircle, Check,
+  LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -286,8 +286,13 @@ function TableView({ tasks, sortKey, sortAsc, onSort, onEdit, onDelete }: {
               return (
                 <tr key={t.id} className="hover:bg-background-elevated/50 transition-colors group">
                   <td className="px-4 py-3 max-w-[320px]">
-                    <p className="text-text-primary leading-snug line-clamp-2">{t.title}</p>
-                    {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0">
+                        <p className="text-text-primary leading-snug line-clamp-2">{t.title}</p>
+                        {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
+                      </div>
+                      <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "—"}</td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.start_date)}</td>
@@ -380,7 +385,10 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
                       dragId === t.id && "opacity-50",
                     )}
                     onClick={() => onEdit(t)}>
-                    <p className="text-text-primary text-sm leading-snug mb-2">{t.title}</p>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <p className="text-text-primary text-sm leading-snug">{t.title}</p>
+                      <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                    </div>
                     <div className="flex items-center justify-between gap-2">
                       <PriorityBadge priority={t.priority} />
                       <div className="flex items-center gap-2 text-xs text-text-muted">
@@ -564,6 +572,33 @@ function TeamModal({ team, newName, onNameChange, onAdd, onRemove, onClose }: {
 }
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
+
+const SOURCE_META: Record<string, { label: string; icon: typeof Mail; color: string }> = {
+  email:   { label: "Email", icon: Mail,          color: "#4FC3F7" },
+  chat:    { label: "Chat",  icon: MessageSquare, color: "#A78BFA" },
+  voice:   { label: "Voice", icon: Mic,           color: "#34D399" },
+  meeting: { label: "Meeting", icon: MessageSquare, color: "#F0C94E" },
+};
+
+function SourceBadge({ type, link, detail }: { type?: string; link?: string; detail?: string }) {
+  if (!type) return null;
+  const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#7878A8" };
+  const Icon = meta.icon;
+  const inner = (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none"
+      style={{ color: meta.color, borderColor: `${meta.color}55` }}
+      title={detail || meta.label}
+    >
+      <Icon size={10} /> {meta.label}
+    </span>
+  );
+  return link ? (
+    <a href={link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-none">
+      {inner}
+    </a>
+  ) : inner;
+}
 
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (

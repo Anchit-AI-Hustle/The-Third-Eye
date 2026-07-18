@@ -18,6 +18,9 @@ export interface LocalTask {
   due_date?: string;
   completed_at?: string;
   created_at: string;
+  source_type?: string;
+  source_link?: string;
+  source_detail?: string;
 }
 
 export interface TeamMember {
@@ -44,9 +47,9 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
   // read the current value without being re-created on every load.
   const remote = useRef(false);
 
-  useEffect(() => {
+  const load = useCallback((markReady = true) => {
     let cancelled = false;
-    setReady(false);
+    if (markReady) setReady(false);
     Promise.all([
       dataList<LocalTask>("tasks"),
       dataList<TeamMember>("team_members"),
@@ -63,7 +66,16 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
       setReady(true);
     });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, []);
+
+  useEffect(() => load(), [userId, load]);
+
+  // Refresh when foreground ingestion (Gmail/Chat → tasks) reports new work.
+  useEffect(() => {
+    const onUpdated = () => load(false);
+    window.addEventListener("te:tasks-updated", onUpdated);
+    return () => window.removeEventListener("te:tasks-updated", onUpdated);
+  }, [load]);
 
   const create = useCallback(async (data: Omit<LocalTask, "id" | "created_at">) => {
     const t: LocalTask = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
