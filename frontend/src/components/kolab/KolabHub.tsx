@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Loader2, Sparkles, Save, Check, Download, ChevronDown, Workflow, Megaphone, Target, HeartPulse, ExternalLink } from "lucide-react";
 import { KOLAB_MODES, type BrandProfile, type KolabMode } from "@/lib/kolab/types";
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
+import { recordGeneration, fieldsFrom } from "@/lib/generations";
 
 const APP = "kolab";
 const MODE_ICONS = { Workflow, Megaphone, Target, HeartPulse } as const;
@@ -41,6 +42,16 @@ export function KolabHub() {
       const d = await res.json();
       if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
       setOut(d.output); setProvider(d.provider || "");
+      if (d.output) {
+        const modeLabel = KOLAB_MODES.find((m) => m.id === mode)?.label ?? mode;
+        recordGeneration({
+          app: "kolab", appLabel: `Kolab · ${modeLabel}`,
+          title: `${modeLabel} — ${brand.name}`,
+          kind: "markdown",
+          inputs: fieldsFrom(brand as unknown as Record<string, unknown>), inputText: brief || undefined,
+          output: d.output, meta: { provider: d.provider, mode },
+        });
+      }
     } catch { setError("Network error — please try again."); }
     finally { setLoading(false); }
   }
