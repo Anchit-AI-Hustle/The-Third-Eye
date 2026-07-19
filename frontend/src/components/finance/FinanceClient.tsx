@@ -6,6 +6,9 @@ import {
   Clapperboard, Plane, Wallet, Mic, Sparkles, Trash2, Plus, Loader2, Pencil,
 } from "lucide-react";
 import { useLocalExpenses, type Expense } from "@/hooks/useLocalExpenses";
+import { useMode } from "@/hooks/useMode";
+import { useModeTags, filterByMode } from "@/hooks/useModeTags";
+import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 
 const CATEGORIES = [
   "Food", "Groceries", "Transport", "Shopping", "Bills",
@@ -31,6 +34,15 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export function FinanceClient() {
   const { expenses, ready, add, update, remove } = useLocalExpenses();
+  const { modeId } = useMode();
+  const { tags, tagItem } = useModeTags();
+  const [showAllModes, setShowAllModes] = useState(false);
+
+  // Expenses visible under the active mode (e.g. personal vs work spend).
+  const scopedExpenses = useMemo(
+    () => filterByMode(expenses, tags, modeId, showAllModes),
+    [expenses, tags, modeId, showAllModes],
+  );
 
   // form state
   const [nl, setNl] = useState("");
@@ -58,15 +70,15 @@ export function FinanceClient() {
 
   const month = todayISO().slice(0, 7);
   const stats = useMemo(() => {
-    const thisMonth = expenses.filter((e) => e.spent_on.startsWith(month));
+    const thisMonth = scopedExpenses.filter((e) => e.spent_on.startsWith(month));
     const total = thisMonth.reduce((s, e) => s + e.amount, 0);
-    const today = expenses.filter((e) => e.spent_on === todayISO()).reduce((s, e) => s + e.amount, 0);
+    const today = scopedExpenses.filter((e) => e.spent_on === todayISO()).reduce((s, e) => s + e.amount, 0);
     const byCat = new Map<string, number>();
     for (const e of thisMonth) byCat.set(e.category, (byCat.get(e.category) ?? 0) + e.amount);
     const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
     const dayOfMonth = new Date().getDate();
     return { total, today, count: thisMonth.length, avg: total / Math.max(1, dayOfMonth), cats };
-  }, [expenses, month]);
+  }, [scopedExpenses, month]);
 
   async function parseNL() {
     const text = nl.trim();
@@ -109,7 +121,8 @@ export function FinanceClient() {
     if (editingId) {
       await update(editingId, { amount: amt, category, note: note.trim() || undefined, spent_on: date });
     } else {
-      await add({ amount: amt, category, note, spent_on: date });
+      const ex = await add({ amount: amt, category, note, spent_on: date });
+      if (ex?.id) tagItem(ex.id, modeId); // tag new expenses with the active mode
     }
     resetForm();
   }
@@ -242,14 +255,19 @@ export function FinanceClient() {
 
       {/* Recent transactions */}
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
-        <div className="hud-label text-text-muted mb-3">Recent</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="hud-label text-text-muted">Recent</div>
+          <ModeScopeToggle showAll={showAllModes} onChange={setShowAllModes} />
+        </div>
         {!ready ? (
           <p className="text-sm text-text-muted py-4 text-center flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading…</p>
-        ) : expenses.length === 0 ? (
-          <p className="text-sm text-text-muted py-4 text-center">Nothing logged yet.</p>
+        ) : scopedExpenses.length === 0 ? (
+          <p className="text-sm text-text-muted py-4 text-center">
+            {expenses.length === 0 ? "Nothing logged yet." : "No expenses in this mode. Switch to “All” to see every transaction."}
+          </p>
         ) : (
           <div className="divide-y divide-border-default">
-            {expenses.slice(0, 40).map((e) => <Row key={e.id} e={e} editing={editingId === e.id} onEdit={() => startEdit(e)} onDelete={() => remove(e.id)} />)}
+            {scopedExpenses.slice(0, 40).map((e) => <Row key={e.id} e={e} editing={editingId === e.id} onEdit={() => startEdit(e)} onDelete={() => remove(e.id)} />)}
           </div>
         )}
       </div>
