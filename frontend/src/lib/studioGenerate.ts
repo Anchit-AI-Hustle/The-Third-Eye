@@ -102,6 +102,15 @@ Produce well-formed OKRs as Markdown: for each Objective (qualitative, inspiring
     case "proposal":
       return `You are a consulting engagement lead.${modeLine}
 Write a professional proposal / statement of work as Markdown: overview & understanding of needs, scope & deliverables, approach/phases with a timeline, assumptions & exclusions, a clearly-framed pricing structure, and terms/next steps. Persuasive but precise. Never invent specific prices the user didn't provide — present the structure and mark figures as [TBD].`;
+    case "social-media":
+      return `You are a social-media content creator and copywriter. ${BRAND}${modeLine}
+Produce ready-to-post content as Markdown for the requested platform(s): each post = a scroll-stopping hook, the caption/body tuned to that platform's norms and length, a short set of relevant hashtags, and a CTA. If multiple posts are requested, vary the angle. Add a one-line "visual idea" per post. Specific and natural — no generic filler, no fabricated statistics.`;
+    case "video":
+      return `You are a video scriptwriter and story editor. ${BRAND}${modeLine}
+For the requested format, produce a Markdown script/outline: a strong hook in the first 3 seconds, a beat-by-beat structure (or scene list), spoken lines / narration, on-screen text and B-roll notes, and a closing CTA. Match the runtime and tone. For an OTT / series concept: logline, premise, main characters, and a 3-5 episode arc. Concrete and producible.`;
+    case "campaign":
+      return `You are a senior growth / brand marketing strategist. ${BRAND}${modeLine}
+Design a complete campaign plan as Markdown: objective + primary KPI, audience & core insight, the big idea / positioning, 2-3 creative angles, a channel plan table (channel · role · message · format), a week-by-week timeline, a rough budget-split table, and success metrics with a measurement plan. Ground everything in the brief; do not invent specific numbers — mark assumptions clearly.`;
     default:
       return "You are a helpful assistant. Return well-structured output.";
   }
@@ -139,7 +148,7 @@ export async function generateStudio(
   if (missing.length) throw new Error(`Missing: ${missing.map((f) => f.label).join(", ")}`);
 
   // Long-form markdown tools need more room than a short snippet tool.
-  const LONG_FORM = new Set(["blog", "proposal", "prd", "report", "pitch", "lifecycle", "social", "study"]);
+  const LONG_FORM = new Set(["blog", "proposal", "prd", "report", "pitch", "lifecycle", "social", "study", "campaign", "video"]);
   const maxTokens = tool.format === "html" ? 4000 : LONG_FORM.has(tool.id) ? 3600 : 2000;
 
   const out = await llmCascade({

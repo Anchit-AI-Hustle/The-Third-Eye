@@ -6,16 +6,17 @@ import {
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket,
   Building2, ArrowRight, Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper,
   CalendarDays, Send, Tag, Briefcase, ScrollText, Target, FileSignature,
+  Share2, Clapperboard, TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import { STUDIO_TOOLS, STUDIOS, type ModeId } from "@/lib/studioTools";
+import { STUDIO_TOOLS, STUDIOS, CATEGORY_ORDER, categoryOf, type ModeId } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutTemplate, Mail, Workflow, Music, PenLine, Presentation, Megaphone,
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket, Building2,
   Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper, CalendarDays, Send, Tag,
-  Briefcase, ScrollText, Target, FileSignature,
+  Briefcase, ScrollText, Target, FileSignature, Share2, Clapperboard, TrendingUp,
 };
 
 // Studio is mode-aware: it shows the tools for the CURRENTLY selected user mode
@@ -78,22 +79,41 @@ export function StudioHub() {
         </div>
       </div>
 
-      {/* Tools for the active mode */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        {tools.map((t) => {
-          const Icon = ICONS[t.icon] ?? LayoutTemplate;
+      {/* Tools for the active mode, grouped by category */}
+      <div className="space-y-6">
+        {(() => {
+          const known = CATEGORY_ORDER[modeId] ?? [];
+          const extra = Array.from(new Set(tools.map((t) => categoryOf(t.id)))).filter((c) => !known.includes(c));
+          return [...known, ...extra];
+        })().map((cat) => {
+          const inCat = tools.filter((t) => categoryOf(t.id) === cat);
+          if (!inCat.length) return null;
           return (
-            <Link key={t.id} href={`/tools/${t.id}`}
-              className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden hover:-translate-y-0.5 transition-transform">
-              <div className="flex items-center justify-between mb-2">
-                <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-none" style={{ background: `${t.accent}1A`, color: t.accent }}>
-                  <Icon size={18} />
-                </span>
-                <ArrowRight size={14} className="text-text-muted group-hover:text-text-primary group-hover:translate-x-0.5 transition-all" />
+            <section key={cat}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="hud-label text-text-muted">{cat}</span>
+                <span className="text-[10px] font-mono text-text-muted">{inCat.length}</span>
+                <span className="flex-1 h-px bg-border-default" />
               </div>
-              <div className="text-sm font-semibold text-text-primary">{t.label}</div>
-              <div className="text-xs text-text-muted mt-1 leading-relaxed line-clamp-3">{t.blurb}</div>
-            </Link>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                {inCat.map((t) => {
+                  const Icon = ICONS[t.icon] ?? LayoutTemplate;
+                  return (
+                    <Link key={t.id} href={`/tools/${t.id}`}
+                      className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden hover:-translate-y-0.5 transition-transform">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-none" style={{ background: `${t.accent}1A`, color: t.accent }}>
+                          <Icon size={18} />
+                        </span>
+                        <ArrowRight size={14} className="text-text-muted group-hover:text-text-primary group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      <div className="text-sm font-semibold text-text-primary">{t.label}</div>
+                      <div className="text-xs text-text-muted mt-1 leading-relaxed line-clamp-3">{t.blurb}</div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>
