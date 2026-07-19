@@ -52,14 +52,14 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Life & Apps",
+    title: "Apps & Life",
     items: [
       { label: "Apps", href: "/apps", icon: LayoutGrid },
       { label: "Finance", href: "/finance", icon: BarChart2, modes: ["personal", "professional"] },
     ],
   },
   {
-    title: "System",
+    title: "Account & System",
     items: [
       { label: "Plans & Credits", href: "/plans", icon: Gem },
       { label: "Capabilities", href: "/capabilities", icon: Sparkles },
