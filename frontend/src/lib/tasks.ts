@@ -155,13 +155,15 @@ export async function saveExtractedTasks(
       .from("tasks").select("id").eq("user_id", ctx.userId).eq("dedupe_hash", hash).maybeSingle();
     if (dup) { skipped++; continue; }
 
-    // (2) soft merge on (normalized_heading, spoc) among open tasks
-    const { data: openMatch } = await sb
+    // (2) soft merge on (normalized_heading, spoc) among open tasks.
+    // spoc is stored NULL when there's no owner, so match with .is(null) rather
+    // than .eq("") — otherwise owner-less tasks never merge and duplicate.
+    let mergeQuery = sb
       .from("tasks").select("id, all_updates")
       .eq("user_id", ctx.userId).eq("status", "todo")
-      .eq("normalized_heading", normalized)
-      .eq("spoc", spoc ?? "")
-      .limit(1).maybeSingle();
+      .eq("normalized_heading", normalized);
+    mergeQuery = spoc === null ? mergeQuery.is("spoc", null) : mergeQuery.eq("spoc", spoc);
+    const { data: openMatch } = await mergeQuery.limit(1).maybeSingle();
 
     const updateLine = formatUpdateLine(ctx, spoc, t);
     if (openMatch) {
