@@ -123,6 +123,29 @@ export const STUDIO_TOOLS: StudioTool[] = [
     ],
   },
 
+  {
+    id: "social-media", label: "Social Media Studio", mode: "personal", icon: "Share2", accent: "#F0C94E",
+    blurb: "Platform-ready posts, captions, and hooks for Instagram, TikTok, YouTube, or LinkedIn.",
+    format: "markdown", downloadExt: "md", cta: "Create posts",
+    fields: [
+      { name: "topic", label: "Topic / idea", type: "textarea", placeholder: "What's the post about? goal, vibe, offer…", required: true },
+      { name: "platform", label: "Platform", type: "select", options: ["Instagram", "TikTok", "YouTube", "LinkedIn", "X / Twitter", "Multi-platform"] },
+      { name: "count", label: "How many", type: "select", options: ["1 post", "A set of 5", "A week of posts"] },
+      { name: "tone", label: "Tone", type: "text", placeholder: "e.g. playful, aspirational, educational" },
+    ],
+  },
+  {
+    id: "video", label: "OTT / Video Studio", mode: "personal", icon: "Clapperboard", accent: "#F0C94E",
+    blurb: "Video scripts and outlines — short-form reels, YouTube episodes, or an OTT series concept.",
+    format: "markdown", downloadExt: "md", cta: "Write script",
+    fields: [
+      { name: "concept", label: "Concept", type: "textarea", placeholder: "The story, topic, or hook…", required: true },
+      { name: "format", label: "Format", type: "select", options: ["Short-form reel (15-60s)", "YouTube video (5-10 min)", "OTT / series concept", "Explainer"] },
+      { name: "audience", label: "Audience", type: "text", placeholder: "who it's for" },
+      { name: "tone", label: "Tone / style", type: "text", placeholder: "e.g. cinematic, casual, dramatic" },
+    ],
+  },
+
   // ── Startup Studio (Professional) ────────────────────────────────────────
   {
     id: "landing", label: "Landing Page Engine", mode: "professional", icon: "LayoutTemplate", accent: P,
@@ -217,6 +240,18 @@ export const STUDIO_TOOLS: StudioTool[] = [
     ],
   },
 
+  {
+    id: "campaign", label: "Campaign Planner", mode: "professional", icon: "TrendingUp", accent: P,
+    blurb: "A full multi-channel marketing campaign plan — angles, channels, timeline, budget split, and KPIs.",
+    format: "markdown", downloadExt: "md", cta: "Plan campaign",
+    fields: [
+      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Vahdam Diwali gifting", required: true },
+      { name: "objective", label: "Objective & context", type: "textarea", placeholder: "Goal, audience, timing, budget, constraints…", required: true },
+      { name: "channels", label: "Channels", type: "text", placeholder: "e.g. Meta, Google, email, influencers" },
+      { name: "duration", label: "Duration", type: "select", options: ["1 week", "2 weeks", "1 month", "Quarter"] },
+    ],
+  },
+
   // ── Office Studio (Enterprise) ───────────────────────────────────────────
   {
     id: "lifecycle", label: "Lifecycle OS", mode: "enterprise", icon: "Workflow", accent: E,
@@ -308,4 +343,37 @@ export const STUDIO_TOOLS: StudioTool[] = [
 
 export function getTool(id: string): StudioTool | undefined {
   return STUDIO_TOOLS.find((t) => t.id === id);
+}
+
+// Category grouping within each mode's studio, so the hub reads as
+// mode → category → tools (Personal: music/social/video/writing/life;
+// Professional: ads & campaigns / website & email / content / sales;
+// Enterprise: programs / docs / ops / people & deals).
+export const TOOL_CATEGORY: Record<string, string> = {
+  // Hobby (personal)
+  music: "Music & Audio",
+  "social-media": "Social & Video", video: "Social & Video",
+  creative: "Writing",
+  travel: "Life & Plans", recipe: "Life & Plans", workout: "Life & Plans",
+  study: "Life & Plans", journal: "Life & Plans", budget: "Life & Plans",
+  // Startup (professional)
+  adcopy: "Ads & Campaigns", campaign: "Ads & Campaigns",
+  landing: "Website & Email", mailer: "Website & Email",
+  blog: "Content", social: "Content",
+  pitch: "Sales & Fundraising",
+  // Office (enterprise)
+  lifecycle: "Programs",
+  report: "Docs & Specs", prd: "Docs & Specs", sop: "Docs & Specs",
+  meeting: "Ops", okr: "Ops",
+  jd: "People & Deals", proposal: "People & Deals",
+};
+
+export const CATEGORY_ORDER: Record<ModeId, string[]> = {
+  personal: ["Music & Audio", "Social & Video", "Writing", "Life & Plans"],
+  professional: ["Ads & Campaigns", "Website & Email", "Content", "Sales & Fundraising"],
+  enterprise: ["Programs", "Docs & Specs", "Ops", "People & Deals"],
+};
+
+export function categoryOf(id: string): string {
+  return TOOL_CATEGORY[id] || "More";
 }

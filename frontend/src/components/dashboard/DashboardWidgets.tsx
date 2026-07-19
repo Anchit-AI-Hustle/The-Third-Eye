@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MessageSquare, CheckSquare, Radio, FileText, Target, BookOpen,
-  BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings, Wand2, Briefcase,
+  BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings, Wand2, Briefcase, LayoutGrid,
 } from "lucide-react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
@@ -53,6 +53,7 @@ export function DashboardWidgets() {
 
   const widgets = [
     { href: "/assistant", icon: MessageSquare, label: "Assistant", stat: "Ask anything", sub: "voice + actions", color: "#4FC3F7" },
+    { href: "/apps", icon: LayoutGrid, label: "Apps", stat: "Life OS", sub: "daily apps + emergencies", color: "#34D399" },
     { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: `${stats.open} open`, sub: `${stats.urgent} urgent`, color: "#4FC3F7" },
     { href: "/tasks", icon: Radio, label: "Live Capture", stat: "Listen", sub: "mic + inbox → tracker", color: "#F05B8D" },
     { href: "/notes", icon: FileText, label: "Notes", stat: `${notes.length}`, sub: "captured", color: "#F0C94E" },
