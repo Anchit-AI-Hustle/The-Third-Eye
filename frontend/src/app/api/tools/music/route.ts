@@ -7,86 +7,107 @@ import { replicateConfigured, createPrediction, getPrediction, audioUrlFrom } fr
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Real music generation for Creative Studio.
-//   POST → generate style prompt (+ lyrics for vocal tracks) via the LLM cascade,
-//          then submit a Replicate audio job. Returns { jobId, prompt, lyrics }.
-//   GET ?id=… → poll the job; returns { status, audioUrl }.
-// Instrumental uses meta/musicgen (reliable text→music); vocal songs use a
-// lyrics-capable model (configurable). Powered by REPLICATE_API_TOKEN, copied
-// from the music-gen project's Vercel env.
+// Real music generation for Music Studio — a faithful port of the MusicGenAI
+// project's Replicate routing:
+//   • Instrumental (or vocals off) → stability-ai/stable-audio  { prompt, seconds_total }
+//   • Vocals from scratch         → lucataco/ace-step           { tags, lyrics, duration }
+// (The production MusicGenAI app also has a GPU-worker segment pipeline + an
+//  ElevenLabs path; those need external infra, so here we use the same Replicate
+//  providers that generate from text alone — no reference song/voice needed,
+//  which is what caused the earlier minimax "reference required" error.)
+//   POST → craft style tags + lyrics, submit the job → { jobId, prompt, lyrics, tags }
+//   GET ?id=… → poll → { status, audioUrl }
 
-const INSTRUMENTAL_MODEL = process.env.MUSIC_MODEL || "meta/musicgen";
-const SONG_MODEL = process.env.MUSIC_SONG_MODEL || "minimax/music-01";
+const INSTRUMENTAL_MODEL = "stability-ai/stable-audio";
+const INSTRUMENTAL_FALLBACK_VERSION = "812b1cc162cb5f69ec9873d611ee67e3fd04be85160d5ed703bc984d72d24403";
+const VOCAL_MODEL = process.env.MUSIC_SONG_MODEL || "lucataco/ace-step";
 
-async function auth() {
-  const session = await getServerSession(authOptions);
-  return session?.user?.email ?? null;
+interface MusicInput {
+  title?: string; description?: string; genre?: string; subgenre?: string; mood?: string;
+  tempo?: number; duration?: number; vocals?: boolean; vocalStyle?: string; vocalLanguage?: string;
+  lyricsMode?: "auto" | "manual" | "none"; lyricsText?: string; artistInspiration?: string;
+  instruments?: string; energy?: number; structure?: string;
+}
+
+async function email() {
+  const s = await getServerSession(authOptions);
+  return s?.user?.email ?? null;
+}
+
+// Build a rich, descriptive style string (tags) the way the music-gen project does.
+function buildTags(i: MusicInput): string {
+  return [
+    i.genre, i.subgenre, i.mood && `${i.mood} mood`,
+    i.tempo && `${i.tempo} BPM`,
+    i.energy != null && `energy ${i.energy}/10`,
+    i.instruments, i.structure,
+    i.artistInspiration && `in the style of ${i.artistInspiration}`,
+    i.vocals ? `${i.vocalStyle || "expressive"} ${i.vocalLanguage || "English"} vocals` : "instrumental, no vocals",
+  ].filter(Boolean).join(", ");
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await auth())) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
-  let body: { brief?: string; genre?: string; mood?: string; vocals?: boolean; duration?: number; lyrics?: string };
-  try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  let i: MusicInput;
+  try { i = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const brief = (body.brief ?? "").trim();
-  if (!brief) return Response.json({ error: "A description is required" }, { status: 400 });
-  const vocals = body.vocals !== false;
-  const duration = Math.min(Math.max(Number(body.duration) || 20, 5), 60);
-  const style = [body.genre, body.mood].filter(Boolean).join(", ");
+  const description = (i.description ?? "").trim();
+  if (!description) return Response.json({ error: "A description is required" }, { status: 400 });
+  const vocals = i.vocals !== false && i.lyricsMode !== "none";
+  const duration = Math.min(Math.max(Number(i.duration) || 30, 10), 120);
+  const tags = buildTags(i);
+  const prompt = `${description}. ${tags}`.slice(0, 500);
 
-  // 1) Craft a music-model style prompt (+ lyrics when the track has vocals).
-  let prompt = brief;
-  let lyrics = (body.lyrics ?? "").trim();
-  try {
-    const out = await llmCascade({
-      system: "You turn a brief into inputs for a text-to-music model. Return ONLY JSON: {\"prompt\": string, \"lyrics\": string}. `prompt` is a vivid one-line style description (genre, instrumentation, tempo/BPM, mood). `lyrics` are short structured lyrics with [Verse]/[Chorus] (empty string if instrumental).",
-      messages: [{ role: "user", content: `Brief: ${brief}\nStyle: ${style || "(none given)"}\nVocals: ${vocals ? "yes" : "instrumental only"}` }],
-      jsonMode: true, maxTokens: 600, temperature: 0.7,
-    });
-    const parsed = JSON.parse(out.text);
-    if (parsed.prompt) prompt = String(parsed.prompt);
-    if (vocals && !lyrics && parsed.lyrics) lyrics = String(parsed.lyrics);
-  } catch { /* fall back to the raw brief as the prompt */ }
+  // Lyrics: use provided (manual) or generate (auto) via the cascade; none if instrumental.
+  let lyrics = (i.lyricsText ?? "").trim();
+  if (vocals && i.lyricsMode !== "manual") {
+    try {
+      const out = await llmCascade({
+        system: "Write concise, singable song lyrics with [Verse]/[Chorus]/[Bridge] tags. Return ONLY the lyrics, no commentary.",
+        messages: [{ role: "user", content: `Song: ${i.title || description}\nStyle: ${tags}\nLanguage: ${i.vocalLanguage || "English"}\nTheme: ${description}` }],
+        maxTokens: 500, temperature: 0.8,
+      });
+      lyrics = out.text.trim();
+    } catch { /* proceed without generated lyrics */ }
+  }
 
-  // 2) Submit the audio job (graceful if Replicate isn't configured).
   if (!replicateConfigured()) {
-    return Response.json({
-      configured: false, prompt, lyrics,
-      note: "Music generation needs REPLICATE_API_TOKEN in the environment. Here are the generated prompt + lyrics you can paste into a music tool.",
-    });
+    return Response.json({ configured: false, prompt, tags, lyrics, note: "Music generation needs REPLICATE_API_TOKEN. Here are the style prompt + lyrics to paste into a music tool." });
+  }
+
+  // Route to a model that generates from text alone (no reference required).
+  async function submitVocal() {
+    return createPrediction(VOCAL_MODEL, { tags, lyrics: lyrics || description, duration });
+  }
+  async function submitInstrumental() {
+    return createPrediction(INSTRUMENTAL_MODEL, { prompt, seconds_total: duration }, INSTRUMENTAL_FALLBACK_VERSION);
   }
 
   try {
-    const model = vocals ? SONG_MODEL : INSTRUMENTAL_MODEL;
-    const input: Record<string, unknown> = vocals
-      ? { lyrics: lyrics || brief, prompt, song_prompt: prompt }
-      : { prompt, duration, output_format: "mp3" };
-    const pred = await createPrediction(model, input);
-    return Response.json({ configured: true, jobId: pred.id, status: pred.status, model, prompt, lyrics });
-  } catch (e) {
-    // If the vocal model rejects the input shape, retry once as instrumental.
     if (vocals) {
       try {
-        const pred = await createPrediction(INSTRUMENTAL_MODEL, { prompt, duration, output_format: "mp3" });
-        return Response.json({ configured: true, jobId: pred.id, status: pred.status, model: INSTRUMENTAL_MODEL, prompt, lyrics, fellBackToInstrumental: true });
-      } catch { /* fall through to error */ }
+        const p = await submitVocal();
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics });
+      } catch {
+        const p = await submitInstrumental();
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, fellBackToInstrumental: true });
+      }
     }
-    return Response.json({ error: `Music job failed: ${e instanceof Error ? e.message : "unknown"}`, prompt, lyrics }, { status: 502 });
+    const p = await submitInstrumental();
+    return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics });
+  } catch (e) {
+    return Response.json({ error: `Music job failed: ${e instanceof Error ? e.message : "unknown"}`, prompt, tags, lyrics }, { status: 502 });
   }
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await auth())) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id || !/^[a-zA-Z0-9]+$/.test(id)) return Response.json({ error: "valid id required" }, { status: 400 });
   try {
     const p = await getPrediction(id);
-    return Response.json({
-      status: p.status,
-      audioUrl: p.status === "succeeded" ? audioUrlFrom(p.output) : null,
-      error: p.error,
-    });
+    return Response.json({ status: p.status, audioUrl: p.status === "succeeded" ? audioUrlFrom(p.output) : null, error: p.error });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "poll failed" }, { status: 502 });
   }

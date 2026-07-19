@@ -58,9 +58,19 @@ export interface Prediction {
   error: string | null;
 }
 
-/** Submit a prediction for a model (resolves the version automatically). */
-export async function createPrediction(model: string, input: Record<string, unknown>): Promise<Prediction> {
-  const version = await latestVersion(model);
+/**
+ * Submit a prediction for a model. Resolves the latest version, falling back to
+ * a pinned version id if resolution fails (keeps generation working even when
+ * the models API hiccups).
+ */
+export async function createPrediction(model: string, input: Record<string, unknown>, fallbackVersion?: string): Promise<Prediction> {
+  let version: string;
+  try {
+    version = await latestVersion(model);
+  } catch (e) {
+    if (!fallbackVersion) throw e;
+    version = fallbackVersion;
+  }
   const p = await rq(`/predictions`, {
     method: "POST",
     body: JSON.stringify({ version, input }),
