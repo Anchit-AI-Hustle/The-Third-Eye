@@ -48,9 +48,17 @@ function cleanLyrics(raw: string): string {
   return t
     .split("\n")
     .map((line) => {
-      const m = line.match(/^\s*\[\s*([a-zA-Z][a-zA-Z0-9 \-]*?)\s*\d*\s*\]\s*$/);
-      if (m) return `[${m[1].trim().toLowerCase()}]`; // normalise tag lines
-      return line.replace(/\s+$/g, "");
+      // Normalise a section-tag line like "[Chorus 2]" -> "[chorus]" using plain
+      // string ops (no backtracking-prone regex on user text).
+      const trimmed = line.trim();
+      if (trimmed.length > 1 && trimmed.length <= 40 && trimmed[0] === "[" && trimmed.endsWith("]")) {
+        let inner = trimmed.slice(1, -1).trim().toLowerCase();
+        const parts = inner.split(/\s+/); // split is linear-safe
+        if (parts.length > 1 && /^\d{1,3}$/.test(parts[parts.length - 1])) parts.pop();
+        inner = parts.join(" ");
+        if (inner && /^[a-z][a-z -]{0,20}$/.test(inner)) return `[${inner}]`;
+      }
+      return line.trimEnd();
     })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
