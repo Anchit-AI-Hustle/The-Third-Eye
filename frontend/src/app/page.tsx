@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { LandingHero } from "@/components/landing/LandingHero";
+import { LandingReveal } from "@/components/landing/LandingReveal";
 
 export const metadata = {
   title: "The Third Eye — Your Personal AI Operating System",
@@ -72,22 +73,25 @@ export default async function Home() {
         <LandingHero />
 
         {/* what it does */}
-        <section className="pb-16">
-          <h2 className="text-center font-display text-2xl font-semibold mb-8">
-            What you can do with The Third Eye
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="bg-background-surface border border-border-default rounded-card p-5 text-left"
-              >
-                <h3 className="font-medium text-text-primary mb-2">{f.title}</h3>
-                <p className="text-text-secondary text-sm leading-relaxed">{f.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <LandingReveal>
+          <section className="pb-16">
+            <h2 data-reveal className="text-center font-display text-2xl font-semibold mb-8">
+              What you can do with The Third Eye
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {FEATURES.map((f) => (
+                <div
+                  key={f.title}
+                  data-reveal
+                  className="bg-background-surface border border-border-default rounded-card p-5 text-left transition-colors hover:border-[#4FC3F7]/30"
+                >
+                  <h3 className="font-medium text-text-primary mb-2">{f.title}</h3>
+                  <p className="text-text-secondary text-sm leading-relaxed">{f.body}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </LandingReveal>
 
         {/* data transparency */}
         <section className="pb-16">
