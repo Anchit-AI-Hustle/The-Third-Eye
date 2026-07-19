@@ -12,6 +12,7 @@ export const config = {
     "/tasks/:path*",
     "/assistant/:path*",
     "/capture/:path*",
+    "/activity/:path*",
     "/knowledge/:path*",
     "/finance/:path*",
     "/notes/:path*",
