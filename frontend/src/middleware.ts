@@ -9,6 +9,7 @@ export default withAuth({
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/apps/:path*",
     "/tasks/:path*",
     "/job-agent/:path*",
     "/assistant/:path*",

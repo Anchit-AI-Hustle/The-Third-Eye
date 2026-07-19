@@ -6,7 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase,
+  FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -17,6 +17,7 @@ import { CloudSyncBadge } from "./CloudSyncBadge";
 const NAV_ITEMS = [
   { label: "App Audit", href: "/audit", icon: ShieldCheck },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Apps",       href: "/apps",       icon: LayoutGrid },
   { label: "Assistant",  href: "/assistant",  icon: MessageSquare },
   { label: "Task Tracker", href: "/tasks",     icon: CheckSquare },
   { label: "Job Agent",  href: "/job-agent",  icon: Briefcase },
