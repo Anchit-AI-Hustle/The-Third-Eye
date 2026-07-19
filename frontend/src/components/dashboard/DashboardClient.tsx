@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
+import { ReactorCanvas } from "./ReactorCanvas";
 import { cn } from "@/lib/utils";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
@@ -128,11 +129,8 @@ export function DashboardClient() {
 
         {/* Arc Reactor + System Status */}
         <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center hud-frame">
-          {/* Arc reactor */}
-          <div className="arc-reactor arc-reactor-lg my-4">
-            <div className="arc-reactor-ring3" />
-            <div className="arc-reactor-core" />
-          </div>
+          {/* Arc reactor — live 3D */}
+          <ReactorCanvas size={150} />
           <span className="hud-label mt-2 mb-4">{agent.name}</span>
 
           {/* System lines */}
