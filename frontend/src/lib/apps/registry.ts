@@ -45,7 +45,6 @@ export const APPS: AppEntry[] = [
   { id: "pinterest", label: "Pinterest", category: "Social", modes: [P], kind: "external", href: "https://www.pinterest.com", icon: "Camera" },
 
   // ── Personal · Food & Grocery ──
-  { id: "health-engine-food", label: "Health Engine", category: "Food & Grocery", modes: [P], kind: "internal", href: "/tools/health", icon: "HeartPulse", selfBuilt: true, blurb: "Meals, macros & diet plan" },
   { id: "swiggy", label: "Swiggy", category: "Food & Grocery", modes: [P], kind: "external", href: "https://www.swiggy.com", icon: "UtensilsCrossed" },
   { id: "zomato", label: "Zomato", category: "Food & Grocery", modes: [P], kind: "external", href: "https://www.zomato.com", icon: "UtensilsCrossed" },
   { id: "blinkit", label: "Blinkit", category: "Food & Grocery", modes: [P], kind: "external", href: "https://blinkit.com", icon: "ShoppingBasket" },
@@ -147,7 +146,6 @@ export const APPS: AppEntry[] = [
 
   // ── Work · Marketing ──
   { id: "kolab", label: "Kolab", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab", icon: "Workflow", selfBuilt: true, blurb: "Brand-adaptable Lifecycle OS & creator campaigns" },
-  { id: "campaign-mkt", label: "Campaign Planner", category: "Marketing", modes: [PR], kind: "internal", href: "/tools/campaign", icon: "TrendingUp", selfBuilt: true },
   { id: "meta-ads", label: "Meta Ads", category: "Marketing", modes: [PR, E], kind: "external", href: "https://business.facebook.com/adsmanager", icon: "Megaphone" },
   { id: "google-ads", label: "Google Ads", category: "Marketing", modes: [PR, E], kind: "external", href: "https://ads.google.com", icon: "Megaphone" },
   { id: "mailchimp", label: "Mailchimp", category: "Marketing", modes: [PR], kind: "external", href: "https://mailchimp.com", icon: "Mail" },
