@@ -83,22 +83,24 @@ export function Sidebar() {
       {!collapsed ? (
         <div className="px-3 pt-3">
           <div className="hud-label text-text-muted mb-1.5 px-1">Mode</div>
-          <div className="flex gap-1 p-0.5 rounded-input bg-background-elevated border border-border-default">
+          <div className="space-y-1">
             {modes.map((m) => {
               const on = m.id === mode.id;
               return (
                 <button key={m.id} onClick={() => setMode(m.id)} title={m.tagline}
                   className={cn(
-                    "flex-1 text-[10px] font-mono tracking-wide py-1.5 rounded-[6px] transition-all",
-                    on ? "text-background-base font-semibold" : "text-text-muted hover:text-text-secondary"
+                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-input border text-left transition-all",
+                    on ? "border-transparent" : "border-border-default hover:bg-background-elevated"
                   )}
-                  style={on ? { background: m.accentColor } : undefined}>
-                  {m.label.slice(0, 4)}
+                  style={on ? { background: `${m.accentColor}1A`, borderColor: m.accentColor } : undefined}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: m.accentColor }} />
+                  <span className={cn("text-xs font-medium flex-1", on ? "text-text-primary" : "text-text-secondary")}>{m.label}</span>
+                  {on && <span className="text-[9px] font-mono uppercase tracking-wider" style={{ color: m.accentColor }}>active</span>}
                 </button>
               );
             })}
           </div>
-          <div className="text-[10px] text-text-muted mt-1 px-1 truncate">{mode.tagline}</div>
+          <div className="text-[10px] text-text-muted mt-1.5 px-1">{mode.tagline}</div>
         </div>
       ) : (
         <button
