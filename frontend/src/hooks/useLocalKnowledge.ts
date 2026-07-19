@@ -149,6 +149,7 @@ export function useLocalKnowledge() {
       }).catch(() => {});
     }
     setUploading(false);
+    return newDocs;
   }, []);
 
   const remove = useCallback(async (id: string) => {
