@@ -19,6 +19,11 @@ on:
       - "frontend/supabase/migrations/**"
   workflow_dispatch: {}
 
+# Least privilege: this workflow only checks out code and calls external CLIs
+# (Supabase, curl) — it never writes back to the repo.
+permissions:
+  contents: read
+
 jobs:
   migrate:
     runs-on: ubuntu-latest
