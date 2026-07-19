@@ -62,4 +62,5 @@ create table if not exists activity_log (
 );
 create index if not exists activity_log_user_day_idx on activity_log(user_id, day);
 alter table activity_log enable row level security;
+drop policy if exists "users own activity" on activity_log;
 create policy "users own activity" on activity_log for all using (auth.jwt() ->> 'email' = user_id);
