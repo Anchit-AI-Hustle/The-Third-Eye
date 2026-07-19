@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { TasksClient } from "@/components/tasks/TasksClient";
+import { TrackerWorkspace } from "@/components/tracker/TrackerWorkspace";
 
 export const metadata = { title: "Task Tracker — The Third Eye" };
 
@@ -16,9 +16,11 @@ export default async function TasksPage() {
           <span className="hud-label text-[#4FC3F7]">// Mission Queue</span>
         </div>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Task Tracker</h1>
-        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">Auto-tracked from Gmail &amp; your assistant — and add tasks manually anytime</p>
+        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">
+          One queue — auto-filled from live capture, Gmail &amp; Chat, and manual entry
+        </p>
       </div>
-      <TasksClient />
+      <TrackerWorkspace />
     </div>
   );
 }

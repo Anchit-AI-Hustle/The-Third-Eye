@@ -34,6 +34,64 @@ async function email() {
   return s?.user?.email ?? null;
 }
 
+// ── Lyrics ────────────────────────────────────────────────────────────────
+// ace-step (and Suno/Udio) expect lyrics with lowercase section tags on their
+// own line: [verse], [chorus], [bridge], [intro], [outro]. Normalise whatever
+// the LLM returns into that shape and strip any prose/markdown the model adds.
+function cleanLyrics(raw: string): string {
+  let t = (raw || "").trim();
+  // Drop code fences the model sometimes wraps lyrics in.
+  t = t.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+  // Drop a leading "Sure, here are..." style preamble (first line before a tag).
+  const firstTag = t.search(/\[(intro|verse|pre-?chorus|chorus|bridge|hook|outro|refrain)/i);
+  if (firstTag > 0 && /here (are|is)|sure|certainly|below/i.test(t.slice(0, firstTag))) t = t.slice(firstTag);
+  return t
+    .split("\n")
+    .map((line) => {
+      // Normalise a section-tag line like "[Chorus 2]" -> "[chorus]" using plain
+      // string ops (no backtracking-prone regex on user text).
+      const trimmed = line.trim();
+      if (trimmed.length > 1 && trimmed.length <= 40 && trimmed[0] === "[" && trimmed.endsWith("]")) {
+        let inner = trimmed.slice(1, -1).trim().toLowerCase();
+        const parts = inner.split(/\s+/); // split is linear-safe
+        if (parts.length > 1 && /^\d{1,3}$/.test(parts[parts.length - 1])) parts.pop();
+        inner = parts.join(" ");
+        if (inner && /^[a-z][a-z -]{0,20}$/.test(inner)) return `[${inner}]`;
+      }
+      return line.trimEnd();
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function writeLyrics(i: MusicInput, description: string, tags: string): Promise<string> {
+  const structure = i.structure || "Verse - Chorus - Verse - Chorus - Bridge - Chorus";
+  const lang = i.vocalLanguage || "English";
+  const system = [
+    "You are a professional songwriter and topliner who writes for Suno and Udio.",
+    "Write original, emotionally resonant, SINGABLE lyrics — concrete imagery, a memorable hook, natural rhyme and consistent meter that a vocalist can actually sing.",
+    "Rules:",
+    "• Use lowercase section tags on their own line: [intro], [verse], [pre-chorus], [chorus], [bridge], [outro].",
+    "• The [chorus] must repeat the same lyric each time it appears (it's the hook).",
+    "• 4–6 lines per section. Keep lines short and rhythmic — no rambling.",
+    "• Match the requested language, mood and genre. No explicit content unless the theme clearly calls for it.",
+    "• Output ONLY the lyrics with their tags. No title, no explanation, no markdown, no quotation marks.",
+  ].join("\n");
+  const user = [
+    `Title: ${i.title || "(untitled)"}`,
+    `Theme / brief: ${description}`,
+    `Genre & style: ${tags}`,
+    i.mood ? `Mood: ${i.mood}` : "",
+    i.artistInspiration ? `Vibe reference (do NOT copy any existing lyrics): ${i.artistInspiration}` : "",
+    `Language: ${lang}`,
+    `Song structure to follow: ${structure}`,
+  ].filter(Boolean).join("\n");
+
+  const out = await llmCascade({ system, messages: [{ role: "user", content: user }], maxTokens: 900, temperature: 0.9 });
+  return cleanLyrics(out.text);
+}
+
 // Build a rich, descriptive style string (tags) the way the music-gen project does.
 function buildTags(i: MusicInput): string {
   return [
@@ -63,14 +121,10 @@ export async function POST(req: NextRequest) {
   let lyrics = (i.lyricsText ?? "").trim();
   if (vocals && i.lyricsMode !== "manual") {
     try {
-      const out = await llmCascade({
-        system: "Write concise, singable song lyrics with [Verse]/[Chorus]/[Bridge] tags. Return ONLY the lyrics, no commentary.",
-        messages: [{ role: "user", content: `Song: ${i.title || description}\nStyle: ${tags}\nLanguage: ${i.vocalLanguage || "English"}\nTheme: ${description}` }],
-        maxTokens: 500, temperature: 0.8,
-      });
-      lyrics = out.text.trim();
+      lyrics = await writeLyrics(i, description, tags);
     } catch { /* proceed without generated lyrics */ }
   }
+  if (vocals && i.lyricsMode === "manual") lyrics = cleanLyrics(lyrics);
 
   if (!replicateConfigured()) {
     return Response.json({ configured: false, prompt, tags, lyrics, note: "Music generation needs REPLICATE_API_TOKEN. Here are the style prompt + lyrics to paste into a music tool." });
@@ -78,14 +132,18 @@ export async function POST(req: NextRequest) {
 
   // Route to a model that generates from text alone (no reference required).
   async function submitVocal() {
-    return createPrediction(VOCAL_MODEL, { tags, lyrics: lyrics || description, duration });
+    return createPrediction(VOCAL_MODEL, { tags, lyrics, duration });
   }
   async function submitInstrumental() {
     return createPrediction(INSTRUMENTAL_MODEL, { prompt, seconds_total: duration }, INSTRUMENTAL_FALLBACK_VERSION);
   }
 
+  // Only sing if we actually have lyrics — otherwise the vocal model would try to
+  // "sing" the raw description. No lyrics → instrumental.
+  const sing = vocals && lyrics.trim().length > 0;
+
   try {
-    if (vocals) {
+    if (sing) {
       try {
         const p = await submitVocal();
         return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics });

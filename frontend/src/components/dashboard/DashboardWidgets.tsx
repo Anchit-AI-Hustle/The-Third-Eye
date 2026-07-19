@@ -54,7 +54,7 @@ export function DashboardWidgets() {
   const widgets = [
     { href: "/assistant", icon: MessageSquare, label: "Assistant", stat: "Ask anything", sub: "voice + actions", color: "#4FC3F7" },
     { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: `${stats.open} open`, sub: `${stats.urgent} urgent`, color: "#4FC3F7" },
-    { href: "/capture", icon: Radio, label: "Live Capture", stat: "Listen", sub: "transcribe → tasks", color: "#F05B8D" },
+    { href: "/tasks", icon: Radio, label: "Live Capture", stat: "Listen", sub: "mic + inbox → tracker", color: "#F05B8D" },
     { href: "/notes", icon: FileText, label: "Notes", stat: `${notes.length}`, sub: "captured", color: "#F0C94E" },
     { href: "/goals", icon: Target, label: "Goals", stat: `${stats.avgGoal}%`, sub: "avg progress", color: "#34D399" },
     { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: `${docs.length}`, sub: "documents", color: "#A78BFA" },
