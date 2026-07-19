@@ -162,7 +162,11 @@ export function MusicStudio() {
           field: key === "description" ? "description" : key,
           value: String(f[name] ?? ""), action,
           previous: prevSug.current[key] ?? [],
-          context: { genre: f.genre, mood: f.mood, tempo: f.tempo, vocals: f.vocals, description: f.description },
+          context: {
+            genre: f.genre, subgenre: f.subgenre, mood: f.mood, tempo: f.tempo, energy: f.energy,
+            instruments: f.instruments, artistInspiration: f.artistInspiration,
+            vocals: f.vocals, vocalStyle: f.vocalStyle, description: f.description,
+          },
         }),
       });
       const d = await res.json();
