@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Radio, ListChecks } from "lucide-react";
+import { ChevronDown, Radio, ListChecks, Network } from "lucide-react";
 import { CaptureClient } from "@/components/capture/CaptureClient";
 import { TasksClient } from "@/components/tasks/TasksClient";
 import { useCapture } from "@/components/capture/CaptureContext";
+import { useMode } from "@/hooks/useMode";
+import { TeamOS } from "@/components/team/TeamOS";
 
 // The unified Task Tracker workspace. One feature, two intake paths:
 //   1. Live Capture — the mic listens and auto-extracts action items.
@@ -18,6 +20,7 @@ const PANEL_KEY = "te_tracker_capture_open_v1";
 
 export function TrackerWorkspace() {
   const { listening, analyzing, tasks: liveTasks } = useCapture();
+  const { modeId } = useMode();
   const [open, setOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -74,11 +77,25 @@ export function TrackerWorkspace() {
         )}
       </section>
 
+      {/* Team OS — the structured business layer, only in Enterprise (Team) mode.
+          Gating (Pro core / Max full) is enforced inside the component. */}
+      {modeId === "enterprise" && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Network size={15} className="text-[#A78BFA]" />
+            <span className="hud-label text-text-muted">Team OS — projects · metrics · OKRs · roadmap</span>
+          </div>
+          <TeamOS />
+        </section>
+      )}
+
       {/* The tracker itself — fed by every source above plus manual entry */}
       <section>
         <div className="flex items-center gap-2 mb-3">
           <ListChecks size={15} className="text-[#4FC3F7]" />
-          <span className="hud-label text-text-muted">Tasks</span>
+          <span className="hud-label text-text-muted">
+            {modeId === "personal" ? "Personal tasks" : modeId === "professional" ? "Office tasks (private)" : "Team tasks"}
+          </span>
         </div>
         <TasksClient />
       </section>
