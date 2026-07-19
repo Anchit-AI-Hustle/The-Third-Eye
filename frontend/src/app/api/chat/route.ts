@@ -8,6 +8,9 @@ import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getGoogleAccessToken } from "@/lib/googleToken";
+import { getTool } from "@/lib/studioTools";
+import { generateStudio } from "@/lib/studioGenerate";
+import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,6 +48,7 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **get_calendar_events**: when user asks about schedule, meetings, "what's on my calendar", "am I free on X"
 - **read_emails**: when user asks about their inbox, unread emails, messages from someone
 - **send_email**: only when user explicitly asks to send an email; confirm recipient/subject/body before sending
+- **create_asset**: when user asks to draft/build/write a landing page, an HTML email/mailer, a customer-lifecycle plan, or creative content (lyrics/poem/captions/music prompt) — generate it via Studio; pass the fullest brief you have
 
 ## Honesty & status reporting (CRITICAL — never violate)
 - Report ONLY what actually happened, based strictly on the tool results you received. Never claim an action succeeded unless its tool result confirms success.
@@ -368,6 +372,19 @@ const geminiTools = [
             },
           },
           required: ["question", "angles"],
+        },
+      },
+      {
+        name: "create_asset",
+        description: "Generate a marketing/creative asset with the Studio engine: a landing page, an HTML email mailer, a customer-lifecycle plan, or creative content (lyrics/music-gen prompt/poem/captions). Use when the user asks to draft/build/write one of these. The result is saved to their Knowledge base and openable in Studio.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            kind: { type: "STRING", enum: ["landing", "mailer", "lifecycle", "creative"], description: "landing = landing page; mailer = HTML email; lifecycle = CRM lifecycle plan; creative = lyrics/poem/captions/music prompt" },
+            title: { type: "STRING", description: "Short name/subject for the asset (product, campaign, segment, or creative title)" },
+            brief: { type: "STRING", description: "The full brief: what it's about, key message, offer, audience, tone — as much detail as the user gave" },
+          },
+          required: ["kind", "brief"],
         },
       },
     ],
@@ -754,6 +771,9 @@ async function runTool(
     case "multi_agent_run":
       return { result: await multiAgentRun(input.question ?? "", input.angles ?? []) };
 
+    case "create_asset":
+      return { result: await createAsset(ctx, input) };
+
     default:
       return { result: `Unknown tool: ${name}` };
   }
@@ -904,6 +924,59 @@ async function cancelReminder(ctx: RunContext, id: string): Promise<string> {
     .eq("user_id", ctx.email)
     .eq("id", id);
   return error ? `Could not cancel: ${error.message}` : "Reminder canceled.";
+}
+
+// Assistant → Studio bridge: generate an asset via the shared Studio engine and
+// save it to the user's Knowledge base so it's persisted and openable in Studio.
+async function createAsset(
+  ctx: RunContext,
+  input: { kind?: string; title?: string; brief?: string },
+): Promise<string> {
+  const tool = input.kind ? getTool(input.kind) : undefined;
+  if (!tool) return "I couldn't recognise that asset type. Try landing, mailer, lifecycle, or creative.";
+  const brief = (input.brief ?? "").trim();
+  if (!brief) return "I need a brief describing what to create.";
+  const title = (input.title ?? "").trim() || brief.slice(0, 60);
+
+  // Map the free-form brief/title onto the tool's fields; fill required ones.
+  const inputs: Record<string, string> = {};
+  const textField = tool.fields.find((f) => f.type === "text");
+  const areaField = tool.fields.find((f) => f.type === "textarea");
+  if (textField) inputs[textField.name] = title;
+  if (areaField) inputs[areaField.name] = brief;
+  for (const f of tool.fields) if (f.required && !inputs[f.name]?.trim()) inputs[f.name] = brief;
+
+  let result;
+  try {
+    result = await generateStudio(tool.id, inputs, undefined);
+  } catch (e) {
+    return `Couldn't generate the ${tool.label}: ${e instanceof Error ? e.message : "provider error"}.`;
+  }
+
+  // Persist to Knowledge (best-effort). Requires cloud storage configured.
+  const sb = getAdminSupabase();
+  let saved = false;
+  if (sb && ctx.email) {
+    const { error } = await sb.from("knowledge_docs").insert({
+      id: randomUUID(),
+      user_id: ctx.email,
+      title: `${tool.label}: ${title}`,
+      content: result.output,
+      file_type: tool.downloadExt,
+      file_size_bytes: result.output.length,
+      chunk_count: Math.max(1, Math.ceil(result.output.split(/\s+/).length / 500)),
+      processing_status: "ready",
+    });
+    saved = !error;
+  }
+
+  const where = saved
+    ? "Saved to your Knowledge base — open Studio to preview, tweak, or download it."
+    : "It isn't saved (cloud storage not configured), so here it is inline.";
+  const preview = tool.format === "markdown"
+    ? `\n\n${result.output.slice(0, 1200)}${result.output.length > 1200 ? "\n\n…(truncated — full version in Knowledge/Studio)" : ""}`
+    : `\n\n(${result.output.length.toLocaleString()} chars of HTML generated.)`;
+  return `Created a ${tool.label} — "${title}". ${where}${saved ? "" : preview}`;
 }
 
 async function multiAgentRun(question: string, angles: string[]): Promise<string> {
