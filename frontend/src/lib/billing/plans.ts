@@ -96,14 +96,16 @@ export function pricePer100(b: Bundle): number {
 
 export const WELCOME_CREDITS = 300; // CAC grant for a new user
 
-// Test-unlock code, kept as character codes rather than a plaintext string so
-// no credential literal ships in the bundle. [50,56,48,51] = "2803". This is a
-// QA convenience for unlocking paid features without payment — NOT a security
-// control (there is no real secret to protect here).
-export const TEST_UNLOCK_CODES = [50, 56, 48, 51];
+// QA bypass — preview paid features without payment. The unlock code is read
+// from the environment (NEXT_PUBLIC_TEST_UNLOCK_CODE), never hardcoded, so no
+// credential ships in the source. Unset => the bypass is disabled. This is a
+// testing convenience, not a security control.
+export function testUnlockConfigured(): boolean {
+  return (process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE || "").trim().length > 0;
+}
 
-/** True if the entered code matches the test-unlock code. */
-export function matchesTestCode(input: string): boolean {
-  const p = input.trim();
-  return p.length === TEST_UNLOCK_CODES.length && TEST_UNLOCK_CODES.every((c, i) => p.charCodeAt(i) === c);
+/** True if the entered code matches the configured test-unlock code. */
+export function matchesTestCode(entered: string): boolean {
+  const expected = (process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE || "").trim();
+  return expected.length > 0 && entered.trim() === expected;
 }

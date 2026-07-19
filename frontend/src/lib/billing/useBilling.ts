@@ -75,8 +75,8 @@ export function useBilling() {
     return { ...r, milestones };
   }, [refresh]);
 
-  const tryUnlock = useCallback((pin: string) => {
-    const ok = unlockTest(pin); if (ok) refresh(); return ok;
+  const tryUnlock = useCallback((code: string) => {
+    const ok = unlockTest(code); if (ok) refresh(); return ok;
   }, [refresh]);
 
   const lock = useCallback(() => { clearTestUnlock(); refresh(); }, [refresh]);

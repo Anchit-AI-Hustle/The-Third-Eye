@@ -36,8 +36,8 @@ export function ensureWelcome(): WalletState {
 export function getBalance(): number { return getWallet().balance; }
 
 export function isTestUnlocked(): boolean { return vaultGet<boolean>(APP, "testUnlock", false); }
-export function unlockTest(pin: string): boolean {
-  if (matchesTestCode(pin)) { vaultSet(APP, "testUnlock", true); return true; }
+export function unlockTest(code: string): boolean {
+  if (matchesTestCode(code)) { vaultSet(APP, "testUnlock", true); return true; }
   return false;
 }
 export function clearTestUnlock() { vaultSet(APP, "testUnlock", false); }

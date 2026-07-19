@@ -21,16 +21,16 @@ export function Paywall({
   cost?: number;
 }) {
   const { balance, tier, tryUnlock } = useBilling();
-  const [pin, setPin] = useState("");
-  const [pinErr, setPinErr] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeErr, setCodeErr] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
 
   if (!open) return null;
 
   const t = TIERS[requiredTier];
-  const submitPin = () => {
-    if (tryUnlock(pin)) { setUnlocked(true); setTimeout(onClose, 900); }
-    else { setPinErr(true); setTimeout(() => setPinErr(false), 1200); }
+  const submitCode = () => {
+    if (tryUnlock(code)) { setUnlocked(true); setTimeout(onClose, 900); }
+    else { setCodeErr(true); setTimeout(() => setCodeErr(false), 1200); }
   };
 
   return (
@@ -97,23 +97,24 @@ export function Paywall({
               {/* Test bypass — PIN 2803 (no real payment). */}
               <div className="rounded-input border border-border-default bg-background-secondary/40 p-3">
                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-text-muted mb-2">
-                  <KeyRound size={12} /> Testing? Enter security PIN to bypass payment
+                  <KeyRound size={12} /> Testing? Enter the unlock code to bypass payment
                 </div>
                 <div className="flex gap-2">
                   <input
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && submitPin()}
-                    type="password"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submitCode()}
+                    type="text"
                     inputMode="numeric"
-                    placeholder="••••"
-                    className={`flex-1 rounded-input bg-background-primary border px-3 py-2 text-sm font-mono tracking-[0.4em] text-text-primary outline-none ${pinErr ? "border-red-500/70" : "border-border-default focus:border-accent-primary"}`}
+                    autoComplete="off"
+                    placeholder="Unlock code"
+                    className={`flex-1 rounded-input bg-background-primary border px-3 py-2 text-sm font-mono tracking-[0.4em] text-text-primary outline-none ${codeErr ? "border-red-500/70" : "border-border-default focus:border-accent-primary"}`}
                   />
-                  <button onClick={submitPin} className="rounded-input px-4 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-primary">
+                  <button onClick={submitCode} className="rounded-input px-4 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-primary">
                     Unlock
                   </button>
                 </div>
-                {pinErr && <p className="text-red-400 text-[11px] mt-1.5">Incorrect PIN.</p>}
+                {codeErr && <p className="text-red-400 text-[11px] mt-1.5">Incorrect code.</p>}
               </div>
 
               <p className="text-[10px] text-text-muted font-mono mt-3 text-center">

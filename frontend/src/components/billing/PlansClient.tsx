@@ -14,8 +14,8 @@ import {
 export function PlansClient() {
   const b = useBilling();
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
-  const [pin, setPin] = useState("");
-  const [pinMsg, setPinMsg] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [codeMsg, setCodeMsg] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2200); };
@@ -29,10 +29,10 @@ export function PlansClient() {
     const r = b.purchaseBundle(id);
     if (r.ok) flash(`Added ${r.added?.toLocaleString()} credits`);
   };
-  const submitPin = () => {
-    if (b.tryUnlock(pin)) { setPinMsg("Unlocked — all paid features open (test mode)."); setPin(""); }
-    else setPinMsg("Incorrect PIN.");
-    setTimeout(() => setPinMsg(null), 2500);
+  const submitCode = () => {
+    if (b.tryUnlock(code)) { setCodeMsg("Unlocked — all paid features open (test mode)."); setCode(""); }
+    else setCodeMsg("Incorrect code.");
+    setTimeout(() => setCodeMsg(null), 2500);
   };
 
   return (
@@ -164,16 +164,16 @@ export function PlansClient() {
           <ShieldCheck size={16} className="text-accent-primary" />
           <h2 className="font-display text-base font-semibold text-text-primary">Testing mode</h2>
         </div>
-        <p className="text-text-muted text-xs font-mono mb-3">Enter the security PIN to unlock every paid feature without real payment.</p>
+        <p className="text-text-muted text-xs font-mono mb-3">Enter the unlock code to open every paid feature without real payment.</p>
         <div className="flex gap-2 max-w-xs">
-          <input value={pin} onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitPin()}
-            type="password" inputMode="numeric" placeholder="Security PIN"
+          <input value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitCode()}
+            type="text" inputMode="numeric" autoComplete="off" placeholder="Unlock code"
             className="flex-1 rounded-input bg-background-primary border border-border-default focus:border-accent-primary px-3 py-2 text-sm font-mono tracking-[0.3em] text-text-primary outline-none" />
-          <button onClick={submitPin} className="rounded-input px-4 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-primary flex items-center gap-1.5">
+          <button onClick={submitCode} className="rounded-input px-4 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-primary flex items-center gap-1.5">
             <KeyRound size={14} /> Unlock
           </button>
         </div>
-        {pinMsg && <p className={`text-xs font-mono mt-2 ${pinMsg.startsWith("Incorrect") ? "text-red-400" : "text-[#34D399]"}`}>{pinMsg}</p>}
+        {codeMsg && <p className={`text-xs font-mono mt-2 ${codeMsg.startsWith("Incorrect") ? "text-red-400" : "text-[#34D399]"}`}>{codeMsg}</p>}
         {b.testUnlocked && (
           <button onClick={b.lock} className="text-[11px] font-mono text-text-muted hover:text-text-primary mt-2 flex items-center gap-1"><X size={11} /> Turn off test unlock</button>
         )}
