@@ -33,10 +33,13 @@ export function StudioHub() {
           const s = STUDIOS[m];
           const Icon = ICONS[s.icon] ?? Rocket;
           const active = modeId === m;
+          const count = STUDIO_TOOLS.filter((t) => t.mode === m).length;
           return (
             <button
               key={m}
               onClick={() => setMode(m)}
+              aria-pressed={active}
+              title={`${s.name} — ${s.tagline}`}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-input border text-sm transition-colors ${
                 active
                   ? "font-semibold"
@@ -45,6 +48,12 @@ export function StudioHub() {
               style={active ? { borderColor: s.accent, color: s.accent, background: `${s.accent}12` } : undefined}
             >
               <Icon size={15} /> {s.name}
+              <span
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
+                style={{ background: active ? `${s.accent}22` : "var(--border-default, #ffffff14)", color: active ? s.accent : undefined }}
+              >
+                {count}
+              </span>
             </button>
           );
         })}
@@ -59,6 +68,7 @@ export function StudioHub() {
           <div className="flex items-center gap-2">
             <h2 className="font-display text-lg font-semibold" style={{ color: studio.accent }}>{studio.name}</h2>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border" style={{ borderColor: studio.accent, color: studio.accent }}>active mode</span>
+            <span className="text-[11px] text-text-muted font-mono">{tools.length} tools</span>
           </div>
           <p className="text-xs text-text-muted">{studio.tagline}</p>
         </div>
