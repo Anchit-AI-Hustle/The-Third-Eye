@@ -1,0 +1,65 @@
+name: Deploy Supabase migrations
+
+# Applies database migrations to the linked Supabase project whenever a
+# migration file lands on main — the CLI step you'd otherwise run by hand.
+# Also (optionally) pings a Vercel deploy hook so the site rebuilds in lock-step.
+#
+# One-time setup — add these in GitHub → Settings → Secrets and variables → Actions:
+#   SUPABASE_ACCESS_TOKEN  — https://supabase.com/dashboard/account/tokens
+#   SUPABASE_DB_PASSWORD   — your project's database password
+#   VERCEL_DEPLOY_HOOK     — (optional) a Deploy Hook URL from Vercel → Settings → Git → Deploy Hooks
+#
+# Nothing here can run until those secrets exist; the job fails fast with a clear
+# message if the required two are missing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/supabase/migrations/**"
+  workflow_dispatch: {}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_ID: cnbxarfuyicyjbtvbmtv
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "::error::Set SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD in repo secrets to enable migrations."
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        working-directory: frontend
+        run: supabase link --project-ref "$PROJECT_ID"
+
+      - name: Push migrations
+        working-directory: frontend
+        run: supabase db push
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy hook (optional)
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            echo "Triggering Vercel deploy hook…"
+            curl -sS -X POST "$HOOK" && echo "Deploy triggered."
+          else
+            echo "No VERCEL_DEPLOY_HOOK secret set — skipping."
+            echo "Vercel's Git integration already auto-deploys main (git.deploymentEnabled), so this is only a fallback."
+          fi
