@@ -13,6 +13,7 @@ import { useState } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { CloudSyncBadge } from "./CloudSyncBadge";
+import { WalletWidget } from "@/components/billing/WalletWidget";
 
 const NAV_ITEMS = [
   { label: "App Audit", href: "/audit", icon: ShieldCheck },
@@ -144,6 +145,11 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border-default px-2 py-3 space-y-0.5 flex-none">
+        {!collapsed && (
+          <div className="px-1 pb-1.5">
+            <WalletWidget />
+          </div>
+        )}
         <CloudSyncBadge collapsed={collapsed} />
         <Link href="/settings" title={collapsed ? "Settings" : undefined}
           className={cn(
