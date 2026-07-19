@@ -78,6 +78,51 @@ export const STUDIO_TOOLS: StudioTool[] = [
     ],
   },
 
+  {
+    id: "workout", label: "Fitness Planner", mode: "personal", icon: "Dumbbell", accent: H,
+    blurb: "A personalized weekly workout plan matched to your goal, level, and available equipment.",
+    format: "markdown", downloadExt: "md", cta: "Build my plan",
+    fields: [
+      { name: "goal", label: "Goal", type: "select", options: ["Build muscle", "Lose fat", "Get stronger", "General fitness", "Endurance"] },
+      { name: "level", label: "Experience", type: "select", options: ["Beginner", "Intermediate", "Advanced"] },
+      { name: "days", label: "Days per week & time", type: "text", placeholder: "e.g. 4 days, 45 min", required: true },
+      { name: "equipment", label: "Equipment / setting", type: "text", placeholder: "e.g. home dumbbells, full gym, bodyweight" },
+      { name: "notes", label: "Constraints / preferences", type: "textarea", placeholder: "injuries, dislikes, focus areas…" },
+    ],
+  },
+  {
+    id: "study", label: "Study Coach", mode: "personal", icon: "GraduationCap", accent: H,
+    blurb: "A structured study plan or learning path for any subject, tuned to your timeline.",
+    format: "markdown", downloadExt: "md", cta: "Plan my learning",
+    fields: [
+      { name: "subject", label: "Subject / skill", type: "text", placeholder: "e.g. Spanish, calculus, guitar", required: true },
+      { name: "level", label: "Current level", type: "text", placeholder: "e.g. complete beginner" },
+      { name: "timeline", label: "Timeline & hours/week", type: "text", placeholder: "e.g. 8 weeks, 5 hrs/week", required: true },
+      { name: "goal", label: "Target outcome", type: "textarea", placeholder: "What you want to be able to do…" },
+    ],
+  },
+  {
+    id: "journal", label: "Journal & Reflection", mode: "personal", icon: "NotebookPen", accent: "#F0C94E",
+    blurb: "Guided journaling prompts or a reflective entry from your thoughts and mood.",
+    format: "markdown", downloadExt: "md", cta: "Reflect",
+    fields: [
+      { name: "want", label: "What do you want", type: "select", options: ["Journaling prompts for today", "Turn my notes into a reflection", "Weekly review", "Gratitude list"] },
+      { name: "context", label: "What's on your mind", type: "textarea", placeholder: "How you're feeling, what happened, what's ahead…", required: true },
+      { name: "focus", label: "Focus (optional)", type: "text", placeholder: "e.g. work stress, relationships, goals" },
+    ],
+  },
+  {
+    id: "budget", label: "Budget Planner", mode: "personal", icon: "Wallet", accent: H,
+    blurb: "A simple personal monthly budget with category splits and savings tips.",
+    format: "markdown", downloadExt: "md", cta: "Plan my budget",
+    fields: [
+      { name: "income", label: "Monthly income", type: "text", placeholder: "e.g. ₹90,000 take-home", required: true },
+      { name: "fixed", label: "Fixed costs", type: "textarea", placeholder: "rent, EMIs, subscriptions…" },
+      { name: "goals", label: "Savings / goals", type: "text", placeholder: "e.g. save 20%, trip fund" },
+      { name: "notes", label: "Anything else", type: "textarea", placeholder: "debts, dependents, priorities…" },
+    ],
+  },
+
   // ── Startup Studio (Professional) ────────────────────────────────────────
   {
     id: "landing", label: "Landing Page Engine", mode: "professional", icon: "LayoutTemplate", accent: P,
@@ -126,6 +171,52 @@ export const STUDIO_TOOLS: StudioTool[] = [
     ],
   },
 
+  {
+    id: "blog", label: "SEO Blog Writer", mode: "professional", icon: "Newspaper", accent: P,
+    blurb: "A complete, SEO-structured blog article with title options, headings, and a meta description.",
+    format: "markdown", downloadExt: "md", cta: "Write article",
+    fields: [
+      { name: "topic", label: "Topic / working title", type: "text", placeholder: "e.g. Benefits of turmeric tea", required: true },
+      { name: "keyword", label: "Primary keyword", type: "text", placeholder: "e.g. turmeric tea benefits" },
+      { name: "audience", label: "Audience & intent", type: "textarea", placeholder: "Who's reading and what they want…", required: true },
+      { name: "length", label: "Length", type: "select", options: ["Short (~600w)", "Standard (~1200w)", "In-depth (~2000w)"] },
+      { name: "tone", label: "Tone", type: "select", options: ["Helpful & warm", "Authoritative", "Playful", "Editorial"] },
+    ],
+  },
+  {
+    id: "social", label: "Social Content Calendar", mode: "professional", icon: "CalendarDays", accent: P,
+    blurb: "A ready-to-post content calendar — hooks, captions, and formats across a week or month.",
+    format: "markdown", downloadExt: "md", cta: "Build calendar",
+    fields: [
+      { name: "brand", label: "Brand / product", type: "text", placeholder: "e.g. Vahdam India", required: true },
+      { name: "goal", label: "Goal & themes", type: "textarea", placeholder: "e.g. drive Diwali gifting, educate on wellness…", required: true },
+      { name: "platforms", label: "Platforms", type: "text", placeholder: "e.g. Instagram, LinkedIn" },
+      { name: "cadence", label: "Timeframe", type: "select", options: ["1 week", "2 weeks", "1 month"] },
+    ],
+  },
+  {
+    id: "outreach", label: "Cold Outreach", mode: "professional", icon: "Send", accent: P,
+    blurb: "A multi-step cold email / DM sequence with follow-ups that actually get replies.",
+    format: "markdown", downloadExt: "md", cta: "Write sequence",
+    fields: [
+      { name: "offer", label: "What you're offering", type: "textarea", placeholder: "Product/service, key value, proof…", required: true },
+      { name: "target", label: "Who you're targeting", type: "text", placeholder: "e.g. D2C founders, marketing heads", required: true },
+      { name: "channel", label: "Channel", type: "select", options: ["Cold email", "LinkedIn DM", "Both"] },
+      { name: "steps", label: "Sequence length", type: "select", options: ["3 touches", "4 touches", "5 touches"] },
+    ],
+  },
+  {
+    id: "naming", label: "Naming & Tagline", mode: "professional", icon: "Tag", accent: P,
+    blurb: "Brandable name ideas and taglines for a product, feature, or campaign — with rationale.",
+    format: "markdown", downloadExt: "md", cta: "Generate names",
+    fields: [
+      { name: "what", label: "What are we naming", type: "text", placeholder: "e.g. a new cold-brew tea line", required: true },
+      { name: "context", label: "Positioning & vibe", type: "textarea", placeholder: "Audience, feel, differentiators…", required: true },
+      { name: "type", label: "What to produce", type: "select", options: ["Names + taglines", "Names only", "Taglines only"] },
+      { name: "avoid", label: "Avoid / must-have", type: "text", placeholder: "e.g. avoid 'zen', must feel premium" },
+    ],
+  },
+
   // ── Office Studio (Enterprise) ───────────────────────────────────────────
   {
     id: "lifecycle", label: "Lifecycle OS", mode: "enterprise", icon: "Workflow", accent: E,
@@ -167,6 +258,50 @@ export const STUDIO_TOOLS: StudioTool[] = [
       { name: "process", label: "Process / task", type: "text", placeholder: "e.g. New campaign QA before send", required: true },
       { name: "details", label: "How it works today", type: "textarea", placeholder: "Steps, tools, who's involved, gotchas…", required: true },
       { name: "audience", label: "For whom", type: "text", placeholder: "e.g. marketing ops team" },
+    ],
+  },
+  {
+    id: "jd", label: "Job Description", mode: "enterprise", icon: "Briefcase", accent: E,
+    blurb: "A polished, inclusive job description with responsibilities, requirements, and about-the-role.",
+    format: "markdown", downloadExt: "md", cta: "Write JD",
+    fields: [
+      { name: "role", label: "Role title", type: "text", placeholder: "e.g. Senior Growth Marketer", required: true },
+      { name: "company", label: "Team / company context", type: "textarea", placeholder: "What the team does, mission, stage…", required: true },
+      { name: "must", label: "Key responsibilities & must-haves", type: "textarea", placeholder: "Core outcomes, skills, experience…" },
+      { name: "location", label: "Location & type", type: "text", placeholder: "e.g. Remote (India), full-time" },
+    ],
+  },
+  {
+    id: "prd", label: "PRD & Spec", mode: "enterprise", icon: "ScrollText", accent: E,
+    blurb: "A crisp product requirements doc: problem, goals, scope, user stories, and success metrics.",
+    format: "markdown", downloadExt: "md", cta: "Draft PRD",
+    fields: [
+      { name: "feature", label: "Feature / product", type: "text", placeholder: "e.g. In-app referral program", required: true },
+      { name: "problem", label: "Problem & context", type: "textarea", placeholder: "Who it's for, why now, current state…", required: true },
+      { name: "scope", label: "Goals / scope hints", type: "textarea", placeholder: "Must-haves, non-goals, constraints…" },
+      { name: "detail", label: "Detail level", type: "select", options: ["Lightweight one-pager", "Standard PRD", "Detailed spec"] },
+    ],
+  },
+  {
+    id: "okr", label: "OKR Planner", mode: "enterprise", icon: "Target", accent: E,
+    blurb: "Objectives and measurable key results for a team or quarter, with supporting initiatives.",
+    format: "markdown", downloadExt: "md", cta: "Set OKRs",
+    fields: [
+      { name: "team", label: "Team / scope", type: "text", placeholder: "e.g. Growth team, Q3", required: true },
+      { name: "priorities", label: "Priorities & context", type: "textarea", placeholder: "What matters most, current baseline…", required: true },
+      { name: "count", label: "How many objectives", type: "select", options: ["1 focused", "2-3", "3-5"] },
+      { name: "horizon", label: "Time horizon", type: "text", placeholder: "e.g. one quarter" },
+    ],
+  },
+  {
+    id: "proposal", label: "Proposal & SOW", mode: "enterprise", icon: "FileSignature", accent: E,
+    blurb: "A client proposal or statement of work: scope, deliverables, timeline, and pricing structure.",
+    format: "markdown", downloadExt: "md", cta: "Draft proposal",
+    fields: [
+      { name: "client", label: "Client / project", type: "text", placeholder: "e.g. Acme — website revamp", required: true },
+      { name: "scope", label: "Scope & deliverables", type: "textarea", placeholder: "What you'll do, outcomes…", required: true },
+      { name: "timeline", label: "Timeline & pricing hints", type: "text", placeholder: "e.g. 6 weeks, retainer vs fixed" },
+      { name: "type", label: "Document", type: "select", options: ["Proposal", "Statement of Work", "Both"] },
     ],
   },
 ];

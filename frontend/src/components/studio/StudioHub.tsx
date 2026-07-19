@@ -4,7 +4,9 @@ import Link from "next/link";
 import {
   LayoutTemplate, Mail, Workflow, Music, PenLine, Presentation, Megaphone,
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket,
-  Building2, ArrowRight, type LucideIcon,
+  Building2, ArrowRight, Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper,
+  CalendarDays, Send, Tag, Briefcase, ScrollText, Target, FileSignature,
+  type LucideIcon,
 } from "lucide-react";
 import { STUDIO_TOOLS, STUDIOS, type ModeId } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
@@ -12,6 +14,8 @@ import { useMode } from "@/hooks/useMode";
 const ICONS: Record<string, LucideIcon> = {
   LayoutTemplate, Mail, Workflow, Music, PenLine, Presentation, Megaphone,
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket, Building2,
+  Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper, CalendarDays, Send, Tag,
+  Briefcase, ScrollText, Target, FileSignature,
 };
 
 // Studio is mode-aware: it shows the tools for the CURRENTLY selected user mode
