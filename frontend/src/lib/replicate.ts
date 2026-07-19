@@ -33,12 +33,18 @@ async function rq(path: string, init?: RequestInit) {
 const versionCache: Record<string, { id: string; at: number }> = {};
 const VERSION_TTL = 1000 * 60 * 60 * 12;
 
+// Strict allowlists so nothing user-influenced can steer the request URL
+// off Replicate's API (SSRF-safe). Model slugs and prediction ids only.
+const MODEL_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+const ID_RE = /^[a-zA-Z0-9]+$/;
+
 /** Resolve `owner/name` → latest version id (cached). */
 export async function latestVersion(model: string): Promise<string> {
+  if (!MODEL_RE.test(model)) throw new Error("Invalid model slug");
   const cached = versionCache[model];
   if (cached && Date.now() - cached.at < VERSION_TTL) return cached.id;
   const [owner, name] = model.split("/");
-  const data = await rq(`/models/${owner}/${name}`);
+  const data = await rq(`/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
   const id = data?.latest_version?.id;
   if (!id) throw new Error(`No version for model ${model}`);
   versionCache[model] = { id, at: Date.now() };
@@ -52,9 +58,19 @@ export interface Prediction {
   error: string | null;
 }
 
-/** Submit a prediction for a model (resolves the version automatically). */
-export async function createPrediction(model: string, input: Record<string, unknown>): Promise<Prediction> {
-  const version = await latestVersion(model);
+/**
+ * Submit a prediction for a model. Resolves the latest version, falling back to
+ * a pinned version id if resolution fails (keeps generation working even when
+ * the models API hiccups).
+ */
+export async function createPrediction(model: string, input: Record<string, unknown>, fallbackVersion?: string): Promise<Prediction> {
+  let version: string;
+  try {
+    version = await latestVersion(model);
+  } catch (e) {
+    if (!fallbackVersion) throw e;
+    version = fallbackVersion;
+  }
   const p = await rq(`/predictions`, {
     method: "POST",
     body: JSON.stringify({ version, input }),
@@ -63,7 +79,8 @@ export async function createPrediction(model: string, input: Record<string, unkn
 }
 
 export async function getPrediction(id: string): Promise<Prediction> {
-  const p = await rq(`/predictions/${id}`);
+  if (!ID_RE.test(id)) throw new Error("Invalid prediction id");
+  const p = await rq(`/predictions/${encodeURIComponent(id)}`);
   return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
 }
 
