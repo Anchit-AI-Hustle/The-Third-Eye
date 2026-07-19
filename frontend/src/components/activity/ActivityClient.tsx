@@ -83,7 +83,7 @@ export function ActivityClient() {
         </div>
         {log.length === 0 ? (
           <p className="text-sm text-text-muted py-6 text-center">
-            No agent actions yet. Everything the assistant does — and anything blocked by the kill switch — will be recorded here.
+            No activity yet. Assistant actions, generations (Studio / Music / Kolab), voice captures and system events all appear here — and anything blocked by the kill switch.
           </p>
         ) : (
           <div className="divide-y divide-border-default">

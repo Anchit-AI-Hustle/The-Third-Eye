@@ -1,6 +1,7 @@
 "use client";
 
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
+import { logAgentAction } from "@/lib/agentControl";
 
 // Unified generations log. Every app that produces an output records it here, so
 // the /generations dashboard can list every input→output across the whole app
@@ -58,6 +59,8 @@ export function recordGeneration(rec: Omit<GenerationRecord, "id" | "createdAt">
   const full: GenerationRecord = { ...rec, id: genId(), createdAt: new Date().toISOString() };
   const next = [full, ...listGenerations()].slice(0, CAP);
   vaultSet(APP, KEY, next);
+  // Surface every generation in the Agent Activity feed too.
+  try { logAgentAction({ type: `generate.${full.app}`, label: `${full.appLabel}: ${full.title}`, outcome: "applied" }); } catch { /* noop */ }
   try { window.dispatchEvent(new CustomEvent("te:generations-updated")); } catch { /* noop */ }
   return full.id;
 }
