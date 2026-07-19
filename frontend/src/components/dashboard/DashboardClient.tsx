@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { ReactorCanvas } from "./ReactorCanvas";
+import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
@@ -161,6 +162,9 @@ export function DashboardClient() {
           ))}
         </div>
       </div>
+
+      {/* ── Command Center widgets ───────────────────────────── */}
+      <DashboardWidgets />
 
       {/* ── Row 2: Tasks + Quick Access ──────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
