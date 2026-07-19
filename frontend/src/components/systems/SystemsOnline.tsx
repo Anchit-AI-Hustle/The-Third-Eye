@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Radio, Check, X } from "lucide-react";
 import { announceSystems, resolveSystems, type SystemDef, type SystemsTarget } from "@/lib/systems";
+import { logAgentAction } from "@/lib/agentControl";
 
 // Global "All Systems Online" HUD. Listens for the `te:systems-online` window
 // event (dispatched by the assistant, the ambient mic, or the manual button) and
@@ -32,6 +33,7 @@ export function SystemsOnline() {
       setPhases((p) => ({ ...p, [id]: phase }));
     });
 
+    try { logAgentAction({ type: "systems.status", label: list.length === 1 ? `${list[0].name} reported online` : `All systems online (${list.length})`, outcome: "applied" }); } catch { /* noop */ }
     running.current = false;
     closeTimer.current = setTimeout(() => setOpen(false), 2600);
   }, []);

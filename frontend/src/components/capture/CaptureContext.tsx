@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { dataInsert, dataDelete } from "@/lib/dataClient";
 import { getConsent } from "@/lib/consent";
 import { matchSystemsCommand } from "@/lib/systems";
+import { logAgentAction } from "@/lib/agentControl";
 
 export type ConvType = "meeting" | "brainstorm" | "work" | "personal" | "learning" | "other";
 
@@ -166,6 +167,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         }
         if (fresh.length) {
           setTasks((prev) => [...prev, ...fresh]);
+          try { logAgentAction({ type: "capture.extract", label: `Captured ${fresh.length} task${fresh.length > 1 ? "s" : ""} from voice`, outcome: "applied" }); } catch { /* noop */ }
           if (autoCreateRef.current) {
             for (const t of fresh) {
               const row = buildRow(t, true);
