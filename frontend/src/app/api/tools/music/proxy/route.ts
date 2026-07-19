@@ -5,18 +5,20 @@ import { authOptions } from "@/lib/auth";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Same-origin media proxy for generated audio. The video visualizer needs to run
-// the track through Web Audio (analyser), which taints on cross-origin sources
-// without CORS — so we stream the (allowlisted) provider URL through here.
-const ALLOWED_HOSTS = [
-  "replicate.delivery", "replicate.com", "pbxt.replicate.delivery",
-  "supabase.co", "supabase.in", "storage.googleapis.com",
-];
-
-function allowed(u: URL): boolean {
-  const h = u.hostname.toLowerCase();
-  return u.protocol === "https:" && ALLOWED_HOSTS.some((a) => h === a || h.endsWith(`.${a}`));
-}
+// Same-origin media proxy for generated audio. The video visualizer runs the
+// track through Web Audio (analyser), which taints on cross-origin sources — so
+// we stream the (allowlisted) provider URL through here.
+//
+// SSRF-safe: the host must be an EXACT match in the allowlist, and the URL we
+// fetch is rebuilt from the vetted host + path only — no raw user string ever
+// reaches fetch(), and the origin can't be redirected off the allowlist.
+const ALLOWED_HOSTS = new Set([
+  "replicate.delivery",
+  "pbxt.replicate.delivery",
+  "replicate.com",
+  "cnbxarfuyicyjbtvbmtv.supabase.co",
+  "storage.googleapis.com",
+]);
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -24,11 +26,15 @@ export async function GET(req: NextRequest) {
 
   const raw = new URL(req.url).searchParams.get("url");
   if (!raw) return new Response("url required", { status: 400 });
-  let target: URL;
-  try { target = new URL(raw); } catch { return new Response("invalid url", { status: 400 }); }
-  if (!allowed(target)) return new Response("host not allowed", { status: 403 });
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { return new Response("invalid url", { status: 400 }); }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || !ALLOWED_HOSTS.has(parsed.hostname)) {
+    return new Response("host not allowed", { status: 403 });
+  }
 
-  const upstream = await fetch(target.toString());
+  // Rebuild from vetted host + path/query only (defence in depth vs SSRF).
+  const safe = `https://${parsed.hostname}${parsed.pathname}${parsed.search}`;
+  const upstream = await fetch(safe, { redirect: "error" });
   if (!upstream.ok || !upstream.body) return new Response("upstream error", { status: 502 });
 
   return new Response(upstream.body, {
