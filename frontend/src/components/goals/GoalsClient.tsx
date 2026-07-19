@@ -4,6 +4,9 @@ import { useState } from "react";
 import { Target, Plus, Trash2, ChevronUp, ChevronDown, Check, X, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalGoals, Goal } from "@/hooks/useLocalGoals";
+import { useMode } from "@/hooks/useMode";
+import { useModeTags, filterByMode } from "@/hooks/useModeTags";
+import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 
 const CATEGORIES = ["Career", "Health", "Finance", "Learning", "Personal", "Business"];
 
@@ -13,6 +16,9 @@ const emptyForm = (): Omit<Goal, "id" | "created_at"> => ({
 
 export function GoalsClient() {
   const { goals, ready, add, adjust, remove } = useLocalGoals();
+  const { modeId } = useMode();
+  const { tags, tagItem } = useModeTags();
+  const [showAllModes, setShowAllModes] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
@@ -22,7 +28,8 @@ export function GoalsClient() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return;
-    await add(form);
+    const g = await add(form);
+    if (g?.id) tagItem(g.id, modeId); // tag new goals with the active mode
     setForm(emptyForm()); setShowForm(false);
   }
 
@@ -41,8 +48,9 @@ export function GoalsClient() {
 
   if (!ready) return <div className="flex justify-center py-20"><div className="w-4 h-4 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
 
+  const scopedGoals = filterByMode(goals, tags, modeId, showAllModes);
   const byCategory = CATEGORIES.reduce<Record<string, Goal[]>>((acc, cat) => {
-    const items = goals.filter((g) => g.category === cat);
+    const items = scopedGoals.filter((g) => g.category === cat);
     if (items.length > 0) acc[cat] = items;
     return acc;
   }, {});
@@ -51,11 +59,12 @@ export function GoalsClient() {
     <div className="space-y-6 max-w-4xl">
       <div className="flex justify-between items-center">
         <div className="flex gap-3">
-          <Stat label="Total goals" value={goals.length} />
-          <Stat label="Completed" value={goals.filter((g) => g.current >= g.target).length} color="green" />
-          <Stat label="In progress" value={goals.filter((g) => g.current > 0 && g.current < g.target).length} color="blue" />
+          <Stat label="Total goals" value={scopedGoals.length} />
+          <Stat label="Completed" value={scopedGoals.filter((g) => g.current >= g.target).length} color="green" />
+          <Stat label="In progress" value={scopedGoals.filter((g) => g.current > 0 && g.current < g.target).length} color="blue" />
         </div>
         <div className="flex items-center gap-2">
+          <ModeScopeToggle showAll={showAllModes} onChange={setShowAllModes} />
           {goals.length > 0 && (
             <button onClick={exportGoals}
               className="flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-text-muted hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 text-sm transition-colors">
@@ -109,11 +118,15 @@ export function GoalsClient() {
         </form>
       )}
 
-      {goals.length === 0 ? (
+      {scopedGoals.length === 0 ? (
         <div className="py-20 text-center">
           <Target size={28} className="mx-auto text-text-muted mb-4 opacity-40" />
-          <p className="text-text-muted text-sm">No goals yet. Create your first one above.</p>
-          <p className="text-text-muted text-xs mt-1">Your AI will help you track and achieve them.</p>
+          <p className="text-text-muted text-sm">
+            {goals.length === 0 ? "No goals yet. Create your first one above." : "No goals in this mode."}
+          </p>
+          <p className="text-text-muted text-xs mt-1">
+            {goals.length === 0 ? "Your AI will help you track and achieve them." : "Switch to “All” to see goals from every mode."}
+          </p>
         </div>
       ) : (
         Object.entries(byCategory).map(([cat, items]) => (
