@@ -59,8 +59,14 @@ export async function POST(req: NextRequest) {
     : action === "new" ? `Produce a fresh ALTERNATIVE that is clearly different from the current value and from anything tried before.`
     : `Suggest a strong value.`;
 
+  // When the form already has content (genre/description/mood/etc.), THAT is the
+  // anchor — the suggestion must be coherent with what's filled. Only fall back
+  // to the rotating style family for freshness when there's no context yet.
+  const anchor = ctx
+    ? `The value MUST be coherent with the user's context above — match its genre, sub-genre, mood, tempo and instruments. Do not drift to an unrelated style.`
+    : `Anchor loosely to the "${family}" style family for freshness.`;
   const system = `You are a world-class music production assistant. ${fieldInstruction(field)}
-Anchor loosely to the "${family}" style family for freshness, but honor the user's context. Generate dynamically — never return template/placeholder text. Output ONLY the value, no labels, no commentary, no surrounding quotes.`;
+${anchor} Generate dynamically — never return template/placeholder text. Output ONLY the value, no labels, no commentary, no surrounding quotes.`;
   const user = [
     ctx && `Context — ${ctx}.`,
     actionLine,
