@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useLocalTasks } from "./useLocalTasks";
 import { useLocalGoals } from "./useLocalGoals";
 import { useLocalNotes } from "./useLocalNotes";
+import { isAgentKilled, logAgentAction, describeSideEffect } from "@/lib/agentControl";
 
 // A side-effect emitted by the /api/chat agent loop when it runs a write tool.
 export interface AgentSideEffect {
@@ -36,6 +37,14 @@ export function useAgentActions() {
   return useCallback(
     async (sideEffects: AgentSideEffect[] | undefined): Promise<UndoableAction[]> => {
       if (!sideEffects?.length) return [];
+      // Kill switch (spec §6/§11): when engaged, the agent applies NOTHING —
+      // every requested action is logged as blocked and skipped.
+      if (isAgentKilled()) {
+        for (const fx of sideEffects) {
+          logAgentAction({ type: fx.type, label: describeSideEffect(fx.type, fx.data), outcome: "blocked" });
+        }
+        return [];
+      }
       const undoables: UndoableAction[] = [];
       for (const fx of sideEffects) {
         const d = fx.data ?? {};
@@ -92,6 +101,8 @@ export function useAgentActions() {
           default:
             break;
         }
+        // Append-only audit trail of everything the agent applied.
+        logAgentAction({ type: fx.type, label: describeSideEffect(fx.type, d), outcome: "applied" });
       }
       return undoables;
     },
