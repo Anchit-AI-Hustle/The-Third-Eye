@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (!(await auth())) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const id = new URL(req.url).searchParams.get("id");
-  if (!id) return Response.json({ error: "id required" }, { status: 400 });
+  if (!id || !/^[a-zA-Z0-9]+$/.test(id)) return Response.json({ error: "valid id required" }, { status: 400 });
   try {
     const p = await getPrediction(id);
     return Response.json({
