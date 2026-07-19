@@ -10,6 +10,7 @@ import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentActions } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
+import { useMode } from "@/hooks/useMode";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -46,6 +47,7 @@ export function VoiceOverlay() {
   const applyActions = useAgentActions();
   const { docs } = useLocalKnowledge();
   const { active: agent } = useAgentProfile();
+  const { modeId } = useMode();
   const tts = useTTS(agent.voicePreference);
 
   const stt = useVoiceSTT({
@@ -148,6 +150,7 @@ export function VoiceOverlay() {
             userEmail: session?.user?.email,
             agentName: agent.name,
             agentPersonality: agent.personality,
+            mode: modeId,
             tasks: allTasks,
             docs: readyDocs,
             attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),

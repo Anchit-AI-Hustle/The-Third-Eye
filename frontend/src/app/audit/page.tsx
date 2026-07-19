@@ -169,18 +169,6 @@ const AUDITS: Audit[] = [
     ],
   },
   {
-    page: "Kolab",
-    href: "/kolab",
-    current: 8.5,
-    target: 9.5,
-    dims: { accuracy: 9, implementation: 8, execution: 9, results: 8 },
-    verdict: "Embedded cleanly, re-themed to The Third Eye, XSS sinks hardened, privileged data in env, config route gated, and it now signs in with your Third Eye Google session automatically.",
-    issues: [
-      { severity: "high", text: "Sessions didn't survive a reload, and the local sign-in was separate from the app's Google login.", fix: "Restore the session from the same-origin Third Eye NextAuth session on every load (no separate Kolab sign-in, no PII written to localStorage).", status: "fixed" },
-      { severity: "critical", text: "/api/kolab/config exposed real personal numbers to anonymous callers.", fix: "Auth-gate the route (401 without a session).", status: "fixed" },
-    ],
-  },
-  {
     page: "Navigation & Shell",
     href: "/dashboard",
     current: 9.0,

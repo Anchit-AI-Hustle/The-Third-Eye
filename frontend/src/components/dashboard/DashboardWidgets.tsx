@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   MessageSquare, CheckSquare, Radio, FileText, Target, BookOpen,
-  BarChart2, Sparkles, Store, ShieldCheck, ArrowRight,
+  BarChart2, Sparkles, ShieldCheck, ArrowRight,
 } from "lucide-react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
@@ -45,7 +45,6 @@ export function DashboardWidgets() {
     { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: `${docs.length}`, sub: "documents", color: "#A78BFA" },
     { href: "/finance", icon: BarChart2, label: "Finance", stat: `₹${inr.format(Math.round(stats.spend))}`, sub: "this month", color: "#4F8EF7" },
     { href: "/capabilities", icon: Sparkles, label: "Capabilities", stat: "Explore", sub: "what it can do", color: "#4FC3F7" },
-    { href: "/kolab", icon: Store, label: "Kolab", stat: "Creators", sub: "influencer OS", color: "#4FC3F7" },
     { href: "/audit", icon: ShieldCheck, label: "App Audit", stat: "Health", sub: "honest ratings", color: "#34D399" },
   ];
 

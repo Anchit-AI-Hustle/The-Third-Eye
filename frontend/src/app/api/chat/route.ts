@@ -959,7 +959,20 @@ interface ChatRequest {
   location?: { latitude: number; longitude: number; label?: string };
   agentName?: string;
   agentPersona?: string;
+  mode?: string;
 }
+
+// Mode-aware runtime (ported from the Mirror app): the operator's active mode
+// re-frames how the assistant prioritises and responds. Kept in sync with
+// hooks/useMode.ts. Unknown/absent modes fall back to no extra framing.
+const MODE_CONTEXT: Record<string, string> = {
+  personal:
+    "The operator is in PERSONAL mode. Optimise for their life outside work: health, habits, relationships, learning, finances, travel, errands, and creative ideas. Keep the tone warm and human. Prefer personal goals, reminders, and notes. Do not assume a work context unless they raise one.",
+  professional:
+    "The operator is in PROFESSIONAL mode — an individual contributor focused on execution. Optimise for deep work: drafting, analysis, writing, planning, email, calendar, and shipping tangible output fast. Be crisp and results-oriented. Bias toward creating tasks with clear owners and due dates, and toward concrete deliverables over discussion.",
+  enterprise:
+    "The operator is in ENTERPRISE mode — thinking at org and strategy scale. Optimise for cross-functional coordination, roadmaps, stakeholder management, risk, metrics, and lifecycle operations. When a decision is non-trivial, reason across angles (financial, technical, competitive, people) and prefer multi_agent_run for hard strategic calls. Track goals and knowledge that outlive a single task.",
+};
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -974,7 +987,7 @@ export async function POST(req: NextRequest) {
   const {
     message, history = [], memory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], location,
-    agentName, agentPersona,
+    agentName, agentPersona, mode,
   } = body;
 
   if (!message?.trim()) {
@@ -1029,6 +1042,9 @@ export async function POST(req: NextRequest) {
   if (agentPersona) {
     systemInstruction += `\n\n## Active persona (overrides the Character section above)\nYou are currently operating as ${agentName || "the selected assistant"}. Embody this personality in voice, tone and how you address the user:\n${agentPersona}`;
   }
+  // Mode-aware framing (Mirror-style runtime) — biases priorities/tone per mode.
+  const modeContext = mode ? MODE_CONTEXT[mode] : undefined;
+  if (modeContext) systemInstruction += `\n\n## Operating mode\n${modeContext}`;
   if (userName) systemInstruction += `\n\nUser's name: ${userName}.`;
   if (email) systemInstruction += ` Email: ${email}.`;
 

@@ -6,11 +6,12 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, Store, ShieldCheck, Radio,
+  FileText, Target, Sparkles, ShieldCheck, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
+import { useMode } from "@/hooks/useMode";
 
 const NAV_ITEMS = [
   { label: "App Audit", href: "/audit", icon: ShieldCheck },
@@ -23,7 +24,6 @@ const NAV_ITEMS = [
   { label: "Knowledge",  href: "/knowledge",  icon: BookOpen },
   { label: "Finance",    href: "/finance",    icon: BarChart2 },
   { label: "Capabilities", href: "/capabilities", icon: Sparkles },
-  { label: "Kolab",      href: "/kolab",      icon: Store },
 ];
 
 export function Sidebar() {
@@ -31,6 +31,7 @@ export function Sidebar() {
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const { active: agent } = useAgentProfile();
+  const { mode, modes, setMode } = useMode();
 
   return (
     <aside
@@ -71,6 +72,41 @@ export function Sidebar() {
           className="mx-auto mt-3 p-1.5 text-text-muted hover:text-text-primary hover:bg-background-elevated rounded transition-colors"
           title="Expand">
           <PanelLeftOpen size={14} />
+        </button>
+      )}
+
+      {/* Mode switcher — the Mirror-style mode-aware runtime. The active mode
+          re-frames the assistant (see /api/chat) and any mode-aware surface. */}
+      {!collapsed ? (
+        <div className="px-3 pt-3">
+          <div className="hud-label text-text-muted mb-1.5 px-1">Mode</div>
+          <div className="flex gap-1 p-0.5 rounded-input bg-background-elevated border border-border-default">
+            {modes.map((m) => {
+              const on = m.id === mode.id;
+              return (
+                <button key={m.id} onClick={() => setMode(m.id)} title={m.tagline}
+                  className={cn(
+                    "flex-1 text-[10px] font-mono tracking-wide py-1.5 rounded-[6px] transition-all",
+                    on ? "text-background-base font-semibold" : "text-text-muted hover:text-text-secondary"
+                  )}
+                  style={on ? { background: m.accentColor } : undefined}>
+                  {m.label.slice(0, 4)}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-text-muted mt-1 px-1 truncate">{mode.tagline}</div>
+        </div>
+      ) : (
+        <button
+          onClick={() => {
+            const idx = modes.findIndex((m) => m.id === mode.id);
+            setMode(modes[(idx + 1) % modes.length].id);
+          }}
+          title={`Mode: ${mode.label} — click to cycle`}
+          className="mx-auto mt-3 w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-mono font-semibold text-background-base"
+          style={{ background: mode.accentColor }}>
+          {mode.label.slice(0, 1)}
         </button>
       )}
 

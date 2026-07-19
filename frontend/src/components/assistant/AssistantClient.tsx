@@ -14,6 +14,7 @@ import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
+import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { useWakeWord } from "@/hooks/useWakeWord";
 
@@ -126,6 +127,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { active: agent } = useAgentProfile();
+  const { modeId } = useMode();
 
   const offerUndo = useCallback((actions: UndoableAction[]) => {
     if (!actions.length) return;
@@ -352,6 +354,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : undefined,
           agentName: agent?.name,
           agentPersona: agent?.personality,
+          mode: modeId,
         }),
         signal: abortRef.current.signal,
       });
