@@ -13,6 +13,7 @@ export const config = {
     "/tasks/:path*",
     "/job-agent/:path*",
     "/kolab/:path*",
+    "/plans/:path*",
     "/assistant/:path*",
     "/capture/:path*",
     "/activity/:path*",
