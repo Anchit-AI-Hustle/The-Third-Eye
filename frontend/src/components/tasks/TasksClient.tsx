@@ -7,6 +7,9 @@ import {
   LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMode } from "@/hooks/useMode";
+import { useModeTags, filterByMode } from "@/hooks/useModeTags";
+import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,9 @@ function emptyForm(): Omit<LocalTask, "id" | "created_at"> {
 export function TasksClient() {
   const { allTasks, team, ready, create, update, remove, addMember, removeMember } =
     useLocalTasks();
+  const { modeId } = useMode();
+  const { tags, tagItem } = useModeTags();
+  const [showAllModes, setShowAllModes] = useState(false);
 
   const [view, setView] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");
@@ -80,7 +86,7 @@ export function TasksClient() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Filtering ─────────────────────────────────────────────────────────────
-  const filtered = allTasks
+  const filtered = filterByMode(allTasks, tags, modeId, showAllModes)
     .filter((t) => {
       if (search && !t.title.toLowerCase().includes(search.toLowerCase()) &&
           !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false;
@@ -127,7 +133,7 @@ export function TasksClient() {
           priority: (priority as TaskPriority) || "medium",
           start_date: start_date || undefined, due_date: due_date || undefined,
           completed_at: completed_at || undefined,
-        });
+        }).then((t) => { if (t?.id) tagItem(t.id, modeId); });
       });
     };
     reader.readAsText(file);
@@ -196,6 +202,8 @@ export function TasksClient() {
         <FilterSelect value={filterPriority} onChange={setFilterPriority}
           options={[{ value: "", label: "All priorities" }, ...PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label }))]} />
 
+        <ModeScopeToggle showAll={showAllModes} onChange={setShowAllModes} />
+
         <div className="flex rounded-card border border-border-default overflow-hidden">
           <button onClick={() => setView("table")} className={cn("px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
             view === "table" ? "bg-accent-blue text-white" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
@@ -210,7 +218,7 @@ export function TasksClient() {
 
       {/* ── View ───────────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <EmptyState hasFilters={!!(search || filterAssignee || filterStatus || filterPriority)} onNew={openNew} />
+        <EmptyState hasFilters={!!(search || filterAssignee || filterStatus || filterPriority || !showAllModes)} onNew={openNew} />
       ) : view === "table" ? (
         <TableView tasks={filtered} sortKey={sortKey} sortAsc={sortAsc}
           onSort={handleSort} onEdit={openEdit} onDelete={remove} />
@@ -223,9 +231,12 @@ export function TasksClient() {
         <ActionModal
           task={editTask}
           team={team}
-          onSave={(data) => {
+          onSave={async (data) => {
             if (editTask) update(editTask.id, data);
-            else create(data);
+            else {
+              const t = await create(data);
+              if (t?.id) tagItem(t.id, modeId); // tag new tasks with the active mode
+            }
             setShowModal(false);
           }}
           onClose={() => setShowModal(false)}

@@ -18,7 +18,6 @@ export const config = {
     "/notes/:path*",
     "/goals/:path*",
     "/capabilities/:path*",
-    "/kolab/:path*",
     "/audit/:path*",
   ],
 };
