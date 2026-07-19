@@ -158,36 +158,47 @@ export async function scrapeChatForUser(sb: Sb, email: string) {
       continue; // a single locked space shouldn't stop the rest
     }
     const msgs = (res.messages ?? []).slice().sort((a, b) => (a.createTime ?? "").localeCompare(b.createTime ?? ""));
+    // Messages are ascending. Advance the watermark ONLY after a message is fully
+    // processed — never before extraction — so a mid-space failure can't skip
+    // unprocessed messages. On error we stop this space and retry it next run.
     for (const m of msgs) {
       const id = (m.name ?? "").split("/").pop() ?? "";
       const text = (m.text ?? "").trim();
-      if (m.createTime) await setWatermark(sb, email, space, m.createTime);
-      if (!id || !text) continue;
-      if (await alreadyProcessed(sb, email, "chat", id)) continue;
 
-      const ex = await extractMeetingTasks({
-        startedAt: m.createTime ?? new Date().toISOString(),
-        transcript: text,
-        defaultOwner: m.sender?.displayName ?? null,
-      });
-      if (ex.tasks.length) {
-        const bare = space.replace(/^spaces\//, "");
-        const r = await saveExtractedTasks(
-          {
-            userId: email,
-            sourceType: "Chat",
-            sourceRefId: `chat:${id}`,
-            sourceDetail: `Google Chat${m.sender?.displayName ? ` with ${m.sender.displayName}` : ""}`,
-            sourceLink: `https://mail.google.com/chat/u/0/#chat/space/${bare}`,
-            dateGiven: m.createTime ?? null,
-          },
-          ex.tasks,
-        );
-        inserted += r.inserted;
-        merged += r.merged;
+      // Empty/non-actionable or already-seen messages are safe to skip past.
+      if (!id || !text || (await alreadyProcessed(sb, email, "chat", id))) {
+        if (m.createTime) await setWatermark(sb, email, space, m.createTime);
+        continue;
       }
-      await markProcessed(sb, email, "chat", id);
-      processed++;
+
+      try {
+        const ex = await extractMeetingTasks({
+          startedAt: m.createTime ?? new Date().toISOString(),
+          transcript: text,
+          defaultOwner: m.sender?.displayName ?? null,
+        });
+        if (ex.tasks.length) {
+          const bare = space.replace(/^spaces\//, "");
+          const r = await saveExtractedTasks(
+            {
+              userId: email,
+              sourceType: "Chat",
+              sourceRefId: `chat:${id}`,
+              sourceDetail: `Google Chat${m.sender?.displayName ? ` with ${m.sender.displayName}` : ""}`,
+              sourceLink: `https://mail.google.com/chat/u/0/#chat/space/${bare}`,
+              dateGiven: m.createTime ?? null,
+            },
+            ex.tasks,
+          );
+          inserted += r.inserted;
+          merged += r.merged;
+        }
+        await markProcessed(sb, email, "chat", id);
+        processed++;
+        if (m.createTime) await setWatermark(sb, email, space, m.createTime); // only after success
+      } catch {
+        break; // leave watermark at last success; this space resumes next run
+      }
     }
   }
 
