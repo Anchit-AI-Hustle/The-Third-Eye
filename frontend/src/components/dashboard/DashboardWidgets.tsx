@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MessageSquare, CheckSquare, Radio, FileText, Target, BookOpen,
-  BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings, Wand2,
+  BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings, Wand2, Briefcase,
 } from "lucide-react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
@@ -60,6 +60,7 @@ export function DashboardWidgets() {
     { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: `${docs.length}`, sub: "documents", color: "#A78BFA" },
     { href: "/finance", icon: BarChart2, label: "Finance", stat: `₹${inr.format(Math.round(stats.spend))}`, sub: "this month", color: "#4F8EF7" },
     { href: "/tools", icon: Wand2, label: "Studio", stat: "Create", sub: "pages · mailers · more", color: "#A78BFA" },
+    { href: "/job-agent", icon: Briefcase, label: "Job Agent", stat: "Apply", sub: "search · tailor · track", color: "#4FC3F7" },
     { href: "/capabilities", icon: Sparkles, label: "Capabilities", stat: "Explore", sub: "what it can do", color: "#4FC3F7" },
     { href: "/activity", icon: Activity, label: "Agent Activity", stat: agent.killed ? "Halted" : `${agent.count}`, sub: agent.killed ? "kill switch on" : "actions logged", color: agent.killed ? "#EF4444" : "#34D399" },
     { href: "/audit", icon: ShieldCheck, label: "App Audit", stat: "Health", sub: "honest ratings", color: "#34D399" },
