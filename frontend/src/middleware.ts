@@ -10,6 +10,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/tasks/:path*",
+    "/job-agent/:path*",
     "/assistant/:path*",
     "/capture/:path*",
     "/activity/:path*",

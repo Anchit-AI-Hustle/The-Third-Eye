@@ -34,6 +34,22 @@ const ENTITIES: Record<string, EntityCfg> = {
   knowledge_docs: { table: "knowledge_docs", order: [{ col: "created_at", asc: false }] },
   expenses: { table: "expenses", order: [{ col: "spent_on", asc: false }, { col: "created_at", asc: false }] },
   music_tracks: { table: "music_tracks", order: [{ col: "created_at", asc: false }] },
+  // ── Job Agent (all user-owned; RLS-backed) ──
+  job_agent_profiles: { table: "job_agent_profiles", order: [{ col: "updated_at", asc: false }] },
+  career_preferences: { table: "career_preferences", order: [{ col: "updated_at", asc: false }] },
+  candidate_documents: { table: "candidate_documents", order: [{ col: "created_at", asc: false }] },
+  candidate_facts: { table: "candidate_facts", order: [{ col: "created_at", asc: false }] },
+  saved_jobs: { table: "saved_jobs", order: [{ col: "created_at", asc: false }] },
+  job_matches: { table: "job_matches", order: [{ col: "created_at", asc: false }] },
+  resume_documents: { table: "resume_documents", order: [{ col: "updated_at", asc: false }] },
+  cover_letters: { table: "cover_letters", order: [{ col: "updated_at", asc: false }] },
+  answer_library: { table: "answer_library", order: [{ col: "updated_at", asc: false }] },
+  applications: { table: "applications", order: [{ col: "updated_at", asc: false }] },
+  application_answers: { table: "application_answers", order: [{ col: "created_at", asc: false }] },
+  application_events: { table: "application_events", order: [{ col: "created_at", asc: false }] },
+  agent_runs: { table: "agent_runs", order: [{ col: "created_at", asc: false }] },
+  job_agent_settings: { table: "job_agent_settings", order: [{ col: "updated_at", asc: false }] },
+  job_agent_audit: { table: "job_agent_audit", order: [{ col: "created_at", asc: false }] },
 };
 
 type Ctx =
