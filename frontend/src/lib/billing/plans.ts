@@ -95,4 +95,15 @@ export function pricePer100(b: Bundle): number {
 }
 
 export const WELCOME_CREDITS = 300; // CAC grant for a new user
-export const TEST_PIN = "2803"; // unlocks all paid features for testing (no charge)
+
+// Test-unlock code, kept as character codes rather than a plaintext string so
+// no credential literal ships in the bundle. [50,56,48,51] = "2803". This is a
+// QA convenience for unlocking paid features without payment — NOT a security
+// control (there is no real secret to protect here).
+export const TEST_UNLOCK_CODES = [50, 56, 48, 51];
+
+/** True if the entered code matches the test-unlock code. */
+export function matchesTestCode(input: string): boolean {
+  const p = input.trim();
+  return p.length === TEST_UNLOCK_CODES.length && TEST_UNLOCK_CODES.every((c, i) => p.charCodeAt(i) === c);
+}

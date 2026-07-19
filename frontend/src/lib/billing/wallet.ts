@@ -1,7 +1,7 @@
 "use client";
 
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
-import { BUNDLES, TIERS, WELCOME_CREDITS, TEST_PIN, costOf, type BillingPeriod, type Tier } from "./plans";
+import { BUNDLES, TIERS, WELCOME_CREDITS, matchesTestCode, costOf, type BillingPeriod, type Tier } from "./plans";
 
 // Test-mode wallet + subscription state, kept in the device vault. No real money
 // moves here — purchases/recharges are simulated and PIN 2803 unlocks paid
@@ -37,7 +37,7 @@ export function getBalance(): number { return getWallet().balance; }
 
 export function isTestUnlocked(): boolean { return vaultGet<boolean>(APP, "testUnlock", false); }
 export function unlockTest(pin: string): boolean {
-  if (pin.trim() === TEST_PIN) { vaultSet(APP, "testUnlock", true); return true; }
+  if (matchesTestCode(pin)) { vaultSet(APP, "testUnlock", true); return true; }
   return false;
 }
 export function clearTestUnlock() { vaultSet(APP, "testUnlock", false); }
