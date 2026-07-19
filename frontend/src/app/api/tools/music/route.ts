@@ -22,6 +22,13 @@ const INSTRUMENTAL_MODEL = "stability-ai/stable-audio";
 const INSTRUMENTAL_FALLBACK_VERSION = "812b1cc162cb5f69ec9873d611ee67e3fd04be85160d5ed703bc984d72d24403";
 const VOCAL_MODEL = process.env.MUSIC_SONG_MODEL || "lucataco/ace-step";
 
+// Text-to-music models render at most seconds→minutes per call. Longer sessions
+// (up to 5h) are produced by seamlessly looping a base clip in the player, so we
+// cap the actual generated clip to each model's practical maximum.
+const INSTRUMENTAL_CLIP_MAX = 120; // stable-audio
+const VOCAL_CLIP_MAX = 240;        // ace-step
+const MAX_SESSION_SECONDS = 18000; // 5 hours
+
 interface MusicInput {
   title?: string; description?: string; genre?: string; subgenre?: string; mood?: string;
   tempo?: number; duration?: number; vocals?: boolean; vocalStyle?: string; vocalLanguage?: string;
@@ -113,7 +120,7 @@ export async function POST(req: NextRequest) {
   const description = (i.description ?? "").trim();
   if (!description) return Response.json({ error: "A description is required" }, { status: 400 });
   const vocals = i.vocals !== false && i.lyricsMode !== "none";
-  const duration = Math.min(Math.max(Number(i.duration) || 30, 10), 120);
+  const sessionSeconds = Math.min(Math.max(Number(i.duration) || 30, 10), MAX_SESSION_SECONDS);
   const tags = buildTags(i);
   const prompt = `${description}. ${tags}`.slice(0, 500);
 
@@ -130,33 +137,37 @@ export async function POST(req: NextRequest) {
     return Response.json({ configured: false, prompt, tags, lyrics, note: "Music generation needs REPLICATE_API_TOKEN. Here are the style prompt + lyrics to paste into a music tool." });
   }
 
+  // Only sing if we actually have lyrics — otherwise the vocal model would try to
+  // "sing" the raw description. No lyrics → instrumental.
+  const sing = vocals && lyrics.trim().length > 0;
+
+  // The clip we actually render; the player loops it to fill the session.
+  const clipSeconds = Math.min(sessionSeconds, sing ? VOCAL_CLIP_MAX : INSTRUMENTAL_CLIP_MAX);
+  const loopMeta = { sessionSeconds, clipSeconds, loop: sessionSeconds > clipSeconds };
+
   // Route to a model that generates from text alone (no reference required).
   async function submitVocal() {
-    return createPrediction(VOCAL_MODEL, { tags, lyrics, duration });
+    return createPrediction(VOCAL_MODEL, { tags, lyrics, duration: Math.min(sessionSeconds, VOCAL_CLIP_MAX) });
   }
   async function submitInstrumental() {
     // If we're here because vocals were requested but produced no lyrics, drop the
     // "vocals" wording from the style so the instrumental prompt stays coherent.
     const instrPrompt = sing ? prompt : `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
-    return createPrediction(INSTRUMENTAL_MODEL, { prompt: instrPrompt, seconds_total: duration }, INSTRUMENTAL_FALLBACK_VERSION);
+    return createPrediction(INSTRUMENTAL_MODEL, { prompt: instrPrompt, seconds_total: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX) }, INSTRUMENTAL_FALLBACK_VERSION);
   }
-
-  // Only sing if we actually have lyrics — otherwise the vocal model would try to
-  // "sing" the raw description. No lyrics → instrumental.
-  const sing = vocals && lyrics.trim().length > 0;
 
   try {
     if (sing) {
       try {
         const p = await submitVocal();
-        return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics });
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics, ...loopMeta });
       } catch {
         const p = await submitInstrumental();
-        return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, fellBackToInstrumental: true });
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, fellBackToInstrumental: true, ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX) });
       }
     }
     const p = await submitInstrumental();
-    return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics });
+    return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, ...loopMeta });
   } catch (e) {
     return Response.json({ error: `Music job failed: ${e instanceof Error ? e.message : "unknown"}`, prompt, tags, lyrics }, { status: 502 });
   }

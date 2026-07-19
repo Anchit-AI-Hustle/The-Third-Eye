@@ -24,7 +24,7 @@ export const MODES: ModeDef[] = [
   {
     id: "personal",
     label: "Personal",
-    tagline: "Life, health, ideas & downtime",
+    tagline: "Life, health, money & downtime",
     accentColor: "#34D399",
     systemContext:
       "The operator is in PERSONAL mode. Optimise for their life outside work: " +
@@ -34,8 +34,8 @@ export const MODES: ModeDef[] = [
   },
   {
     id: "professional",
-    label: "Professional",
-    tagline: "Deep work, execution & output",
+    label: "Work",
+    tagline: "Focused solo execution & output",
     accentColor: "#4FC3F7",
     systemContext:
       "The operator is in PROFESSIONAL mode — an individual contributor focused " +
@@ -46,8 +46,8 @@ export const MODES: ModeDef[] = [
   },
   {
     id: "enterprise",
-    label: "Enterprise",
-    tagline: "Strategy, teams & lifecycle",
+    label: "Team",
+    tagline: "Run the whole business — strategy, metrics & people",
     accentColor: "#A78BFA",
     systemContext:
       "The operator is in ENTERPRISE mode — thinking at org and strategy scale. " +
