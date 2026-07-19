@@ -6,6 +6,7 @@ import {
 import { useSession } from "next-auth/react";
 import { dataInsert, dataDelete } from "@/lib/dataClient";
 import { getConsent } from "@/lib/consent";
+import { matchSystemsCommand } from "@/lib/systems";
 
 export type ConvType = "meeting" | "brainstorm" | "work" | "personal" | "learning" | "other";
 
@@ -215,7 +216,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           if (r.isFinal) finalTxt += r[0].transcript + " ";
           else interimTxt += r[0].transcript;
         }
-        if (finalTxt) setTranscript((prev) => (prev + finalTxt).slice(-20000));
+        if (finalTxt) {
+          // Ambient voice command: "all systems online" / "<system> status".
+          const cmd = matchSystemsCommand(finalTxt);
+          if (cmd && typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("te:systems-online", { detail: cmd }));
+          }
+          setTranscript((prev) => (prev + finalTxt).slice(-20000));
+        }
         setInterim(interimTxt);
       };
       rec.onerror = (e: any) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") stop(); };

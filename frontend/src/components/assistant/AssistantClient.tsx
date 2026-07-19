@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { matchSystemsCommand } from "@/lib/systems";
+import { triggerSystemsOnline } from "@/components/systems/SystemsOnline";
 import { usePush } from "@/hooks/usePush";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
@@ -312,6 +314,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || isStreamingRef.current) return;
+
+    // "All systems online" / "<system> status" → run the spoken status sequence
+    // instead of a normal chat turn.
+    const sysCmd = matchSystemsCommand(msg);
+    if (sysCmd) { triggerSystemsOnline(sysCmd); setInput(""); return; }
 
     // Activity → reset the proactive idle timer and re-arm nudges.
     lastActivityRef.current = Date.now();
