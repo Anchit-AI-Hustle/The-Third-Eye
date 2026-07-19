@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles } from "lucide-react";
+import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus } from "lucide-react";
+import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
+import { generateVisualizerVideo } from "@/lib/musicVideo";
+
+interface SavedTrack {
+  id: string; title?: string; description?: string; prompt?: string; lyrics?: string;
+  audio_url?: string; created_at?: string; params?: Record<string, unknown>;
+}
+const proxied = (url: string) => `/api/tools/music/proxy?url=${encodeURIComponent(url)}`;
 
 const GENRES = ["Lo-fi", "Pop", "Cinematic", "Acoustic", "EDM", "Hip-hop", "Ambient", "Rock", "Classical", "Indie", "R&B", "Jazz", "Hardtechno", "Folk", "Afrobeats", "Synthwave"];
 const MOODS = ["Uplifting", "Chill", "Energetic", "Melancholic", "Dreamy", "Epic", "Romantic", "Playful", "Dark", "Nostalgic"];
@@ -50,6 +58,66 @@ export function MusicStudio() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopPoll = useCallback(() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } }, []);
   useEffect(() => () => stopPoll(), [stopPoll]);
+
+  // Tabs + library + video
+  const [tab, setTab] = useState<"create" | "library">("create");
+  const [tracks, setTracks] = useState<SavedTrack[]>([]);
+  const [libLoading, setLibLoading] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoPct, setVideoPct] = useState(0);
+  const [savedNote, setSavedNote] = useState(false);
+  const fFor = useRef(f); fFor.current = f;
+  const pRef = useRef(""); const lRef = useRef("");
+
+  // Library is localStorage-backed with cloud best-effort, so it works even
+  // before the music_tracks table exists, and upgrades to cloud once it does.
+  const LS_KEY = "te_music_tracks_v1";
+  const lsRead = (): SavedTrack[] => { try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]"); } catch { return []; } };
+  const lsWrite = (v: SavedTrack[]) => { try { localStorage.setItem(LS_KEY, JSON.stringify(v.slice(0, 200))); } catch { /* noop */ } };
+
+  const loadLibrary = useCallback(async () => {
+    setLibLoading(true);
+    try {
+      const local = lsRead();
+      const r = await dataList<SavedTrack>("music_tracks").catch(() => ({ remote: false, rows: [] as SavedTrack[] }));
+      const byId = new Map<string, SavedTrack>();
+      [...(r.rows ?? []), ...local].forEach((t) => { if (t?.id && !byId.has(t.id)) byId.set(t.id, t); });
+      const merged = [...byId.values()].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+      setTracks(merged);
+    } finally { setLibLoading(false); }
+  }, []);
+  useEffect(() => { if (tab === "library") loadLibrary(); }, [tab, loadLibrary]);
+
+  async function saveTrack(audio: string, promptStr: string, lyricsStr: string) {
+    const cur = fFor.current;
+    const row: SavedTrack = {
+      id: crypto.randomUUID(),
+      title: cur.title || cur.description.slice(0, 60), description: cur.description,
+      prompt: promptStr, lyrics: lyricsStr, audio_url: audio, created_at: new Date().toISOString(),
+      params: { genre: cur.genre, mood: cur.mood, tempo: cur.tempo, vocals: cur.vocals, duration: cur.duration },
+    };
+    lsWrite([row, ...lsRead()]);                 // always persist locally
+    dataInsert("music_tracks", row).catch(() => {}); // cloud best-effort
+    setSavedNote(true); setTimeout(() => setSavedNote(false), 2500);
+  }
+
+  async function deleteTrack(id: string) {
+    lsWrite(lsRead().filter((x) => x.id !== id));
+    await dataDelete("music_tracks", id).catch(() => {});
+    setTracks((p) => p.filter((x) => x.id !== id));
+  }
+
+  async function makeVideo(audio: string, title: string, target: "create" | string) {
+    setVideoBusy(true); setVideoPct(0); setError(null);
+    try {
+      const blob = await generateVisualizerVideo(proxied(audio), { title, onProgress: setVideoPct });
+      const url = URL.createObjectURL(blob);
+      if (target === "create") setVideoUrl(url);
+      else { const a = document.createElement("a"); a.href = url; a.download = `${title || "track"}.webm`; a.click(); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Video generation failed."); }
+    finally { setVideoBusy(false); }
+  }
 
   // ── AI auto-fill: infer the whole form from the description ──
   async function autoFill() {
@@ -109,14 +177,14 @@ export function MusicStudio() {
 
   async function generate() {
     stopPoll();
-    setPhase("generating"); setError(null); setNote(null); setAudioUrl(null); setStatus("Writing the track…");
+    setPhase("generating"); setError(null); setNote(null); setAudioUrl(null); setVideoUrl(null); setStatus("Writing the track…");
     try {
       const res = await fetch("/api/tools/music", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f),
       });
       const d = await res.json();
       if (!res.ok) { setPhase("error"); setError(d.error ?? `HTTP ${res.status}`); setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); return; }
-      setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? "");
+      setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); pRef.current = d.prompt ?? ""; lRef.current = d.lyrics ?? "";
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       if (d.fellBackToInstrumental) setNote("The vocal model wasn't available, so this is an instrumental version (lyrics shown below).");
       setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
@@ -130,7 +198,7 @@ export function MusicStudio() {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();
         if (d.status) setStatus(`Composing audio… (${d.status})`);
-        if (d.status === "succeeded" && d.audioUrl) { stopPoll(); setAudioUrl(d.audioUrl); setPhase("ready"); setStatus(""); }
+        if (d.status === "succeeded" && d.audioUrl) { stopPoll(); setAudioUrl(d.audioUrl); setPhase("ready"); setStatus(""); void saveTrack(d.audioUrl, pRef.current, lRef.current); }
         else if (d.status === "failed" || d.status === "canceled" || d.error) { stopPoll(); setPhase("error"); setError(d.error || "Generation failed."); }
       } catch { /* keep polling */ }
     }, 3000);
@@ -154,7 +222,54 @@ export function MusicStudio() {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-5">
+    <div className="space-y-4">
+      <div className="flex items-center gap-1">
+        {(["create", "library"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-input text-sm font-medium transition-colors ${tab === t ? "bg-[#34D399]/15 text-[#34D399]" : "text-text-muted hover:text-text-secondary"}`}>
+            {t === "create" ? <Plus size={14} /> : <Library size={14} />} {t === "create" ? "Create" : "Library"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "library" ? (
+        <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="hud-label text-[#34D399]">Your tracks ({tracks.length})</span>
+            <button onClick={loadLibrary} className="text-text-muted hover:text-text-primary" title="Refresh"><RefreshCw size={13} /></button>
+          </div>
+          {libLoading ? (
+            <div className="py-10 flex justify-center"><Loader2 size={18} className="animate-spin text-text-muted" /></div>
+          ) : tracks.length === 0 ? (
+            <p className="text-sm text-text-muted py-8 text-center">No tracks yet. Create one and it'll appear here.</p>
+          ) : (
+            <div className="space-y-3">
+              {tracks.map((t) => (
+                <div key={t.id} className="rounded-input border border-border-default bg-background-base p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Music size={13} className="text-[#34D399] flex-none" />
+                    <span className="text-sm text-text-primary flex-1 min-w-0 truncate">{t.title || "Untitled"}</span>
+                    <span className="text-[10px] text-text-muted font-mono flex-none">{t.created_at ? new Date(t.created_at).toLocaleDateString() : ""}</span>
+                    <button onClick={() => deleteTrack(t.id)}
+                      className="text-text-muted hover:text-accent-red flex-none" title="Delete"><Trash2 size={13} /></button>
+                  </div>
+                  {t.audio_url && <audio controls src={t.audio_url} className="w-full h-9" />}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {t.audio_url && <a href={t.audio_url} download className="inline-flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary"><Download size={11} /> Audio</a>}
+                    {t.audio_url && (
+                      <button onClick={() => makeVideo(t.audio_url!, t.title || "track", t.id)} disabled={videoBusy}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-input border border-[#34D399]/40 text-[11px] text-[#34D399] hover:bg-[#34D399]/10 disabled:opacity-40">
+                        {videoBusy ? <Loader2 size={11} className="animate-spin" /> : <Film size={11} />} Video
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-5">
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-3.5 self-start">
         <div>
           <label className={lbl}>Describe the track <span className="text-accent-red">*</span> <AiBar name="description" /></label>
@@ -234,9 +349,21 @@ export function MusicStudio() {
         {busy && (<div className="h-full flex flex-col items-center justify-center text-center text-text-secondary py-16"><Loader2 size={24} className="animate-spin text-[#34D399] mb-3" /><p className="text-sm">{status}</p></div>)}
         {audioUrl && phase === "ready" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span></div>
+            <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}</div>
             <audio controls src={audioUrl} className="w-full" />
-            <a href={audioUrl} download className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download</a>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href={audioUrl} download className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Audio</a>
+              <button onClick={() => makeVideo(audioUrl, f.title || f.description, "create")} disabled={videoBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-[#34D399]/40 text-xs text-[#34D399] hover:bg-[#34D399]/10 disabled:opacity-40">
+                {videoBusy ? <><Loader2 size={12} className="animate-spin" /> Rendering {Math.round(videoPct * 100)}%</> : <><Film size={12} /> Generate video</>}
+              </button>
+            </div>
+            {videoUrl && (
+              <div className="space-y-2">
+                <video controls src={videoUrl} className="w-full rounded-input bg-black" />
+                <a href={videoUrl} download={`${f.title || "track"}.webm`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download video</a>
+              </div>
+            )}
           </div>
         )}
         {(prompt || lyrics) && (
@@ -256,6 +383,8 @@ export function MusicStudio() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }
