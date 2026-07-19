@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MessageSquare, CheckSquare, Radio, FileText, Target, BookOpen,
-  BarChart2, Sparkles, ShieldCheck, ArrowRight,
+  BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings,
 } from "lucide-react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
+import { getAgentLog, isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
@@ -24,6 +25,20 @@ export function DashboardWidgets() {
   const { docs } = useLocalKnowledge();
   const { expenses } = useLocalExpenses();
   const root = useRef<HTMLDivElement>(null);
+
+  // Agent-safety layer state (kill switch + audit log) is localStorage-backed,
+  // so read it on the client and stay live via the agent-control event.
+  const [agent, setAgent] = useState({ count: 0, killed: false });
+  useEffect(() => {
+    const sync = () => setAgent({ count: getAgentLog().length, killed: isAgentKilled() });
+    sync();
+    window.addEventListener(AGENT_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(AGENT_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   const stats = useMemo(() => {
     const open = allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
@@ -45,7 +60,9 @@ export function DashboardWidgets() {
     { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: `${docs.length}`, sub: "documents", color: "#A78BFA" },
     { href: "/finance", icon: BarChart2, label: "Finance", stat: `₹${inr.format(Math.round(stats.spend))}`, sub: "this month", color: "#4F8EF7" },
     { href: "/capabilities", icon: Sparkles, label: "Capabilities", stat: "Explore", sub: "what it can do", color: "#4FC3F7" },
+    { href: "/activity", icon: Activity, label: "Agent Activity", stat: agent.killed ? "Halted" : `${agent.count}`, sub: agent.killed ? "kill switch on" : "actions logged", color: agent.killed ? "#EF4444" : "#34D399" },
     { href: "/audit", icon: ShieldCheck, label: "App Audit", stat: "Health", sub: "honest ratings", color: "#34D399" },
+    { href: "/settings", icon: Settings, label: "Settings", stat: "Configure", sub: "agent + account", color: "#94A3B8" },
   ];
 
   useEffect(() => {
