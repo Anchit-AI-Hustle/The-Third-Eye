@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutTemplate, Mail, Workflow, Music, ArrowRight, type LucideIcon } from "lucide-react";
+import { LayoutTemplate, Mail, Workflow, Music, PenLine, ArrowRight, type LucideIcon } from "lucide-react";
 import { STUDIO_TOOLS, type ModeId } from "@/lib/studioTools";
 import { useMode, MODES } from "@/hooks/useMode";
 
-const ICONS: Record<string, LucideIcon> = { LayoutTemplate, Mail, Workflow, Music };
+const ICONS: Record<string, LucideIcon> = { LayoutTemplate, Mail, Workflow, Music, PenLine };
 
 export function StudioHub() {
   const { modeId, setMode } = useMode();
