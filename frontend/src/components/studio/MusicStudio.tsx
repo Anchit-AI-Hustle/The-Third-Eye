@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus } from "lucide-react";
 import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
 import { generateVisualizerVideo } from "@/lib/musicVideo";
+import { recordGeneration } from "@/lib/generations";
 
 interface SavedTrack {
   id: string; title?: string; description?: string; prompt?: string; lyrics?: string;
@@ -108,6 +109,19 @@ export function MusicStudio() {
     };
     lsWrite([row, ...lsRead()]);                 // always persist locally
     dataInsert("music_tracks", row).catch(() => {}); // cloud best-effort
+    recordGeneration({
+      app: "music", appLabel: "Music Studio",
+      title: row.title || "Track",
+      kind: "audio",
+      inputs: [
+        { label: "Genre", value: cur.genre }, { label: "Mood", value: cur.mood },
+        { label: "Tempo", value: `${cur.tempo} BPM` }, { label: "Structure", value: cur.structure },
+        { label: "Instruments", value: cur.instruments }, { label: "Artist vibe", value: cur.artistInspiration },
+        { label: "Vocals", value: cur.vocals ? cur.vocalStyle : "instrumental" },
+      ].filter((x) => x.value),
+      inputText: cur.description,
+      output: audio, meta: { prompt: promptStr, lyrics: lyricsStr },
+    });
     setSavedNote(true); setTimeout(() => setSavedNote(false), 2500);
   }
 

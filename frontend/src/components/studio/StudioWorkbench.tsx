@@ -8,6 +8,7 @@ import type { StudioTool } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags } from "@/hooks/useModeTags";
 import { dataInsert } from "@/lib/dataClient";
+import { recordGeneration, fieldsFrom } from "@/lib/generations";
 
 export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const { modeId } = useMode();
@@ -35,6 +36,15 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? `HTTP ${res.status}`); return; }
       setOutput(d.output ?? ""); setProvider(d.provider ?? ""); setView("preview");
+      if (d.output) {
+        const labels = Object.fromEntries(tool.fields.map((fl) => [fl.name, fl.label]));
+        recordGeneration({
+          app: "studio", appLabel: `Studio · ${tool.label}`,
+          title: `${tool.label}: ${inputs[tool.fields[0].name]?.slice(0, 60) || "untitled"}`,
+          kind: tool.format === "html" ? "html" : "markdown",
+          inputs: fieldsFrom(inputs, labels), output: d.output, meta: { provider: d.provider, tool: tool.id },
+        });
+      }
     } catch {
       setError("Network error — please try again.");
     } finally { setLoading(false); }
