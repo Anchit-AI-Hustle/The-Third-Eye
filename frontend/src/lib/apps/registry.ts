@@ -103,10 +103,15 @@ export const APPS: AppEntry[] = [
   { id: "campaign", label: "Campaign Planner", category: "Create", modes: [PR], kind: "internal", href: "/tools/campaign", icon: "TrendingUp", selfBuilt: true },
   { id: "landing", label: "Landing Pages", category: "Create", modes: [PR], kind: "internal", href: "/tools/landing", icon: "LayoutTemplate", selfBuilt: true },
 
+  // ── Professional · Marketing ──
+  { id: "kolab", label: "Kolab", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab", icon: "Workflow", selfBuilt: true, blurb: "Brand-adaptable Lifecycle OS & creator campaigns" },
+  { id: "campaign-mkt", label: "Campaign Planner", category: "Marketing", modes: [PR], kind: "internal", href: "/tools/campaign", icon: "TrendingUp", selfBuilt: true },
+
   // ── Professional · Career ──
   { id: "job-agent", label: "Job Agent", category: "Career", modes: [PR], kind: "internal", href: "/job-agent", icon: "Briefcase", selfBuilt: true, blurb: "Search, tailor, track" },
 
   // ── Enterprise · Operations ──
+  { id: "kolab-ent", label: "Kolab Marketing AI", category: "Operations", modes: [E], kind: "internal", href: "/kolab", icon: "Workflow", selfBuilt: true, blurb: "Lifecycle, retention & GTM for any brand" },
   { id: "lifecycle", label: "Lifecycle OS", category: "Operations", modes: [E], kind: "internal", href: "/tools/lifecycle", icon: "Workflow", selfBuilt: true },
   { id: "sop", label: "SOP Studio", category: "Operations", modes: [E], kind: "internal", href: "/tools/sop", icon: "ListChecks", selfBuilt: true },
   { id: "okr", label: "OKR Planner", category: "Operations", modes: [E], kind: "internal", href: "/tools/okr", icon: "Target", selfBuilt: true },
