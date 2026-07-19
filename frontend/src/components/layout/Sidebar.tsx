@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
+import { CloudSyncBadge } from "./CloudSyncBadge";
 
 const NAV_ITEMS = [
   { label: "App Audit", href: "/audit", icon: ShieldCheck },
@@ -137,6 +138,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t border-border-default px-2 py-3 space-y-0.5 flex-none">
+        <CloudSyncBadge collapsed={collapsed} />
         <Link href="/settings" title={collapsed ? "Settings" : undefined}
           className={cn(
             "flex items-center gap-3 rounded-input text-sm text-text-secondary hover:text-text-primary hover:bg-background-elevated transition-all border border-transparent",
