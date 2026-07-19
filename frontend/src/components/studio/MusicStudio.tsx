@@ -30,6 +30,14 @@ type Fields = {
 const field = "w-full bg-background-base border border-border-default rounded-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-[#34D399] transition-colors";
 const lbl = "block text-xs font-mono text-text-secondary mb-1.5";
 
+// Human-friendly duration label (e.g. 30s, 3m, 1h 30m, 5h).
+function fmtDuration(s: number): string {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) { const m = Math.floor(s / 60), r = s % 60; return r ? `${m}m ${r}s` : `${m}m`; }
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 // Match a free-text AI value to the closest option in a select's list.
 function matchOption(val: string, opts: string[]): string | null {
   if (!val) return null;
@@ -52,6 +60,7 @@ export function MusicStudio() {
   const [prompt, setPrompt] = useState("");
   const [lyrics, setLyrics] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [loopSession, setLoopSession] = useState(false);
   const [copied, setCopied] = useState(false);
   const [filling, setFilling] = useState(false);
   const [busyField, setBusyField] = useState<string | null>(null);
@@ -176,7 +185,11 @@ export function MusicStudio() {
           field: key === "description" ? "description" : key,
           value: String(f[name] ?? ""), action,
           previous: prevSug.current[key] ?? [],
-          context: { genre: f.genre, mood: f.mood, tempo: f.tempo, vocals: f.vocals, description: f.description },
+          context: {
+            genre: f.genre, subgenre: f.subgenre, mood: f.mood, tempo: f.tempo, energy: f.energy,
+            instruments: f.instruments, artistInspiration: f.artistInspiration,
+            vocals: f.vocals, vocalStyle: f.vocalStyle, description: f.description,
+          },
         }),
       });
       const d = await res.json();
@@ -199,8 +212,10 @@ export function MusicStudio() {
       const d = await res.json();
       if (!res.ok) { setPhase("error"); setError(d.error ?? `HTTP ${res.status}`); setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); return; }
       setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); pRef.current = d.prompt ?? ""; lRef.current = d.lyrics ?? "";
+      setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       if (d.fellBackToInstrumental) setNote("The vocal model wasn't available, so this is an instrumental version (lyrics shown below).");
+      if (d.loop) setNote(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
       setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
       poll(d.jobId);
     } catch { setPhase("error"); setError("Network error — please try again."); }
@@ -312,7 +327,21 @@ export function MusicStudio() {
           <div><label className={lbl}>Tempo: {f.tempo} BPM</label><input type="range" min={60} max={180} value={f.tempo} onChange={(e) => set("tempo", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
           <div><label className={lbl}>Energy: {f.energy}/10</label><input type="range" min={1} max={10} value={f.energy} onChange={(e) => set("energy", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
         </div>
-        <div><label className={lbl}>Length: {f.duration}s</label><input type="range" min={10} max={120} value={f.duration} onChange={(e) => set("duration", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
+        <div>
+          <label className={lbl}>Session length: {fmtDuration(f.duration)}</label>
+          <input type="range" min={10} max={18000} step={10} value={f.duration} onChange={(e) => set("duration", Number(e.target.value))} className="w-full accent-[#34D399]" />
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {[30, 60, 180, 600, 1800, 3600, 10800, 18000].map((s) => (
+              <button key={s} type="button" onClick={() => set("duration", s)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono border transition-colors ${f.duration === s ? "border-[#34D399] text-[#34D399] bg-[#34D399]/10" : "border-border-default text-text-muted hover:text-text-primary"}`}>
+                {fmtDuration(s)}
+              </button>
+            ))}
+          </div>
+          {f.duration > 120 && (
+            <p className="text-[11px] text-text-muted mt-1.5">Long sessions are built by seamlessly looping a generated clip — perfect for focus / ambient / party sets.</p>
+          )}
+        </div>
 
         <div className="flex items-center justify-between pt-1">
           <label className="text-xs font-mono text-text-secondary">Vocals + lyrics</label>
@@ -363,8 +392,8 @@ export function MusicStudio() {
         {busy && (<div className="h-full flex flex-col items-center justify-center text-center text-text-secondary py-16"><Loader2 size={24} className="animate-spin text-[#34D399] mb-3" /><p className="text-sm">{status}</p></div>)}
         {audioUrl && phase === "ready" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}</div>
-            <audio controls src={audioUrl} className="w-full" />
+            <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}{loopSession && <span className="text-[10px] font-mono text-text-muted">· 🔁 looping to fill {fmtDuration(f.duration)}</span>}</div>
+            <audio controls loop={loopSession} src={audioUrl} className="w-full" />
             <div className="flex flex-wrap items-center gap-2">
               <a href={audioUrl} download className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Audio</a>
               <button onClick={() => makeVideo(audioUrl, f.title || f.description, "create")} disabled={videoBusy}
