@@ -33,6 +33,7 @@ const ENTITIES: Record<string, EntityCfg> = {
   goals: { table: "goals", order: [{ col: "created_at", asc: false }] },
   knowledge_docs: { table: "knowledge_docs", order: [{ col: "created_at", asc: false }] },
   expenses: { table: "expenses", order: [{ col: "spent_on", asc: false }, { col: "created_at", asc: false }] },
+  music_tracks: { table: "music_tracks", order: [{ col: "created_at", asc: false }] },
 };
 
 type Ctx =
