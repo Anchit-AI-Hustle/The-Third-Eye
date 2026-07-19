@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { LandingHero } from "@/components/landing/LandingHero";
 
 export const metadata = {
   title: "The Third Eye — Your Personal AI Operating System",
@@ -67,28 +68,8 @@ export default async function Home() {
           </Link>
         </header>
 
-        {/* hero */}
-        <section className="pt-16 pb-12 text-center max-w-2xl mx-auto">
-          <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight leading-tight">
-            Your personal AI operating system
-          </h1>
-          <p className="text-text-secondary text-base md:text-lg mt-5 leading-relaxed">
-            The Third Eye is a private, self-hosted workspace where an AI assistant helps you
-            capture tasks and notes, search your own knowledge, track goals and finances, and stay
-            on top of reminders — all in one place, owned entirely by you.
-          </p>
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <Link
-              href="/auth/signin"
-              className="flex items-center justify-center bg-accent-blue hover:bg-accent-blue/90 text-white rounded-input px-6 h-12 text-sm font-medium transition-all duration-150 active:scale-[0.98]"
-            >
-              Get started with Google
-            </Link>
-          </div>
-          <p className="text-text-muted text-xs mt-4">
-            Private by design — your data stays in your own workspace and is visible only to you.
-          </p>
-        </section>
+        {/* hero — Three.js + GSAP */}
+        <LandingHero />
 
         {/* what it does */}
         <section className="pb-16">
