@@ -135,7 +135,10 @@ export async function POST(req: NextRequest) {
     return createPrediction(VOCAL_MODEL, { tags, lyrics, duration });
   }
   async function submitInstrumental() {
-    return createPrediction(INSTRUMENTAL_MODEL, { prompt, seconds_total: duration }, INSTRUMENTAL_FALLBACK_VERSION);
+    // If we're here because vocals were requested but produced no lyrics, drop the
+    // "vocals" wording from the style so the instrumental prompt stays coherent.
+    const instrPrompt = sing ? prompt : `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
+    return createPrediction(INSTRUMENTAL_MODEL, { prompt: instrPrompt, seconds_total: duration }, INSTRUMENTAL_FALLBACK_VERSION);
   }
 
   // Only sing if we actually have lyrics — otherwise the vocal model would try to
