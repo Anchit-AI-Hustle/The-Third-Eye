@@ -43,7 +43,7 @@ export const APPS: AppEntry[] = [
   { id: "blinkit", label: "Blinkit", category: "Food & Grocery", modes: [P], kind: "external", href: "https://blinkit.com", icon: "ShoppingBasket" },
   { id: "zepto", label: "Zepto", category: "Food & Grocery", modes: [P], kind: "external", href: "https://www.zeptonow.com", icon: "ShoppingBasket" },
   { id: "bigbasket", label: "BigBasket", category: "Food & Grocery", modes: [P], kind: "external", href: "https://www.bigbasket.com", icon: "ShoppingBasket" },
-  { id: "recipe-studio", label: "Recipe Studio", category: "Food & Grocery", modes: [P], kind: "internal", href: "/tools/recipe", icon: "ChefHat", selfBuilt: true },
+  { id: "health-engine-food", label: "Health Engine", category: "Food & Grocery", modes: [P], kind: "internal", href: "/tools/health", icon: "HeartPulse", selfBuilt: true, blurb: "Meals, macros & diet plan" },
 
   // ── Personal · Shopping ──
   { id: "amazon", label: "Amazon", category: "Shopping", modes: [P], kind: "external", href: "https://www.amazon.in", icon: "ShoppingCart" },
@@ -58,6 +58,8 @@ export const APPS: AppEntry[] = [
   { id: "paytm", label: "Paytm", category: "Money", modes: [P], kind: "external", href: "https://paytm.com", icon: "CreditCard" },
 
   // ── Personal · Health & Emergency ──
+  { id: "health-engine", label: "Health Engine", category: "Health & Emergency", modes: [P], kind: "internal", href: "/tools/health", icon: "HeartPulse", selfBuilt: true, blurb: "Nutrition + exercise, goal-driven" },
+  { id: "health-events", label: "Health Events", category: "Health & Emergency", modes: [P], kind: "internal", href: "/tools/health", icon: "CalendarClock", selfBuilt: true, blurb: "Classes, runs, court booking" },
   { id: "practo", label: "Doctor (Practo)", category: "Health & Emergency", modes: [P], kind: "external", href: "https://www.practo.com", icon: "Stethoscope" },
   { id: "apollo", label: "Apollo 24|7", category: "Health & Emergency", modes: [P], kind: "external", href: "https://www.apollo247.com", icon: "HeartPulse" },
   { id: "onemg", label: "Pharmacy (1mg)", category: "Health & Emergency", modes: [P], kind: "external", href: "https://www.1mg.com", icon: "Pill" },

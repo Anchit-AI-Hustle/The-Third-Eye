@@ -67,28 +67,9 @@ export const STUDIO_TOOLS: StudioTool[] = [
     ],
   },
   {
-    id: "recipe", label: "Recipe & Meal Studio", mode: "personal", icon: "ChefHat", accent: H,
-    blurb: "Recipes or a weekly meal plan from ingredients, diet, and time you have.",
-    format: "markdown", downloadExt: "md", cta: "Cook up ideas",
-    fields: [
-      { name: "goal", label: "What do you want", type: "select", options: ["A single recipe", "A weekly meal plan", "Use up my ingredients"] },
-      { name: "ingredients", label: "Ingredients / cuisine", type: "textarea", placeholder: "e.g. paneer, spinach, tomatoes — North Indian", required: true },
-      { name: "diet", label: "Diet / constraints", type: "text", placeholder: "e.g. vegetarian, high-protein, 30-min" },
-      { name: "servings", label: "Servings", type: "text", placeholder: "e.g. 2" },
-    ],
-  },
-
-  {
-    id: "workout", label: "Fitness Planner", mode: "personal", icon: "Dumbbell", accent: H,
-    blurb: "A personalized weekly workout plan matched to your goal, level, and available equipment.",
-    format: "markdown", downloadExt: "md", cta: "Build my plan",
-    fields: [
-      { name: "goal", label: "Goal", type: "select", options: ["Build muscle", "Lose fat", "Get stronger", "General fitness", "Endurance"] },
-      { name: "level", label: "Experience", type: "select", options: ["Beginner", "Intermediate", "Advanced"] },
-      { name: "days", label: "Days per week & time", type: "text", placeholder: "e.g. 4 days, 45 min", required: true },
-      { name: "equipment", label: "Equipment / setting", type: "text", placeholder: "e.g. home dumbbells, full gym, bodyweight" },
-      { name: "notes", label: "Constraints / preferences", type: "textarea", placeholder: "injuries, dislikes, focus areas…" },
-    ],
+    id: "health", label: "Health Engine", mode: "personal", icon: "HeartPulse", accent: H,
+    blurb: "Nutrition + exercise in one, goal-driven (lose / maintain / gain). Exact calorie & macro targets, meal + workout plans, and a health-events finder. Combines meals, diet & fitness.",
+    format: "markdown", downloadExt: "md", cta: "Open Health Engine", fields: [],
   },
   {
     id: "study", label: "Study Coach", mode: "personal", icon: "GraduationCap", accent: H,
@@ -354,8 +335,8 @@ export const TOOL_CATEGORY: Record<string, string> = {
   music: "Music & Audio",
   "social-media": "Social & Video", video: "Social & Video",
   creative: "Writing",
-  travel: "Life & Plans", recipe: "Life & Plans", workout: "Life & Plans",
-  study: "Life & Plans", journal: "Life & Plans", budget: "Life & Plans",
+  health: "Health & Fitness",
+  travel: "Life & Plans", study: "Life & Plans", journal: "Life & Plans", budget: "Life & Plans",
   // Startup (professional)
   adcopy: "Ads & Campaigns", campaign: "Ads & Campaigns",
   landing: "Website & Email", mailer: "Website & Email",
@@ -369,7 +350,7 @@ export const TOOL_CATEGORY: Record<string, string> = {
 };
 
 export const CATEGORY_ORDER: Record<ModeId, string[]> = {
-  personal: ["Music & Audio", "Social & Video", "Writing", "Life & Plans"],
+  personal: ["Health & Fitness", "Music & Audio", "Social & Video", "Writing", "Life & Plans"],
   professional: ["Ads & Campaigns", "Website & Email", "Content", "Sales & Fundraising"],
   enterprise: ["Programs", "Docs & Specs", "Ops", "People & Deals"],
 };

@@ -9,7 +9,7 @@ import {
   HeartPulse, Pill, Siren, Ambulance, ShieldAlert, Plane, Car, MapPin, Newspaper,
   Trophy, Gamepad2, CheckSquare, FileText, Target, MessageSquare, Mail, CalendarDays,
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
-  ListChecks, FileBarChart, BookOpen, ClipboardList, ArrowUpRight, HardDrive,
+  ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock, ArrowUpRight, HardDrive,
   type LucideIcon,
 } from "lucide-react";
 import { useMode } from "@/hooks/useMode";
@@ -23,7 +23,7 @@ const ICONS: Record<string, LucideIcon> = {
   HeartPulse, Pill, Siren, Ambulance, ShieldAlert, Plane, Car, MapPin, Newspaper,
   Trophy, Gamepad2, CheckSquare, FileText, Target, MessageSquare, Mail, CalendarDays,
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
-  ListChecks, FileBarChart, BookOpen, ClipboardList,
+  ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock,
 };
 
 export function AppHub() {
