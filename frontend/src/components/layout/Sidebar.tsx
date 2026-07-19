@@ -6,7 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, ShieldCheck, Radio,
+  FileText, Target, Sparkles, Store, ShieldCheck, Radio, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -24,6 +24,8 @@ const NAV_ITEMS = [
   { label: "Knowledge",  href: "/knowledge",  icon: BookOpen },
   { label: "Finance",    href: "/finance",    icon: BarChart2 },
   { label: "Capabilities", href: "/capabilities", icon: Sparkles },
+  { label: "Agent Activity", href: "/activity", icon: Activity },
+  { label: "Kolab",      href: "/kolab",      icon: Store },
 ];
 
 export function Sidebar() {
