@@ -91,11 +91,21 @@ export const APPS: AppEntry[] = [
   { id: "goals", label: "Goals", category: "Life & Plans", modes: [P], kind: "internal", href: "/goals", icon: "Target", selfBuilt: true },
   { id: "assistant", label: "Assistant", category: "Life & Plans", modes: [P, PR, E], kind: "internal", href: "/assistant", icon: "MessageSquare", selfBuilt: true },
 
+  // ── Calendar & Meetings (all modes — personal & work) ──
+  { id: "gcal", label: "Google Calendar", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://calendar.google.com", icon: "CalendarDays" },
+  { id: "outlook-cal", label: "Outlook Calendar", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://outlook.live.com/calendar/", icon: "CalendarRange" },
+  { id: "apple-cal", label: "Apple Calendar", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://www.icloud.com/calendar/", icon: "CalendarClock" },
+  { id: "calendly", label: "Calendly", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://calendly.com", icon: "CalendarCheck" },
+  { id: "meet", label: "Google Meet", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://meet.google.com", icon: "Video" },
+  { id: "zoom", label: "Zoom", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://zoom.us/join", icon: "Webcam" },
+  { id: "teams", label: "Microsoft Teams", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://teams.microsoft.com", icon: "Users" },
+  { id: "webex", label: "Webex", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://www.webex.com", icon: "Presentation" },
+  { id: "skype", label: "Skype", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://web.skype.com", icon: "MessageSquare" },
+  { id: "whereby", label: "Whereby", category: "Calendar & Meetings", modes: [P, PR, E], kind: "external", href: "https://whereby.com", icon: "MonitorPlay" },
+
   // ── Professional · Work & Comms ──
   { id: "gmail", label: "Gmail", category: "Work & Comms", modes: [PR, E], kind: "external", href: "https://mail.google.com", icon: "Mail" },
-  { id: "gcal", label: "Calendar", category: "Work & Comms", modes: [PR, E], kind: "external", href: "https://calendar.google.com", icon: "CalendarDays" },
   { id: "slack", label: "Slack", category: "Work & Comms", modes: [PR, E], kind: "external", href: "https://slack.com", icon: "Hash" },
-  { id: "meet", label: "Google Meet", category: "Work & Comms", modes: [PR, E], kind: "external", href: "https://meet.google.com", icon: "Video" },
   { id: "linkedin-pro", label: "LinkedIn", category: "Work & Comms", modes: [PR], kind: "external", href: "https://www.linkedin.com", icon: "Contact" },
 
   // ── Professional · Create (Studio) ──

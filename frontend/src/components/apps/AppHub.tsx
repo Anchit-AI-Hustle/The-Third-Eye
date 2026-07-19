@@ -10,6 +10,7 @@ import {
   Trophy, Gamepad2, CheckSquare, FileText, Target, MessageSquare, Mail, CalendarDays,
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
   ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock, ArrowUpRight, HardDrive,
+  CalendarRange, CalendarCheck, Webcam, Presentation, MonitorPlay,
   type LucideIcon,
 } from "lucide-react";
 import { useMode } from "@/hooks/useMode";
@@ -24,6 +25,7 @@ const ICONS: Record<string, LucideIcon> = {
   Trophy, Gamepad2, CheckSquare, FileText, Target, MessageSquare, Mail, CalendarDays,
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
   ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock,
+  CalendarRange, CalendarCheck, Webcam, Presentation, MonitorPlay,
 };
 
 export function AppHub() {
