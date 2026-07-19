@@ -1,7 +1,7 @@
 import type { JobSearchInput, NormalizedJob } from "../types";
 import type { JobSourceAdapter } from "./types";
 import { safeFetchJson } from "../safeFetch";
-import { sanitizeHtml, htmlToText } from "../sanitize";
+import { htmlToText } from "../sanitize";
 import { canonicalizeUrl, contentHashFor, deriveJobId, parseSalaryText } from "../normalize";
 
 // Remotive public API (https://remotive.com/api/remote-jobs). Free, documented,
@@ -35,7 +35,6 @@ export const remotiveAdapter: JobSourceAdapter = {
     const fetchedAt = new Date().toISOString();
     return (data.jobs ?? []).slice(0, limit).map((j) => {
       const canonicalUrl = canonicalizeUrl(j.url);
-      const descriptionHtml = sanitizeHtml(j.description);
       const descriptionText = htmlToText(j.description);
       const salary = parseSalaryText(j.salary);
       const job: NormalizedJob = {
@@ -48,7 +47,6 @@ export const remotiveAdapter: JobSourceAdapter = {
         locationText: j.candidate_required_location || "Remote",
         remoteType: "remote",
         employmentType: j.job_type,
-        descriptionHtml,
         descriptionText,
         salaryMin: salary.min,
         salaryMax: salary.max,

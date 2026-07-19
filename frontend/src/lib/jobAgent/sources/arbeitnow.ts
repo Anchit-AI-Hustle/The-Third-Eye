@@ -1,7 +1,7 @@
 import type { JobSearchInput, NormalizedJob } from "../types";
 import type { JobSourceAdapter } from "./types";
 import { safeFetchJson } from "../safeFetch";
-import { sanitizeHtml, htmlToText } from "../sanitize";
+import { htmlToText } from "../sanitize";
 import { canonicalizeUrl, contentHashFor, deriveJobId } from "../normalize";
 
 // Arbeitnow public Job Board API (https://www.arbeitnow.com/api/job-board-api).
@@ -60,7 +60,6 @@ export const arbeitnowAdapter: JobSourceAdapter = {
           remoteType: j.remote ? "remote" : undefined,
           employmentType: (j.job_types || [])[0],
           skills: j.tags,
-          descriptionHtml: sanitizeHtml(j.description),
           descriptionText: htmlToText(j.description),
           publishedAt: j.created_at ? new Date(j.created_at * 1000).toISOString() : undefined,
           applyUrl: j.url,

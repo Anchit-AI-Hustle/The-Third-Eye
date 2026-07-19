@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeHtml, htmlToText } from "../sanitize";
+import { htmlToText } from "../sanitize";
 import { canonicalizeUrl, parseSalaryText, safeFilenamePart, documentFilename, deriveJobId } from "../normalize";
 import { isSafeUrl } from "../safeFetch";
 import { dedupeJobs } from "../dedupe";
@@ -16,15 +16,18 @@ function job(over: Partial<NormalizedJob>): NormalizedJob {
   };
 }
 
-describe("sanitize", () => {
-  it("strips scripts and event handlers, keeps formatting", () => {
-    const dirty = `<p onclick="evil()">Hi</p><script>steal()</script><a href="javascript:evil()">x</a><b>bold</b>`;
-    const clean = sanitizeHtml(dirty);
-    expect(clean).not.toMatch(/script|onclick|javascript:/i);
-    expect(clean).toContain("<b>");
-  });
-  it("htmlToText removes tags", () => {
+describe("htmlToText (untrusted → plain text)", () => {
+  it("removes tags and script/style blocks (incl. nested bypass attempts)", () => {
     expect(htmlToText("<p>Hello <b>world</b></p>")).toBe("Hello world");
+    const nested = htmlToText("before<scr<script>ipt>alert(1)</script>after");
+    expect(nested).not.toMatch(/<script/i);
+    expect(nested).toContain("before");
+    expect(htmlToText("<style>.x{color:red}</style>visible")).toBe("visible");
+  });
+  it("decodes entities without double-unescaping", () => {
+    // &amp;lt; must decode to the literal "&lt;", NOT to "<".
+    expect(htmlToText("a &amp;lt; b")).toBe("a &lt; b");
+    expect(htmlToText("Tom &amp; Jerry")).toBe("Tom & Jerry");
   });
 });
 

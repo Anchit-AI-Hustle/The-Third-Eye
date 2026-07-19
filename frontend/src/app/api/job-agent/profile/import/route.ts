@@ -3,8 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
 import { JOB_AGENT } from "@/lib/jobAgent/config";
-import { safeFetch } from "@/lib/jobAgent/safeFetch";
-import { htmlToText } from "@/lib/jobAgent/sanitize";
 import { APPLICATION_AGENT_SYSTEM_PROMPT, untrustedBlock } from "@/lib/jobAgent/prompts";
 import type { CandidateFact, CareerProfile } from "@/lib/jobAgent/types";
 
@@ -31,18 +29,19 @@ export async function POST(req: NextRequest) {
   let body: { text?: string; sourceUrl?: string; filename?: string; mimeType?: string };
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  let text = (body.text || "").toString();
+  const text0 = (body.text || "").toString();
 
-  // Portfolio URL import (SSRF-safe).
-  if (!text && body.sourceUrl) {
-    try {
-      const res = await safeFetch(body.sourceUrl, { timeoutMs: 8000 });
-      const html = await res.text();
-      text = htmlToText(html).slice(0, 20000);
-    } catch (e) {
-      return Response.json({ error: `Could not fetch that URL: ${e instanceof Error ? e.message : "blocked"}` }, { status: 400 });
-    }
+  // Portfolio-URL import does a server-side fetch of a user-supplied host (an
+  // SSRF surface). It's intentionally disabled in this build pending a
+  // DNS-pinned fetch service; paste the page text instead.
+  if (!text0 && body.sourceUrl) {
+    return Response.json({
+      error: "Portfolio-URL import is a staged follow-up. Please paste your resume/portfolio text instead.",
+      code: "url_import_staged",
+    }, { status: 422 });
   }
+
+  let text = text0;
 
   // Binary formats need a parser we don't ship yet — fail gracefully.
   if (!text && body.mimeType && /pdf|word|officedocument/i.test(body.mimeType)) {
