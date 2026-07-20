@@ -18,14 +18,21 @@ export const maxDuration = 60;
 //   POST → craft style tags + lyrics, submit the job → { jobId, prompt, lyrics, tags }
 //   GET ?id=… → poll → { status, audioUrl }
 
-const INSTRUMENTAL_MODEL = "stability-ai/stable-audio";
-const INSTRUMENTAL_FALLBACK_VERSION = "812b1cc162cb5f69ec9873d611ee67e3fd04be85160d5ed703bc984d72d24403";
+// Instrumental: meta/musicgen is Replicate's official Meta MusicGen — it's a
+// base model, so the model-scoped predictions endpoint works without pinning a
+// version (the previous "stability-ai/stable-audio" slug no longer exists on
+// Replicate, which is what produced the 422 "Invalid version or not permitted").
+// stable-audio-open is a solid secondary, addressed by a real, current version.
+const INSTRUMENTAL_MODEL = process.env.MUSIC_INSTRUMENTAL_MODEL || "meta/musicgen";
+const INSTRUMENTAL_MODEL_VERSION = process.env.MUSIC_INSTRUMENTAL_VERSION || "stereo-large";
+const STABLE_AUDIO_MODEL = "stackadoc/stable-audio-open-1.0";
+const STABLE_AUDIO_VERSION = "9aff84a639f96d0f7e6081cdea002d15133d0043727f849c40abdd166b7c75a8";
 const VOCAL_MODEL = process.env.MUSIC_SONG_MODEL || "lucataco/ace-step";
 
 // Text-to-music models render at most seconds→minutes per call. Longer sessions
 // (up to 5h) are produced by seamlessly looping a base clip in the player, so we
 // cap the actual generated clip to each model's practical maximum.
-const INSTRUMENTAL_CLIP_MAX = 120; // stable-audio
+const INSTRUMENTAL_CLIP_MAX = 30;  // musicgen / stable-audio-open sweet spot
 const VOCAL_CLIP_MAX = 240;        // ace-step
 const MAX_SESSION_SECONDS = 18000; // 5 hours
 
@@ -182,7 +189,9 @@ export async function POST(req: NextRequest) {
   // The clip we actually render; the player loops it to fill the session.
   const clipSeconds = Math.min(sessionSeconds, sing ? VOCAL_CLIP_MAX : INSTRUMENTAL_CLIP_MAX);
   const loopMeta = { sessionSeconds, clipSeconds, loop: sessionSeconds > clipSeconds };
-  const instrPromptText = sing ? prompt : `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
+  // Always instrumental-safe (drop any "vocals" wording) — this text is only
+  // ever used for the instrumental models (Replicate + the HF fallback).
+  const instrPromptText = `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
 
   // If Replicate isn't configured, fall straight to the free HuggingFace
   // (MusicGen) provider when a token is present; else return the prompt/lyrics.
@@ -196,12 +205,26 @@ export async function POST(req: NextRequest) {
   async function submitVocal() {
     return createPrediction(VOCAL_MODEL, { tags, lyrics, duration: Math.min(sessionSeconds, VOCAL_CLIP_MAX) });
   }
-  async function submitInstrumental() {
-    // If we're here because vocals were requested but produced no lyrics, drop the
-    // "vocals" wording from the style so the instrumental prompt stays coherent.
-    const instrPrompt = sing ? prompt : `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
-    return createPrediction(INSTRUMENTAL_MODEL, { prompt: instrPrompt, seconds_total: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX) }, INSTRUMENTAL_FALLBACK_VERSION);
+  // Try MusicGen (official, model-scoped) first; on a non-throttle error fall
+  // back to stable-audio-open (pinned to a real version). Returns the chosen
+  // model name alongside the prediction so the response reflects what ran.
+  const instrSecs = Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX);
+  async function submitInstrumental(): Promise<{ p: Awaited<ReturnType<typeof createPrediction>>; model: string }> {
+    try {
+      const p = await createPrediction(INSTRUMENTAL_MODEL, {
+        prompt: instrPromptText, duration: instrSecs,
+        model_version: INSTRUMENTAL_MODEL_VERSION, output_format: "mp3",
+      });
+      return { p, model: INSTRUMENTAL_MODEL };
+    } catch (err) {
+      // A 429 throttle is account-wide — the second model would hit it too.
+      if (err instanceof Error && /\b429\b|throttled/i.test(err.message)) throw err;
+      const p = await createPrediction(STABLE_AUDIO_MODEL, { prompt: instrPromptText, seconds_total: instrSecs }, STABLE_AUDIO_VERSION);
+      return { p, model: STABLE_AUDIO_MODEL };
+    }
   }
+
+  const instrLoop = { ...loopMeta, clipSeconds: instrSecs, loop: sessionSeconds > instrSecs };
 
   try {
     if (sing) {
@@ -209,12 +232,12 @@ export async function POST(req: NextRequest) {
         const p = await submitVocal();
         return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics, ...loopMeta });
       } catch {
-        const p = await submitInstrumental();
-        return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, fellBackToInstrumental: true, ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX) });
+        const { p, model } = await submitInstrumental();
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, fellBackToInstrumental: true, ...instrLoop });
       }
     }
-    const p = await submitInstrumental();
-    return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, ...loopMeta });
+    const { p, model } = await submitInstrumental();
+    return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, ...instrLoop });
   } catch (e) {
     // Replicate failed (out of credit, 429 after retries, model error). Before
     // surfacing an error, try the free HuggingFace instrumental fallback so the

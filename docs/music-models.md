@@ -34,8 +34,12 @@ picks one when a provider is unavailable.
 
 1. **Vocals requested + lyrics present** → `lucataco/ace-step` on Replicate
    (tags + lyrics + duration). On failure → instrumental fallback.
-2. **Instrumental (or no lyrics)** → `stability-ai/stable-audio` on Replicate
-   (prompt + seconds_total).
+2. **Instrumental (or no lyrics)** → `meta/musicgen` on Replicate (prompt +
+   duration; official Meta MusicGen). On a non-throttle error →
+   `stackadoc/stable-audio-open-1.0` (prompt + seconds_total).
+   > The old `stability-ai/stable-audio` slug was removed from Replicate and
+   > returned 422 "Invalid version or not permitted"; `meta/musicgen` is a base
+   > model resolved by its current version, so it can't go stale the same way.
 3. **Replicate missing / throttled (429) / out of credit** → free HuggingFace
    serverless Inference with MusicGen (`facebook/musicgen-small`, override via
    `HF_MUSIC_MODEL`). Instrumental only; returns audio inline as a `data:` URI
