@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Radio, Check, X } from "lucide-react";
 import { announceSystems, resolveSystems, type SystemDef, type SystemsTarget } from "@/lib/systems";
 import { logAgentAction } from "@/lib/agentControl";
@@ -13,6 +14,7 @@ import { logAgentAction } from "@/lib/agentControl";
 type Phase = "pending" | "speaking" | "online";
 
 export function SystemsOnline() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [systems, setSystems] = useState<SystemDef[]>([]);
   const [phases, setPhases] = useState<Record<string, Phase>>({});
@@ -25,6 +27,9 @@ export function SystemsOnline() {
     running.current = true;
     if (closeTimer.current) clearTimeout(closeTimer.current);
 
+    // Activate the Online Agents tab so the persistent status board is in view.
+    try { router.push("/agents"); } catch { /* noop */ }
+
     setSystems(list);
     setPhases(Object.fromEntries(list.map((s) => [s.id, "pending" as Phase])));
     setOpen(true);
@@ -36,7 +41,7 @@ export function SystemsOnline() {
     try { logAgentAction({ type: "systems.status", label: list.length === 1 ? `${list[0].name} reported online` : `All systems online (${list.length})`, outcome: "applied" }); } catch { /* noop */ }
     running.current = false;
     closeTimer.current = setTimeout(() => setOpen(false), 2600);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const onEvent = (e: Event) => {
