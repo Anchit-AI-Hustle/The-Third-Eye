@@ -11,7 +11,7 @@
 // that fit; the Conductor synchronises them into one coherent generation.
 
 import { llmCascade } from "@/lib/llmCascade";
-import { knowledgeContext } from "./knowledge";
+import { knowledgeContext, lookupGenres } from "./knowledge";
 import type { MusicInput, MusicBrief, BeatSpec, FinalPlan } from "./types";
 
 // Pull the first {...} JSON object out of an LLM response (defensive parse).
@@ -165,6 +165,52 @@ export function conductor(
     durationHint: i.duration,
     coherenceNotes: `${brief.genre} @ ${beats.tempo} BPM · ${brief.moods.join("/")} · ${sing ? "vocal" : "instrumental"}`,
   };
+}
+
+// ── Deterministic fallbacks ──────────────────────────────────────────────────
+// Used when an agent's LLM call fails (all providers down) so a single failure
+// never collapses the whole pipeline. Grounded in the knowledge base so they're
+// still genre-appropriate.
+
+export function fallbackBrief(i: MusicInput): MusicBrief {
+  const kb = lookupGenres(i)[0];
+  return {
+    genre: i.genre || kb?.name || "electronic",
+    subgenre: i.subgenre,
+    region: kb?.region || "Global",
+    era: kb?.era || "contemporary",
+    bpm: num(i.tempo, 40, 220, kb ? Math.round((kb.bpm[0] + kb.bpm[1]) / 2) : 120),
+    timeSignature: "4/4",
+    instruments: i.instruments ? i.instruments.split(/,\s*/) : (kb?.instruments ?? []),
+    structure: i.structure || kb?.structure || "Intro - verse - chorus - verse - chorus - outro",
+    moods: i.mood ? [i.mood] : (kb?.moods ?? ["energetic"]),
+    energy: num(i.energy, 1, 10, 6),
+    vocalStyle: i.vocals === false ? "instrumental" : (i.vocalStyle || kb?.vocalStyle || "expressive"),
+    referenceArtists: kb?.artists ?? [],
+    culturalContext: kb ? `${kb.name} — ${kb.region}, ${kb.era}.` : "",
+    productionNotes: kb?.production ?? "",
+  };
+}
+
+export function fallbackBeats(i: MusicInput, brief: MusicBrief): BeatSpec {
+  const tags = [brief.genre, brief.subgenre, `${brief.bpm} BPM`, ...brief.moods, brief.instruments.join(" ")].filter(Boolean).join(", ");
+  return {
+    modelPrompt: `${i.description || brief.genre}. ${brief.genre} at ${brief.bpm} BPM, ${brief.moods.join(" ")}, ${brief.instruments.join(", ")}`.slice(0, 600),
+    styleTags: tags,
+    tempo: brief.bpm,
+    arrangement: brief.structure,
+  };
+}
+
+// A minimal-but-real singable lyric, so vocal tracks always have something to
+// sing even if the Lyricist agent is unavailable ("be it very less, but there").
+export function fallbackLyrics(i: MusicInput, brief?: MusicBrief): string {
+  const firstSentence = (i.description || "").trim().split(/[.!?\n]+/).map((s) => s.trim()).filter(Boolean)[0];
+  const hook = (i.title || firstSentence || brief?.genre || "tonight").trim().slice(0, 48);
+  const mood = (i.mood || brief?.moods?.[0] || "").toString().toLowerCase();
+  const line1 = firstSentence ? firstSentence.slice(0, 64) : (mood ? `we light it up with a ${mood} glow` : "we light it up tonight");
+  const line2 = mood ? `feel the ${mood} take control` : "feel the rhythm in my soul";
+  return ["[verse]", line1, line2, "[chorus]", hook, hook, "[outro]", hook].join("\n");
 }
 
 // ── Lyrics normaliser (shared) ───────────────────────────────────────────────
