@@ -12,22 +12,40 @@ export function replicateConfigured(): boolean {
   return !!token();
 }
 
-async function rq(path: string, init?: RequestInit) {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Replicate throttles prediction creation to a few requests/minute while an
+// account has < $5 credit, returning 429 with a short `retry_after`. That's a
+// soft limit (not "out of credit"), so we honour Retry-After / retry_after and
+// retry a few times instead of failing the whole request.
+async function rq(path: string, init?: RequestInit, retries = 4): Promise<any> {
   const t = token();
   if (!t) throw new Error("REPLICATE_API_TOKEN not set");
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${t}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Replicate ${res.status}: ${body.slice(0, 300)}`);
+  let lastBody = "";
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${t}`,
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (res.ok) return res.json();
+    lastBody = await res.text().catch(() => "");
+    if (res.status === 429 && attempt < retries) {
+      // Prefer the Retry-After header, then the body's retry_after, else backoff.
+      let waitS = Number(res.headers.get("retry-after"));
+      if (!Number.isFinite(waitS) || waitS <= 0) {
+        try { waitS = Number(JSON.parse(lastBody)?.retry_after); } catch { waitS = 0; }
+      }
+      if (!Number.isFinite(waitS) || waitS <= 0) waitS = attempt + 1; // 1s,2s,3s…
+      await sleep(Math.min(waitS, 10) * 1000 + 300);
+      continue;
+    }
+    throw new Error(`Replicate ${res.status}: ${lastBody.slice(0, 300)}`);
   }
-  return res.json();
+  throw new Error(`Replicate 429: throttled after ${retries} retries: ${lastBody.slice(0, 200)}`);
 }
 
 const versionCache: Record<string, { id: string; at: number }> = {};
@@ -79,6 +97,9 @@ export async function createPrediction(model: string, input: Record<string, unkn
     });
     return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
   } catch (modelErr) {
+    // A rate-limit throttle (429) already exhausted its retries — the version
+    // endpoint would hit the same account-level limit, so don't double the wait.
+    if (modelErr instanceof Error && /\b429\b|throttled/i.test(modelErr.message)) throw modelErr;
     // Fallback: resolve a version id and use the global predictions endpoint.
     let version: string | undefined;
     try { version = await latestVersion(model); } catch { version = fallbackVersion; }
