@@ -127,6 +127,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { goals } = useLocalGoals();
   const applyActions = useAgentActions();
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
+  // Links the assistant asked to open but the browser blocked (iOS blocks
+  // window.open outside a tap) — rendered as tappable chips so one tap opens.
+  const [pendingOpens, setPendingOpens] = useState<{ url: string; label: string }[]>([]);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
@@ -143,6 +146,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setUndoable([]);
     if (undoTimer.current) clearTimeout(undoTimer.current);
   }, [undoable]);
+
+  // The agent asked to open one or more links (open_app tool). Try to open each
+  // in a new tab immediately; iOS/Safari block window.open outside a tap, so any
+  // that don't open are surfaced as tappable chips (one tap = a real gesture).
+  const openLinks = useCallback((sideEffects?: { type: string; data?: any }[]) => {
+    const opens = (sideEffects ?? []).filter((fx) => fx.type === "open_url" && fx.data?.url);
+    if (!opens.length) return;
+    const blocked: { url: string; label: string }[] = [];
+    for (const fx of opens) {
+      const url = String(fx.data.url);
+      if (!/^https?:\/\//i.test(url)) continue; // only ever open http(s)
+      let win: Window | null = null;
+      try { win = window.open(url, "_blank", "noopener,noreferrer"); } catch { win = null; }
+      if (!win) blocked.push({ url, label: fx.data.label || url });
+    }
+    setPendingOpens(blocked);
+  }, []);
   const tts = useTTS(agent?.voicePreference);
 
   const stt = useVoiceSTT({
@@ -429,6 +449,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "assistant", content: fullText },
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
+                openLinks(parsed.sideEffects);
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -695,6 +716,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div className="flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base">
+        {pendingOpens.length > 0 && (
+          <div className="flex items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-input bg-success/10 border border-success/25 animate-fade-in">
+            <span className="text-xs text-text-secondary flex-none">Tap to open:</span>
+            {pendingOpens.map((o) => (
+              <a key={o.url} href={o.url} target="_blank" rel="noopener noreferrer"
+                onClick={() => setPendingOpens((p) => p.filter((x) => x.url !== o.url))}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-success border border-success/30 rounded-input px-2.5 py-1 hover:bg-success/15 transition-colors">
+                <Globe size={12} /> {o.label}
+              </a>
+            ))}
+          </div>
+        )}
         {undoable.length > 0 && (
           <div className="flex items-center justify-between gap-3 mb-2 px-3 py-2 rounded-input bg-accent-blue/10 border border-accent-blue/25 animate-fade-in">
             <span className="text-xs text-text-secondary">
