@@ -41,6 +41,9 @@ export function TrackerWorkspace() {
 
   return (
     <div className="space-y-6">
+      {/* Auto-capture requires the Gmail/Chat scopes — prompt if not connected. */}
+      <GmailConnectBanner />
+
       {/* Capture & Sources — collapsible intake panel */}
       <section className="rounded-card border border-border-default bg-background-surface/30 overflow-hidden">
         <button
@@ -99,6 +102,50 @@ export function TrackerWorkspace() {
         </div>
         <TasksClient />
       </section>
+    </div>
+  );
+}
+
+// Shown until the user connects Gmail/Chat with the ingestion scopes — without
+// them the scrape silently returns "not connected" and the tracker never fills
+// from email. One tap starts the opt-in OAuth flow (read-only scopes).
+function GmailConnectBanner() {
+  const [state, setState] = useState<{ connected: boolean; hasGmail: boolean; configured: boolean } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/connect/google/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        const scopes: string[] = d.scopes ?? [];
+        setState({
+          connected: !!d.connected,
+          hasGmail: scopes.some((s) => s.includes("gmail")),
+          configured: d.configured !== false,
+        });
+      })
+      .catch(() => setState(null));
+    return () => { alive = false; };
+  }, []);
+
+  // Cloud sync off → auto-capture can't run at all; stay quiet (manual still works).
+  if (!state || !state.configured) return null;
+  if (state.connected && state.hasGmail) return null;
+
+  return (
+    <div className="flex items-start gap-3 rounded-card border border-[#F0C94E]/30 bg-[#F0C94E]/5 px-4 py-3">
+      <Radio size={16} className="text-[#F0C94E] flex-none mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-text-primary">Auto-capture from Gmail &amp; Chat is off</p>
+        <p className="text-xs text-text-muted mt-0.5">
+          Connect your Google account (read-only) so new emails &amp; chats are scanned and turned into tasks automatically.
+        </p>
+      </div>
+      <a href="/api/connect/google"
+        className="flex-none inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#F0C94E]/15 border border-[#F0C94E]/40 text-[#F0C94E] text-xs font-medium hover:bg-[#F0C94E]/25 transition-colors">
+        Connect Gmail
+      </a>
     </div>
   );
 }
