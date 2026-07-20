@@ -53,9 +53,9 @@ export function DashboardWidgets() {
 
   const widgets = [
     { href: "/assistant", icon: MessageSquare, label: "Assistant", stat: "Ask anything", sub: "voice + actions", color: "#4FC3F7" },
-    { href: "/apps", icon: LayoutGrid, label: "Apps", stat: "Life OS", sub: "daily apps + emergencies", color: "#34D399" },
+    { href: "/apps", icon: LayoutGrid, label: "Apps", stat: "Open apps", sub: "daily apps + emergencies", color: "#34D399" },
     { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: `${stats.open} open`, sub: `${stats.urgent} urgent`, color: "#4FC3F7" },
-    { href: "/tasks", icon: Radio, label: "Live Capture", stat: "Listen", sub: "mic + inbox → tracker", color: "#F05B8D" },
+    { href: "/tasks", icon: Radio, label: "Live Capture", stat: "Capture", sub: "mic + inbox → tracker", color: "#F05B8D" },
     { href: "/notes", icon: FileText, label: "Notes", stat: `${notes.length}`, sub: "captured", color: "#F0C94E" },
     { href: "/goals", icon: Target, label: "Goals", stat: `${stats.avgGoal}%`, sub: "avg progress", color: "#34D399" },
     { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: `${docs.length}`, sub: "documents", color: "#A78BFA" },
@@ -64,7 +64,7 @@ export function DashboardWidgets() {
     { href: "/job-agent", icon: Briefcase, label: "Job Agent", stat: "Apply", sub: "search · tailor · track", color: "#4FC3F7" },
     { href: "/capabilities", icon: Sparkles, label: "Capabilities", stat: "Explore", sub: "what it can do", color: "#4FC3F7" },
     { href: "/activity", icon: Activity, label: "Agent Activity", stat: agent.killed ? "Halted" : `${agent.count}`, sub: agent.killed ? "kill switch on" : "actions logged", color: agent.killed ? "#EF4444" : "#34D399" },
-    { href: "/audit", icon: ShieldCheck, label: "App Audit", stat: "Health", sub: "honest ratings", color: "#34D399" },
+    { href: "/audit", icon: ShieldCheck, label: "App Audit", stat: "Audit", sub: "honest ratings", color: "#34D399" },
     { href: "/settings", icon: Settings, label: "Settings", stat: "Configure", sub: "agent + account", color: "#94A3B8" },
   ];
 
