@@ -216,6 +216,12 @@ export function MusicStudio() {
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       if (d.fellBackToInstrumental) setNote("The vocal model wasn't available, so this is an instrumental version (lyrics shown below).");
       if (d.loop) setNote(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
+      // Free HuggingFace fallback returns audio synchronously (no job to poll).
+      if (d.done && d.audioUrl) {
+        setAudioUrl(d.audioUrl); setPhase("ready"); setStatus("");
+        void saveTrack(d.audioUrl, pRef.current, lRef.current);
+        return;
+      }
       setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
       poll(d.jobId);
     } catch { setPhase("error"); setError("Network error — please try again."); }

@@ -99,6 +99,48 @@ async function writeLyrics(i: MusicInput, description: string, tags: string): Pr
   return cleanLyrics(out.text);
 }
 
+// ── Free fallback: HuggingFace Inference (MusicGen) ─────────────────────────
+// When Replicate is unavailable — no token, or exhausted its 429 retries / out
+// of credit — try the free HuggingFace serverless Inference API. MusicGen is an
+// OPEN instrumental model (see docs/music-models.md), so this covers the
+// instrumental path only; it returns raw audio bytes we inline as a data: URI.
+// Gated on a token: with no HF key it returns null and the caller keeps the
+// existing Replicate behaviour, so this can never break the working path.
+function hfToken(): string | null {
+  return process.env.HF_API_TOKEN || process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACEHUB_API_TOKEN || null;
+}
+
+async function tryHuggingFaceMusic(promptText: string, seconds: number): Promise<string | null> {
+  const t = hfToken();
+  if (!t) return null;
+  const model = process.env.HF_MUSIC_MODEL || "facebook/musicgen-small";
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(model)) return null;
+  // MusicGen renders short clips; keep the HF request modest so it returns
+  // within the serverless time budget. The player loops it to fill the session.
+  const duration = Math.min(Math.max(Math.round(seconds) || 15, 5), 30);
+  try {
+    const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${t}`,
+        "Content-Type": "application/json",
+        Accept: "audio/wav",
+        "x-wait-for-model": "true",
+      },
+      body: JSON.stringify({ inputs: promptText.slice(0, 500), parameters: { duration } }),
+    });
+    if (!res.ok) return null;
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) return null; // an error/status payload, not audio
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length) return null;
+    const mime = ct.startsWith("audio/") ? ct.split(";")[0] : "audio/wav";
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 // Build a rich, descriptive style string (tags) the way the music-gen project does.
 function buildTags(i: MusicInput): string {
   return [
@@ -133,10 +175,6 @@ export async function POST(req: NextRequest) {
   }
   if (vocals && i.lyricsMode === "manual") lyrics = cleanLyrics(lyrics);
 
-  if (!replicateConfigured()) {
-    return Response.json({ configured: false, prompt, tags, lyrics, note: "Music generation needs REPLICATE_API_TOKEN. Here are the style prompt + lyrics to paste into a music tool." });
-  }
-
   // Only sing if we actually have lyrics — otherwise the vocal model would try to
   // "sing" the raw description. No lyrics → instrumental.
   const sing = vocals && lyrics.trim().length > 0;
@@ -144,6 +182,15 @@ export async function POST(req: NextRequest) {
   // The clip we actually render; the player loops it to fill the session.
   const clipSeconds = Math.min(sessionSeconds, sing ? VOCAL_CLIP_MAX : INSTRUMENTAL_CLIP_MAX);
   const loopMeta = { sessionSeconds, clipSeconds, loop: sessionSeconds > clipSeconds };
+  const instrPromptText = sing ? prompt : `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
+
+  // If Replicate isn't configured, fall straight to the free HuggingFace
+  // (MusicGen) provider when a token is present; else return the prompt/lyrics.
+  if (!replicateConfigured()) {
+    const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
+    if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta });
+    return Response.json({ configured: false, prompt, tags, lyrics, note: "Music generation needs REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool." });
+  }
 
   // Route to a model that generates from text alone (no reference required).
   async function submitVocal() {
@@ -169,6 +216,18 @@ export async function POST(req: NextRequest) {
     const p = await submitInstrumental();
     return Response.json({ configured: true, jobId: p.id, status: p.status, model: INSTRUMENTAL_MODEL, prompt, tags, lyrics, ...loopMeta });
   } catch (e) {
+    // Replicate failed (out of credit, 429 after retries, model error). Before
+    // surfacing an error, try the free HuggingFace instrumental fallback so the
+    // user still gets audio when an alternate model is available.
+    const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
+    if (hf) {
+      return Response.json({
+        configured: true, done: true, audioUrl: hf,
+        model: "huggingface:musicgen", provider: "huggingface",
+        prompt, tags, lyrics, fellBackToInstrumental: sing,
+        ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX),
+      });
+    }
     return Response.json({ error: `Music job failed: ${e instanceof Error ? e.message : "unknown"}`, prompt, tags, lyrics }, { status: 502 });
   }
 }
