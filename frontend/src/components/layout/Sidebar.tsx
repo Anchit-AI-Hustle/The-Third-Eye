@@ -50,6 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Create & Grow",
     items: [
       { label: "Studio", href: "/tools", icon: Wand2 },
+      { label: "Skills", href: "/skills", icon: Workflow },
       { label: "Job Agent", href: "/job-agent", icon: Briefcase, modes: ["personal", "professional"] },
       { label: "Kolab", href: "/kolab", icon: Workflow, modes: ["professional", "enterprise"] },
     ],
