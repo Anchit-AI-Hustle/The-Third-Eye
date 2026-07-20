@@ -25,8 +25,15 @@ type Fields = {
   title: string; description: string; genre: string; subgenre: string; mood: string;
   tempo: number; duration: number; vocals: boolean; vocalStyle: string; vocalLanguage: string;
   lyricsMode: "auto" | "manual" | "none"; lyricsText: string; artistInspiration: string;
-  instruments: string; energy: number; structure: string;
+  instruments: string; energy: number; structure: string; makeVideoUpfront: boolean;
 };
+
+// What the Musicologist agent understood — surfaced back to the user.
+interface Brief {
+  genre?: string; subgenre?: string; region?: string; era?: string; bpm?: number;
+  moods?: string[]; energy?: number; instruments?: string[]; vocalStyle?: string;
+  referenceArtists?: string[]; culturalContext?: string;
+}
 const field = "w-full bg-background-base border border-border-default rounded-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-[#34D399] transition-colors";
 const lbl = "block text-xs font-mono text-text-secondary mb-1.5";
 
@@ -50,6 +57,7 @@ export function MusicStudio() {
     title: "", description: "", genre: GENRES[0], subgenre: "", mood: MOODS[0],
     tempo: 120, duration: 30, vocals: true, vocalStyle: VOCAL_STYLES[0], vocalLanguage: LANGUAGES[0],
     lyricsMode: "auto", lyricsText: "", artistInspiration: "", instruments: "", energy: 6, structure: STRUCTURES[1],
+    makeVideoUpfront: false,
   });
   const set = useCallback(<K extends keyof Fields>(k: K, v: Fields[K]) => setF((p) => ({ ...p, [k]: v })), []);
 
@@ -60,6 +68,7 @@ export function MusicStudio() {
   const [prompt, setPrompt] = useState("");
   const [lyrics, setLyrics] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [brief, setBrief] = useState<Brief | null>(null);
   const [loopSession, setLoopSession] = useState(false);
   const [copied, setCopied] = useState(false);
   const [filling, setFilling] = useState(false);
@@ -217,19 +226,25 @@ export function MusicStudio() {
       const d = await res.json();
       if (!res.ok) { setPhase("error"); setError(d.error ?? `HTTP ${res.status}`); setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); return; }
       setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); pRef.current = d.prompt ?? ""; lRef.current = d.lyrics ?? "";
+      setBrief(d.brief ?? null);
       setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       if (d.fellBackToInstrumental) setNote("The vocal model wasn't available, so this is an instrumental version (lyrics shown below).");
       if (d.loop) setNote(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
       // Free HuggingFace fallback returns audio synchronously (no job to poll).
-      if (d.done && d.audioUrl) {
-        setAudioUrl(d.audioUrl); setPhase("ready"); setStatus("");
-        void saveTrack(d.audioUrl, pRef.current, lRef.current);
-        return;
-      }
+      if (d.done && d.audioUrl) { onAudioReady(d.audioUrl); return; }
       setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
       poll(d.jobId);
     } catch { setPhase("error"); setError("Network error — please try again."); }
+  }
+  // Audio is ready: play, save, and — if the user asked for a video up-front —
+  // kick off the visualizer render automatically (spanning the full session).
+  function onAudioReady(url: string) {
+    setAudioUrl(url); setPhase("ready"); setStatus("");
+    void saveTrack(url, pRef.current, lRef.current);
+    if (fFor.current.makeVideoUpfront) {
+      void makeVideo(url, fFor.current.title || fFor.current.description, "create");
+    }
   }
   function poll(jobId: string) {
     stopPoll();
@@ -238,7 +253,7 @@ export function MusicStudio() {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();
         if (d.status) setStatus(`Composing audio… (${d.status})`);
-        if (d.status === "succeeded" && d.audioUrl) { stopPoll(); setAudioUrl(d.audioUrl); setPhase("ready"); setStatus(""); void saveTrack(d.audioUrl, pRef.current, lRef.current); }
+        if (d.status === "succeeded" && d.audioUrl) { stopPoll(); onAudioReady(d.audioUrl); }
         else if (d.status === "failed" || d.status === "canceled" || d.error) { stopPoll(); setPhase("error"); setError(d.error || "Generation failed."); }
       } catch { /* keep polling */ }
     }, 3000);
@@ -383,6 +398,13 @@ export function MusicStudio() {
           </>
         )}
 
+        <div className="flex items-center justify-between pt-1">
+          <label className="text-xs font-mono text-text-secondary flex items-center gap-1.5"><Film size={13} className="text-[#34D399]" /> Also create a music video</label>
+          <button onClick={() => set("makeVideoUpfront", !f.makeVideoUpfront)} className={`relative w-9 h-5 rounded-full transition-colors ${f.makeVideoUpfront ? "bg-[#34D399]" : "bg-border-default"}`}>
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${f.makeVideoUpfront ? "left-4" : "left-0.5"}`} />
+          </button>
+        </div>
+
         <button onClick={generate} disabled={busy || !f.description.trim()}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-input text-sm font-semibold text-[#07070F] bg-[#34D399] hover:brightness-110 disabled:opacity-50 transition-all">
           {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
@@ -412,12 +434,16 @@ export function MusicStudio() {
                 {videoBusy ? <><Loader2 size={12} className="animate-spin" /> Rendering {Math.round(videoPct * 100)}%</> : <><Film size={12} /> Generate video</>}
               </button>
             </div>
+            {videoBusy && !videoUrl && (
+              <p className="text-[11px] font-mono text-text-muted flex items-center gap-1.5"><Loader2 size={11} className="animate-spin text-[#34D399]" /> Rendering your music video… {Math.round(videoPct * 100)}%</p>
+            )}
             {videoUrl && (
               <div className="space-y-2">
                 <video controls src={videoUrl} className="w-full rounded-input bg-black" />
                 <a href={videoUrl} download={`${f.title || "track"}.webm`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download video</a>
               </div>
             )}
+            {brief && <BriefCard brief={brief} />}
           </div>
         )}
         {(prompt || lyrics) && (
@@ -439,6 +465,31 @@ export function MusicStudio() {
       </div>
       </div>
       )}
+    </div>
+  );
+}
+
+// What the Musicologist agent understood — genre lineage, tempo, feel, and the
+// cultural context it grounded the composition in.
+function BriefCard({ brief }: { brief: Brief }) {
+  const chips = [
+    brief.genre && `${brief.genre}${brief.subgenre ? ` · ${brief.subgenre}` : ""}`,
+    brief.bpm && `${brief.bpm} BPM`,
+    brief.energy != null && `energy ${brief.energy}/10`,
+    brief.vocalStyle,
+  ].filter(Boolean) as string[];
+  return (
+    <div className="rounded-input border border-[#34D399]/20 bg-[#34D399]/[0.04] p-3 space-y-2">
+      <div className="flex items-center gap-1.5"><WandSparkles size={12} className="text-[#34D399]" /><span className="hud-label text-[#34D399]">Musicologist brief</span>{(brief.region || brief.era) && <span className="text-[10px] font-mono text-text-muted">· {[brief.region, brief.era].filter(Boolean).join(" · ")}</span>}</div>
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {chips.map((c, idx) => <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-border-default text-text-secondary">{c}</span>)}
+        </div>
+      )}
+      {brief.moods?.length ? <p className="text-[11px] text-text-muted"><span className="text-text-secondary">Mood:</span> {brief.moods.join(", ")}</p> : null}
+      {brief.instruments?.length ? <p className="text-[11px] text-text-muted"><span className="text-text-secondary">Instruments:</span> {brief.instruments.join(", ")}</p> : null}
+      {brief.referenceArtists?.length ? <p className="text-[11px] text-text-muted"><span className="text-text-secondary">Reference feel:</span> {brief.referenceArtists.join(", ")}</p> : null}
+      {brief.culturalContext ? <p className="text-[11px] text-text-secondary italic leading-relaxed">{brief.culturalContext}</p> : null}
     </div>
   );
 }
