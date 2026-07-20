@@ -32,7 +32,8 @@ const VOCAL_MODEL = process.env.MUSIC_SONG_MODEL || "lucataco/ace-step";
 // Text-to-music models render at most seconds→minutes per call. Longer sessions
 // (up to 5h) are produced by seamlessly looping a base clip in the player, so we
 // cap the actual generated clip to each model's practical maximum.
-const INSTRUMENTAL_CLIP_MAX = 30;  // musicgen / stable-audio-open sweet spot
+const INSTRUMENTAL_CLIP_MAX = 60;  // a real mini-composition, not a tiny loop
+const STABLE_AUDIO_CLIP_MAX = 47;  // stable-audio-open's native window
 const VOCAL_CLIP_MAX = 240;        // ace-step
 const MAX_SESSION_SECONDS = 18000; // 5 hours
 
@@ -219,7 +220,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       // A 429 throttle is account-wide — the second model would hit it too.
       if (err instanceof Error && /\b429\b|throttled/i.test(err.message)) throw err;
-      const p = await createPrediction(STABLE_AUDIO_MODEL, { prompt: instrPromptText, seconds_total: instrSecs }, STABLE_AUDIO_VERSION);
+      const p = await createPrediction(STABLE_AUDIO_MODEL, { prompt: instrPromptText, seconds_total: Math.min(instrSecs, STABLE_AUDIO_CLIP_MAX) }, STABLE_AUDIO_VERSION);
       return { p, model: STABLE_AUDIO_MODEL };
     }
   }

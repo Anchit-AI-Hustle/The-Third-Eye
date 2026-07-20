@@ -10,7 +10,7 @@ export default async function AssistantPage() {
   if (!session) redirect("/auth/signin");
 
   return (
-    <div className="h-[100dvh] flex flex-col">
+    <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex items-center gap-3 px-4 sm:px-8 py-4 border-b border-border-default flex-none bg-background-surface/80 backdrop-blur-sm">
         <div className="relative">
           <div className="w-2 h-2 rounded-full bg-success" />

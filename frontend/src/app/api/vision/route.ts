@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { visionCascade } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -9,16 +9,17 @@ export const maxDuration = 30;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // ~8 MB decoded — plenty for a frame
 
 // E.D.I.T.H. vision: analyze a captured frame (screen share or webcam) with a
-// question, via the multimodal Gemini model. Auth-gated (it spends provider
-// credits) and self-contained — the client sends one still frame as a data URL.
+// question. Uses a multimodal provider cascade (Gemini → OpenAI → OpenRouter)
+// so it keeps working when the primary provider is rate-limited or out of
+// credit. Auth-gated (it spends provider credits); the client sends one still
+// frame as a data URL.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return Response.json({ error: "GEMINI_API_KEY not set" }, { status: 503 });
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    return Response.json({ error: "No vision provider configured (set GEMINI_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)" }, { status: 503 });
   }
 
   let body: { image?: string; prompt?: string };
@@ -38,19 +39,15 @@ export async function POST(req: NextRequest) {
     "Describe what's on this screen/image concisely, and call out anything notable or actionable.";
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction:
+    const { text, provider } = await visionCascade({
+      image: { mimeType, data },
+      prompt,
+      system:
         "You are E.D.I.T.H., analyzing what the user is showing you (a screenshot or camera frame). " +
         "Be precise and useful: describe what you see, extract any visible text/data asked for, and surface " +
         "anything notable or actionable. Never invent details that aren't visible.",
     });
-    const result = await model.generateContent([
-      { text: prompt },
-      { inlineData: { mimeType, data } },
-    ]);
-    return Response.json({ text: result.response.text() });
+    return Response.json({ text, provider });
   } catch (e) {
     console.error("vision route error:", e);
     return Response.json({ error: "Vision analysis failed" }, { status: 500 });

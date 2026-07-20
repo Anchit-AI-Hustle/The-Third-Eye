@@ -134,7 +134,12 @@ export function MusicStudio() {
   async function makeVideo(audio: string, title: string, target: "create" | string) {
     setVideoBusy(true); setVideoPct(0); setError(null);
     try {
-      const blob = await generateVisualizerVideo(proxied(audio), { title, onProgress: setVideoPct });
+      // data:/blob: URLs are already same-origin — only remote URLs need the proxy.
+      const src = /^(data:|blob:)/.test(audio) ? audio : proxied(audio);
+      // On the create tab, render the full requested session (the generator caps
+      // it and the clip loops seamlessly to fill it); library items loop off.
+      const loopToSeconds = target === "create" ? Number(f.duration) || undefined : undefined;
+      const blob = await generateVisualizerVideo(src, { title, onProgress: setVideoPct, loopToSeconds });
       const url = URL.createObjectURL(blob);
       if (target === "create") setVideoUrl(url);
       else { const a = document.createElement("a"); a.href = url; a.download = `${title || "track"}.webm`; a.click(); }
