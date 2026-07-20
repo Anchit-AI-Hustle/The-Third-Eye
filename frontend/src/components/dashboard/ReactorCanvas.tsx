@@ -81,7 +81,7 @@ export function ReactorCanvas({ size = 150 }: { size?: number }) {
         renderer.dispose();
         if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
       };
-    });
+    }).catch(() => { /* WebGL unavailable / three failed to load — purely decorative, ignore */ });
 
     return () => { disposed = true; cleanup(); };
   }, [size]);

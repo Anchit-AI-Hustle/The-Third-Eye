@@ -98,6 +98,15 @@ export const authOptions: NextAuthOptions = {
       if (token.accessToken) (session as any).accessToken = token.accessToken;
       return session;
     },
+    // Post-auth landing: always resolve to a proper in-app page. A bare
+    // base-url redirect (which would otherwise show the marketing landing) goes
+    // to the dashboard; same-origin callback URLs are preserved.
+    async redirect({ url, baseUrl }) {
+      if (url === baseUrl || url === `${baseUrl}/`) return `${baseUrl}/dashboard`;
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith(baseUrl)) return url;
+      return `${baseUrl}/dashboard`;
+    },
   },
   pages: {
     signIn: "/auth/signin",

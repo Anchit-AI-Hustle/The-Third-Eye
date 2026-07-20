@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { LandingHero } from "@/components/landing/LandingHero";
 import { LandingReveal } from "@/components/landing/LandingReveal";
+import { AuthedRedirect } from "@/components/landing/AuthedRedirect";
 
 export const metadata = {
   title: "The Third Eye — Your Personal AI Operating System",
@@ -46,6 +47,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-background-base text-text-primary relative overflow-hidden">
+      <AuthedRedirect />
       {/* ambient glow */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-accent-blue/5 rounded-full blur-3xl" />
