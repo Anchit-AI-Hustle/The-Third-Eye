@@ -19,6 +19,8 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { Persona3D } from "@/components/persona/Persona3D";
+import { personaFor } from "@/lib/persona/personas";
 
 interface Message {
   id: string;
@@ -599,12 +601,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }
 
   const isEmpty = messages.length === 0 && !liveBubble;
+  // The active agent's 3D persona — shown in the top bar and empty-state hero,
+  // and animated while the agent is speaking.
+  const persona = personaFor(agent?.name);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Top bar */}
       <div className="flex-none flex items-center justify-between px-4 sm:px-8 py-2 border-b border-border-default bg-background-surface">
         <div className="flex items-center gap-2">
+          <div className="w-9 h-9 flex-none -my-1"><Persona3D color={persona.color} speaking={tts.speaking} className="w-full h-full" /></div>
           <span className={cn("w-1.5 h-1.5 rounded-full",
             tts.speaking ? "bg-accent-violet animate-pulse"
             : suppressRef.current ? "bg-warning animate-pulse"
@@ -690,7 +696,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Conversation */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5">
-        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} />}
+        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} persona={persona} speaking={tts.speaking} />}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
 
@@ -866,13 +872,12 @@ function VoiceWaveform({ level }: { level: number }) {
   );
 }
 
-function EmptyState({ userName, supported, onSuggest }: { userName?: string; supported: boolean; onSuggest: (t: string) => void }) {
+function EmptyState({ userName, supported, onSuggest, persona, speaking }: { userName?: string; supported: boolean; onSuggest: (t: string) => void; persona: { name: string; color: string }; speaking: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-4">
-          <Cpu size={22} className="text-accent-blue" />
-        </div>
+        <div className="w-36 h-36 mx-auto mb-3"><Persona3D color={persona.color} speaking={speaking} className="w-full h-full" /></div>
+        <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
         <p className="text-text-primary font-semibold text-base mb-1">
           {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
         </p>

@@ -1,0 +1,9 @@
+{
+  "$comment": "Blender MCP — runs a LOCAL Blender instance (see docs/blender-mcp-setup.md). Merge this into your Claude Code / Claude Desktop MCP config. Requires: Blender + the blender-mcp addon (Connect to Claude), and `uv` installed.",
+  "mcpServers": {
+    "blender": {
+      "command": "uvx",
+      "args": ["blender-mcp"]
+    }
+  }
+}
