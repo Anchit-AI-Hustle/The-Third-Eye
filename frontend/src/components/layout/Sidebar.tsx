@@ -6,7 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot,
+  FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -40,6 +40,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Workspace",
     items: [
       { label: "Task Tracker", href: "/tasks", icon: CheckSquare },
+      { label: "Life Log", href: "/lifelog", icon: Radio },
       { label: "Notes", href: "/notes", icon: FileText },
       { label: "Goals", href: "/goals", icon: Target },
       { label: "Knowledge", href: "/knowledge", icon: BookOpen },

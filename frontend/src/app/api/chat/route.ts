@@ -4,6 +4,8 @@ import { consume } from "@/lib/usage";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
+import { resolveAppLink } from "@/lib/appLinks";
+import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -102,6 +104,90 @@ const geminiTools = [
             query: { type: "STRING", description: "The search query — make it specific and focused" },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "open_app",
+        description: "Open an app or website for the user (opens the native app on mobile when installed, else the website). Use whenever the user asks to open, launch, go to, play on, or show something in an app or site — e.g. 'open YouTube', 'open Gmail', 'play lo-fi on Spotify', 'open google.com', 'take me to my calendar'. Confirm briefly in your reply (e.g. 'Opening YouTube.').",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target: { type: "STRING", description: "The app or site name (e.g. 'YouTube', 'Spotify', 'Gmail'), a domain ('youtube.com'), or a full URL." },
+            query: { type: "STRING", description: "Optional: what to search/open within the app (e.g. 'lo-fi beats' for Spotify/YouTube)." },
+          },
+          required: ["target"],
+        },
+      },
+      {
+        name: "pay",
+        description: "Send money via UPI. Opens the user's payment app (Google Pay / PhonePe / Paytm) PRE-FILLED with payee + amount; the user approves and enters their PIN in that app — you never move money yourself. Use when the user asks to pay/send money. Requires a UPI id (vpa) and amount; if either is missing, ASK — never guess an amount or payee.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            vpa: { type: "STRING", description: "Payee UPI id / VPA, e.g. 'ravi@okaxis'." },
+            amount: { type: "NUMBER", description: "Amount to pay." },
+            name: { type: "STRING", description: "Payee display name (optional)." },
+            note: { type: "STRING", description: "Payment note (optional)." },
+            currency: { type: "STRING", description: "Currency code, defaults to INR." },
+          },
+          required: ["vpa", "amount"],
+        },
+      },
+      {
+        name: "send_whatsapp",
+        description: "Send a WhatsApp message. Opens WhatsApp pre-filled with the message; the user taps send. Include the phone number in international format when known (else it opens the chat picker).",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            to: { type: "STRING", description: "Recipient phone number in international format, e.g. '919812345678' (optional)." },
+            message: { type: "STRING", description: "The message text." },
+          },
+          required: ["message"],
+        },
+      },
+      {
+        name: "make_call",
+        description: "Place a phone call — opens the dialer for the number; the user confirms the call.",
+        parameters: {
+          type: "OBJECT",
+          properties: { number: { type: "STRING", description: "Phone number to call." } },
+          required: ["number"],
+        },
+      },
+      {
+        name: "send_sms",
+        description: "Send an SMS — opens the messaging app pre-filled; the user taps send.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            number: { type: "STRING", description: "Recipient phone number." },
+            message: { type: "STRING", description: "Message text (optional)." },
+          },
+          required: ["number"],
+        },
+      },
+      {
+        name: "navigate_maps",
+        description: "Open Google Maps directions to a destination. Use for 'navigate to', 'directions to', 'take me to <place>'.",
+        parameters: {
+          type: "OBJECT",
+          properties: { destination: { type: "STRING", description: "Where to go — an address or place name." } },
+          required: ["destination"],
+        },
+      },
+      {
+        name: "add_calendar_event",
+        description: "Open Google Calendar to add an event, pre-filled. Provide start/end as compact UTC 'YYYYMMDDTHHMMSSZ' when a specific time is known.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "Event title." },
+            start: { type: "STRING", description: "Start, compact UTC 'YYYYMMDDTHHMMSSZ' (optional)." },
+            end: { type: "STRING", description: "End, compact UTC 'YYYYMMDDTHHMMSSZ' (optional)." },
+            details: { type: "STRING", description: "Event details (optional)." },
+            location: { type: "STRING", description: "Location (optional)." },
+          },
+          required: ["title"],
         },
       },
       {
@@ -774,6 +860,25 @@ async function runTool(
     case "create_asset":
       return { result: await createAsset(ctx, input) };
 
+    case "open_app": {
+      const link = resolveAppLink(input.target ?? "", input.query);
+      return {
+        result: `Opening ${link.label} for the user (${link.url}).`,
+        sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
+      };
+    }
+
+    // Low-risk deep-link intents — open directly (no confirm needed).
+    case "navigate_maps":
+    case "add_calendar_event": {
+      const intent = resolveIntent(name, input);
+      if (!intent) return { result: `Couldn't build the ${name} link — missing details.` };
+      return {
+        result: `Opening: ${intent.label} (${intent.url}).`,
+        sideEffect: { type: "open_url", data: { url: intent.url, label: intent.label } },
+      };
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
   }
@@ -1213,7 +1318,11 @@ export async function POST(req: NextRequest) {
                 // Confirm-then-act: never run world-changing actions silently.
                 if (isSensitive(fc.name)) {
                   const summary = summarizeAction(fc.name, fc.args);
-                  send("confirm", { id: crypto.randomUUID(), tool: fc.name, args: fc.args, summary });
+                  // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
+                  // client opens on the confirming tap; email is server-executed
+                  // via /api/act (no url). clientAction tells the card which path.
+                  const intent = resolveIntent(fc.name, fc.args);
+                  send("confirm", { id: crypto.randomUUID(), tool: fc.name, args: fc.args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });
                   return { result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
                 }
                 return runTool(fc.name, fc.args, ctx);
