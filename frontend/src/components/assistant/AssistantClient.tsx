@@ -19,6 +19,8 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { Persona3D } from "@/components/persona/Persona3D";
+import { personaFor } from "@/lib/persona/personas";
 
 interface Message {
   id: string;
@@ -42,6 +44,9 @@ interface PendingAction {
   summary: string;
   status: "pending" | "running" | "done" | "failed" | "canceled";
   result?: string;
+  url?: string;          // deep link to open on approval (pay/whatsapp/call/sms)
+  openLabel?: string;    // confirm-button label for a client action
+  clientAction?: boolean; // true → open url on the confirming tap (no /api/act)
 }
 
 interface HistoryEntry {
@@ -127,6 +132,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { goals } = useLocalGoals();
   const applyActions = useAgentActions();
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
+  // Links the assistant asked to open but the browser blocked (iOS blocks
+  // window.open outside a tap) — rendered as tappable chips so one tap opens.
+  const [pendingOpens, setPendingOpens] = useState<{ url: string; label: string }[]>([]);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
@@ -143,6 +151,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setUndoable([]);
     if (undoTimer.current) clearTimeout(undoTimer.current);
   }, [undoable]);
+
+  // The agent asked to open one or more links (open_app tool). Try to open each
+  // in a new tab immediately; iOS/Safari block window.open outside a tap, so any
+  // that don't open are surfaced as tappable chips (one tap = a real gesture).
+  const openLinks = useCallback((sideEffects?: { type: string; data?: any }[]) => {
+    const opens = (sideEffects ?? []).filter((fx) => fx.type === "open_url" && fx.data?.url);
+    if (!opens.length) return;
+    const blocked: { url: string; label: string }[] = [];
+    for (const fx of opens) {
+      const url = String(fx.data.url);
+      if (!/^https?:\/\//i.test(url)) continue; // only ever open http(s)
+      let win: Window | null = null;
+      try { win = window.open(url, "_blank", "noopener,noreferrer"); } catch { win = null; }
+      if (!win) blocked.push({ url, label: fx.data.label || url });
+    }
+    setPendingOpens(blocked);
+  }, []);
   const tts = useTTS(agent?.voicePreference);
 
   const stt = useVoiceSTT({
@@ -406,6 +431,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setPendingActions((prev) => [...prev, {
                   id: parsed.id, tool: parsed.tool, args: parsed.args,
                   summary: parsed.summary, status: "pending",
+                  url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
                 }]);
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
@@ -429,6 +455,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "assistant", content: fullText },
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
+                openLinks(parsed.sideEffects);
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -503,6 +530,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }, [interrupt, tts.speaking]);
 
   const confirmAction = useCallback(async (action: PendingAction) => {
+    // Deep-link intents (pay/whatsapp/call/sms): open the target app on THIS
+    // tap (a real user gesture, so iOS allows it). The app opens pre-filled and
+    // the user completes/approves it there — we never execute the payment.
+    if (action.clientAction && action.url) {
+      const url = action.url;
+      try {
+        if (/^https?:/i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+        else window.location.href = url; // upi: / tel: / sms: → OS opens the app
+      } catch { /* noop */ }
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: `Opened ${action.tool === "pay" ? "your payment app" : "the app"} — complete it there.` } : a));
+      return;
+    }
     setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "running" } : a));
     try {
       const res = await fetch("/api/act", {
@@ -562,12 +601,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }
 
   const isEmpty = messages.length === 0 && !liveBubble;
+  // The active agent's 3D persona — shown in the top bar and empty-state hero,
+  // and animated while the agent is speaking.
+  const persona = personaFor(agent?.name);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Top bar */}
       <div className="flex-none flex items-center justify-between px-4 sm:px-8 py-2 border-b border-border-default bg-background-surface">
         <div className="flex items-center gap-2">
+          <div className="w-9 h-9 flex-none -my-1"><Persona3D color={persona.color} speaking={tts.speaking} className="w-full h-full" /></div>
           <span className={cn("w-1.5 h-1.5 rounded-full",
             tts.speaking ? "bg-accent-violet animate-pulse"
             : suppressRef.current ? "bg-warning animate-pulse"
@@ -653,7 +696,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Conversation */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5">
-        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} />}
+        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} persona={persona} speaking={tts.speaking} />}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
 
@@ -695,6 +738,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div className="flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base">
+        {pendingOpens.length > 0 && (
+          <div className="flex items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-input bg-success/10 border border-success/25 animate-fade-in">
+            <span className="text-xs text-text-secondary flex-none">Tap to open:</span>
+            {pendingOpens.map((o) => (
+              <a key={o.url} href={o.url} target="_blank" rel="noopener noreferrer"
+                onClick={() => setPendingOpens((p) => p.filter((x) => x.url !== o.url))}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-success border border-success/30 rounded-input px-2.5 py-1 hover:bg-success/15 transition-colors">
+                <Globe size={12} /> {o.label}
+              </a>
+            ))}
+          </div>
+        )}
         {undoable.length > 0 && (
           <div className="flex items-center justify-between gap-3 mb-2 px-3 py-2 rounded-input bg-accent-blue/10 border border-accent-blue/25 animate-fade-in">
             <span className="text-xs text-text-secondary">
@@ -817,13 +872,12 @@ function VoiceWaveform({ level }: { level: number }) {
   );
 }
 
-function EmptyState({ userName, supported, onSuggest }: { userName?: string; supported: boolean; onSuggest: (t: string) => void }) {
+function EmptyState({ userName, supported, onSuggest, persona, speaking }: { userName?: string; supported: boolean; onSuggest: (t: string) => void; persona: { name: string; color: string }; speaking: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-4">
-          <Cpu size={22} className="text-accent-blue" />
-        </div>
+        <div className="w-36 h-36 mx-auto mb-3"><Persona3D color={persona.color} speaking={speaking} className="w-full h-full" /></div>
+        <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
         <p className="text-text-primary font-semibold text-base mb-1">
           {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
         </p>
@@ -916,7 +970,7 @@ function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; on
           {a.status === "pending" && (
             <div className="flex items-center gap-2 mt-3">
               <button onClick={onConfirm} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-success/15 text-success border border-success/30 text-xs font-medium hover:bg-success/25 transition-colors">
-                <Check size={13} /> Confirm & do it
+                <Check size={13} /> {a.openLabel ?? "Confirm & do it"}
               </button>
               <button onClick={onCancel} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-muted border border-border-default text-xs hover:text-text-secondary transition-colors">
                 <X size={13} /> Cancel
