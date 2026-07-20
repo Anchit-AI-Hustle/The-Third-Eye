@@ -4,6 +4,7 @@ import { consume } from "@/lib/usage";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
+import { resolveAppLink } from "@/lib/appLinks";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -102,6 +103,18 @@ const geminiTools = [
             query: { type: "STRING", description: "The search query — make it specific and focused" },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "open_app",
+        description: "Open an app or website for the user (opens the native app on mobile when installed, else the website). Use whenever the user asks to open, launch, go to, play on, or show something in an app or site — e.g. 'open YouTube', 'open Gmail', 'play lo-fi on Spotify', 'open google.com', 'take me to my calendar'. Confirm briefly in your reply (e.g. 'Opening YouTube.').",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            target: { type: "STRING", description: "The app or site name (e.g. 'YouTube', 'Spotify', 'Gmail'), a domain ('youtube.com'), or a full URL." },
+            query: { type: "STRING", description: "Optional: what to search/open within the app (e.g. 'lo-fi beats' for Spotify/YouTube)." },
+          },
+          required: ["target"],
         },
       },
       {
@@ -773,6 +786,14 @@ async function runTool(
 
     case "create_asset":
       return { result: await createAsset(ctx, input) };
+
+    case "open_app": {
+      const link = resolveAppLink(input.target ?? "", input.query);
+      return {
+        result: `Opening ${link.label} for the user (${link.url}).`,
+        sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
+      };
+    }
 
     default:
       return { result: `Unknown tool: ${name}` };
