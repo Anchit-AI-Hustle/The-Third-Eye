@@ -4,13 +4,14 @@ name: Deploy Supabase migrations
 # migration file lands on main — the CLI step you'd otherwise run by hand.
 # Also (optionally) pings a Vercel deploy hook so the site rebuilds in lock-step.
 #
-# One-time setup — add these in GitHub → Settings → Secrets and variables → Actions:
+# Optional setup — add these in GitHub → Settings → Secrets and variables → Actions:
 #   SUPABASE_ACCESS_TOKEN  — https://supabase.com/dashboard/account/tokens
 #   SUPABASE_DB_PASSWORD   — your project's database password
 #   VERCEL_DEPLOY_HOOK     — (optional) a Deploy Hook URL from Vercel → Settings → Git → Deploy Hooks
 #
-# Nothing here can run until those secrets exist; the job fails fast with a clear
-# message if the required two are missing.
+# If the Supabase secrets are absent, the workflow SKIPS the migration (a clean
+# success with a notice) instead of failing — so a push never shows a red
+# "deployment error". Vercel's Git integration deploys the app independently.
 
 on:
   push:
@@ -34,22 +35,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify required secrets
+      - name: Check for migration secrets
+        id: check
         run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
-            echo "::error::Set SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD in repo secrets to enable migrations."
-            exit 1
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Supabase secrets not set — skipping automated migration. Add SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD to enable it. Apply migrations manually with 'supabase db push' until then."
           fi
 
       - uses: supabase/setup-cli@v1
+        if: steps.check.outputs.ready == 'true'
         with:
           version: latest
 
       - name: Link project
+        if: steps.check.outputs.ready == 'true'
         working-directory: frontend
         run: supabase link --project-ref "$PROJECT_ID"
 
       - name: Push migrations
+        if: steps.check.outputs.ready == 'true'
         working-directory: frontend
         run: supabase db push
 

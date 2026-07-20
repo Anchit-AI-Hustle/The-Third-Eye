@@ -59,23 +59,36 @@ export interface Prediction {
 }
 
 /**
- * Submit a prediction for a model. Resolves the latest version, falling back to
- * a pinned version id if resolution fails (keeps generation working even when
- * the models API hiccups).
+ * Submit a prediction for a model.
+ *
+ * Prefers the model-scoped endpoint `POST /models/{owner}/{name}/predictions`
+ * (no version). This is the correct path for Replicate's official / base models
+ * (e.g. stability-ai/stable-audio), whose versions can't be pinned via the
+ * global `/predictions` endpoint — sending a stale/foreign version there is what
+ * produced the "Invalid version or not permitted" (422). Community models work
+ * on this endpoint too (it uses the model's latest version). Falls back to the
+ * version-based endpoint only if the model endpoint is unavailable.
  */
 export async function createPrediction(model: string, input: Record<string, unknown>, fallbackVersion?: string): Promise<Prediction> {
-  let version: string;
+  if (!MODEL_RE.test(model)) throw new Error("Invalid model slug");
+  const [owner, name] = model.split("/");
   try {
-    version = await latestVersion(model);
-  } catch (e) {
-    if (!fallbackVersion) throw e;
-    version = fallbackVersion;
+    const p = await rq(`/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/predictions`, {
+      method: "POST",
+      body: JSON.stringify({ input }),
+    });
+    return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
+  } catch (modelErr) {
+    // Fallback: resolve a version id and use the global predictions endpoint.
+    let version: string | undefined;
+    try { version = await latestVersion(model); } catch { version = fallbackVersion; }
+    if (!version) throw modelErr;
+    const p = await rq(`/predictions`, {
+      method: "POST",
+      body: JSON.stringify({ version, input }),
+    });
+    return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
   }
-  const p = await rq(`/predictions`, {
-    method: "POST",
-    body: JSON.stringify({ version, input }),
-  });
-  return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
 }
 
 export async function getPrediction(id: string): Promise<Prediction> {
