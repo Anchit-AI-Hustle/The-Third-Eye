@@ -44,6 +44,9 @@ interface PendingAction {
   summary: string;
   status: "pending" | "running" | "done" | "failed" | "canceled";
   result?: string;
+  url?: string;          // deep link to open on approval (pay/whatsapp/call/sms)
+  openLabel?: string;    // confirm-button label for a client action
+  clientAction?: boolean; // true → open url on the confirming tap (no /api/act)
 }
 
 interface HistoryEntry {
@@ -428,6 +431,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setPendingActions((prev) => [...prev, {
                   id: parsed.id, tool: parsed.tool, args: parsed.args,
                   summary: parsed.summary, status: "pending",
+                  url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
                 }]);
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
@@ -526,6 +530,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }, [interrupt, tts.speaking]);
 
   const confirmAction = useCallback(async (action: PendingAction) => {
+    // Deep-link intents (pay/whatsapp/call/sms): open the target app on THIS
+    // tap (a real user gesture, so iOS allows it). The app opens pre-filled and
+    // the user completes/approves it there — we never execute the payment.
+    if (action.clientAction && action.url) {
+      const url = action.url;
+      try {
+        if (/^https?:/i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+        else window.location.href = url; // upi: / tel: / sms: → OS opens the app
+      } catch { /* noop */ }
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: `Opened ${action.tool === "pay" ? "your payment app" : "the app"} — complete it there.` } : a));
+      return;
+    }
     setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "running" } : a));
     try {
       const res = await fetch("/api/act", {
@@ -954,7 +970,7 @@ function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; on
           {a.status === "pending" && (
             <div className="flex items-center gap-2 mt-3">
               <button onClick={onConfirm} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-success/15 text-success border border-success/30 text-xs font-medium hover:bg-success/25 transition-colors">
-                <Check size={13} /> Confirm & do it
+                <Check size={13} /> {a.openLabel ?? "Confirm & do it"}
               </button>
               <button onClick={onCancel} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-muted border border-border-default text-xs hover:text-text-secondary transition-colors">
                 <X size={13} /> Cancel
