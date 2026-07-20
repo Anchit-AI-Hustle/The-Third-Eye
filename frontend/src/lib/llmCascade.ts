@@ -1,6 +1,9 @@
-// 7-provider LLM cascade — ported from marketing_mailers__html_architect/api/_shared/llm.js
+// LLM cascade — ported from marketing_mailers__html_architect/api/_shared/llm.js
 //
-// Order: OpenAI → Anthropic → Gemini → xAI/Grok → Groq → Cerebras → Ollama
+// Order: OpenAI → Anthropic → Gemini → xAI/Grok → Groq → Cerebras → OpenRouter
+//        → Mistral → Ollama
+// Groq, Cerebras, OpenRouter (:free models) and Mistral all offer generous FREE
+// tiers, so the app keeps working on free keys alone.
 // First provider with a non-quota-exhausted key returns. Quota / rate-limit /
 // "credit balance too low" errors fall through to the next tier without
 // failing the request.
@@ -21,7 +24,7 @@ export interface LlmCascadeOptions {
   timeoutMs?: number;
   stage?: string;            // for logging
   /** Pin a single provider; skip the rest. */
-  preferProvider?: "openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "ollama";
+  preferProvider?: "openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "openrouter" | "mistral" | "ollama";
   /** Force JSON-only response */
   jsonMode?: boolean;
 }
@@ -39,6 +42,8 @@ const GEMINI_BASE    = "https://generativelanguage.googleapis.com/v1beta";
 const GROK_BASE      = "https://api.x.ai/v1";
 const GROQ_BASE      = "https://api.groq.com/openai/v1";
 const CEREBRAS_BASE  = "https://api.cerebras.ai/v1";
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const MISTRAL_BASE   = "https://api.mistral.ai/v1";
 const OLLAMA_BASE    = process.env.OLLAMA_BASE ?? "http://localhost:11434";
 
 // Vercel env-var names are case-sensitive; we also strip BOM/zero-width chars
@@ -54,6 +59,8 @@ function loadKeys() {
     grok:      clean(process.env.XAI_API_KEY),
     groq:      clean(process.env.GROQ_API_KEY),
     cerebras:  clean(process.env.CEREBRAS_API_KEY),
+    openrouter: clean(process.env.OPENROUTER_API_KEY),
+    mistral:   clean(process.env.MISTRAL_API_KEY),
     ollama:    process.env.OLLAMA_ENABLED === "1",
   };
 }
@@ -237,8 +244,8 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const attempts: LlmCascadeResult["attempts"] = [];
   const pref = opts.preferProvider;
 
-  const order: ("openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "ollama")[] =
-    pref ? [pref] : ["openai", "anthropic", "gemini", "grok", "groq", "cerebras", "ollama"];
+  const order: ("openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "openrouter" | "mistral" | "ollama")[] =
+    pref ? [pref] : ["openai", "anthropic", "gemini", "grok", "groq", "cerebras", "openrouter", "mistral", "ollama"];
 
   for (const provider of order) {
     if (provider === "openai" && keys.openai.length > 0) {
@@ -268,6 +275,15 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       const res = await callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, "llama-3.3-70b", opts);
       attempts.push({ provider: "cerebras", model: "llama-3.3-70b", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "cerebras", model: "llama-3.3-70b", attempts };
+    } else if (provider === "openrouter" && keys.openrouter) {
+      const model = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
+      const res = await callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, model, opts);
+      attempts.push({ provider: "openrouter", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "openrouter", model, attempts };
+    } else if (provider === "mistral" && keys.mistral) {
+      const res = await callOpenAICompatible(MISTRAL_BASE, keys.mistral, "mistral-small-latest", opts);
+      attempts.push({ provider: "mistral", model: "mistral-small-latest", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "mistral", model: "mistral-small-latest", attempts };
     } else if (provider === "ollama" && keys.ollama) {
       const res = await callOllama("llama3.1:8b", opts);
       attempts.push({ provider: "ollama", model: "llama3.1:8b", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
