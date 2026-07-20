@@ -15,6 +15,7 @@ export const config = {
     "/kolab/:path*",
     "/plans/:path*",
     "/generations/:path*",
+    "/agents/:path*",
     "/assistant/:path*",
     "/capture/:path*",
     "/activity/:path*",
