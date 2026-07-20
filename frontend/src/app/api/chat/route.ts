@@ -1048,13 +1048,11 @@ const MODE_CONTEXT: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  // Gemini is the primary (it has native function-calling for tools). When its
+  // key is absent, we DON'T hard-fail — we fall through to the multi-provider
+  // cascade (Groq/OpenAI/etc.) for a plain-text answer, so the assistant stays
+  // usable on free keys alone. The cascade path is in the stream's catch below.
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "GEMINI_API_KEY not set. Add it in Vercel → Settings → Environment Variables." }),
-      { status: 500 }
-    );
-  }
 
   const body = (await req.json()) as ChatRequest;
   const {
@@ -1106,7 +1104,7 @@ export async function POST(req: NextRequest) {
   const effectiveTier: Tier = enforced ? gate.tier : "premium";
   const MODEL = enforced ? gate.limits.chatModel : "gemini-2.5-flash";
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
   // Build system instruction with full user context
   let systemInstruction = SYSTEM_PROMPT;
@@ -1164,7 +1162,7 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Operator location:** ${location.latitude.toFixed(3)}, ${location.longitude.toFixed(3)}${where}. Use this for nearby/weather/traffic-style queries without asking for coords. Never reveal raw coordinates unless asked.`;
   }
 
-  const model = genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools: geminiTools });
+  const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools: geminiTools }) : null;
   const contents: Content[] = [
     ...convertHistory(history),
     { role: "user", parts: [{ text: message }] },
@@ -1182,6 +1180,8 @@ export async function POST(req: NextRequest) {
       };
 
       try {
+        // No Gemini key → skip the tool-calling path and use the cascade below.
+        if (!model) throw new Error("Gemini not configured — using fallback provider.");
         let loopGuard = 0;
         let currentContents = contents;
 

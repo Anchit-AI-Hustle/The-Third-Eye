@@ -7,7 +7,7 @@ export default async function AssistantLayout({ children }: { children: React.Re
   const session = await getServerSession(authOptions);
   if (!session) redirect("/auth/signin");
   return (
-    <MainLayout mainClassName="flex-1 overflow-hidden flex flex-col pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pb-0">
+    <MainLayout mainClassName="flex-1 overflow-hidden flex flex-col pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pb-0">
       {children}
     </MainLayout>
   );

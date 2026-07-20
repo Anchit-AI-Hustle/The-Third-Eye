@@ -293,3 +293,122 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
 
   throw new Error(`All ${order.length} LLM provider(s) failed. Attempts: ${JSON.stringify(attempts)}`);
 }
+
+// ─── Vision cascade (multimodal image → text) ────────────────────────────
+// Same fall-through philosophy as llmCascade, for image analysis. Order:
+// Gemini → OpenAI (gpt-4o-mini) → OpenRouter (free vision model). Any provider
+// whose key is present and not quota-exhausted answers; only if all fail do we
+// throw. Keeps E.D.I.T.H. vision working when the primary provider is down.
+export interface VisionCascadeOptions {
+  image: { mimeType: string; data: string }; // data = base64 (no data: prefix)
+  prompt: string;
+  system?: string;
+  maxTokens?: number;
+  timeoutMs?: number;
+}
+export interface VisionCascadeResult { text: string; provider: string; model: string }
+
+async function visionGemini(key: string, model: string, o: VisionCascadeOptions) {
+  const { signal, clear } = withTimeout(Math.round((o.timeoutMs ?? 30_000) * 1.3));
+  try {
+    const r = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal,
+      body: JSON.stringify({
+        ...(o.system ? { system_instruction: { parts: [{ text: o.system }] } } : {}),
+        contents: [{ role: "user", parts: [{ text: o.prompt }, { inlineData: { mimeType: o.image.mimeType, data: o.image.data } }] }],
+        generationConfig: { maxOutputTokens: o.maxTokens ?? 1200 },
+      }),
+    });
+    if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) }; }
+    const d = await r.json();
+    return { ok: true as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "" };
+  } catch (e) { return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false }; }
+  finally { clear(); }
+}
+
+async function visionOpenAICompatible(base: string, key: string, model: string, o: VisionCascadeOptions) {
+  const { signal, clear } = withTimeout(o.timeoutMs ?? 30_000);
+  try {
+    const r = await fetch(`${base}/chat/completions`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal,
+      body: JSON.stringify({
+        model, max_tokens: o.maxTokens ?? 1200,
+        messages: [
+          ...(o.system ? [{ role: "system", content: o.system }] : []),
+          { role: "user", content: [
+            { type: "text", text: o.prompt },
+            { type: "image_url", image_url: { url: `data:${o.image.mimeType};base64,${o.image.data}` } },
+          ] },
+        ],
+      }),
+    });
+    if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) }; }
+    const d = await r.json();
+    return { ok: true as const, text: d.choices?.[0]?.message?.content ?? "" };
+  } catch (e) { return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false }; }
+  finally { clear(); }
+}
+
+export async function visionCascade(o: VisionCascadeOptions): Promise<VisionCascadeResult> {
+  const keys = loadKeys();
+  const errors: string[] = [];
+  if (keys.gemini) {
+    const res = await visionGemini(keys.gemini, "gemini-2.5-flash", o);
+    if (res.ok) return { text: res.text, provider: "gemini", model: "gemini-2.5-flash" };
+    errors.push(`gemini:${res.status}`);
+  }
+  for (const key of keys.openai) {
+    const res = await visionOpenAICompatible(OPENAI_BASE, key, "gpt-4o-mini", o);
+    if (res.ok) return { text: res.text, provider: "openai", model: "gpt-4o-mini" };
+    errors.push(`openai:${res.status}`);
+    if (!res.quota) break;
+  }
+  if (keys.openrouter) {
+    const model = process.env.OPENROUTER_VISION_MODEL || "meta-llama/llama-3.2-11b-vision-instruct:free";
+    const res = await visionOpenAICompatible(OPENROUTER_BASE, keys.openrouter, model, o);
+    if (res.ok) return { text: res.text, provider: "openrouter", model };
+    errors.push(`openrouter:${res.status}`);
+  }
+  throw new Error(`All vision providers failed (${errors.join(", ") || "no keys configured"}).`);
+}
+
+// ─── Transcription cascade (audio → text) ────────────────────────────────
+// Groq Whisper (free, fast) → OpenAI Whisper. Both are OpenAI-compatible
+// multipart endpoints, so the same request shape works for each.
+export interface TranscribeCascadeResult { text: string; provider: string; model: string }
+
+async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = 30_000): Promise<{ ok: boolean; text?: string; status?: number; quota?: boolean }> {
+  const { signal, clear } = withTimeout(timeoutMs);
+  try {
+    const fd = new FormData();
+    fd.append("file", new File([audio], "audio.webm", { type: audio.type || "audio/webm" }));
+    fd.append("model", model);
+    if (lang) fd.append("language", lang.split("-")[0]);
+    fd.append("response_format", "text");
+    const r = await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd, signal });
+    if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false, status: r.status, quota: isQuotaError(r.status, err) }; }
+    const body = await r.text();
+    // response_format=text returns raw text; some gateways still wrap it in JSON.
+    let text = body;
+    try { const j = JSON.parse(body); if (j && typeof j.text === "string") text = j.text; } catch { /* raw text */ }
+    return { ok: true, text: text.trim() };
+  } catch { return { ok: false, status: 0 }; }
+  finally { clear(); }
+}
+
+export async function transcribeCascade(audio: Blob, lang?: string): Promise<TranscribeCascadeResult> {
+  const keys = loadKeys();
+  const errors: string[] = [];
+  if (keys.groq) {
+    const res = await transcribeOne(GROQ_BASE, keys.groq, "whisper-large-v3", audio, lang);
+    if (res.ok) return { text: res.text ?? "", provider: "groq", model: "whisper-large-v3" };
+    errors.push(`groq:${res.status}`);
+  }
+  for (const key of keys.openai) {
+    const res = await transcribeOne(OPENAI_BASE, key, "whisper-1", audio, lang);
+    if (res.ok) return { text: res.text ?? "", provider: "openai", model: "whisper-1" };
+    errors.push(`openai:${res.status}`);
+    if (!res.quota) break;
+  }
+  throw new Error(`All transcription providers failed (${errors.join(", ") || "no keys configured"}).`);
+}
