@@ -984,7 +984,23 @@ function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; on
             <div className="flex items-center gap-2 mt-3 text-xs text-success"><Check size={13} /> {a.result}</div>
           )}
           {a.status === "failed" && (
-            <div className="flex items-start gap-2 mt-3 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it — {a.result}</span></div>
+            <div className="mt-3 space-y-2">
+              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it — {a.result}</span></div>
+              {/* Missing connection/permission → let the user grant it inline and
+                  retry, so the action actually completes rather than dead-ending. */}
+              {/(connect|not connected|permission|scope|authoriz)/i.test(a.result ?? "") && (
+                <div className="flex items-center gap-2">
+                  <a href="/api/connect/google"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-accent-blue/15 text-accent-blue border border-accent-blue/30 text-xs font-medium hover:bg-accent-blue/25 transition-colors">
+                    <ShieldCheck size={13} /> Connect Google &amp; grant access
+                  </a>
+                  <button onClick={onConfirm}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-secondary border border-border-default text-xs hover:text-text-primary transition-colors">
+                    <RotateCcw size={12} /> Try again
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {a.status === "canceled" && (
             <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>
