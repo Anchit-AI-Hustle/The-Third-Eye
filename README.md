@@ -53,8 +53,8 @@ pytest --cov=app -v
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Foundation (Auth, AI Chat, Tasks, Memory) | ✅ Complete |
-| 2 | Agent Framework + Knowledge Base | 🔲 Not started |
-| 3 | Financial Intelligence | 🔲 Not started |
+| 2 | Agent Framework + Knowledge Base | ✅ Complete |
+| 3 | Financial Intelligence | 🔄 In progress |
 | 4 | Automation + Integrations | 🔲 Not started |
 | 5 | Voice, Reports, Advanced Agents | 🔲 Not started |
 
