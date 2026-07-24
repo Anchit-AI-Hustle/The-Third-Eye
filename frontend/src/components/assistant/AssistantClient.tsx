@@ -312,6 +312,19 @@ export function AssistantClient({ userName }: { userName?: string }) {
     prevStreamingRef.current = isStreaming;
   }, [isStreaming, messages.length]);
 
+  // Skill hand-off: the Skills page stashes a composed run and navigates here;
+  // pick it up once and send it, so the automation runs through the agent loop.
+  const skillRanRef = useRef(false);
+  useEffect(() => {
+    if (skillRanRef.current) return;
+    let text: string | null = null;
+    try { text = sessionStorage.getItem("te_pending_skill_run"); if (text) sessionStorage.removeItem("te_pending_skill_run"); } catch { /* noop */ }
+    if (text) {
+      skillRanRef.current = true;
+      setTimeout(() => { if (!isStreamingRef.current) sendRef.current(text!); }, 400);
+    }
+  }, []);
+
   // Auto-start mic and greet on mount
   const greetedRef = useRef(false);
   useEffect(() => {
