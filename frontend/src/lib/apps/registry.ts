@@ -107,7 +107,10 @@ export const APPS: AppEntry[] = [
   { id: "play-games", label: "Games", category: "Entertainment", modes: [P], kind: "external", href: "https://play.google.com/store/games", icon: "Gamepad2" },
 
   // ── Personal · Planning (self-built + everyday tools) ──
-  { id: "how-to", label: "How-To Guide", category: "Planning", modes: [P], kind: "internal", href: "/tools/how-to", icon: "BookOpenCheck", selfBuilt: true, blurb: "Step-by-step guide for anything — try \"how to swim\"" },
+  // Internal tool but NOT marked selfBuilt: generation posts the user's inputs to
+  // /api/tools/generate → external LLM providers, so it must not carry the App Hub's
+  // "on-device" data-locality badge (that's reserved for tools whose data truly stays local).
+  { id: "how-to", label: "How-To Guide", category: "Planning", modes: [P], kind: "internal", href: "/tools/how-to", icon: "BookOpenCheck", blurb: "Step-by-step guide for anything — try \"how to swim\"" },
   { id: "tasks", label: "Task Tracker", category: "Planning", modes: [P, PR, E], kind: "internal", href: "/tasks", icon: "CheckSquare", selfBuilt: true },
   { id: "notes", label: "Notes", category: "Planning", modes: [P, PR, E], kind: "internal", href: "/notes", icon: "FileText", selfBuilt: true },
   { id: "goals", label: "Goals", category: "Planning", modes: [P], kind: "internal", href: "/goals", icon: "Target", selfBuilt: true },
