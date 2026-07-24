@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { replicateConfigured, createPrediction, getPrediction, audioUrlFrom } from "@/lib/replicate";
-import { musicologist, beatSmith, lyricist, conductor, cleanLyrics } from "@/lib/music/agents";
+import { musicologist, beatSmith, lyricist, conductor, cleanLyrics, fallbackBrief, fallbackBeats, fallbackLyrics } from "@/lib/music/agents";
 import type { MusicInput, MusicBrief } from "@/lib/music/types";
 
 export const runtime = "nodejs";
@@ -85,17 +85,6 @@ async function tryHuggingFaceMusic(promptText: string, seconds: number): Promise
   }
 }
 
-// Build a rich, descriptive style string (tags) the way the music-gen project does.
-function buildTags(i: MusicInput): string {
-  return [
-    i.genre, i.subgenre, i.mood && `${i.mood} mood`,
-    i.tempo && `${i.tempo} BPM`,
-    i.energy != null && `energy ${i.energy}/10`,
-    i.instruments, i.structure,
-    i.artistInspiration && `in the style of ${i.artistInspiration}`,
-    i.vocals ? `${i.vocalStyle || "expressive"} ${i.vocalLanguage || "English"} vocals` : "instrumental, no vocals",
-  ].filter(Boolean).join(", ");
-}
 
 export async function POST(req: NextRequest) {
   if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -112,23 +101,21 @@ export async function POST(req: NextRequest) {
   // Musicologist (knowledge) → Beat-smith + Lyricist (parallel) → Conductor
   // (synchronise). All cascaded; if every LLM provider is down we fall back to
   // deterministic tags so instrumental generation still works.
-  let brief: MusicBrief | null = null;
-  let prompt: string, tags: string, lyrics: string;
-  try {
-    brief = await musicologist(i);
-    const manual = vocals && i.lyricsMode === "manual" ? cleanLyrics(i.lyricsText ?? "") : "";
-    const [beats, autoLyrics] = await Promise.all([
-      beatSmith(i, brief),
-      vocals && i.lyricsMode !== "manual" ? lyricist(i, brief) : Promise.resolve(""),
-    ]);
-    const finalPlan = conductor(i, brief, beats, manual || autoLyrics);
-    prompt = finalPlan.prompt; tags = finalPlan.tags; lyrics = finalPlan.lyrics;
-  } catch {
-    // Every provider unavailable — deterministic assembly keeps music working.
-    tags = buildTags(i);
-    prompt = `${description}. ${buildTags({ ...i, vocals: false })}`.slice(0, 500);
-    lyrics = vocals && i.lyricsMode === "manual" ? cleanLyrics(i.lyricsText ?? "") : "";
-  }
+  // Each agent is independently resilient: one failing (e.g. all LLM providers
+  // down) falls back to a deterministic result instead of collapsing the whole
+  // pipeline — so lyrics never silently vanish.
+  const brief: MusicBrief = await musicologist(i).catch(() => fallbackBrief(i));
+  const manual = vocals && i.lyricsMode === "manual" ? cleanLyrics(i.lyricsText ?? "") : "";
+  const [beats, autoLyrics] = await Promise.all([
+    beatSmith(i, brief).catch(() => fallbackBeats(i, brief)),
+    vocals && i.lyricsMode !== "manual" ? lyricist(i, brief).catch(() => "") : Promise.resolve(""),
+  ]);
+  // Guarantee lyrics whenever the track isn't explicitly instrumental — even if
+  // the Lyricist was unavailable, a minimal deterministic lyric is used.
+  let chosenLyrics = (manual || autoLyrics || "").trim();
+  if (vocals && !chosenLyrics) chosenLyrics = fallbackLyrics(i, brief);
+  const finalPlan = conductor(i, brief, beats, chosenLyrics);
+  const prompt = finalPlan.prompt, tags = finalPlan.tags, lyrics = finalPlan.lyrics;
   const briefMeta = brief
     ? { brief: { genre: brief.genre, subgenre: brief.subgenre, region: brief.region, era: brief.era, bpm: brief.bpm, moods: brief.moods, energy: brief.energy, instruments: brief.instruments, vocalStyle: brief.vocalStyle, referenceArtists: brief.referenceArtists, culturalContext: brief.culturalContext } }
     : {};
