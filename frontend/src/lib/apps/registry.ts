@@ -107,6 +107,7 @@ export const APPS: AppEntry[] = [
   { id: "play-games", label: "Games", category: "Entertainment", modes: [P], kind: "external", href: "https://play.google.com/store/games", icon: "Gamepad2" },
 
   // ── Personal · Planning (self-built + everyday tools) ──
+  { id: "how-to", label: "How-To Guide", category: "Planning", modes: [P], kind: "internal", href: "/tools/how-to", icon: "BookOpenCheck", selfBuilt: true, blurb: "Step-by-step guide for anything — try \"how to swim\"" },
   { id: "tasks", label: "Task Tracker", category: "Planning", modes: [P, PR, E], kind: "internal", href: "/tasks", icon: "CheckSquare", selfBuilt: true },
   { id: "notes", label: "Notes", category: "Planning", modes: [P, PR, E], kind: "internal", href: "/notes", icon: "FileText", selfBuilt: true },
   { id: "goals", label: "Goals", category: "Planning", modes: [P], kind: "internal", href: "/goals", icon: "Target", selfBuilt: true },

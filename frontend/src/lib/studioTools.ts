@@ -105,6 +105,17 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
 
   {
+    id: "how-to", label: "How-To Guide", mode: "personal", icon: "BookOpenCheck", accent: H,
+    blurb: "A clear, step-by-step how-to guide for anything — a life skill, a task, a process. Try \"how to swim\".",
+    format: "markdown", downloadExt: "md", cta: "Create guide",
+    fields: [
+      { name: "topic", label: "What do you want to learn / do", type: "text", placeholder: "e.g. how to swim", required: true },
+      { name: "level", label: "Your current level", type: "select", options: ["Complete beginner", "Some experience", "Intermediate", "Just need a refresher"] },
+      { name: "format", label: "Guide style", type: "select", options: ["Step-by-step walkthrough", "Quick checklist", "Beginner's roadmap", "Troubleshooting / tips"] },
+      { name: "constraints", label: "Anything specific (optional)", type: "textarea", placeholder: "Time you have, equipment, fears, constraints, goal…" },
+    ],
+  },
+  {
     id: "social-media", label: "Social Media Studio", mode: "personal", icon: "Share2", accent: "#F0C94E",
     blurb: "Platform-ready posts, captions, and hooks for Instagram, TikTok, YouTube, or LinkedIn.",
     format: "markdown", downloadExt: "md", cta: "Create posts",
@@ -336,7 +347,7 @@ export const TOOL_CATEGORY: Record<string, string> = {
   "social-media": "Social & Video", video: "Social & Video",
   creative: "Writing",
   health: "Health & Fitness",
-  travel: "Life & Plans", study: "Life & Plans", journal: "Life & Plans", budget: "Life & Plans",
+  travel: "Life & Plans", study: "Life & Plans", journal: "Life & Plans", budget: "Life & Plans", "how-to": "Life & Plans",
   // Startup (professional)
   adcopy: "Ads & Campaigns", campaign: "Ads & Campaigns",
   landing: "Website & Email", mailer: "Website & Email",
