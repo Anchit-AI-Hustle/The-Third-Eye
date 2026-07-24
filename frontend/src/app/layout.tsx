@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
@@ -6,6 +7,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const PORTFOLIO_ASSETS = "https://anchit-tandon.com/assets";
 
 export const metadata: Metadata = {
   title: "The Third Eye",
@@ -39,10 +41,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
+      <head>
+        {/* Shared portfolio navigation + project-level SkillTree / prompt library. */}
+        <link rel="stylesheet" href={`${PORTFOLIO_ASSETS}/app-skill-map.css`} />
+        <link rel="stylesheet" href={`${PORTFOLIO_ASSETS}/project-playbooks.css`} />
+      </head>
       <body
         className={`${inter.variable} ${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >
         <Providers>{children}</Providers>
+        <Script src={`${PORTFOLIO_ASSETS}/app-skill-map.js`} strategy="afterInteractive" />
+        <Script src={`${PORTFOLIO_ASSETS}/project-playbooks.js`} strategy="afterInteractive" />
         <script
           dangerouslySetInnerHTML={{
             // Register after load so it never competes with first paint / hydration.
