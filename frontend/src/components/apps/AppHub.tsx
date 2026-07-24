@@ -11,7 +11,7 @@ import {
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
   ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock, ArrowUpRight, HardDrive,
   CalendarRange, CalendarCheck, Webcam, Presentation, MonitorPlay,
-  Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket,
+  Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, BookOpenCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useMode } from "@/hooks/useMode";
@@ -27,7 +27,7 @@ const ICONS: Record<string, LucideIcon> = {
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
   ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock,
   CalendarRange, CalendarCheck, Webcam, Presentation, MonitorPlay,
-  Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, HardDrive,
+  Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, HardDrive, BookOpenCheck,
 };
 
 export function AppHub() {

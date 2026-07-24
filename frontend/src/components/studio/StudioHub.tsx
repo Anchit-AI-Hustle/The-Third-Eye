@@ -6,7 +6,7 @@ import {
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket,
   Building2, ArrowRight, Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper,
   CalendarDays, Send, Tag, Briefcase, ScrollText, Target, FileSignature,
-  Share2, Clapperboard, TrendingUp,
+  Share2, Clapperboard, TrendingUp, BookOpenCheck,
   type LucideIcon,
 } from "lucide-react";
 import { STUDIO_TOOLS, STUDIOS, CATEGORY_ORDER, categoryOf, type ModeId } from "@/lib/studioTools";
@@ -16,7 +16,7 @@ const ICONS: Record<string, LucideIcon> = {
   LayoutTemplate, Mail, Workflow, Music, PenLine, Presentation, Megaphone,
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket, Building2,
   Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper, CalendarDays, Send, Tag,
-  Briefcase, ScrollText, Target, FileSignature, Share2, Clapperboard, TrendingUp,
+  Briefcase, ScrollText, Target, FileSignature, Share2, Clapperboard, TrendingUp, BookOpenCheck,
 };
 
 // Studio is mode-aware: it shows the tools for the CURRENTLY selected user mode
