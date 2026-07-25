@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+
 import { authOptions } from "@/lib/auth";
 import { LandingHero } from "@/components/landing/LandingHero";
 import { LandingReveal } from "@/components/landing/LandingReveal";
-import { AuthedRedirect } from "@/components/landing/AuthedRedirect";
 
 export const metadata = {
   title: "The Third Eye — Your Personal AI Operating System",
@@ -41,92 +41,144 @@ const FEATURES = [
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
+
   if (session) {
     redirect("/dashboard");
   }
 
   return (
-    <div className="min-h-screen bg-background-base text-text-primary relative overflow-hidden">
-      <AuthedRedirect />
-      {/* ambient glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-accent-blue/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-accent-violet/5 rounded-full blur-3xl" />
+    <div className="relative min-h-screen overflow-hidden bg-background-base text-text-primary">
+      {/* Ambient background glow */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute left-1/2 top-0 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-accent-blue/5 blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 h-[400px] w-[400px] rounded-full bg-accent-violet/5 blur-3xl" />
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-5xl px-5">
-        {/* header */}
         <header className="flex items-center justify-between py-5">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-accent-blue/10 border border-accent-blue/20 overflow-hidden flex items-center justify-center">
-              <img src="/logo.png" alt="The Third Eye logo" className="w-full h-full object-cover" />
+          <Link
+            href="/"
+            className="flex items-center gap-3"
+            aria-label="The Third Eye home"
+          >
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-accent-blue/20 bg-accent-blue/10">
+              <img
+                src="/logo.png"
+                alt=""
+                className="h-full w-full object-cover"
+              />
             </div>
-            <span className="font-display font-bold tracking-tight">The Third Eye</span>
-          </div>
+
+            <span className="font-display font-bold tracking-tight">
+              The Third Eye
+            </span>
+          </Link>
+
           <Link
             href="/auth/signin"
-            className="flex items-center justify-center bg-accent-blue hover:bg-accent-blue/90 text-white rounded-input px-4 h-10 text-sm font-medium transition-all duration-150 active:scale-[0.98]"
+            className="flex h-10 items-center justify-center rounded-input bg-accent-blue px-4 text-sm font-medium text-white transition-all duration-150 hover:bg-accent-blue/90 active:scale-[0.98]"
           >
             Sign in
           </Link>
         </header>
 
-        {/* hero — Three.js + GSAP */}
-        <LandingHero />
+        <main>
+          {/* Three.js + GSAP hero */}
+          <LandingHero />
 
-        {/* what it does */}
-        <LandingReveal>
+          <LandingReveal>
+            <section className="pb-16">
+              <h2
+                data-reveal
+                className="mb-8 text-center font-display text-2xl font-semibold"
+              >
+                What you can do with The Third Eye
+              </h2>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {FEATURES.map((feature) => (
+                  <article
+                    key={feature.title}
+                    data-reveal
+                    className="rounded-card border border-border-default bg-background-surface p-5 text-left transition-colors hover:border-[#4FC3F7]/30"
+                  >
+                    <h3 className="mb-2 font-medium text-text-primary">
+                      {feature.title}
+                    </h3>
+
+                    <p className="text-sm leading-relaxed text-text-secondary">
+                      {feature.body}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </LandingReveal>
+
           <section className="pb-16">
-            <h2 data-reveal className="text-center font-display text-2xl font-semibold mb-8">
-              What you can do with The Third Eye
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {FEATURES.map((f) => (
-                <div
-                  key={f.title}
-                  data-reveal
-                  className="bg-background-surface border border-border-default rounded-card p-5 text-left transition-colors hover:border-[#4FC3F7]/30"
+            <div className="mx-auto max-w-3xl rounded-card border border-border-default bg-background-surface p-6">
+              <h2 className="mb-3 font-display text-lg font-semibold">
+                Your data and why we ask for it
+              </h2>
+
+              <p className="text-sm leading-relaxed text-text-secondary">
+                The Third Eye uses your Google account solely to sign you in and
+                identify your private workspace. We request your basic profile,
+                including your name and email address, for authentication only.
+                Anything you create in the app — including tasks, notes, and
+                documents — is stored so it remains available across your
+                devices and is visible only to you. We never sell your data or
+                share it with third parties for advertising. Additional access
+                for optional integrations is requested explicitly and used only
+                for features you enable. Full details are available in our{" "}
+                <Link
+                  href="/privacy_policy"
+                  className="text-accent-blue hover:underline"
                 >
-                  <h3 className="font-medium text-text-primary mb-2">{f.title}</h3>
-                  <p className="text-text-secondary text-sm leading-relaxed">{f.body}</p>
-                </div>
-              ))}
+                  Privacy Policy
+                </Link>
+                .
+              </p>
             </div>
           </section>
-        </LandingReveal>
+        </main>
 
-        {/* data transparency */}
-        <section className="pb-16">
-          <div className="bg-background-surface border border-border-default rounded-card p-6 max-w-3xl mx-auto">
-            <h2 className="font-display text-lg font-semibold mb-3">Your data & why we ask for it</h2>
-            <p className="text-text-secondary text-sm leading-relaxed">
-              The Third Eye uses your Google account solely to sign you in and identify your private
-              workspace — we request your basic profile (name and email) for authentication only.
-              Anything you create in the app — tasks, notes, and documents — is stored so it is
-              available to you across your devices, and is visible only to you. We never sell your
-              data or share it with third parties for advertising. If you enable optional
-              integrations in the future, any additional access will be requested explicitly and
-              used only to power features you turn on. Full details are in our{" "}
-              <Link href="/privacy_policy" className="text-accent-blue hover:underline">
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </div>
-        </section>
-
-        {/* footer */}
-        <footer className="border-t border-border-default py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-text-muted text-xs">
+        <footer className="flex flex-col items-center justify-between gap-4 border-t border-border-default py-8 text-xs text-text-muted sm:flex-row">
           <span>© {new Date().getFullYear()} The Third Eye</span>
-          <div className="flex items-center gap-4 font-mono">
-            <Link href="/privacy_policy" className="hover:text-text-secondary transition-colors">
+
+          <nav
+            className="flex items-center gap-4 font-mono"
+            aria-label="Legal and product links"
+          >
+            <Link
+              href="/capabilities"
+              className="transition-colors hover:text-text-secondary"
+            >
+              Capabilities
+            </Link>
+
+            <span className="text-border-default" aria-hidden="true">
+              ·
+            </span>
+
+            <Link
+              href="/privacy_policy"
+              className="transition-colors hover:text-text-secondary"
+            >
               Privacy Policy
             </Link>
-            <span className="text-border-default">·</span>
-            <Link href="/terms_of_service" className="hover:text-text-secondary transition-colors">
+
+            <span className="text-border-default" aria-hidden="true">
+              ·
+            </span>
+
+            <Link
+              href="/terms_of_service"
+              className="transition-colors hover:text-text-secondary"
+            >
               Terms of Service
             </Link>
-          </div>
+          </nav>
         </footer>
       </div>
     </div>
