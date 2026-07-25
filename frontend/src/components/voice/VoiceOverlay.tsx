@@ -3,14 +3,17 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { useWakeWord } from "@/hooks/useWakeWord";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentActions } from "@/hooks/useAgentActions";
+import { useAgentConfirm, classifyVoiceConfirm, type PendingAction } from "@/hooks/useAgentConfirm";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
+import { ActionCard } from "@/components/assistant/ActionCard";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -26,6 +29,7 @@ export function VoiceOverlay() {
 
   const [expanded, setExpanded] = useState(false);
   const [micOn, setMicOn] = useState(false);
+  const [wakeEnabled, setWakeEnabled] = useState(true);
   const [liveBubble, setLiveBubble] = useState<LiveBubble | null>(null);
   const [lastQuery, setLastQuery] = useState("");
   const [response, setResponse] = useState("");
@@ -42,6 +46,9 @@ export function VoiceOverlay() {
   const sendRef = useRef<(text?: string) => Promise<void>>(async () => {});
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Mirror of the pending sensitive actions so voice callbacks can read the
+  // latest without being re-created on every state change.
+  const pendingRef = useRef<PendingAction[]>([]);
 
   const { allTasks } = useLocalTasks();
   const applyActions = useAgentActions();
@@ -49,6 +56,37 @@ export function VoiceOverlay() {
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
   const tts = useTTS(agent.voicePreference);
+  const {
+    pendingActions,
+    pendingOpens,
+    addPending,
+    dismissOpen,
+    openLinks,
+    confirmAction,
+    cancelAction,
+  } = useAgentConfirm();
+
+  useEffect(() => { pendingRef.current = pendingActions; }, [pendingActions]);
+
+  // Hands-free confirmation: if the agent is waiting on a sensitive action and
+  // the user says "confirm" / "cancel", act on the most recent pending one.
+  // Returns true if the transcript was consumed as a confirm/cancel.
+  const handleVoiceConfirm = useCallback((text: string): boolean => {
+    const waiting = pendingRef.current.filter((a) => a.status === "pending");
+    if (!waiting.length) return false;
+    const verdict = classifyVoiceConfirm(text);
+    if (!verdict) return false;
+    const target = waiting[waiting.length - 1];
+    if (verdict === "confirm") {
+      // Deep-link intents need a real tap gesture on iOS; voice can't provide
+      // one, so those still require the on-card tap. Server actions (send_email)
+      // execute fully hands-free here.
+      confirmAction(target);
+    } else {
+      cancelAction(target.id);
+    }
+    return true;
+  }, [confirmAction, cancelAction]);
 
   const stt = useVoiceSTT({
     lang: "",
@@ -74,9 +112,22 @@ export function VoiceOverlay() {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
+      // A pending "confirm before I act" takes priority over a new question.
+      if (handleVoiceConfirm(text)) return;
       if (!isStreamingRef.current) sendRef.current(text);
-    }, []),
+    }, [handleVoiceConfirm]),
   });
+
+  // App-wide wake word: passively listen for the agent's name while the mic is
+  // off (so it never fights the main recognizer). Saying "JARVIS" opens the
+  // panel and starts listening — true hands-free entry.
+  const onWake = useCallback(() => {
+    if (isStreamingRef.current) return;
+    setExpanded(true);
+    stt.enable();
+    setMicOn(true);
+  }, [stt]);
+  useWakeWord({ agentName: agent.name, enabled: wakeEnabled && !micOn, onWake, cooldownMs: 2000 });
 
   useEffect(() => {
     if (tts.speaking) {
@@ -182,6 +233,17 @@ export function VoiceOverlay() {
                 if (eventType === "text" && parsed.text !== undefined) {
                   fullText += parsed.text;
                   setResponse(fullText);
+                } else if (eventType === "confirm" && parsed.tool) {
+                  // Sensitive action needs explicit approval. Show the card and,
+                  // hands-free, prompt the user to say "confirm" or "cancel".
+                  addPending({
+                    id: parsed.id, tool: parsed.tool, args: parsed.args,
+                    summary: parsed.summary, status: "pending",
+                    url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
+                  });
+                  if (micOn) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
+                } else if (eventType === "error") {
+                  setResponse(`Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
                   if (parsed.memory) memoryRef.current = parsed.memory;
                   historyRef.current = [
@@ -190,7 +252,8 @@ export function VoiceOverlay() {
                     { role: "assistant", content: fullText },
                   ];
                   applyActions(parsed.sideEffects);
-                  tts.speak(fullText);
+                  openLinks(parsed.sideEffects);
+                  if (fullText) tts.speak(fullText);
                 }
               } catch {}
               eventType = "";
@@ -204,7 +267,7 @@ export function VoiceOverlay() {
         setIsStreaming(false);
       }
     },
-    [input, session, allTasks, docs, applyActions, tts, attachedFiles, agent]
+    [input, session, allTasks, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
@@ -275,6 +338,12 @@ export function VoiceOverlay() {
               </div>
             </div>
             <div className="flex items-center gap-0.5">
+              <button onClick={() => setWakeEnabled((w) => !w)}
+                title={wakeEnabled ? `Wake word on — say "${agent.name}"` : "Wake word off"}
+                className={cn("p-1.5 rounded-input transition-colors",
+                  wakeEnabled ? "text-success" : "text-text-muted hover:text-text-secondary")}>
+                <Radio size={11} />
+              </button>
               <button onClick={tts.toggle} title={tts.enabled ? "Mute" : "Unmute"}
                 className={cn("p-1.5 rounded-input transition-colors",
                   tts.enabled ? "text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
@@ -339,8 +408,24 @@ export function VoiceOverlay() {
               </div>
             )}
 
+            {/* Pending sensitive actions — confirm before acting */}
+            {pendingActions.map((a) => (
+              <ActionCard key={a.id} action={a} onConfirm={() => confirmAction(a)} onCancel={() => cancelAction(a.id)} />
+            ))}
+
+            {/* Links the browser blocked — one tap opens them (a real gesture) */}
+            {pendingOpens.map((o) => (
+              <div key={o.url} className="flex items-center gap-2">
+                <a href={o.url} target="_blank" rel="noopener noreferrer"
+                  onClick={() => dismissOpen(o.url)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/25 text-xs font-medium hover:bg-[#4FC3F7]/20 transition-colors max-w-full truncate">
+                  Open {o.label}
+                </a>
+              </div>
+            ))}
+
             {/* Empty state */}
-            {!liveBubble && !response && !lastQuery && (
+            {!liveBubble && !response && !lastQuery && pendingActions.length === 0 && (
               <div className="flex flex-col items-center justify-center py-5 text-center">
                 <div className="arc-reactor mb-3" style={{ width: 36, height: 36 }}>
                   <div className="arc-reactor-core" style={{ width: 10, height: 10 }} />
