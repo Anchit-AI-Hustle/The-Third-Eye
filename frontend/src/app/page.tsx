@@ -25,8 +25,8 @@ const FEATURES = [
     body: "Sub-agents tackle distinct angles of a question in parallel and synthesize a single strategic answer with confidence.",
   },
   {
-    title: "Private & encrypted",
-    body: "Encrypted persistent memory, a privacy mode that keeps PII from AI providers, and full data export or deletion on demand.",
+    title: "Your data, your control",
+    body: "Every account's data is isolated to that user, and you can review or delete your documents and history whenever you like.",
   },
 ];
 
