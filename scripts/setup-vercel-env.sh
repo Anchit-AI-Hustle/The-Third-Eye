@@ -16,9 +16,13 @@ ENVS=(
   "NEXT_PUBLIC_SUPABASE_URL:Supabase project URL (from supabase.com → Settings → API)"
   "NEXT_PUBLIC_SUPABASE_ANON_KEY:Supabase anon key (from supabase.com → Settings → API)"
   "NEXTAUTH_SECRET:Random secret — run: openssl rand -base64 32"
-  "NEXTAUTH_URL:Your production URL, e.g. https://third-eye.anchit-tandon.com"
+  "NEXTAUTH_URL:Your production URL, e.g. https://the-third-eye.anchit-tandon.com"
+  "NEXT_PUBLIC_APP_URL:Absolute app URL, e.g. https://the-third-eye.anchit-tandon.com (canonical/sitemap/OG)"
   "GOOGLE_CLIENT_ID:Google OAuth client ID (from console.cloud.google.com)"
   "GOOGLE_CLIENT_SECRET:Google OAuth client secret"
+  "NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:Google Search Console HTML-tag content value (optional; blank = no tag)"
+  "NEXT_PUBLIC_FB_DOMAIN_VERIFICATION:Meta Business domain-verification content value (optional; blank = no tag)"
+  "NEXT_PUBLIC_BING_SITE_VERIFICATION:Bing Webmaster msvalidate.01 content value (optional; blank = no tag)"
 )
 
 for entry in "${ENVS[@]}"; do

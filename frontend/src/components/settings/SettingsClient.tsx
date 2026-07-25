@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import { signOutAndClear } from "@/lib/signOutClean";
 import { User, Shield, Bell, Cpu, LogOut, ExternalLink, Check, Activity, CheckCircle2, XCircle, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -178,7 +179,7 @@ export function SettingsClient({ user }: Props) {
 
       {/* Sign out */}
       <button
-        onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+        onClick={() => signOutAndClear({ callbackUrl: "/auth/signin" })}
         className="w-full flex items-center gap-2 px-4 py-3 rounded-card border border-border-default text-text-secondary hover:text-accent-red hover:border-accent-red/30 transition-colors text-sm"
       >
         <LogOut size={15} />

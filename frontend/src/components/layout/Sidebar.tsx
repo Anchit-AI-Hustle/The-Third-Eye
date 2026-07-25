@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutAndClear } from "@/lib/signOutClean";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
@@ -239,7 +240,7 @@ export function Sidebar() {
                 <span className="text-text-secondary text-xs truncate flex-1 font-mono">
                   {session.user.name?.split(" ")[0] ?? session.user.email}
                 </span>
-                <button onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+                <button onClick={() => signOutAndClear({ callbackUrl: "/auth/signin" })}
                   className="text-text-muted hover:text-accent-red transition-colors p-0.5"
                   title="Sign out">
                   <LogOut size={13} />
