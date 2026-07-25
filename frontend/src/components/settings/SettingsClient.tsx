@@ -1,7 +1,8 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { User, Shield, Bell, Cpu, LogOut, ExternalLink, Check, Activity, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { signOutAndClear } from "@/lib/signOutClean";
+import { User, Shield, Bell, Cpu, LogOut, ExternalLink, Check, Activity, CheckCircle2, XCircle, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,28 @@ export function SettingsClient({ user }: Props) {
   const [saved, setSaved] = useState(false);
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
+  const [showDelete, setShowDelete] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
+
+  // Right to erasure: wipe server-side data (all rows keyed to this account),
+  // then clear every on-device store, then sign out.
+  async function deleteAccount() {
+    setDeleting(true); setDelError(null);
+    try {
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `HTTP ${res.status}`); }
+      // On-device: localStorage, sessionStorage, and the Life Log audio DB.
+      try { localStorage.clear(); } catch { /* noop */ }
+      try { sessionStorage.clear(); } catch { /* noop */ }
+      try { indexedDB.deleteDatabase("te_lifelog"); } catch { /* noop */ }
+      await signOut({ callbackUrl: "/auth/signin" });
+    } catch (e) {
+      setDelError(e instanceof Error ? e.message : "Couldn't delete the account. Try again.");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/status")
@@ -64,13 +87,13 @@ export function SettingsClient({ user }: Props) {
             </span>
           </Row>
           <Row label="Prompt caching" sub="Reduces cost by caching system prompt">
-            <Toggle enabled={true} disabled />
+            <span className="text-xs text-success font-mono">On</span>
           </Row>
-          <Row label="Memory" sub="JARVIS remembers facts within a session">
-            <Toggle enabled={true} disabled />
+          <Row label="Memory" sub="Remembers facts within a session">
+            <span className="text-xs text-success font-mono">On</span>
           </Row>
           <Row label="Streaming" sub="Token-by-token response rendering">
-            <Toggle enabled={true} disabled />
+            <span className="text-xs text-success font-mono">On</span>
           </Row>
         </div>
       </Section>
@@ -81,8 +104,8 @@ export function SettingsClient({ user }: Props) {
           <Row label="Notifications" sub="Browser notification prompts">
             <Toggle enabled={notifs} onChange={setNotifs} />
           </Row>
-          <Row label="Sound effects" sub="UI interaction sounds">
-            <Toggle enabled={false} disabled />
+          <Row label="Sound effects" sub="UI interaction sounds — coming soon">
+            <span className="text-xs text-text-muted font-mono">Soon</span>
           </Row>
         </div>
         <div className="px-5 pb-4">
@@ -109,8 +132,8 @@ export function SettingsClient({ user }: Props) {
           <Row label="Session duration" sub="JWT token lifetime">
             <span className="text-xs text-text-muted font-mono">24 hours</span>
           </Row>
-          <Row label="Data storage" sub="Conversations are not persisted server-side">
-            <span className="text-xs text-text-muted font-mono">Local only</span>
+          <Row label="Data storage" sub="Your tasks/notes/goals/expenses sync to your private Supabase when configured; otherwise this device only">
+            <span className="text-xs text-text-muted font-mono">Private / per-user</span>
           </Row>
         </div>
       </Section>
@@ -156,12 +179,52 @@ export function SettingsClient({ user }: Props) {
 
       {/* Sign out */}
       <button
-        onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+        onClick={() => signOutAndClear({ callbackUrl: "/auth/signin" })}
         className="w-full flex items-center gap-2 px-4 py-3 rounded-card border border-border-default text-text-secondary hover:text-accent-red hover:border-accent-red/30 transition-colors text-sm"
       >
         <LogOut size={15} />
         Sign out
       </button>
+
+      {/* Danger zone — delete account */}
+      <div className="bg-accent-red/5 border border-accent-red/25 rounded-card overflow-hidden">
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-accent-red/20">
+          <span className="text-accent-red"><AlertTriangle size={16} /></span>
+          <h2 className="text-sm font-semibold text-accent-red">Danger zone</h2>
+        </div>
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-text-secondary">
+            Permanently delete your account and <span className="text-text-primary">all associated data</span> —
+            tasks, notes, goals, knowledge, music, life-log recordings, job-agent data, memory and connected tokens,
+            on this device and in the cloud. This cannot be undone.
+          </p>
+          {!showDelete ? (
+            <button onClick={() => { setShowDelete(true); setConfirmText(""); setDelError(null); }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-input border border-accent-red/40 text-accent-red text-sm hover:bg-accent-red/10 transition-colors">
+              <Trash2 size={15} /> Delete my account
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <label className="block text-xs text-text-muted">Type <span className="font-mono text-accent-red">DELETE</span> to confirm{user?.email ? ` deletion of ${user.email}` : ""}.</label>
+              <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoFocus
+                placeholder="DELETE"
+                className="w-full bg-background-base border border-accent-red/30 rounded-input px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-red/60" />
+              {delError && <p className="text-xs text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{delError}</p>}
+              <div className="flex items-center gap-2">
+                <button onClick={deleteAccount} disabled={confirmText !== "DELETE" || deleting}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-input bg-accent-red/15 border border-accent-red/40 text-accent-red text-sm font-medium hover:bg-accent-red/25 disabled:opacity-40 transition-colors">
+                  {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                  {deleting ? "Deleting…" : "Permanently delete"}
+                </button>
+                <button onClick={() => { setShowDelete(false); setConfirmText(""); }} disabled={deleting}
+                  className="px-4 py-2.5 rounded-input border border-border-default text-text-secondary text-sm hover:text-text-primary disabled:opacity-40">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
+import { resolveAuthSecret } from "@/lib/authSecret";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
 
@@ -48,16 +49,13 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: [
-            "openid",
-            "email",
-            "profile",
-            "https://www.googleapis.com/auth/calendar.readonly",
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/gmail.send",
-          ].join(" "),
+          // Basic sign-in only. Sensitive/restricted Google scopes
+          // (gmail.*, calendar.*) force OAuth app verification before
+          // non-test users can sign in, which blocks login. They are
+          // re-added alongside the Gmail/Chat ingestion feature, when
+          // restricted-scope verification is completed.
+          scope: ["openid", "email", "profile"].join(" "),
           access_type: "offline",
-          prompt: "consent",
         },
       },
     }),
@@ -100,12 +98,21 @@ export const authOptions: NextAuthOptions = {
       if (token.accessToken) (session as any).accessToken = token.accessToken;
       return session;
     },
+    // Post-auth landing: always resolve to a proper in-app page. A bare
+    // base-url redirect (which would otherwise show the marketing landing) goes
+    // to the dashboard; same-origin callback URLs are preserved.
+    async redirect({ url, baseUrl }) {
+      if (url === baseUrl || url === `${baseUrl}/`) return `${baseUrl}/dashboard`;
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith(baseUrl)) return url;
+      return `${baseUrl}/dashboard`;
+    },
   },
   pages: {
     signIn: "/auth/signin",
     error: "/auth/error",
   },
-  secret: process.env.NEXTAUTH_SECRET ?? "set-NEXTAUTH_SECRET-env-var-in-vercel",
+  secret: resolveAuthSecret(),
 };
 
 declare module "next-auth" {

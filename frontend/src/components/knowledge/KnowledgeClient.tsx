@@ -4,33 +4,73 @@ import { useRef, useCallback, DragEvent, useState } from "react";
 import { Upload, FileText, Trash2, Search, AlertCircle, CheckCircle2, BookOpen, Download } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { useLocalKnowledge, searchDocs, type SearchResult } from "@/hooks/useLocalKnowledge";
+import { useMode } from "@/hooks/useMode";
+import { useModeTags, filterByMode } from "@/hooks/useModeTags";
+import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 
 export function KnowledgeClient() {
   const { docs, ready, uploading, upload, remove } = useLocalKnowledge();
+  const { modeId } = useMode();
+  const { tags, tagItem } = useModeTags();
+  const [showAllModes, setShowAllModes] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [semantic, setSemantic] = useState(false);
+
+  // Docs visible under the current mode scope (untagged docs show in every mode).
+  const visibleDocs = filterByMode(docs, tags, modeId, showAllModes);
+
+  // Tag freshly-uploaded docs with the active mode so they're mode-scoped.
+  const tagNew = useCallback((created: { id: string }[]) => {
+    for (const d of created) tagItem(d.id, modeId);
+  }, [tagItem, modeId]);
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
-    upload(files);
-  }, [upload]);
+    upload(files).then((created) => created && tagNew(created));
+  }, [upload, tagNew]);
 
   function onDragOver(e: DragEvent<HTMLDivElement>) { e.preventDefault(); setIsDragging(true); }
   function onDragLeave(e: DragEvent<HTMLDivElement>) { e.preventDefault(); setIsDragging(false); }
   function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault(); setIsDragging(false);
-    upload(e.dataTransfer?.files ?? new DataTransfer().files);
+    upload(e.dataTransfer?.files ?? new DataTransfer().files).then((created) => created && tagNew(created));
   }
 
-  function handleSearch() {
+  async function handleSearch() {
     const q = searchQuery.trim();
     if (!q) return;
     setSearching(true);
-    const r = searchDocs(docs, q, 5);
-    setResults(r);
+    // Prefer real semantic (pgvector) search; fall back to local keyword search
+    // when embeddings aren't configured or the request fails.
+    try {
+      const res = await fetch("/api/cortex/search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.enabled && Array.isArray(data.hits) && data.hits.length > 0) {
+          const hits = data.hits.map((h: any) => ({
+            doc_id: h.doc_id, doc_title: h.doc_title, chunk_index: h.chunk_index,
+            content: h.content, score: h.similarity,
+          }));
+          // Keep semantic hits within the active mode scope (untagged = all modes).
+          const scoped = showAllModes
+            ? hits
+            : hits.filter((h: SearchResult) => { const t = tags[h.doc_id]; return t === undefined || t === modeId; });
+          setResults(scoped);
+          setSemantic(true);
+          setSearching(false);
+          return;
+        }
+      }
+    } catch { /* fall back */ }
+    setSemantic(false);
+    setResults(searchDocs(visibleDocs, q, 5));
     setSearching(false);
   }
 
@@ -120,16 +160,34 @@ export function KnowledgeClient() {
 
         {results !== null && (
           <div className="px-4 py-3 space-y-3">
-            <p className="text-text-muted text-xs font-mono">{results.length} results</p>
+            <p className="text-text-muted text-xs font-mono flex items-center gap-2">
+              {results.length} results
+              <span className={cn("px-1.5 py-0.5 rounded text-[10px] border",
+                semantic ? "text-[#4FC3F7] border-[#4FC3F7]/30 bg-[#4FC3F7]/10" : "text-text-muted border-border-default")}>
+                {semantic ? "semantic" : "keyword"}
+              </span>
+            </p>
             {results.length === 0 ? (
               <p className="text-text-muted text-sm py-3">No matching passages found.</p>
             ) : (
               results.map((r, i) => (
                 <div key={`${r.doc_id}-${r.chunk_index}`}
                   className="bg-background-elevated border border-border-default rounded-input px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-accent-blue text-xs font-mono">[{i + 1}] {r.doc_title}</span>
-                    <span className="text-text-muted text-xs font-mono">chunk {r.chunk_index} · score {r.score}</span>
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <span className="text-accent-blue text-xs font-mono truncate">[{i + 1}] {r.doc_title}</span>
+                    <span className="flex items-center gap-2 flex-none">
+                      {semantic ? (
+                        <>
+                          <span className="w-16 h-1.5 rounded-full bg-background-base overflow-hidden hidden sm:block">
+                            <span className="block h-full bg-gradient-to-r from-[#4FC3F7] to-emerald-400"
+                              style={{ width: `${Math.round(Math.max(0, Math.min(1, r.score)) * 100)}%` }} />
+                          </span>
+                          <span className="text-text-muted text-xs font-mono">{Math.round(Math.max(0, Math.min(1, r.score)) * 100)}% match</span>
+                        </>
+                      ) : (
+                        <span className="text-text-muted text-xs font-mono">{r.score}× keyword</span>
+                      )}
+                    </span>
                   </div>
                   <p className="text-text-primary text-sm leading-relaxed line-clamp-4">{r.content}</p>
                 </div>
@@ -144,24 +202,29 @@ export function KnowledgeClient() {
         <div className="px-5 py-4 border-b border-border-default flex items-center justify-between">
           <h2 className="text-text-primary font-medium text-sm">Documents</h2>
           <div className="flex items-center gap-3">
+            <ModeScopeToggle showAll={showAllModes} onChange={setShowAllModes} />
             {docs.length > 0 && (
               <button onClick={exportAll} className="flex items-center gap-1 text-text-muted hover:text-[#4FC3F7] text-xs font-mono transition-colors">
                 <Download size={11} /> Export all
               </button>
             )}
-            <span className="text-text-muted text-xs font-mono">{docs.length} total</span>
+            <span className="text-text-muted text-xs font-mono">{visibleDocs.length} shown</span>
           </div>
         </div>
 
-        {docs.length === 0 ? (
+        {visibleDocs.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <BookOpen size={24} className="mx-auto text-text-muted opacity-40 mb-3" />
-            <p className="text-text-muted text-sm">No documents yet. Upload one above.</p>
-            <p className="text-text-muted text-xs mt-1">Your AI will search them when you ask questions.</p>
+            <p className="text-text-muted text-sm">
+              {docs.length === 0 ? "No documents yet. Upload one above." : "No documents in this mode."}
+            </p>
+            <p className="text-text-muted text-xs mt-1">
+              {docs.length === 0 ? "Your AI will search them when you ask questions." : "Switch to “All” to see documents from every mode."}
+            </p>
           </div>
         ) : (
           <ul className="divide-y divide-border-default">
-            {docs.map((doc) => (
+            {visibleDocs.map((doc) => (
               <li key={doc.id}
                 className="px-5 py-3 flex items-center gap-4 hover:bg-background-elevated transition-colors group">
                 <FileText size={15} className="text-text-muted flex-none" />

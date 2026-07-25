@@ -1,18 +1,46 @@
 "use client";
 
-import { useState, useRef, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useLocalNotes, LocalNote } from "@/hooks/useLocalNotes";
 import { Plus, Trash2, Pin, PinOff, Search, X, Download } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { useMode } from "@/hooks/useMode";
+import { useModeTags, filterByMode } from "@/hooks/useModeTags";
+import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 
 export function NotesClient() {
   const { notes, ready, create, update, remove } = useLocalNotes();
+  const { modeId } = useMode();
+  const { tags, tagItem } = useModeTags();
+  const [showAllModes, setShowAllModes] = useState(false);
   const [active, setActive] = useState<LocalNote | null>(null);
   const [search, setSearch] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const textRef = useRef<HTMLTextAreaElement>(null);
 
-  const filtered = notes.filter((n) =>
+  // Debounced autosave: keystrokes update local state immediately but persist
+  // at most once every ~500ms, instead of one write per character. The latest
+  // patch per note is coalesced and flushed on the timer, on note switch, and
+  // on unmount so nothing is lost.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<{ id: string; patch: Partial<LocalNote> } | null>(null);
+
+  function flushSave() {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    if (pending.current) { update(pending.current.id, pending.current.patch); pending.current = null; }
+  }
+
+  function scheduleSave(id: string, patch: Partial<LocalNote>) {
+    const merged = pending.current && pending.current.id === id ? { ...pending.current.patch, ...patch } : patch;
+    pending.current = { id, patch: merged };
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushSave, 500);
+  }
+
+  // Flush the previous note's pending edits before switching, and on unmount.
+  useEffect(() => flushSave, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filtered = filterByMode(notes, tags, modeId, showAllModes).filter((n) =>
     !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase())
   );
   const pinned = filtered.filter((n) => n.pinned);
@@ -21,6 +49,7 @@ export function NotesClient() {
   async function handleNew() {
     const title = newTitle.trim() || "Untitled";
     const note = await create(title);
+    if (note?.id) tagItem(note.id, modeId); // tag new notes with the active mode
     setNewTitle("");
     setActive(note);
   }
@@ -31,13 +60,13 @@ export function NotesClient() {
 
   function handleBodyChange(content: string) {
     if (!active) return;
-    update(active.id, { content });
+    scheduleSave(active.id, { content });
     setActive((prev) => prev ? { ...prev, content } : null);
   }
 
   function handleTitleChange(title: string) {
     if (!active) return;
-    update(active.id, { title });
+    scheduleSave(active.id, { title });
     setActive((prev) => prev ? { ...prev, title } : null);
   }
 
@@ -86,10 +115,17 @@ export function NotesClient() {
           {search && <button onClick={() => setSearch("")}><X size={11} className="text-text-muted" /></button>}
         </div>
 
+        {/* Mode scope */}
+        <ModeScopeToggle showAll={showAllModes} onChange={setShowAllModes} />
+
         {/* List */}
         <div className="flex-1 overflow-y-auto space-y-1">
-          {notes.length === 0 && (
-            <p className="text-text-muted text-xs text-center py-8">No notes yet. Create one above or ask your AI to take a note.</p>
+          {filtered.length === 0 && (
+            <p className="text-text-muted text-xs text-center py-8">
+              {notes.length === 0
+                ? "No notes yet. Create one above or ask your AI to take a note."
+                : "No notes in this mode. Switch to “All” to see every note."}
+            </p>
           )}
           {pinned.length > 0 && (
             <>

@@ -2,16 +2,25 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2 } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2, Ear } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { matchSystemsCommand } from "@/lib/systems";
+import { triggerSystemsOnline } from "@/components/systems/SystemsOnline";
 import { usePush } from "@/hooks/usePush";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
+import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
+import { useAgentProfile } from "@/hooks/useAgentProfile";
+import { useMode } from "@/hooks/useMode";
+import { VisionButton } from "./VisionButton";
+import { useWakeWord } from "@/hooks/useWakeWord";
+import { Persona3D } from "@/components/persona/Persona3D";
+import { personaFor } from "@/lib/persona/personas";
 
 interface Message {
   id: string;
@@ -33,8 +42,11 @@ interface PendingAction {
   tool: string;
   args: any;
   summary: string;
-  status: "pending" | "running" | "done" | "canceled";
+  status: "pending" | "running" | "done" | "failed" | "canceled";
   result?: string;
+  url?: string;          // deep link to open on approval (pay/whatsapp/call/sms)
+  openLabel?: string;    // confirm-button label for a client action
+  clientAction?: boolean; // true → open url on the confirming tap (no /api/act)
 }
 
 interface HistoryEntry {
@@ -89,6 +101,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [idleIdx, setIdleIdx] = useState(0);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  // How the mic behaves: "call" = hands-free, each utterance auto-sends and the
+  // reply is read aloud; "dictate" = speech fills the input box for review and
+  // is NOT sent until the user presses send.
+  const [voiceMode, setVoiceMode] = useState<"dictate" | "call">("call");
+  const [wakeEnabled, setWakeEnabled] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") setWakeEnabled(localStorage.getItem("jarvis_wakeword") === "1");
+  }, []);
+  const voiceModeRef = useRef<"dictate" | "call">("call");
+  useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
   usePush();
 
@@ -104,11 +126,49 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const suppressRef = useRef(false);
   const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { allTasks, create: createTask, update: updateTask } = useLocalTasks();
+  const { allTasks } = useLocalTasks();
   const { docs } = useLocalKnowledge();
   const { notes } = useLocalNotes();
-  const { goals, add: addGoal, adjust: adjustGoal } = useLocalGoals();
-  const tts = useTTS();
+  const { goals } = useLocalGoals();
+  const applyActions = useAgentActions();
+  const [undoable, setUndoable] = useState<UndoableAction[]>([]);
+  // Links the assistant asked to open but the browser blocked (iOS blocks
+  // window.open outside a tap) — rendered as tappable chips so one tap opens.
+  const [pendingOpens, setPendingOpens] = useState<{ url: string; label: string }[]>([]);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { active: agent } = useAgentProfile();
+  const { modeId } = useMode();
+
+  const offerUndo = useCallback((actions: UndoableAction[]) => {
+    if (!actions.length) return;
+    setUndoable(actions);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndoable([]), 12000);
+  }, []);
+
+  const runUndo = useCallback(() => {
+    undoable.forEach((a) => a.undo());
+    setUndoable([]);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, [undoable]);
+
+  // The agent asked to open one or more links (open_app tool). Try to open each
+  // in a new tab immediately; iOS/Safari block window.open outside a tap, so any
+  // that don't open are surfaced as tappable chips (one tap = a real gesture).
+  const openLinks = useCallback((sideEffects?: { type: string; data?: any }[]) => {
+    const opens = (sideEffects ?? []).filter((fx) => fx.type === "open_url" && fx.data?.url);
+    if (!opens.length) return;
+    const blocked: { url: string; label: string }[] = [];
+    for (const fx of opens) {
+      const url = String(fx.data.url);
+      if (!/^https?:\/\//i.test(url)) continue; // only ever open http(s)
+      let win: Window | null = null;
+      try { win = window.open(url, "_blank", "noopener,noreferrer"); } catch { win = null; }
+      if (!win) blocked.push({ url, label: fx.data.label || url });
+    }
+    setPendingOpens(blocked);
+  }, []);
+  const tts = useTTS(agent?.voicePreference);
 
   const stt = useVoiceSTT({
     lang,
@@ -136,9 +196,25 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
+      // Dictate: drop the transcript into the composer for review, don't send.
+      if (voiceModeRef.current === "dictate") {
+        setInput((prev) => (prev ? prev.replace(/\s+$/, "") + " " : "") + text);
+        return;
+      }
       if (!isStreamingRef.current) sendRef.current(text);
     }, []),
   });
+
+  // Wake word: passive listening for the agent's name. Only runs while the mic
+  // is OFF, so it never fights the main recognizer for the microphone; saying
+  // "JARVIS" (or the active agent's name) flips into hands-free call mode.
+  const onWake = useCallback(() => {
+    if (isStreamingRef.current) return;
+    setVoiceMode("call");
+    stt.enable();
+    setMicOn(true);
+  }, [stt]);
+  useWakeWord({ agentName: agent?.name ?? "JARVIS", enabled: wakeEnabled && !micOn, onWake, cooldownMs: 2000 });
 
   // Track TTS state in a ref so callbacks can see it
   useEffect(() => {
@@ -201,6 +277,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }, 2500);
   }, [serviceStatus, messages.length, session?.user?.email]);
 
+  // Proactive idle check-in (JARVIS-style): after a stretch of inactivity in an
+  // active conversation, offer a gentle nudge — without nagging. Resets on any
+  // send; capped per session; only while the tab is visible and idle.
+  const lastActivityRef = useRef(Date.now());
+  const nudgeCountRef = useRef(0);
+  useEffect(() => {
+    const IDLE_MS = 8 * 60 * 1000;   // 8 minutes
+    const id = setInterval(() => {
+      if (isStreamingRef.current || tts.speaking) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (messages.length === 0 || nudgeCountRef.current >= 2) return;
+      if (Date.now() - lastActivityRef.current < IDLE_MS) return;
+      lastActivityRef.current = Date.now();
+      nudgeCountRef.current += 1;
+      const who = userName ? `, ${userName}` : "";
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(), role: "assistant",
+        content: `Still here${who}. Want a quick task summary, a fresh briefing, or help with something else? Just say the word.`,
+      }]);
+    }, 60 * 1000);
+    return () => clearInterval(id);
+  }, [messages.length, tts.speaking, userName]);
+
   // Show a "done" tagline for 3s after each response
   const prevStreamingRef = useRef(false);
   useEffect(() => {
@@ -212,6 +311,19 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }
     prevStreamingRef.current = isStreaming;
   }, [isStreaming, messages.length]);
+
+  // Skill hand-off: the Skills page stashes a composed run and navigates here;
+  // pick it up once and send it, so the automation runs through the agent loop.
+  const skillRanRef = useRef(false);
+  useEffect(() => {
+    if (skillRanRef.current) return;
+    let text: string | null = null;
+    try { text = sessionStorage.getItem("te_pending_skill_run"); if (text) sessionStorage.removeItem("te_pending_skill_run"); } catch { /* noop */ }
+    if (text) {
+      skillRanRef.current = true;
+      setTimeout(() => { if (!isStreamingRef.current) sendRef.current(text!); }, 400);
+    }
+  }, []);
 
   // Auto-start mic and greet on mount
   const greetedRef = useRef(false);
@@ -240,6 +352,15 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || isStreamingRef.current) return;
+
+    // "All systems online" / "<system> status" → run the spoken status sequence
+    // instead of a normal chat turn.
+    const sysCmd = matchSystemsCommand(msg);
+    if (sysCmd) { triggerSystemsOnline(sysCmd); setInput(""); return; }
+
+    // Activity → reset the proactive idle timer and re-arm nudges.
+    lastActivityRef.current = Date.now();
+    nudgeCountRef.current = 0;
 
     setInput("");
     setApiError(null);
@@ -276,6 +397,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
           location: typeof window !== "undefined" && (window as any).__teLocation
             ? (window as any).__teLocation
             : undefined,
+          agentName: agent?.name,
+          agentPersona: agent?.personality,
+          mode: modeId,
         }),
         signal: abortRef.current.signal,
       });
@@ -320,6 +444,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setPendingActions((prev) => [...prev, {
                   id: parsed.id, tool: parsed.tool, args: parsed.args,
                   summary: parsed.summary, status: "pending",
+                  url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
                 }]);
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
@@ -342,27 +467,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "user", content: msg },
                   { role: "assistant", content: fullText },
                 ];
-                if (parsed.sideEffects) {
-                  for (const fx of parsed.sideEffects) {
-                    if (fx.type === "task_create" && fx.data?.title) {
-                      createTask({ title: fx.data.title, priority: fx.data.priority ?? "medium", status: "todo", assignee: fx.data.assignee, due_date: fx.data.due_date, description: fx.data.description });
-                    }
-                    if (fx.type === "task_update" && fx.data?.id) {
-                      updateTask(fx.data.id, fx.data.patch ?? {});
-                    }
-                    if (fx.type === "note_create" && fx.data?.title) {
-                      const savedNotes = JSON.parse(localStorage.getItem("jarvis_notes_v1") ?? "[]");
-                      savedNotes.unshift({ id: crypto.randomUUID(), title: fx.data.title, content: fx.data.content, pinned: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-                      localStorage.setItem("jarvis_notes_v1", JSON.stringify(savedNotes));
-                    }
-                    if (fx.type === "goal_create" && fx.data?.title) {
-                      addGoal({ title: fx.data.title, category: fx.data.category ?? "Personal", target: fx.data.target ?? 100, current: fx.data.current ?? 0, unit: fx.data.unit ?? "%", deadline: fx.data.deadline, description: fx.data.description });
-                    }
-                    if (fx.type === "goal_update" && fx.data?.id) {
-                      if (fx.data.delta !== undefined) adjustGoal(fx.data.id, fx.data.delta);
-                    }
-                  }
-                }
+                applyActions(parsed.sideEffects).then(offerUndo);
+                openLinks(parsed.sideEffects);
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -384,7 +490,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, session, userName, allTasks, docs, createTask, tts]);
+  }, [input, session, userName, allTasks, docs, applyActions, tts]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -404,7 +510,51 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setIsStreaming(false);
   }
 
+  // Vision (E.D.I.T.H.): a captured screen/camera frame was analyzed — record
+  // it in the conversation as a Q&A turn so it reads naturally in the thread.
+  const handleVisionResult = useCallback((q: string, _image: string, answer: string) => {
+    setInput("");
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: `👁️ ${q}` },
+      { id: crypto.randomUUID(), role: "assistant", content: answer },
+    ]);
+  }, []);
+
+  // Instant interrupt (JARVIS-style): stop the in-flight response + any speech
+  // immediately, WITHOUT wiping the conversation. Wired to Escape and the stop
+  // control so the user can cut the assistant off mid-answer.
+  const interrupt = useCallback(() => {
+    if (isStreamingRef.current) abortRef.current?.abort();
+    tts.stop();
+    setIsStreaming(false);
+    setLiveBubble(null);
+  }, [tts]);
+
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape" && (isStreamingRef.current || tts.speaking)) {
+        e.preventDefault();
+        interrupt();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [interrupt, tts.speaking]);
+
   const confirmAction = useCallback(async (action: PendingAction) => {
+    // Deep-link intents (pay/whatsapp/call/sms): open the target app on THIS
+    // tap (a real user gesture, so iOS allows it). The app opens pre-filled and
+    // the user completes/approves it there — we never execute the payment.
+    if (action.clientAction && action.url) {
+      const url = action.url;
+      try {
+        if (/^https?:/i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
+        else window.location.href = url; // upi: / tel: / sms: → OS opens the app
+      } catch { /* noop */ }
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: `Opened ${action.tool === "pay" ? "your payment app" : "the app"} — complete it there.` } : a));
+      return;
+    }
     setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "running" } : a));
     try {
       const res = await fetch("/api/act", {
@@ -412,11 +562,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool: action.tool, args: action.args }),
       });
-      const data = await res.json();
-      const result = data.result ?? data.error ?? "Done.";
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result } : a));
+      const data = await res.json().catch(() => ({}));
+      // The action truly succeeded only if the HTTP call is ok AND the endpoint
+      // didn't report a failure (ok:false / error). Otherwise it's a rejection.
+      const succeeded = res.ok && data.ok !== false && !data.error;
+      const result = data.result ?? data.error ?? (succeeded ? "Done." : "The action was rejected.");
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: succeeded ? "done" : "failed", result } : a));
     } catch {
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: "Failed to execute." } : a));
+      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "failed", result: "Couldn't reach the server — nothing was done." } : a));
     }
   }, []);
 
@@ -429,15 +582,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     else { stt.enable(); setMicOn(true); }
   }
 
+  // Dictation: mic on in "dictate" mode — speech fills the composer, no auto-send.
+  function toggleDictate() {
+    if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
+    else { setVoiceMode("dictate"); stt.enable(); setMicOn(true); }
+  }
+
   // ── Composer reply mode (Option B) ──────────────────────────────────────────
   // One control governs how JARVIS answers, derived from the existing voice flags:
   //   text  → silent (TTS off)      voice → reply read aloud (TTS on)
-  //   call  → read aloud + mic on (hands-free conversation)
-  const replyMode: "text" | "voice" | "call" = micOn ? "call" : tts.enabled ? "voice" : "text";
+  //   call  → read aloud + mic on, hands-free (voiceMode "call", auto-send)
+  const replyMode: "text" | "voice" | "call" =
+    micOn && voiceMode === "call" ? "call" : tts.enabled ? "voice" : "text";
   function setReplyMode(mode: "text" | "voice" | "call") {
     if (mode === "text") { if (tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
     else if (mode === "voice") { if (!tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
-    else { // call — needs the mic; fall back to voice if STT is unavailable
+    else { // call — hands-free auto-send + read aloud; needs the mic
+      setVoiceMode("call");
       if (!tts.enabled) tts.toggle();
       if (stt.supported && !micOn) toggleMic();
     }
@@ -453,12 +614,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }
 
   const isEmpty = messages.length === 0 && !liveBubble;
+  // The active agent's 3D persona — shown in the top bar and empty-state hero,
+  // and animated while the agent is speaking.
+  const persona = personaFor(agent?.name);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Top bar */}
       <div className="flex-none flex items-center justify-between px-4 sm:px-8 py-2 border-b border-border-default bg-background-surface">
         <div className="flex items-center gap-2">
+          <div className="w-9 h-9 flex-none -my-1"><Persona3D color={persona.color} speaking={tts.speaking} className="w-full h-full" /></div>
           <span className={cn("w-1.5 h-1.5 rounded-full",
             tts.speaking ? "bg-accent-violet animate-pulse"
             : suppressRef.current ? "bg-warning animate-pulse"
@@ -544,7 +709,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Conversation */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5">
-        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} />}
+        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} persona={persona} speaking={tts.speaking} />}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
 
@@ -586,6 +751,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div className="flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base">
+        {pendingOpens.length > 0 && (
+          <div className="flex items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-input bg-success/10 border border-success/25 animate-fade-in">
+            <span className="text-xs text-text-secondary flex-none">Tap to open:</span>
+            {pendingOpens.map((o) => (
+              <a key={o.url} href={o.url} target="_blank" rel="noopener noreferrer"
+                onClick={() => setPendingOpens((p) => p.filter((x) => x.url !== o.url))}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-success border border-success/30 rounded-input px-2.5 py-1 hover:bg-success/15 transition-colors">
+                <Globe size={12} /> {o.label}
+              </a>
+            ))}
+          </div>
+        )}
+        {undoable.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-2 px-3 py-2 rounded-input bg-accent-blue/10 border border-accent-blue/25 animate-fade-in">
+            <span className="text-xs text-text-secondary">
+              {agent.name} added {undoable.map((u) => u.label).join(", ")}.
+            </span>
+            <button onClick={runUndo}
+              className="flex items-center gap-1.5 text-xs font-medium text-accent-blue hover:underline flex-none">
+              <RotateCcw size={12} /> Undo
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
           {/* Mode chip: Chat ▾ → Narrate */}
           <div className="relative flex-none self-stretch flex items-center">
@@ -641,19 +829,37 @@ export function AssistantClient({ userName }: { userName?: string }) {
             )}
           </div>
           {stt.supported && (
-            <button onClick={toggleMic} title={micOn ? "Mute mic" : "Dictate"}
-              className={cn("flex-none p-1.5 rounded-input transition-colors", micOn ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
-              {micOn ? <Mic size={15} /> : <MicOff size={15} />}
+            <button onClick={toggleDictate}
+              title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate — speech fills the box, doesn't send"}
+              className={cn("flex-none p-1.5 rounded-input transition-colors",
+                micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
+              {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
             </button>
           )}
-          <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
+          <button
+            onClick={() => setWakeEnabled((v) => { const n = !v; try { localStorage.setItem("jarvis_wakeword", n ? "1" : "0"); } catch { /* noop */ } return n; })}
+            title={wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free` : "Enable wake word (\"Hey JARVIS\")"}
             className={cn("flex-none p-1.5 rounded-input transition-colors",
-              input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
-            <Send size={15} />
+              wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
+            <Ear size={15} />
           </button>
+          <VisionButton question={input} disabled={isStreaming} onResult={handleVisionResult} />
+          {(isStreaming || tts.speaking) ? (
+            <button onClick={interrupt} title="Stop (Esc)"
+              className="flex-none flex items-center gap-1 px-2 py-1.5 rounded-input text-accent-red hover:bg-accent-red/10 transition-colors">
+              <X size={15} /><span className="text-[11px] font-mono">Esc</span>
+            </button>
+          ) : (
+            <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
+              className={cn("flex-none p-1.5 rounded-input transition-colors",
+                input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
+              <Send size={15} />
+            </button>
+          )}
         </div>
         <p className="text-text-muted text-[11px] mt-2 text-center">
-          {replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
+          {micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
+            : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
             : "Enter to send · Shift+Enter for new line"}
         </p>
@@ -679,13 +885,12 @@ function VoiceWaveform({ level }: { level: number }) {
   );
 }
 
-function EmptyState({ userName, supported, onSuggest }: { userName?: string; supported: boolean; onSuggest: (t: string) => void }) {
+function EmptyState({ userName, supported, onSuggest, persona, speaking }: { userName?: string; supported: boolean; onSuggest: (t: string) => void; persona: { name: string; color: string }; speaking: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-full bg-accent-blue/10 border border-accent-blue/20 flex items-center justify-center mx-auto mb-4">
-          <Cpu size={22} className="text-accent-blue" />
-        </div>
+        <div className="w-36 h-36 mx-auto mb-3"><Persona3D color={persona.color} speaking={speaking} className="w-full h-full" /></div>
+        <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
         <p className="text-text-primary font-semibold text-base mb-1">
           {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
         </p>
@@ -778,7 +983,7 @@ function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; on
           {a.status === "pending" && (
             <div className="flex items-center gap-2 mt-3">
               <button onClick={onConfirm} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-success/15 text-success border border-success/30 text-xs font-medium hover:bg-success/25 transition-colors">
-                <Check size={13} /> Confirm & do it
+                <Check size={13} /> {a.openLabel ?? "Confirm & do it"}
               </button>
               <button onClick={onCancel} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-muted border border-border-default text-xs hover:text-text-secondary transition-colors">
                 <X size={13} /> Cancel
@@ -790,6 +995,25 @@ function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; on
           )}
           {a.status === "done" && (
             <div className="flex items-center gap-2 mt-3 text-xs text-success"><Check size={13} /> {a.result}</div>
+          )}
+          {a.status === "failed" && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it — {a.result}</span></div>
+              {/* Missing connection/permission → let the user grant it inline and
+                  retry, so the action actually completes rather than dead-ending. */}
+              {/(connect|not connected|permission|scope|authoriz)/i.test(a.result ?? "") && (
+                <div className="flex items-center gap-2">
+                  <a href="/api/connect/google"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-accent-blue/15 text-accent-blue border border-accent-blue/30 text-xs font-medium hover:bg-accent-blue/25 transition-colors">
+                    <ShieldCheck size={13} /> Connect Google &amp; grant access
+                  </a>
+                  <button onClick={onConfirm}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-secondary border border-border-default text-xs hover:text-text-primary transition-colors">
+                    <RotateCcw size={12} /> Try again
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {a.status === "canceled" && (
             <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>

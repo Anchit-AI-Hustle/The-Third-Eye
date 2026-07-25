@@ -4,9 +4,12 @@ import { useState, useRef } from "react";
 import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TeamMember } from "@/hooks/useLocalTasks";
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
-  LayoutGrid, List, AlertCircle, Check,
+  LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMode } from "@/hooks/useMode";
+import { useModeTags, filterByMode } from "@/hooks/useModeTags";
+import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,9 @@ function emptyForm(): Omit<LocalTask, "id" | "created_at"> {
 export function TasksClient() {
   const { allTasks, team, ready, create, update, remove, addMember, removeMember } =
     useLocalTasks();
+  const { modeId } = useMode();
+  const { tags, tagItem } = useModeTags();
+  const [showAllModes, setShowAllModes] = useState(false);
 
   const [view, setView] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");
@@ -80,7 +86,7 @@ export function TasksClient() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Filtering ─────────────────────────────────────────────────────────────
-  const filtered = allTasks
+  const filtered = filterByMode(allTasks, tags, modeId, showAllModes)
     .filter((t) => {
       if (search && !t.title.toLowerCase().includes(search.toLowerCase()) &&
           !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false;
@@ -109,7 +115,7 @@ export function TasksClient() {
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `thirdeye-actions-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `thirdeye-tasks-${new Date().toISOString().slice(0,10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
   }
 
@@ -127,7 +133,7 @@ export function TasksClient() {
           priority: (priority as TaskPriority) || "medium",
           start_date: start_date || undefined, due_date: due_date || undefined,
           completed_at: completed_at || undefined,
-        });
+        }).then((t) => { if (t?.id) tagItem(t.id, modeId); });
       });
     };
     reader.readAsText(file);
@@ -153,7 +159,7 @@ export function TasksClient() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2.5">
           <div className="w-2 h-2 rounded-full bg-success" />
-          <span className="text-text-muted text-sm font-mono">{allTasks.length} actions</span>
+          <span className="text-text-muted text-sm font-mono">{allTasks.length} tasks</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={exportCSV} className={btn}>
@@ -174,7 +180,7 @@ export function TasksClient() {
           </button>
           <button onClick={openNew}
             className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors">
-            <Plus size={14} /> New Action
+            <Plus size={14} /> New Task
           </button>
         </div>
       </div>
@@ -184,7 +190,7 @@ export function TasksClient() {
         <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
           <Search size={14} className="text-text-muted flex-none" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search actions…"
+            placeholder="Search tasks…"
             className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none" />
           {search && <button onClick={() => setSearch("")}><X size={12} className="text-text-muted hover:text-text-primary" /></button>}
         </div>
@@ -195,6 +201,8 @@ export function TasksClient() {
           options={[{ value: "", label: "All statuses" }, ...STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label }))]} />
         <FilterSelect value={filterPriority} onChange={setFilterPriority}
           options={[{ value: "", label: "All priorities" }, ...PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label }))]} />
+
+        <ModeScopeToggle showAll={showAllModes} onChange={setShowAllModes} />
 
         <div className="flex rounded-card border border-border-default overflow-hidden">
           <button onClick={() => setView("table")} className={cn("px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
@@ -210,7 +218,7 @@ export function TasksClient() {
 
       {/* ── View ───────────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <EmptyState hasFilters={!!(search || filterAssignee || filterStatus || filterPriority)} onNew={openNew} />
+        <EmptyState hasFilters={!!(search || filterAssignee || filterStatus || filterPriority || !showAllModes)} onNew={openNew} />
       ) : view === "table" ? (
         <TableView tasks={filtered} sortKey={sortKey} sortAsc={sortAsc}
           onSort={handleSort} onEdit={openEdit} onDelete={remove} />
@@ -223,9 +231,12 @@ export function TasksClient() {
         <ActionModal
           task={editTask}
           team={team}
-          onSave={(data) => {
+          onSave={async (data) => {
             if (editTask) update(editTask.id, data);
-            else create(data);
+            else {
+              const t = await create(data);
+              if (t?.id) tagItem(t.id, modeId); // tag new tasks with the active mode
+            }
             setShowModal(false);
           }}
           onClose={() => setShowModal(false)}
@@ -270,7 +281,7 @@ function TableView({ tasks, sortKey, sortAsc, onSort, onEdit, onDelete }: {
         <table className="w-full text-sm">
           <thead className="border-b border-border-default bg-background-elevated/50">
             <tr>
-              <TH label="Action" k="title" />
+              <TH label="Task" k="title" />
               <TH label="Assignee" k="assignee" />
               <TH label="Started" k="start_date" />
               <TH label="Due" k="due_date" />
@@ -286,8 +297,13 @@ function TableView({ tasks, sortKey, sortAsc, onSort, onEdit, onDelete }: {
               return (
                 <tr key={t.id} className="hover:bg-background-elevated/50 transition-colors group">
                   <td className="px-4 py-3 max-w-[320px]">
-                    <p className="text-text-primary leading-snug line-clamp-2">{t.title}</p>
-                    {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0">
+                        <p className="text-text-primary leading-snug line-clamp-2">{t.title}</p>
+                        {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
+                      </div>
+                      <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "—"}</td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.start_date)}</td>
@@ -332,6 +348,7 @@ const KANBAN_COLS: { status: TaskStatus; label: string }[] = [
   { status: "todo", label: "To Do" },
   { status: "in_progress", label: "In Progress" },
   { status: "done", label: "Done" },
+  { status: "cancelled", label: "Cancelled" },
 ];
 
 function KanbanView({ tasks, onEdit, onStatusChange }: {
@@ -339,12 +356,27 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
   onEdit: (t: LocalTask) => void;
   onStatusChange: (id: string, s: TaskStatus) => void;
 }) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<TaskStatus | null>(null);
+
+  const drop = (status: TaskStatus) => {
+    if (dragId) onStatusChange(dragId, status);
+    setDragId(null); setOverCol(null);
+  };
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {KANBAN_COLS.map(({ status, label }) => {
         const col = tasks.filter((t) => t.status === status);
         return (
-          <div key={status} className="bg-background-surface border border-border-default rounded-card overflow-hidden">
+          <div key={status}
+            onDragOver={(e) => { e.preventDefault(); setOverCol(status); }}
+            onDragLeave={() => setOverCol((c) => (c === status ? null : c))}
+            onDrop={() => drop(status)}
+            className={cn(
+              "bg-background-surface border rounded-card overflow-hidden transition-colors",
+              overCol === status ? "border-accent-blue/60 bg-accent-blue/5" : "border-border-default",
+            )}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
               <div className="flex items-center gap-2">
                 <StatusBadge status={status} />
@@ -356,9 +388,18 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
                 const overdue = isOverdue(t.due_date, t.status);
                 return (
                   <div key={t.id}
-                    className="bg-background-elevated border border-border-default rounded-input p-3 hover:border-border-hover transition-colors cursor-pointer"
+                    draggable
+                    onDragStart={() => setDragId(t.id)}
+                    onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                    className={cn(
+                      "bg-background-elevated border border-border-default rounded-input p-3 hover:border-border-hover transition-colors cursor-grab active:cursor-grabbing",
+                      dragId === t.id && "opacity-50",
+                    )}
                     onClick={() => onEdit(t)}>
-                    <p className="text-text-primary text-sm leading-snug mb-2">{t.title}</p>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <p className="text-text-primary text-sm leading-snug">{t.title}</p>
+                      <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                    </div>
                     <div className="flex items-center justify-between gap-2">
                       <PriorityBadge priority={t.priority} />
                       <div className="flex items-center gap-2 text-xs text-text-muted">
@@ -425,7 +466,7 @@ function ActionModal({ task, team, onSave, onClose }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bg-background-elevated border border-border-default rounded-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-5 border-b border-border-default">
-          <h2 className="font-semibold text-text-primary">{task ? "Edit action" : "New action"}</h2>
+          <h2 className="font-semibold text-text-primary">{task ? "Edit task" : "New task"}</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
         </div>
 
@@ -543,6 +584,33 @@ function TeamModal({ team, newName, onNameChange, onAdd, onRemove, onClose }: {
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
+const SOURCE_META: Record<string, { label: string; icon: typeof Mail; color: string }> = {
+  email:   { label: "Email", icon: Mail,          color: "#4FC3F7" },
+  chat:    { label: "Chat",  icon: MessageSquare, color: "#A78BFA" },
+  voice:   { label: "Voice", icon: Mic,           color: "#34D399" },
+  meeting: { label: "Meeting", icon: MessageSquare, color: "#F0C94E" },
+};
+
+function SourceBadge({ type, link, detail }: { type?: string; link?: string; detail?: string }) {
+  if (!type) return null;
+  const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#7878A8" };
+  const Icon = meta.icon;
+  const inner = (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none"
+      style={{ color: meta.color, borderColor: `${meta.color}55` }}
+      title={detail || meta.label}
+    >
+      <Icon size={10} /> {meta.label}
+    </span>
+  );
+  return link ? (
+    <a href={link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-none">
+      {inner}
+    </a>
+  ) : inner;
+}
+
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   return (
     <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", PRIORITY_STYLE[priority])}>
@@ -592,11 +660,11 @@ function EmptyState({ hasFilters, onNew }: { hasFilters: boolean; onNew: () => v
     <div className="py-16 text-center">
       <AlertCircle size={24} className="mx-auto text-text-muted mb-3 opacity-40" />
       <p className="text-text-muted text-sm">
-        {hasFilters ? "No actions match your filters." : "No actions yet."}
+        {hasFilters ? "No tasks match your filters." : "No tasks yet."}
       </p>
       {!hasFilters && (
         <button onClick={onNew} className="mt-3 text-accent-blue text-sm hover:underline">
-          + Create your first action
+          + Create your first task
         </button>
       )}
     </div>

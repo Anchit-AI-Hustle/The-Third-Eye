@@ -34,7 +34,7 @@ jobs:
           ENVIRONMENT: test
           SECRET_KEY: test-secret-key-with-at-least-32-chars
           FINANCIAL_ENCRYPTION_KEY: test-financial-key-with-32-characters
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          DATABASE_URL: sqlite+aiosqlite://:memory:
           REDIS_URL: redis://localhost:6379/0
           NEXTAUTH_SECRET: test-nextauth-secret-with-32-chars
           GOOGLE_AI_API_KEY: test-google-ai-key

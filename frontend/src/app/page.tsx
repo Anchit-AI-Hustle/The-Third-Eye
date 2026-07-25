@@ -1,123 +1,186 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+
 import { authOptions } from "@/lib/auth";
+import { LandingHero } from "@/components/landing/LandingHero";
+import { LandingReveal } from "@/components/landing/LandingReveal";
+
+export const metadata = {
+  title: "The Third Eye — Your Personal AI Operating System",
+  description:
+    "The Third Eye is a private, self-hosted personal AI operating system. One workspace where an AI assistant helps you capture tasks and notes, search your own knowledge, track goals and finances, and stay on top of reminders.",
+};
 
 const FEATURES = [
   {
-    title: "Conversational AI assistant",
-    body: "Streaming voice and text dialog with distinct personalities. Ask questions, run calculations, translate, and get instant answers.",
+    title: "AI Assistant",
+    body: "Chat with an assistant that can search the web, look things up in your own data, and take actions — creating tasks, notes, and reminders on your behalf.",
   },
   {
-    title: "Knowledge base & document Q&A",
-    body: "Upload PDFs and documents, then chat with them. Retrieval-augmented search surfaces the passages that matter.",
+    title: "Tasks",
+    body: "Capture to-dos with priorities and due dates, and let the assistant turn conversations into tracked, actionable items.",
   },
   {
-    title: "Tasks, notes & reminders",
-    body: "Capture notes by voice or text, track tasks with priorities and due dates, and set browser reminders — hands-free.",
+    title: "Knowledge",
+    body: "Upload your documents and ask questions in plain language. Answers cite the passages they came from, powered by semantic search over your files.",
   },
   {
-    title: "Live web, weather & places",
-    body: "Real-time web search, local weather and forecasts, nearby places, news briefings, and live stock or crypto quotes.",
+    title: "Notes",
+    body: "Quickly capture thoughts and meeting notes — organized, searchable, and always private to your account.",
   },
   {
-    title: "Parallel multi-agent research",
-    body: "Sub-agents tackle distinct angles of a question in parallel and synthesize a single strategic answer with confidence.",
+    title: "Reminders & Daily Plan",
+    body: "Get nudged about what's due and receive a morning plan so nothing important slips through the cracks.",
   },
   {
-    title: "Your data, your control",
-    body: "Every account's data is isolated to that user, and you can review or delete your documents and history whenever you like.",
+    title: "Goals & Finance",
+    body: "Track your goals over time and get a clear overview of your finances, all in one place.",
   },
 ];
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
+
   if (session) {
     redirect("/dashboard");
   }
 
   return (
-    <div className="min-h-screen bg-background-base text-text-primary relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-accent-blue/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 w-[400px] h-[400px] bg-accent-violet/5 rounded-full blur-3xl" />
+    <div className="relative min-h-screen overflow-hidden bg-background-base text-text-primary">
+      {/* Ambient background glow */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute left-1/2 top-0 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-accent-blue/5 blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 h-[400px] w-[400px] rounded-full bg-accent-violet/5 blur-3xl" />
       </div>
 
-      <header className="relative z-10 mx-auto max-w-5xl flex items-center justify-between px-4 py-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-accent-blue/10 border border-accent-blue/20 overflow-hidden flex items-center justify-center">
-            <img src="/logo.png" alt="The Third Eye" className="w-full h-full object-cover" />
-          </div>
-          <span className="font-display font-semibold tracking-tight">The Third Eye</span>
-        </div>
-        <Link
-          href="/auth/signin"
-          className="flex items-center justify-center bg-accent-blue hover:bg-accent-blue/90 text-white rounded-input px-4 h-10 text-sm font-medium transition-all duration-150 active:scale-[0.98]"
-        >
-          Sign in
-        </Link>
-      </header>
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-5">
+        <header className="flex items-center justify-between py-5">
+          <Link
+            href="/"
+            className="flex items-center gap-3"
+            aria-label="The Third Eye home"
+          >
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-accent-blue/20 bg-accent-blue/10">
+              <img
+                src="/logo.png"
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
 
-      <main className="relative z-10 mx-auto max-w-5xl px-4">
-        <section className="flex flex-col items-center text-center pt-14 pb-16 md:pt-20 md:pb-20">
-          <div className="w-20 h-20 rounded-2xl bg-accent-blue/10 border border-accent-blue/20 overflow-hidden mb-6 shadow-elevated flex items-center justify-center">
-            <img src="/logo.png" alt="The Third Eye" className="w-full h-full object-cover" />
-          </div>
-          <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight max-w-2xl">
-            Your Personal Intelligence Operating System
-          </h1>
-          <p className="text-text-secondary text-base md:text-lg mt-4 max-w-xl">
-            The Third Eye is an AI assistant that unifies conversation, knowledge, tasks, and
-            real-time information into one private, voice-first workspace.
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row items-center gap-3">
-            <Link
-              href="/auth/signin"
-              className="flex items-center justify-center bg-accent-blue hover:bg-accent-blue/90 text-white rounded-input px-6 h-12 text-sm font-medium transition-all duration-150 active:scale-[0.98]"
-            >
-              Get started
-            </Link>
+            <span className="font-display font-bold tracking-tight">
+              The Third Eye
+            </span>
+          </Link>
+
+          <Link
+            href="/auth/signin"
+            className="flex h-10 items-center justify-center rounded-input bg-accent-blue px-4 text-sm font-medium text-white transition-all duration-150 hover:bg-accent-blue/90 active:scale-[0.98]"
+          >
+            Sign in
+          </Link>
+        </header>
+
+        <main>
+          {/* Three.js + GSAP hero */}
+          <LandingHero />
+
+          <LandingReveal>
+            <section className="pb-16">
+              <h2
+                data-reveal
+                className="mb-8 text-center font-display text-2xl font-semibold"
+              >
+                What you can do with The Third Eye
+              </h2>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {FEATURES.map((feature) => (
+                  <article
+                    key={feature.title}
+                    data-reveal
+                    className="rounded-card border border-border-default bg-background-surface p-5 text-left transition-colors hover:border-[#4FC3F7]/30"
+                  >
+                    <h3 className="mb-2 font-medium text-text-primary">
+                      {feature.title}
+                    </h3>
+
+                    <p className="text-sm leading-relaxed text-text-secondary">
+                      {feature.body}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </LandingReveal>
+
+          <section className="pb-16">
+            <div className="mx-auto max-w-3xl rounded-card border border-border-default bg-background-surface p-6">
+              <h2 className="mb-3 font-display text-lg font-semibold">
+                Your data and why we ask for it
+              </h2>
+
+              <p className="text-sm leading-relaxed text-text-secondary">
+                The Third Eye uses your Google account solely to sign you in and
+                identify your private workspace. We request your basic profile,
+                including your name and email address, for authentication only.
+                Anything you create in the app — including tasks, notes, and
+                documents — is stored so it remains available across your
+                devices and is visible only to you. We never sell your data or
+                share it with third parties for advertising. Additional access
+                for optional integrations is requested explicitly and used only
+                for features you enable. Full details are available in our{" "}
+                <Link
+                  href="/privacy_policy"
+                  className="text-accent-blue hover:underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </div>
+          </section>
+        </main>
+
+        <footer className="flex flex-col items-center justify-between gap-4 border-t border-border-default py-8 text-xs text-text-muted sm:flex-row">
+          <span>© {new Date().getFullYear()} The Third Eye</span>
+
+          <nav
+            className="flex items-center gap-4 font-mono"
+            aria-label="Legal and product links"
+          >
             <Link
               href="/capabilities"
-              className="flex items-center justify-center border border-border-default hover:border-accent-blue/40 text-text-primary rounded-input px-6 h-12 text-sm font-medium transition-colors"
+              className="transition-colors hover:text-text-secondary"
             >
-              Explore capabilities
+              Capabilities
             </Link>
-          </div>
-        </section>
 
-        <section className="pb-16 md:pb-24">
-          <h2 className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-text-muted mb-8">
-            What it does
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="rounded-2xl border border-border-default bg-background-surface/30 p-5 text-left"
-              >
-                <h3 className="font-medium text-text-primary">{f.title}</h3>
-                <p className="text-sm text-text-secondary leading-relaxed mt-2">{f.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      </main>
+            <span className="text-border-default" aria-hidden="true">
+              ·
+            </span>
 
-      <footer className="relative z-10 mx-auto max-w-5xl px-4 py-8 border-t border-border-default flex flex-col sm:flex-row items-center justify-between gap-4 text-text-muted text-xs font-mono">
-        <span>© {new Date().getFullYear()} The Third Eye</span>
-        <div className="flex items-center gap-4">
-          <Link href="/capabilities" className="hover:text-text-secondary transition-colors">
-            Capabilities
-          </Link>
-          <Link href="/privacy_policy" className="hover:text-text-secondary transition-colors">
-            Privacy Policy
-          </Link>
-          <Link href="/terms_of_service" className="hover:text-text-secondary transition-colors">
-            Terms of Service
-          </Link>
-        </div>
-      </footer>
+            <Link
+              href="/privacy_policy"
+              className="transition-colors hover:text-text-secondary"
+            >
+              Privacy Policy
+            </Link>
+
+            <span className="text-border-default" aria-hidden="true">
+              ·
+            </span>
+
+            <Link
+              href="/terms_of_service"
+              className="transition-colors hover:text-text-secondary"
+            >
+              Terms of Service
+            </Link>
+          </nav>
+        </footer>
+      </div>
     </div>
   );
 }

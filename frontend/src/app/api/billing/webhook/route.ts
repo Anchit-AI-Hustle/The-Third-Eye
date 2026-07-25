@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(raw, sig, secret);
   } catch (err) {
-    return new Response(`Invalid signature: ${err instanceof Error ? err.message : ""}`, { status: 400 });
+    console.error("stripe webhook signature verification failed:", err);
+    return new Response("Invalid signature", { status: 400 });
   }
 
   const sb = getAdminSupabase();
@@ -59,7 +60,8 @@ export async function POST(req: NextRequest) {
       }
     }
   } catch (err) {
-    return new Response(`Handler error: ${err instanceof Error ? err.message : ""}`, { status: 500 });
+    console.error("stripe webhook handler error:", err);
+    return new Response("Handler error", { status: 500 });
   }
 
   return new Response("ok", { status: 200 });

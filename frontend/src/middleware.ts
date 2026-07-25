@@ -1,16 +1,30 @@
 import { withAuth } from "next-auth/middleware";
+import { resolveAuthSecret } from "@/lib/authSecret";
 
 export default withAuth({
-  secret: process.env.NEXTAUTH_SECRET ?? "set-NEXTAUTH_SECRET-env-var-in-vercel",
+  secret: resolveAuthSecret(),
   pages: { signIn: "/auth/signin" },
 });
 
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/apps/:path*",
     "/tasks/:path*",
+    "/job-agent/:path*",
+    "/kolab/:path*",
+    "/plans/:path*",
+    "/generations/:path*",
+    "/agents/:path*",
     "/assistant/:path*",
+    "/capture/:path*",
+    "/activity/:path*",
     "/knowledge/:path*",
     "/finance/:path*",
+    "/notes/:path*",
+    "/goals/:path*",
+    "/tools/:path*",
+    "/capabilities/:path*",
+    "/audit/:path*",
   ],
 };

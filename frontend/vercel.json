@@ -3,8 +3,15 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
   "devCommand": "npm run dev",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
   "crons": [
     { "path": "/api/cron/dispatch?job=reminders", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/dispatch?job=digest", "schedule": "30 1 * * *" }
+    { "path": "/api/cron/dispatch?job=digest", "schedule": "30 1 * * *" },
+    { "path": "/api/cron/scrape-gmail", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/scrape-chat", "schedule": "7-59/15 * * * *" }
   ]
 }

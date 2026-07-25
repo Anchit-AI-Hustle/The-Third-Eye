@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { getSupabase } from "@/lib/supabase";
+import { dataList, dataInsert, dataDelete } from "@/lib/dataClient";
 
 export interface KnowledgeDoc {
   id: string;
@@ -82,30 +82,18 @@ export function useLocalKnowledge() {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [ready, setReady] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const remote = useRef(false);
 
   useEffect(() => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      sb.from("knowledge_docs").select("*").eq("user_id", userId).order("created_at", { ascending: false })
-        .then(({ data, error }) => {
-          if (error) { setDocs(ls()); } else { setDocs((data as KnowledgeDoc[]) ?? []); }
-          setReady(true);
-        });
-    } else {
-      setDocs(ls()); setReady(true);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    const sb = getSupabase();
-    if (!sb || !userId) return;
-    const ch = sb.channel(`knowledge_${userId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "knowledge_docs", filter: `user_id=eq.${userId}` },
-        (p) => setDocs((prev) => prev.find((d) => d.id === p.new.id) ? prev : [p.new as KnowledgeDoc, ...prev]))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "knowledge_docs", filter: `user_id=eq.${userId}` },
-        (p) => setDocs((prev) => prev.filter((d) => d.id !== (p.old as { id: string }).id)))
-      .subscribe();
-    return () => { sb.removeChannel(ch); };
+    let cancelled = false;
+    setReady(false);
+    dataList<KnowledgeDoc>("knowledge_docs").then((r) => {
+      if (cancelled) return;
+      remote.current = r.remote;
+      setDocs(r.remote ? r.rows : ls());
+      setReady(true);
+    });
+    return () => { cancelled = true; };
   }, [userId]);
 
   const upload = useCallback(async (files: FileList | File[]) => {
@@ -145,12 +133,13 @@ export function useLocalKnowledge() {
       }
     }
 
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("knowledge_docs").insert(newDocs.map((d) => ({ ...d, user_id: userId })));
-    } else {
-      setDocs((prev) => { const next = [...newDocs, ...prev]; lsSet(next); return next; });
-    }
+    setDocs((prev) => {
+      const next = [...newDocs, ...prev];
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataInsert("knowledge_docs", newDocs);
+
     // Cortex: embed ready docs for semantic search (best-effort, no-op if unconfigured).
     for (const d of newDocs) {
       if (d.processing_status !== "ready" || !d.content) continue;
@@ -160,17 +149,18 @@ export function useLocalKnowledge() {
       }).catch(() => {});
     }
     setUploading(false);
-  }, [userId]);
+    return newDocs;
+  }, []);
 
   const remove = useCallback(async (id: string) => {
-    const sb = getSupabase();
-    if (sb && userId) {
-      await sb.from("knowledge_docs").delete().eq("id", id).eq("user_id", userId);
-    } else {
-      setDocs((prev) => { const next = prev.filter((d) => d.id !== id); lsSet(next); return next; });
-    }
+    setDocs((prev) => {
+      const next = prev.filter((d) => d.id !== id);
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataDelete("knowledge_docs", id);
     fetch(`/api/cortex/ingest?docId=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
-  }, [userId]);
+  }, []);
 
   return { docs, ready, uploading, upload, remove };
 }

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { isSensitive } from "@/lib/actions";
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
+import { getGoogleAccessToken } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,13 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
-  const accessToken = (session as any).accessToken as string | undefined;
+  // Sign-in only grants basic scopes; the confirmed send needs the token from
+  // the "Connect Google" flow (gmail.send). Prefer it, fall back to session.
+  let accessToken = (session as any).accessToken as string | undefined;
+  try {
+    const connected = await getGoogleAccessToken(email);
+    if (connected?.accessToken) accessToken = connected.accessToken;
+  } catch { /* fall back to session token */ }
 
   const { tool, args } = (await req.json().catch(() => ({}))) as { tool?: string; args?: any };
   if (!tool || !isSensitive(tool)) return json({ error: "Unknown or non-confirmable action" }, 400);
@@ -25,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   switch (tool) {
     case "send_email": {
-      if (!accessToken) return json({ ok: false, result: "Gmail not connected — sign out and back in to grant access." });
+      if (!accessToken) return json({ ok: false, result: "Gmail not connected — connect your Google account (with Gmail send access) from Profile Setup." });
       const ok = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
       return json({ ok, result: ok ? `Email sent to ${args?.to}.` : "Gmail rejected the send." });
     }

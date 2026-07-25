@@ -25,10 +25,10 @@ const CAPS: Capability[] = [
   { group: "JARVIS",  name: "Reminders & alarms",          blurb: "Browser-native notifications with countdown",                                       inspiration: "Iron Man — meeting reminders", required: ["notif"],         status: "live", premium: true },
   { group: "JARVIS",  name: "Calendar integration",        blurb: "Read & write events on Google Calendar",                                            inspiration: "Iron Man 2 — pepper schedule", required: ["key"], envKey: "GOOGLE_CALENDAR_OAUTH", status: "planned", premium: true, logo: "gcal" },
   { group: "JARVIS",  name: "Email summarization",         blurb: "Triage Gmail and draft replies",                                                    inspiration: "Iron Man 2",                   required: ["key"], envKey: "GMAIL_OAUTH", status: "planned", premium: true, logo: "gmail" },
-  { group: "JARVIS",  name: "Document Q&A",                blurb: "Upload PDFs/text; chat asks them via RAG",                                          inspiration: "Iron Man — schematics",        required: [],                status: "live" },
+  { group: "JARVIS",  name: "Document Q&A",                blurb: "Upload text docs; chat searches them (keyword now; embeddings in progress)",         inspiration: "Iron Man — schematics",        required: [],                status: "partial" },
   { group: "JARVIS",  name: "Notes capture",               blurb: "Voice or text → titled notes, searchable",                                          inspiration: "Tony's voice memos",           required: [],                status: "live" },
   { group: "JARVIS",  name: "Task tracking",               blurb: "Priorities, due dates, status — voice creates them",                                inspiration: "Iron Man 3 — workshop list",   required: [],                status: "live" },
-  { group: "JARVIS",  name: "Knowledge base (RAG)",        blurb: "pgvector + re-rank top-K passages",                                                 inspiration: "Iron Man — Stark archives",    required: [],                status: "live" },
+  { group: "JARVIS",  name: "Knowledge base",              blurb: "Keyword search over your docs today; pgvector embeddings are being wired up",       inspiration: "Iron Man — Stark archives",    required: [],                status: "partial" },
 
   // — Location-aware —
   { group: "JARVIS",  name: "Local weather",               blurb: "Current weather + 12h forecast at your location",                                   inspiration: "Iron Man — landing brief",     required: ["loc", "key"], envKey: "OPENWEATHER_API_KEY", status: "live" },
@@ -44,10 +44,10 @@ const CAPS: Capability[] = [
   // — Voice —
   { group: "JARVIS",  name: "Voice STT (Web Speech)",      blurb: "Live transcription with interim text",                                              inspiration: "core",                         required: ["mic"],           status: "live" },
   { group: "JARVIS",  name: "Voice TTS",                   blurb: "Agent-matched voice (David / Zira / Samantha)",                                     inspiration: "core",                         required: [],                status: "live" },
-  { group: "JARVIS",  name: "Wake word detection",         blurb: "Passive listening for \"Hey JARVIS\" / agent name",                                  inspiration: "Iron Man — hands-free",        required: ["mic"],           status: "planned" },
+  { group: "JARVIS",  name: "Wake word detection",         blurb: "Passive listening for your agent's name → hands-free call mode",                     inspiration: "Iron Man — hands-free",        required: ["mic"],           status: "live" },
 
   // — EDITH canon —
-  { group: "E.D.I.T.H.", name: "Vision analysis",          blurb: "Camera or upload → AI describes / extracts text",                                   inspiration: "Far From Home — HUD",          required: ["cam"],           status: "planned" },
+  { group: "E.D.I.T.H.", name: "Vision analysis",          blurb: "Share your screen or webcam → AI describes it & extracts text/data",                 inspiration: "Far From Home — HUD",          required: ["cam"],           status: "live" },
   { group: "E.D.I.T.H.", name: "Threat & anomaly scanning", blurb: "Continuously evaluates incoming info for risk patterns",                           inspiration: "Far From Home — drones",       required: [],                status: "planned" },
   { group: "E.D.I.T.H.", name: "Predictive routine",       blurb: "\"You usually do X at this time\" suggestions",                                     inspiration: "Iron Man 3 — JARVIS habits",   required: [],                status: "planned" },
   { group: "E.D.I.T.H.", name: "Encrypted memory",         blurb: "Fernet-encrypted persistent memory of facts",                                        inspiration: "Stark security",               required: [],                status: "live" },

@@ -1,0 +1,136 @@
+// Minimal Replicate REST client (no SDK dependency) for music generation.
+// Mirrors the approach in the MusicGenAI repo: resolve a model's latest version,
+// create a prediction, then poll it. Powered by REPLICATE_API_TOKEN.
+
+const BASE = "https://api.replicate.com/v1";
+
+function token(): string | null {
+  return process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY || null;
+}
+
+export function replicateConfigured(): boolean {
+  return !!token();
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Replicate throttles prediction creation to a few requests/minute while an
+// account has < $5 credit, returning 429 with a short `retry_after`. That's a
+// soft limit (not "out of credit"), so we honour Retry-After / retry_after and
+// retry a few times instead of failing the whole request.
+async function rq(path: string, init?: RequestInit, retries = 4): Promise<any> {
+  const t = token();
+  if (!t) throw new Error("REPLICATE_API_TOKEN not set");
+  let lastBody = "";
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${t}`,
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (res.ok) return res.json();
+    lastBody = await res.text().catch(() => "");
+    if (res.status === 429 && attempt < retries) {
+      // Prefer the Retry-After header, then the body's retry_after, else backoff.
+      let waitS = Number(res.headers.get("retry-after"));
+      if (!Number.isFinite(waitS) || waitS <= 0) {
+        try { waitS = Number(JSON.parse(lastBody)?.retry_after); } catch { waitS = 0; }
+      }
+      if (!Number.isFinite(waitS) || waitS <= 0) waitS = attempt + 1; // 1s,2s,3s…
+      await sleep(Math.min(waitS, 10) * 1000 + 300);
+      continue;
+    }
+    throw new Error(`Replicate ${res.status}: ${lastBody.slice(0, 300)}`);
+  }
+  throw new Error(`Replicate 429: throttled after ${retries} retries: ${lastBody.slice(0, 200)}`);
+}
+
+const versionCache: Record<string, { id: string; at: number }> = {};
+const VERSION_TTL = 1000 * 60 * 60 * 12;
+
+// Strict allowlists so nothing user-influenced can steer the request URL
+// off Replicate's API (SSRF-safe). Model slugs and prediction ids only.
+const MODEL_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+const ID_RE = /^[a-zA-Z0-9]+$/;
+
+/** Resolve `owner/name` → latest version id (cached). */
+export async function latestVersion(model: string): Promise<string> {
+  if (!MODEL_RE.test(model)) throw new Error("Invalid model slug");
+  const cached = versionCache[model];
+  if (cached && Date.now() - cached.at < VERSION_TTL) return cached.id;
+  const [owner, name] = model.split("/");
+  const data = await rq(`/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
+  const id = data?.latest_version?.id;
+  if (!id) throw new Error(`No version for model ${model}`);
+  versionCache[model] = { id, at: Date.now() };
+  return id;
+}
+
+export interface Prediction {
+  id: string;
+  status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
+  output: unknown;
+  error: string | null;
+}
+
+/**
+ * Submit a prediction for a model.
+ *
+ * Prefers the model-scoped endpoint `POST /models/{owner}/{name}/predictions`
+ * (no version). This is the correct path for Replicate's official / base models
+ * (e.g. stability-ai/stable-audio), whose versions can't be pinned via the
+ * global `/predictions` endpoint — sending a stale/foreign version there is what
+ * produced the "Invalid version or not permitted" (422). Community models work
+ * on this endpoint too (it uses the model's latest version). Falls back to the
+ * version-based endpoint only if the model endpoint is unavailable.
+ */
+export async function createPrediction(model: string, input: Record<string, unknown>, fallbackVersion?: string): Promise<Prediction> {
+  if (!MODEL_RE.test(model)) throw new Error("Invalid model slug");
+  const [owner, name] = model.split("/");
+  try {
+    const p = await rq(`/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/predictions`, {
+      method: "POST",
+      body: JSON.stringify({ input }),
+    });
+    return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
+  } catch (modelErr) {
+    // A rate-limit throttle (429) already exhausted its retries — the version
+    // endpoint would hit the same account-level limit, so don't double the wait.
+    if (modelErr instanceof Error && /\b429\b|throttled/i.test(modelErr.message)) throw modelErr;
+    // Fallback: resolve a version id and use the global predictions endpoint.
+    let version: string | undefined;
+    try { version = await latestVersion(model); } catch { version = fallbackVersion; }
+    if (!version) throw modelErr;
+    const p = await rq(`/predictions`, {
+      method: "POST",
+      body: JSON.stringify({ version, input }),
+    });
+    return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
+  }
+}
+
+export async function getPrediction(id: string): Promise<Prediction> {
+  if (!ID_RE.test(id)) throw new Error("Invalid prediction id");
+  const p = await rq(`/predictions/${encodeURIComponent(id)}`);
+  return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
+}
+
+/** Normalize the varied Replicate audio outputs (string | string[] | {audio}) to one URL. */
+export function audioUrlFrom(output: unknown): string | null {
+  if (!output) return null;
+  if (typeof output === "string") return output;
+  if (Array.isArray(output)) {
+    const first = output.find((x) => typeof x === "string");
+    return (first as string) ?? null;
+  }
+  if (typeof output === "object") {
+    const o = output as Record<string, unknown>;
+    for (const k of ["audio", "audio_out", "output", "url"]) {
+      if (typeof o[k] === "string") return o[k] as string;
+    }
+  }
+  return null;
+}
