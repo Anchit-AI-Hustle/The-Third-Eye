@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 // Real brand marks for third-party integrations, so cards show the actual
 // service logo (Gmail, Google Calendar, Google) instead of a generic glyph.
 
@@ -41,7 +43,7 @@ export function GoogleLogo({ size = 16 }: { size?: number }) {
   );
 }
 
-export const BRAND_LOGOS: Record<string, (p: { size?: number }) => JSX.Element> = {
+export const BRAND_LOGOS: Record<string, (p: { size?: number }) => ReactElement> = {
   gmail: GmailLogo,
   gcal: GoogleCalendarLogo,
   google: GoogleLogo,
