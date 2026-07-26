@@ -11,6 +11,7 @@ import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
+import { useChatHistory, type ChatSession } from "@/hooks/useChatHistory";
 import { getAgentLog, isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
@@ -24,6 +25,7 @@ export function DashboardWidgets() {
   const { notes } = useLocalNotes();
   const { docs } = useLocalKnowledge();
   const { expenses } = useLocalExpenses();
+  const { sessions: chatSessions } = useChatHistory();
   const root = useRef<HTMLDivElement>(null);
 
   // Agent-safety layer state (kill switch + audit log) is localStorage-backed,
@@ -67,6 +69,20 @@ export function DashboardWidgets() {
     { href: "/audit", icon: ShieldCheck, label: "App Audit", stat: "Audit", sub: "honest ratings", color: "#34D399" },
     { href: "/settings", icon: Settings, label: "Settings", stat: "Configure", sub: "agent + account", color: "#94A3B8" },
   ];
+
+  // Usage stats (inspired by Opcode's usage monitoring dashboard)
+  const usageStats = useMemo(() => {
+    const today = new Date().toDateString();
+    const allMessages = chatSessions.flatMap((s: ChatSession) => s.messages);
+    const todayChats = allMessages.filter((m: ChatSession["messages"][0]) => new Date(m.timestamp).toDateString() === today).length;
+    const totalChats = allMessages.length;
+    const thisWeek = allMessages.filter((m: ChatSession["messages"][0]) => {
+      const d = new Date(m.timestamp);
+      const now = new Date();
+      return (now.getTime() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+    }).length;
+    return { todayChats, totalChats, thisWeek };
+  }, [chatSessions]);
 
   useEffect(() => {
     let ctx: { revert: () => void } | undefined;

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2, Ear } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2, Ear, Bookmark, History, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -106,6 +106,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // is NOT sent until the user presses send.
   const [voiceMode, setVoiceMode] = useState<"dictate" | "call">("call");
   const [wakeEnabled, setWakeEnabled] = useState(false);
+  // Conversation checkpoints (inspired by Opcode rewind): save/restore snapshots
+  const [checkpoints, setCheckpoints] = useState<{ id: string; label: string; messages: Message[]; history: HistoryEntry[]; timestamp: number }[]>([]);
+  // Persist checkpoints to localStorage
+  useEffect(() => {
+    const email = session?.user?.email;
+    if (!email) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`jarvis_checkpoints_v1_${email}`) ?? "[]");
+      if (saved.length > 0) setCheckpoints(saved);
+    } catch {}
+  }, [session?.user?.email]);
+  useEffect(() => {
+    const email = session?.user?.email;
+    if (!email) return;
+    localStorage.setItem(`jarvis_checkpoints_v1_${email}`, JSON.stringify(checkpoints.slice(0, 20)));
+  }, [checkpoints, session?.user?.email]);
+  const [showCheckpoints, setShowCheckpoints] = useState(false);
   useEffect(() => {
     if (typeof window !== "undefined") setWakeEnabled(localStorage.getItem("jarvis_wakeword") === "1");
   }, []);
@@ -498,9 +515,33 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }
 
+  // Save a checkpoint before clearing or at any point
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const saveCheckpoint = useCallback((label?: string) => {
+    const cp = {
+      id: crypto.randomUUID(),
+      label: label || `Snapshot ${new Date().toLocaleTimeString()}`,
+      messages: [...messagesRef.current],
+      history: [...historyRef.current],
+      timestamp: Date.now(),
+    };
+    setCheckpoints((prev) => [cp, ...prev].slice(0, 20)); // keep last 20
+  }, []);
+
+  const restoreCheckpoint = useCallback((cpId: string) => {
+    const cp = checkpoints.find((c) => c.id === cpId);
+    if (!cp) return;
+    saveCheckpoint("Before rewind"); // auto-save before restoring
+    setMessages(cp.messages);
+    historyRef.current = cp.history;
+    setShowCheckpoints(false);
+  }, [checkpoints, saveCheckpoint]);
+
   function handleClear() {
     if (isStreaming) abortRef.current?.abort();
     tts.stop();
+    if (messages.length > 0) saveCheckpoint("Before clear");
     setMessages([]);
     setLiveBubble(null);
     setApiError(null);
@@ -659,6 +700,36 @@ export function AssistantClient({ userName }: { userName?: string }) {
             className={cn("p-1.5 rounded-input transition-colors", showLang ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
             <Globe size={12} aria-hidden="true" />
           </button>
+          <button onClick={() => { saveCheckpoint(); }} title="Save checkpoint"
+            className="p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
+            <Bookmark size={13} aria-hidden="true" />
+          </button>
+          {checkpoints.length > 0 && (
+            <button onClick={() => setShowCheckpoints((v) => !v)} title="Conversation history & rewind"
+              className={cn("p-1.5 rounded-input transition-colors", showCheckpoints ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
+              <History size={13} aria-hidden="true" />
+            </button>
+          )}
+          {showCheckpoints && (
+            <div className="absolute top-8 right-16 bg-background-elevated border border-border-default rounded-card shadow-xl z-50 w-72 py-2 max-h-80 overflow-y-auto">
+              <div className="px-3 pb-2 border-b border-border-default">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-text-muted">Checkpoints · Rewind</span>
+              </div>
+              {checkpoints.map((cp) => (
+                <button key={cp.id} onClick={() => restoreCheckpoint(cp.id)}
+                  className="w-full text-left px-3 py-2 hover:bg-background-surface transition-colors flex items-center gap-2">
+                  <GitBranch size={12} className="text-accent-blue flex-none" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs text-text-primary block truncate">{cp.label}</span>
+                    <span className="text-[10px] text-text-muted font-mono">{cp.messages.length} messages · {new Date(cp.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                </button>
+              ))}
+              {checkpoints.length === 0 && (
+                <p className="text-xs text-text-muted px-3 py-4 text-center">No checkpoints yet. Click the bookmark icon to save one.</p>
+              )}
+            </div>
+          )}
           {showLang && (
             <div className="absolute top-8 right-8 bg-background-elevated border border-border-default rounded-card shadow-xl z-50 min-w-[180px] py-1 max-h-60 overflow-y-auto">
               {LANGUAGES.map((l) => (

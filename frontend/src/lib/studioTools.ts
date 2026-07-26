@@ -137,6 +137,17 @@ export const STUDIO_TOOLS: StudioTool[] = [
       { name: "tone", label: "Tone / style", type: "text", placeholder: "e.g. cinematic, casual, dramatic" },
     ],
   },
+  {
+    id: "avatar", label: "Video Avatar Studio", mode: "personal", icon: "Video", accent: "#A78BFA",
+    blurb: "Generate a talking video avatar from audio + text — powered by LongCat-Video-Avatar. Upload a voice clip or record one, add your script, and get a lip-synced avatar video.",
+    format: "markdown", downloadExt: "mp4", cta: "Generate avatar",
+    fields: [
+      { name: "script", label: "What the avatar says", type: "textarea", placeholder: "Type the script or transcript for the avatar to speak…", required: true },
+      { name: "avatar_style", label: "Avatar style", type: "select", options: ["Professional presenter", "Casual narrator", "Anime character", "Realistic human", "Custom (upload reference)"] },
+      { name: "mood", label: "Mood / tone", type: "text", placeholder: "e.g. friendly, authoritative, warm" },
+      { name: "output", label: "Output format", type: "select", options: ["Short clip (15-30s)", "Medium (1-2 min)", "Long form (3+ min)"] },
+    ],
+  },
 
   // ── Startup Studio (Professional) ────────────────────────────────────────
   {

@@ -7,6 +7,7 @@ import { getTool } from "@/lib/studioTools";
 import { StudioWorkbench } from "@/components/studio/StudioWorkbench";
 import { MusicStudio } from "@/components/studio/MusicStudio";
 import { HealthStudio } from "@/components/health/HealthStudio";
+import { VideoAvatar } from "@/components/avatar/VideoAvatar";
 
 export default function StudioToolPage() {
   const params = useParams();
@@ -34,7 +35,7 @@ export default function StudioToolPage() {
         <h1 className="font-display text-2xl font-semibold text-text-primary mt-1">{tool.label}</h1>
         <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">{tool.blurb}</p>
       </div>
-      {tool.id === "music" ? <MusicStudio /> : tool.id === "health" ? <HealthStudio /> : <StudioWorkbench tool={tool} />}
+      {tool.id === "music" ? <MusicStudio /> : tool.id === "health" ? <HealthStudio /> : tool.id === "avatar" ? <VideoAvatar /> : <StudioWorkbench tool={tool} />}
     </div>
   );
 }

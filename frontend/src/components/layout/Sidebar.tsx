@@ -246,6 +246,7 @@ export function Sidebar() {
                   className="text-text-muted hover:text-accent-red transition-colors p-1.5"
                   title="Sign out"
                   aria-label="Sign out"
+                >
                   <LogOut size={13} />
                 </button>
               </>

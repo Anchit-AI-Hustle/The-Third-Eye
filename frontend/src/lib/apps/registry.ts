@@ -98,6 +98,14 @@ export const APPS: AppEntry[] = [
   { id: "cricbuzz", label: "Cricbuzz", category: "News & Sports", modes: [P], kind: "external", href: "https://www.cricbuzz.com", icon: "Trophy" },
   { id: "espn", label: "ESPN", category: "News & Sports", modes: [P], kind: "external", href: "https://www.espn.com", icon: "Trophy" },
 
+  // ── Personal · AI Tools (free Google AI tools) ──
+  { id: "google-ai-studio", label: "Google AI Studio", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://aistudio.google.com", icon: "Bot", blurb: "Prompt, test & deploy Gemini models" },
+  { id: "notebooklm", label: "NotebookLM", category: "AI Tools", modes: [P, PR, E], kind: "external", href: "https://notebooklm.google", icon: "BookOpen", blurb: "AI research assistant — upload docs, get summaries" },
+  { id: "stitch", label: "Stitch", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://stitch.withgoogle.com", icon: "Scissors", blurb: "AI-powered UI design from natural language" },
+  { id: "pomelli", label: "Pomelli", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://labs.google.com/pomelli/about/", icon: "Sparkles", blurb: "AI marketing — generate on-brand social content" },
+  { id: "gemini-code-assist", label: "Gemini Code Assist", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://cloud.google.com/products/gemini/code-assist", icon: "Code2", blurb: "AI pair programmer for VS Code & Cursor" },
+  { id: "antigravity", label: "Antigravity", category: "AI Tools", modes: [PR], kind: "external", href: "https://antigravity.google/", icon: "Rocket", blurb: "Experimental agentic IDE — multi-agent coding" },
+
   // ── Personal · Entertainment ──
   { id: "netflix", label: "Netflix", category: "Entertainment", modes: [P], kind: "external", href: "https://www.netflix.com", icon: "Film" },
   { id: "primevideo", label: "Prime Video", category: "Entertainment", modes: [P], kind: "external", href: "https://www.primevideo.com", icon: "Film" },
