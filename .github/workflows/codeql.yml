@@ -52,6 +52,9 @@ jobs:
         run: |
           npm ci
           npx next build
+        env:
+          GEMINI_API_KEY: ci-placeholder
+          NEXTAUTH_SECRET: ci-placeholder
 
       - name: Build backend (Python only)
         if: matrix.language == 'python'
