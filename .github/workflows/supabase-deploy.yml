@@ -17,7 +17,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "frontend/supabase/migrations/**"
+      - "supabase/migrations/**"
   workflow_dispatch: {}
 
 # Least privilege: this workflow only checks out code and calls external CLIs
@@ -52,12 +52,10 @@ jobs:
 
       - name: Link project
         if: steps.check.outputs.ready == 'true'
-        working-directory: frontend
         run: supabase link --project-ref "$PROJECT_ID"
 
       - name: Push migrations
         if: steps.check.outputs.ready == 'true'
-        working-directory: frontend
         run: supabase db push
 
   deploy:

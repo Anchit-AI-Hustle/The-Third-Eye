@@ -32,8 +32,31 @@ jobs:
           # security-extended adds the higher-signal security queries on top of
           # the default set (injection, SSRF, auth, sensitive-data-flow).
           queries: security-extended
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Setup Node
+        if: matrix.language == 'javascript-typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build frontend (JS/TS only)
+        if: matrix.language == 'javascript-typescript'
+        working-directory: frontend
+        run: |
+          npm ci
+          npx next build
+
+      - name: Build backend (Python only)
+        if: matrix.language == 'python'
+        working-directory: backend
+        run: pip install -e .
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
