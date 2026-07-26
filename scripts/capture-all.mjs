@@ -162,4 +162,5 @@ const routes = [
   server.kill();
   process.exit(0);
 })();
-})();
+
+process.on('exit', () => { try { server.kill(); } catch {} });
