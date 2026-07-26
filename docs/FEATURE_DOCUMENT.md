@@ -14,15 +14,18 @@
 5. [Specialized Components](#specialized-components)
 6. [Mobile Experience](#mobile-experience)
 7. [JARVIS AI Assistant](#jarvis-ai-assistant)
-8. [Screenshot Capture Guide](#screenshot-capture-guide)
+8. [Screenshot Gallery](#screenshot-gallery)
 
 ---
 
 ## App Overview
 
-The Third Eye is a JARVIS-inspired AI operating system that unifies productivity, creativity, business, and life management into a single interface. It features:
+The Third Eye is a JARVIS-inspired AI operating system that unifies productivity, creativity, business, and life management into a single interface.
 
-- **3 Mode-Aware Studios** (Hobby, Startup, Office) with 27+ creative tools
+![Homepage](screenshots/01-homepage.png)
+
+**Key Features:**
+- **3 Mode-Aware Studios** (Hobby, Startup, Office) with 28 creative tools
 - **JARVIS AI Assistant** with 18+ autonomous asset-generation tools
 - **Full workspace** (Tasks, Notes, Goals, Knowledge, Life Log)
 - **Mobile-responsive** with hamburger drawer navigation
@@ -33,6 +36,9 @@ The Third Eye is a JARVIS-inspired AI operating system that unifies productivity
 ## Navigation & Layout
 
 ### Left Sidebar (Desktop)
+
+![Sidebar Navigation](screenshots/02-dashboard.png)
+
 - **Logo:** Arc Reactor animation with "The Third Eye" branding
 - **Mode Switcher:** Toggle between Personal / Professional / Enterprise modes
 - **Navigation Groups:**
@@ -41,41 +47,36 @@ The Third Eye is a JARVIS-inspired AI operating system that unifies productivity
   - Create & Grow: Studio, Skills, Job Agent, Kolab
   - Apps & Life: Apps, Finance
   - Account & System: Plans & Credits, Capabilities, Agent Activity, App Audit
-- **Footer:** Wallet widget, Cloud Sync badge, Settings, User profile + Sign out
-- **Collapse/Expand:** PanelLeftClose/PanelLeftOpen toggle
+- **Footer:** Wallet widget, Cloud Sync badge, Settings, User profile
 
 ### Mobile Navigation
+
+![Mobile Homepage](screenshots/50-mobile-home.png)
+
 - **Hamburger icon** (fixed top-left, z-30) opens drawer overlay
 - **Backdrop** with blur effect, tap to close
 - **Auto-close** on route change (pathname listener)
-- **Content padding** (pl-14) to avoid overlap with hamburger button
+
+![Mobile Hamburger Open](screenshots/53-mobile-hamburger-open.png)
 
 ---
 
 ## Core Features
 
 ### 1. Dashboard (`/dashboard`)
-**Purpose:** Central hub showing recent activity, quick actions, and system status.
 
-**Key Elements:**
-- Welcome header with user name
-- Recent generations feed
-- Quick-action cards for Studio, Assistant, Tasks
-- System status indicators
+![Dashboard](screenshots/02-dashboard.png)
 
----
+Central hub showing recent activity, quick actions, and system status.
 
 ### 2. Assistant (`/assistant`)
-**Purpose:** JARVIS AI chat interface — the core conversational AI.
 
-**Key Elements:**
-- Chat input with mode-aware system prompt
-- Message history with markdown rendering
-- Source citations and delegation chain display
-- Agent name and model attribution
-- 18+ autonomous tools including `create_asset` for generating Studio assets from conversation
+![Assistant](screenshots/03-assistant.png)
 
-**JARVIS Tools (from chat):**
+JARVIS AI chat interface — the core conversational AI with mode-aware intelligence.
+
+**JARVIS Tools (18+):**
+
 | Tool | Description |
 |------|-------------|
 | `create_asset` | Generate any Studio asset (18 kinds) from conversation |
@@ -86,69 +87,47 @@ The Third Eye is a JARVIS-inspired AI operating system that unifies productivity
 | `autonomous_check` | Task and goal monitoring |
 | + 12 more | Code generation, deep research, music, health, etc. |
 
----
-
 ### 3. Online Agents (`/agents`)
-**Purpose:** View and manage autonomous AI agents running in the background.
 
----
+![Online Agents](screenshots/04-agents.png)
+
+View and manage autonomous AI agents running in the background.
 
 ### 4. Generations (`/generations`)
-**Purpose:** Unified log of every asset generated across the app.
 
-**Key Elements:**
-- Card grid of all generations (studio, music, kolab, job agent, health, assistant)
-- Filter by app/type
-- Detail view with full output, inputs, and metadata
-- Download button for each generation
-- Chronological feed with app color coding
+![Generations](screenshots/05-generations.png)
 
----
+Unified log of every asset generated across the app — filter by app/type, download, view details.
 
 ### 5. Task Tracker (`/tasks`)
-**Purpose:** Kanban-style task management with AI prioritization.
 
-**Key Elements:**
-- Task creation with priority, due date, tags
-- Drag-and-drop between columns (Todo, In Progress, Done)
-- CSV export
-- AI-suggested priorities
+![Task Tracker](screenshots/06-tasks.png)
 
----
+Kanban-style task management with AI prioritization and CSV export.
 
 ### 6. Life Log (`/lifelog`)
-**Purpose:** Time-based journal of activities, moods, and events.
 
----
+![Life Log](screenshots/07-lifelog.png)
+
+Time-based journal of activities, moods, and events.
 
 ### 7. Notes (`/notes`)
-**Purpose:** Markdown note-taking with knowledge base integration.
 
-**Key Elements:**
-- Note editor with markdown preview
-- Download as .md
-- Search and filter
+![Notes](screenshots/08-notes.png)
 
----
+Markdown note-taking with knowledge base integration and download.
 
 ### 8. Goals (`/goals`)
-**Purpose:** Goal tracking with progress visualization.
 
-**Key Elements:**
-- Goal creation with target, deadline, milestones
-- Progress bars and streak tracking
-- CSV export
+![Goals](screenshots/09-goals.png)
 
----
+Goal tracking with progress visualization and CSV export.
 
 ### 9. Knowledge (`/knowledge`)
-**Purpose:** RAG-powered knowledge base from uploaded documents.
 
-**Key Elements:**
-- Document upload (PDF, DOCX, XLSX, CSV, TXT, MD)
-- Chunking and embedding pipeline
-- Search with relevance scoring
-- Download any document
+![Knowledge](screenshots/10-knowledge.png)
+
+RAG-powered knowledge base from uploaded documents (PDF, DOCX, XLSX, CSV, TXT, MD).
 
 ---
 
@@ -156,255 +135,264 @@ The Third Eye is a JARVIS-inspired AI operating system that unifies productivity
 
 ### Mode-Aware Studios
 
-The Studio adapts to the active mode, showing only relevant tools:
+![Studio Hub](screenshots/11-studio-hub.png)
 
 | Mode | Studio Name | Tagline | Accent |
 |------|-------------|---------|--------|
-| Personal | **Hobby Studio** | Create for the joy of it — music, writing, plans | `#34D399` |
-| Professional | **Startup Studio** | Ship growth assets — pages, mailers, decks, ads | `#4FC3F7` |
-| Enterprise | **Office Studio** | Run the org — lifecycle, reports, meetings, SOPs | `#A78BFA` |
-
-### Studio Hub (`/tools`)
-**Purpose:** Browse all tools organized by category within the active mode.
-
-**Key Elements:**
-- Mode tabs at top
-- Category sections with tool cards
-- Each card shows: icon, label, blurb, accent color
-- Click to open tool workbench
+| Personal | **Hobby Studio** | Create for the joy of it | `#34D399` |
+| Professional | **Startup Studio** | Ship growth assets | `#4FC3F7` |
+| Enterprise | **Office Studio** | Run the org | `#A78BFA` |
 
 ---
 
 ### Hobby Studio Tools (Personal Mode)
 
 #### 1. Music Studio (`/tools/music`)
-**Purpose:** Generate actual music — playable, downloadable audio tracks.
 
-**Key Elements:**
-- **Create tab:** Description input, AI auto-fill, genre/mood/tempo sliders, vocal toggle, lyrics mode (auto/manual/none), session length (30s to 5h), video toggle
-- **Library tab:** Saved tracks with audio player, download (.mp3), video generation
-- **Output:** Playable audio track + optional visualizer video (.webm)
-- **AI Features:** Musicologist brief, per-field suggest/enhance/new
+![Music Studio](screenshots/12-music-studio.png)
 
-**Screenshot:** Show the full Create tab with all controls, and the Library tab with a saved track playing.
+Generate actual music — playable, downloadable audio tracks. Features AI auto-fill, per-field suggest/enhance/new, vocal toggle, lyrics mode, session length (30s to 5h), and optional visualizer video.
 
 #### 2. Creative Studio (`/tools/creative`)
-**Purpose:** Text-only creative: song lyrics, music-gen prompts, poems, social captions.
 
-**Fields:** Your idea (textarea), What to create (select: Song lyrics / Music-gen prompt / Poem / Social caption set), Genre/vibe (text)
+![Creative Studio](screenshots/13-creative-studio.png)
 
-**Output:** Downloadable .md file
+Text-only creative: song lyrics, music-gen prompts, poems, or social captions. Output: downloadable .md
 
 #### 3. Trip Planner (`/tools/travel`)
-**Purpose:** Day-by-day travel itinerary tuned to dates, budget, interests.
 
-**Fields:** Destination, Days & dates, Who's going, Budget (Shoestring/Mid-range/Comfortable/Luxury), Interests
+![Trip Planner](screenshots/14-trip-planner.png)
 
-**Output:** Downloadable .md itinerary
+Day-by-day travel itinerary tuned to dates, budget, interests. Output: downloadable .md
 
 #### 4. Health Engine (`/tools/health`)
-**Purpose:** Nutrition + exercise in one, goal-driven (lose/maintain/gain).
 
-**Key Elements:**
-- Custom HealthStudio component
-- Calorie & macro targets
-- Meal plans + workout plans
-- Health events finder
+![Health Engine](screenshots/15-health-engine.png)
 
-**Output:** Downloadable .md plan
+Nutrition + exercise in one, goal-driven (lose/maintain/gain). Calorie & macro targets, meal + workout plans.
 
 #### 5. Study Coach (`/tools/study`)
-**Purpose:** Structured study plan or learning path for any subject.
 
-**Fields:** Subject/skill, Current level, Timeline & hours/week, Target outcome
+![Study Coach](screenshots/16-study-coach.png)
+
+Structured study plan or learning path for any subject, tuned to timeline.
 
 #### 6. Journal & Reflection (`/tools/journal`)
-**Purpose:** Guided journaling prompts or reflective entries.
 
-**Fields:** What do you want (Journaling prompts / Turn notes into reflection / Weekly review / Gratitude list), What's on your mind, Focus
+![Journal](screenshots/17-journal.png)
+
+Guided journaling prompts or reflective entries from thoughts and mood.
 
 #### 7. Budget Planner (`/tools/budget`)
-**Purpose:** Personal monthly budget with category splits and savings tips.
 
-**Fields:** Monthly income, Fixed costs, Savings/goals, Anything else
+![Budget Planner](screenshots/18-budget-planner.png)
+
+Personal monthly budget with category splits and savings tips.
 
 #### 8. How-To Guide (`/tools/how-to`)
-**Purpose:** Step-by-step guide for any life skill or task.
 
-**Fields:** What to learn/do, Current level, Guide style (Step-by-step / Checklist / Roadmap / Troubleshooting), Constraints
+![How-To Guide](screenshots/19-how-to-guide.png)
+
+Clear, step-by-step how-to guide for anything — life skill, task, or process.
 
 #### 9. Social Media Studio (`/tools/social-media`)
-**Purpose:** Platform-ready posts, captions, and hooks.
 
-**Fields:** Topic/idea, Platform (Instagram/TikTok/YouTube/LinkedIn/X/Multi), How many (1/5/Week), Tone
+![Social Media](screenshots/20-social-media.png)
+
+Platform-ready posts, captions, and hooks for Instagram, TikTok, YouTube, or LinkedIn.
 
 #### 10. OTT / Video Studio (`/tools/video`)
-**Purpose:** Video scripts and outlines — reels, YouTube, OTT concepts.
 
-**Fields:** Concept, Format (Short-form/YouTube/OTT/Explainer), Audience, Tone/style
+![Video Studio](screenshots/21-video-studio.png)
 
-**Output:** Production-ready script (.md)
+Video scripts and outlines — short-form reels, YouTube episodes, or OTT series concept. Output: production-ready script (.md)
 
 #### 11. Video Avatar Studio (`/tools/avatar`)
-**Purpose:** Generate animated avatar video from a script.
 
-**Key Elements:**
-- **Canvas animation:** Breathing pulse, waveform bars, pulsing dots, grid pattern
-- **Audio track:** AudioContext oscillator synced to animation
-- **Live TTS:** Web Speech API plays voice when "Play with voice" clicked
-- **4 avatar styles:** Professional 👔, Casual 😊, Anime ✨, Realistic 🧑
-- **Download:** .webm video with audio track
-- **Generation progress bar**
+![Video Avatar](screenshots/22-video-avatar.png)
 
-**Screenshot:** Show the idle state with avatar preview, then the playing state with video + controls.
+Generate animated avatar video from a script — canvas-rendered visual with browser TTS voice playback. Download as .webm with audio track.
 
 ---
 
 ### Startup Studio Tools (Professional Mode)
 
 #### 12. Landing Page Engine (`/tools/landing`)
-**Purpose:** Complete, responsive HTML landing page from a product brief.
 
-**Fields:** Product/brand, What it is & why it's great, Target audience, Primary CTA, Tone (Premium/Warm/Bold/Editorial)
+![Landing Page](screenshots/23-landing-page.png)
 
-**Output:** Full HTML document (.html) — **with "Open in new tab" button**
-
-**Screenshot:** Show the form, then the generated HTML with preview iframe + code view + Open button.
+Complete, responsive HTML landing page from a product brief. **With "Open in new tab" button** for live preview.
 
 #### 13. HTML Mailer Architect (`/tools/mailer`)
-**Purpose:** Email-client-safe, table-based HTML mailer with inline styles.
 
-**Fields:** Campaign goal, Key message & offer, Subject line direction, Call-to-action, Tone
+![HTML Mailer](screenshots/24-html-mailer.png)
 
-**Output:** Email-safe HTML (.html) — **with "Open in new tab" button**
+Email-client-safe, table-based HTML mailer with inline styles. **With "Open in new tab" button** for email preview.
 
 #### 14. Pitch Deck Outliner (`/tools/pitch`)
-**Purpose:** Slide-by-slide investor/sales pitch outline.
 
-**Fields:** Company/product, What it does & traction, Deck for (Seed/Series A/Sales/Internal), Ask
+![Pitch Deck](screenshots/25-pitch-deck.png)
+
+Slide-by-slide investor/sales pitch outline with narrative and key numbers.
 
 #### 15. Ad Copy Studio (`/tools/adcopy`)
-**Purpose:** Performance ad copy — hooks, primary text, headlines, CTAs per channel.
 
-**Fields:** Product/offer, Angle/benefit, Channel (Meta/Google/TikTok/Email), Tone
+![Ad Copy](screenshots/26-ad-copy.png)
+
+Performance ad copy — hooks, primary text, headlines and CTAs per channel.
 
 #### 16. SEO Blog Writer (`/tools/blog`)
-**Purpose:** Complete, SEO-structured blog article.
 
-**Fields:** Topic/working title, Primary keyword, Audience & intent, Length (600w/1200w/2000w), Tone
+![SEO Blog](screenshots/27-seo-blog.png)
+
+Complete, SEO-structured blog article with title options, headings, meta description.
 
 #### 17. Social Content Calendar (`/tools/social`)
-**Purpose:** Ready-to-post content calendar across a week or month.
 
-**Fields:** Brand/product, Goal & themes, Platforms, Timeframe (1 week/2 weeks/1 month)
+![Content Calendar](screenshots/28-content-calendar.png)
+
+Ready-to-post content calendar — hooks, captions, formats across a week or month.
 
 #### 18. Cold Outreach (`/tools/outreach`)
-**Purpose:** Multi-step cold email/DM sequence with follow-ups.
 
-**Fields:** What you're offering, Who you're targeting, Channel (Cold email/LinkedIn DM/Both), Sequence length (3/4/5 touches)
+![Cold Outreach](screenshots/29-cold-outreach.png)
+
+Multi-step cold email / DM sequence with follow-ups that actually get replies.
 
 #### 19. Naming & Tagline (`/tools/naming`)
-**Purpose:** Brandable name ideas and taglines with rationale.
 
-**Fields:** What to name, Positioning & vibe, What to produce (Names+taglines/Names only/Taglines only), Avoid/must-have
+![Naming](screenshots/30-naming-tagline.png)
+
+Brandable name ideas and taglines for a product, feature, or campaign — with rationale.
 
 #### 20. Campaign Planner (`/tools/campaign`)
-**Purpose:** Full multi-channel marketing campaign plan.
 
-**Fields:** Product/offer, Objective & context, Channels, Duration (1 week/2 weeks/1 month/Quarter)
+![Campaign Planner](screenshots/31-campaign-planner.png)
+
+Full multi-channel marketing campaign plan — angles, channels, timeline, budget split, KPIs.
 
 ---
 
 ### Office Studio Tools (Enterprise Mode)
 
 #### 21. Lifecycle OS (`/tools/lifecycle`)
-**Purpose:** Full customer-lifecycle program — stage messaging, channels, timing, KPIs.
 
-**Fields:** Product/segment, Business context & goal, Primary focus (Onboarding/Retention/Win-back/AOV/Full lifecycle), Channels available
+![Lifecycle OS](screenshots/32-lifecycle-os.png)
+
+Full customer-lifecycle program — stage messaging, channels, timing and KPIs.
 
 #### 22. Meeting Studio (`/tools/meeting`)
-**Purpose:** Turn raw notes/transcript into clean minutes with action items.
 
-**Fields:** Notes/transcript, Meeting & attendees, Output (Minutes+actions/Actions only/Executive summary)
+![Meeting Studio](screenshots/33-meeting-studio.png)
+
+Turn raw notes or a transcript into clean minutes: decisions, action items, follow-ups.
 
 #### 23. Report & Memo Studio (`/tools/report`)
-**Purpose:** Structured business report, memo, or one-pager.
 
-**Fields:** Report topic, Key points/data, Format (Report/Memo/Brief/Update), Audience
+![Report Studio](screenshots/34-report-studio.png)
+
+Structured business report, memo, or one-pager from inputs and data points.
 
 #### 24. SOP & Process Studio (`/tools/sop`)
-**Purpose:** Standard-operating-procedure with steps, owners, checks.
 
-**Fields:** Process/task, How it works today, For whom
+![SOP Studio](screenshots/35-sop-studio.png)
+
+Clear standard-operating-procedure or process doc with steps, owners, and checks.
 
 #### 25. Job Description (`/tools/jd`)
-**Purpose:** Polished, inclusive job description.
 
-**Fields:** Role title, Team/company context, Key responsibilities & must-haves, Location & type
+![Job Description](screenshots/36-job-description.png)
+
+Polished, inclusive job description with responsibilities, requirements, and about-the-role.
 
 #### 26. PRD & Spec (`/tools/prd`)
-**Purpose:** Product requirements doc with problem, goals, scope, user stories.
 
-**Fields:** Feature/product, Problem & context, Goals/scope hints, Detail level (One-pager/Standard/Detailed)
+![PRD & Spec](screenshots/37-prd-spec.png)
+
+Crisp product requirements doc: problem, goals, scope, user stories, and success metrics.
 
 #### 27. OKR Planner (`/tools/okr`)
-**Purpose:** Objectives and measurable key results with initiatives.
 
-**Fields:** Team/scope, Priorities & context, How many objectives (1/2-3/3-5), Time horizon
+![OKR Planner](screenshots/38-okr-planner.png)
+
+Objectives and measurable key results for a team or quarter, with supporting initiatives.
 
 #### 28. Proposal & SOW (`/tools/proposal`)
-**Purpose:** Client proposal or statement of work.
 
-**Fields:** Client/project, Scope & deliverables, Timeline & pricing hints, Document (Proposal/SOW/Both)
+![Proposal & SOW](screenshots/39-proposal-sow.png)
+
+Client proposal or statement of work: scope, deliverables, timeline, and pricing structure.
 
 ---
 
 ## Specialized Components
 
 ### Skills (`/skills`)
+![Skills](screenshots/40-skills.png)
+
 Browse and install reusable AI skill packs.
 
 ### Job Agent (`/job-agent`)
+![Job Agent](screenshots/41-job-agent.png)
+
 Automated job application assistant with resume/cover letter generation.
 
 ### Kolab (`/kolab`)
+![Kolab](screenshots/42-kolab.png)
+
 Collaborative brand workspace with mode-aware playbooks.
 
 ### Apps (`/apps`)
+![Apps](screenshots/43-apps.png)
+
 Hub for built-in mini-applications and integrations.
 
 ### Finance (`/finance`)
+![Finance](screenshots/44-finance.png)
+
 Encrypted financial tracking with Fernet AES-128-CBC encryption.
 
 ### Plans & Credits (`/plans`)
+![Plans](screenshots/45-plans.png)
+
 Subscription tiers and credit management.
 
 ### Capabilities (`/capabilities`)
+![Capabilities](screenshots/46-capabilities.png)
+
 Full feature catalog with interactive demos.
 
 ### Agent Activity (`/activity`)
+![Agent Activity](screenshots/47-agent-activity.png)
+
 Audit log of all AI agent actions (append-only).
 
 ### App Audit (`/audit`)
+![App Audit](screenshots/48-app-audit.png)
+
 Security and privacy audit dashboard.
 
 ### Settings (`/settings`)
+![Settings](screenshots/49-settings.png)
+
 Account, preferences, and system configuration.
 
 ---
 
 ## Mobile Experience
 
-### Hamburger Menu
-- **Trigger:** ☰ icon fixed at top-left (z-30), visible below `lg` breakpoint
-- **Drawer:** Fixed left sidebar slides in with backdrop blur
-- **Auto-close:** On any nav link tap or route change
-- **Backdrop:** Tap anywhere outside to close
-
 ### Responsive Layout
-- **Desktop:** Full sidebar + main content (pl-0)
-- **Mobile:** Hamburger → drawer, main content (pl-14 to avoid overlap)
-- **Breakpoint:** `lg` (1024px)
+
+![Mobile Homepage](screenshots/50-mobile-home.png)
+
+- **Desktop:** Full sidebar + main content
+- **Mobile:** Hamburger → drawer, main content with pl-14 padding
+
+![Mobile Assistant](screenshots/51-mobile-assistant.png)
+
+![Mobile Studio](screenshots/52-mobile-studio.png)
+
+![Mobile Hamburger Open](screenshots/53-mobile-hamburger-open.png)
 
 ---
 
@@ -424,7 +412,6 @@ The assistant operates with mode-aware intelligence:
 5. **Pattern Recognition:** Identifies recurring themes and preferences
 
 ### Tool Integration
-The assistant can invoke any Studio tool from conversation:
 ```
 User: "Create a landing page for my turmeric tea brand"
 → JARVIS calls create_asset(kind="landing", title="Turmeric Tea", brief="...")
@@ -435,95 +422,37 @@ User: "Create a landing page for my turmeric tea brand"
 
 ---
 
-## Screenshot Capture Guide
+## Screenshot Gallery
 
-To capture all screenshots, run the dev server and use the following script:
+All 53 screenshots captured via Playwright (Chromium headless):
 
-```bash
-# Start dev server
-cd frontend && npm run dev
-
-# In another terminal, run the screenshot script
-# (see scripts/capture-screenshots.sh)
-```
-
-### Required Screenshots
-
-| # | Page | Route | What to Capture |
-|---|------|-------|-----------------|
-| 1 | Homepage | `/` | Landing page with hero |
-| 2 | Dashboard | `/dashboard` | Full dashboard view |
-| 3 | Assistant | `/assistant` | Chat interface with JARVIS |
-| 4 | Online Agents | `/agents` | Agent grid |
-| 5 | Generations | `/generations` | Generation cards |
-| 6 | Task Tracker | `/tasks` | Kanban board |
-| 7 | Life Log | `/lifelog` | Timeline view |
-| 8 | Notes | `/notes` | Editor + preview |
-| 9 | Goals | `/goals` | Goal cards with progress |
-| 10 | Knowledge | `/knowledge` | Document list + search |
-| 11 | Studio Hub | `/tools` | Tool grid by category |
-| 12 | Music Studio | `/tools/music` | Create tab with controls |
-| 13 | Music Library | `/tools/music` | Library tab with tracks |
-| 14 | Creative Studio | `/tools/creative` | Form + output |
-| 15 | Trip Planner | `/tools/travel` | Form + output |
-| 16 | Health Engine | `/tools/health` | Custom component |
-| 17 | Study Coach | `/tools/study` | Form + output |
-| 18 | Journal | `/tools/journal` | Form + output |
-| 19 | Budget Planner | `/tools/budget` | Form + output |
-| 20 | How-To Guide | `/tools/how-to` | Form + output |
-| 21 | Social Media | `/tools/social-media` | Form + output |
-| 22 | Video Studio | `/tools/video` | Form + output |
-| 23 | Video Avatar | `/tools/avatar` | Avatar preview + controls |
-| 24 | Landing Page | `/tools/landing` | Form + HTML preview + Open button |
-| 25 | HTML Mailer | `/tools/mailer` | Form + email preview |
-| 26 | Pitch Deck | `/tools/pitch` | Form + output |
-| 27 | Ad Copy | `/tools/adcopy` | Form + output |
-| 28 | SEO Blog | `/tools/blog` | Form + output |
-| 29 | Content Calendar | `/tools/social` | Form + output |
-| 30 | Cold Outreach | `/tools/outreach` | Form + output |
-| 31 | Naming | `/tools/naming` | Form + output |
-| 32 | Campaign Planner | `/tools/campaign` | Form + output |
-| 33 | Lifecycle OS | `/tools/lifecycle` | Form + output |
-| 34 | Meeting Studio | `/tools/meeting` | Form + output |
-| 35 | Report Studio | `/tools/report` | Form + output |
-| 36 | SOP Studio | `/tools/sop` | Form + output |
-| 37 | Job Description | `/tools/jd` | Form + output |
-| 38 | PRD & Spec | `/tools/prd` | Form + output |
-| 39 | OKR Planner | `/tools/okr` | Form + output |
-| 40 | Proposal & SOW | `/tools/proposal` | Form + output |
-| 41 | Skills | `/skills` | Skill catalog |
-| 42 | Job Agent | `/job-agent` | Application kit |
-| 43 | Kolab | `/kolab` | Brand workspace |
-| 44 | Apps | `/apps` | App hub |
-| 45 | Finance | `/finance` | Finance dashboard |
-| 46 | Plans | `/plans` | Pricing tiers |
-| 47 | Capabilities | `/capabilities` | Feature catalog |
-| 48 | Agent Activity | `/activity` | Audit log |
-| 49 | App Audit | `/audit` | Security audit |
-| 50 | Settings | `/settings` | Settings panel |
-| 51 | Mobile Homepage | `/` (mobile) | Hamburger menu closed |
-| 52 | Mobile Drawer | `/` (mobile) | Hamburger menu open |
-| 53 | Mobile Assistant | `/assistant` (mobile) | Chat on mobile |
-
----
-
-## Architecture Summary
-
-```
-The Third Eye
-├── frontend/          Next.js 14 App Router + Tailwind + Radix UI
-│   ├── app/           Pages + API routes
-│   ├── components/    UI + feature components
-│   │   ├── studio/    StudioWorkbench, MusicStudio, StudioHub
-│   │   ├── avatar/    VideoAvatar (canvas + MediaRecorder + TTS)
-│   │   ├── layout/    Sidebar, MainLayout
-│   │   └── ...
-│   ├── lib/           studioTools, studioGenerate, musicVideo, ...
-│   └── hooks/         useMode, useAgentProfile, useModeTags
-├── backend/           FastAPI + SQLAlchemy + pgvector
-├── supabase/          Database migrations
-└── docs/              This document
-```
+| # | Screenshot | Route |
+|---|------------|-------|
+| 01 | Homepage | `/` |
+| 02 | Dashboard | `/dashboard` |
+| 03 | Assistant | `/assistant` |
+| 04 | Online Agents | `/agents` |
+| 05 | Generations | `/generations` |
+| 06 | Task Tracker | `/tasks` |
+| 07 | Life Log | `/lifelog` |
+| 08 | Notes | `/notes` |
+| 09 | Goals | `/goals` |
+| 10 | Knowledge | `/knowledge` |
+| 11 | Studio Hub | `/tools` |
+| 12-22 | Hobby Studio (11 tools) | `/tools/*` |
+| 23-31 | Startup Studio (9 tools) | `/tools/*` |
+| 32-39 | Office Studio (8 tools) | `/tools/*` |
+| 40 | Skills | `/skills` |
+| 41 | Job Agent | `/job-agent` |
+| 42 | Kolab | `/kolab` |
+| 43 | Apps | `/apps` |
+| 44 | Finance | `/finance` |
+| 45 | Plans | `/plans` |
+| 46 | Capabilities | `/capabilities` |
+| 47 | Agent Activity | `/activity` |
+| 48 | App Audit | `/audit` |
+| 49 | Settings | `/settings` |
+| 50-53 | Mobile views | Various |
 
 ---
 
