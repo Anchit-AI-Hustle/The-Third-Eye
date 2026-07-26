@@ -10,7 +10,7 @@ import {
   FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode, type ModeId } from "@/hooks/useMode";
 import { CloudSyncBadge } from "./CloudSyncBadge";
@@ -78,20 +78,40 @@ function visibleItems(items: NavItem[], modeId: ModeId): NavItem[] {
   return items.filter((it) => !it.modes || it.modes.includes(modeId));
 }
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void } = {}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const { active: agent } = useAgentProfile();
   const { mode, modes, setMode } = useMode();
 
+  // Auto-close mobile drawer on route change
+  useEffect(() => {
+    if (mobileOpen && onMobileClose) {
+      onMobileClose();
+    }
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <aside
-      className={cn(
-        "hidden lg:flex flex-col h-screen sticky top-0 bg-background-surface border-r border-border-default transition-all duration-200 ease-in-out flex-none",
-        collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
       )}
-    >
+      <aside
+        className={cn(
+          "flex flex-col h-screen bg-background-surface border-r border-border-default transition-all duration-200 ease-in-out flex-none z-50",
+          /* Desktop: sticky, hidden below lg */
+          "hidden lg:flex lg:sticky lg:top-0",
+          /* Mobile: fixed overlay drawer */
+          mobileOpen && "!flex fixed inset-y-0 left-0",
+          collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
+        )}
+      >
       {/* Logo — Arc Reactor */}
       <div className={cn(
         "flex items-center gap-3 border-b border-border-default h-16 flex-none",
@@ -181,6 +201,7 @@ export function Sidebar() {
                   const isActive = pathname.startsWith(href);
                   return (
                     <Link key={href} href={href} title={collapsed ? label : undefined}
+                      onClick={() => { if (onMobileClose) onMobileClose(); }}
                       className={cn(
                         "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
                         collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
@@ -212,6 +233,7 @@ export function Sidebar() {
         )}
         <CloudSyncBadge collapsed={collapsed} />
         <Link href="/settings" title={collapsed ? "Settings" : undefined}
+          onClick={() => { if (onMobileClose) onMobileClose(); }}
           className={cn(
             "flex items-center gap-3 rounded-input text-sm text-text-secondary hover:text-text-primary hover:bg-background-elevated transition-all border border-transparent",
             collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
@@ -255,5 +277,6 @@ export function Sidebar() {
         )}
       </div>
     </aside>
+    </>
   );
 }

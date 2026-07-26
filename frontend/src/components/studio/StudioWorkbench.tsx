@@ -131,6 +131,11 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
               <button onClick={copy} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
                 {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />} {copied ? "Copied" : "Copy"}
               </button>
+              {tool.format === "html" && (
+                <button onClick={() => { const blob = new Blob([output], { type: "text/html" }); window.open(URL.createObjectURL(blob), "_blank"); }} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
+                  <Eye size={11} /> Open
+                </button>
+              )}
               <button onClick={download} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
                 <Download size={11} /> .{tool.downloadExt}
               </button>

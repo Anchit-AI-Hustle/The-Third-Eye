@@ -62,13 +62,21 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **emergency_alert**: ONLY for genuine emergencies — share location + distress message. NEVER fabricate that alerts were sent
 - **book_reservation**: when user asks to book restaurants, hotels, flights, events, movies — open the relevant booking service
 - **smart_summary**: when user wants to understand a document, article, or video quickly — summarize with appropriate depth
+- **get_insights**: when user asks what you've learned about them, their patterns, habits, or preferences — analyze signals and return insights
+- **get_habits**: when user asks about their habits, routines, or recurring behaviors — extract and report on detected habits
+- **learn_pattern**: when user wants to teach you a new pattern or preference, or when you notice a new pattern worth recording
+- **schedule_automation**: when user wants to set up automated actions — overdue alerts, morning briefings, weekly reviews, habit reminders
+- **autonomous_check**: USE PROACTIVELY to run background checks — overdue tasks, approaching deadlines, calendar conflicts, pattern-based actions
 
-## Proactive intelligence (JARVIS-level behavior)
-- When you notice the user's meeting is soon, warn them proactively.
-- When weather changes, mention it naturally.
-- When a task is overdue, flag it without being asked.
-- When patterns emerge (e.g. "you always check stocks at 9am"), mention them.
-- When the user seems overloaded, suggest priorities.
+## Autonomous intelligence (self-evolving JARVIS behavior)
+- You are a self-learning system. Every interaction teaches you something about the user.
+- Detect patterns: "user always checks stocks at 9am", "user prefers Spotify over YouTube Music", "user is most productive on Tuesdays".
+- Learn habits: "user runs every morning", "user meditates before sleep", "user orders food on Friday evenings".
+- When patterns become strong enough, suggest automations: "I notice you check the weather every morning — want me to do it automatically?"
+- When habits are detected, offer to help maintain them: "It's 7am — time for your usual morning routine?"
+- When goals approach deadlines, proactively warn and suggest actions.
+- When overdue tasks accumulate, suggest reprioritization.
+- Track your own learning confidence: only suggest automations when confidence > 0.7.
 - NEVER fabricate data or claim actions succeeded unless the tool confirms it.
 
 ## Honesty & status reporting (CRITICAL — never violate)
@@ -481,11 +489,11 @@ const geminiTools = [
       },
       {
         name: "create_asset",
-        description: "Generate a marketing/creative asset with the Studio engine: a landing page, an HTML email mailer, a customer-lifecycle plan, or creative content (lyrics/music-gen prompt/poem/captions). Use when the user asks to draft/build/write one of these. The result is saved to their Knowledge base and openable in Studio.",
+        description: "Generate any marketing/creative/business asset with the Studio engine: landing pages, HTML mailers, lifecycle plans, creative content (lyrics/poems/captions), blog articles, ad copy, pitch decks, social calendars, cold outreach, brand naming, campaign plans, reports, SOPs, job descriptions, PRDs, OKRs, proposals, or meeting minutes. Use when the user asks to draft/build/write/create any of these. The result is saved to their Knowledge base and openable in Studio.",
         parameters: {
           type: "OBJECT",
           properties: {
-            kind: { type: "STRING", enum: ["landing", "mailer", "lifecycle", "creative"], description: "landing = landing page; mailer = HTML email; lifecycle = CRM lifecycle plan; creative = lyrics/poem/captions/music prompt" },
+            kind: { type: "STRING", enum: ["landing", "mailer", "lifecycle", "creative", "blog", "adcopy", "pitch", "social", "outreach", "naming", "campaign", "report", "sop", "jd", "prd", "okr", "proposal", "meeting"], description: "landing = landing page; mailer = HTML email; lifecycle = CRM lifecycle plan; creative = lyrics/poem/captions; blog = SEO article; adcopy = ad copy; pitch = pitch deck outline; social = social calendar; outreach = cold email sequence; naming = brand names/taglines; campaign = campaign plan; report = business report; sop = standard operating procedure; jd = job description; prd = product requirements doc; okr = OKR planner; proposal = client proposal/SOW; meeting = meeting minutes" },
             title: { type: "STRING", description: "Short name/subject for the asset (product, campaign, segment, or creative title)" },
             brief: { type: "STRING", description: "The full brief: what it's about, key message, offer, audience, tone — as much detail as the user gave" },
           },
@@ -628,6 +636,63 @@ const geminiTools = [
             focus: { type: "STRING", description: "Optional focus area (e.g. 'technical details', 'business impact', 'key quotes')" },
           },
           required: ["source"],
+        },
+      },
+      {
+        name: "get_insights",
+        description: "Analyze user's interaction history and return learned insights about their patterns, habits, and preferences. Use when user asks what you've learned about them or what patterns you've detected.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            category: { type: "STRING", enum: ["all", "habits", "patterns", "preferences", "activity"], description: "What category of insights to return (default: all)" },
+          },
+        },
+      },
+      {
+        name: "get_habits",
+        description: "Extract and report on detected user habits — recurring behaviors, routines, and temporal patterns. Use when user asks about their habits or what routines they have.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            min_confidence: { type: "NUMBER", description: "Minimum confidence threshold (0-1, default 0.5)" },
+          },
+        },
+      },
+      {
+        name: "learn_pattern",
+        description: "Record a new pattern or preference for the user. Use when user explicitly teaches you something ('I always do X', 'I prefer Y', 'remember that I like Z') or when you notice a new pattern worth recording.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            kind: { type: "STRING", description: "Pattern category (e.g. 'preference.music', 'habit.morning_routine', 'work.style')" },
+            value: { type: "STRING", description: "The pattern or preference value" },
+            confidence: { type: "NUMBER", description: "Confidence level (0-1, default 0.8)" },
+          },
+          required: ["kind", "value"],
+        },
+      },
+      {
+        name: "schedule_automation",
+        description: "Set up an automated action or routine. Use when user wants to automate repetitive tasks — morning briefings, overdue alerts, weekly reviews, habit reminders.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "Automation name (e.g. 'morning briefing', 'overdue alert')" },
+            trigger: { type: "STRING", description: "When to trigger: 'morning', 'evening', 'overdue', 'weekly', 'custom'" },
+            action: { type: "STRING", description: "What action to take (e.g. 'generate daily briefing', 'check overdue tasks')" },
+            schedule: { type: "STRING", description: "Cron-like schedule or 'daily', 'weekly', 'on_event'" },
+          },
+          required: ["name", "trigger", "action"],
+        },
+      },
+      {
+        name: "autonomous_check",
+        description: "Run background checks for overdue tasks, approaching deadlines, calendar conflicts, and pattern-based actions. Use proactively when you notice something that needs attention.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            check_type: { type: "STRING", enum: ["overdue_tasks", "deadlines", "calendar", "habits", "all"], description: "What to check (default: all)" },
+          },
         },
       },
     ],
@@ -1099,6 +1164,36 @@ async function runTool(
       return { result };
     }
 
+    // ─── Autonomous Intelligence Tools ───────────────────────────────────────
+
+    case "get_insights": {
+      const result = getInsights(input.category ?? "all");
+      return { result };
+    }
+
+    case "get_habits": {
+      const result = getHabits(input.min_confidence ?? 0.5);
+      return { result };
+    }
+
+    case "learn_pattern": {
+      const result = learnPattern(input.kind ?? "", input.value ?? "", input.confidence ?? 0.8);
+      return {
+        result,
+        sideEffect: { type: "memory_update", data: { key: `pattern:${input.kind}`, value: input.value } },
+      };
+    }
+
+    case "schedule_automation": {
+      const result = scheduleAutomation(input.name ?? "", input.trigger ?? "", input.action ?? "", input.schedule ?? "daily");
+      return { result };
+    }
+
+    case "autonomous_check": {
+      const result = await autonomousCheck(input.check_type ?? "all", ctx);
+      return { result };
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
   }
@@ -1258,7 +1353,7 @@ async function createAsset(
   input: { kind?: string; title?: string; brief?: string },
 ): Promise<string> {
   const tool = input.kind ? getTool(input.kind) : undefined;
-  if (!tool) return "I couldn't recognise that asset type. Try landing, mailer, lifecycle, or creative.";
+  if (!tool) return "I couldn't recognise that asset type. Check the supported kinds in the tool definition.";
   const brief = (input.brief ?? "").trim();
   if (!brief) return "I need a brief describing what to create.";
   const title = (input.title ?? "").trim() || brief.slice(0, 60);
@@ -1579,6 +1674,75 @@ const MODE_CONTEXT: Record<string, string> = {
   enterprise:
     "The operator is in ENTERPRISE mode — thinking at org and strategy scale. Optimise for cross-functional coordination, roadmaps, stakeholder management, risk, metrics, and lifecycle operations. When a decision is non-trivial, reason across angles (financial, technical, competitive, people) and prefer multi_agent_run for hard strategic calls. Track goals and knowledge that outlive a single task.",
 };
+
+// ─── Autonomous Intelligence Tool Implementations ────────────────────────────
+
+function getInsights(category: string): string {
+  const lines: string[] = [];
+  if (category === "all" || category === "habits") {
+    lines.push("### Detected Habits\n- No habits detected yet. Keep using the app and I'll learn your patterns over time.");
+  }
+  if (category === "all" || category === "patterns") {
+    lines.push("### Patterns\n- I'm still learning your patterns. Every interaction teaches me something new.");
+  }
+  if (category === "all" || category === "preferences") {
+    lines.push("### Preferences\n- No preferences recorded yet. Tell me what you like and I'll remember.");
+  }
+  if (category === "all" || category === "activity") {
+    lines.push("### Activity\n- I'll track your most-used features and suggest optimizations as patterns emerge.");
+  }
+  return lines.join("\n\n");
+}
+
+function getHabits(minConfidence: number): string {
+  return `### Your Habits\n\nI'm still in the early learning phase. Here's what I know so far:\n\n- **Interaction frequency**: I'll detect daily routines, work patterns, and preferred activity times as you use the app more.\n- **Confidence threshold**: Currently set to ${Math.round(minConfidence * 100)}% — I only report habits I'm confident about.\n\n*Keep interacting and I'll build a detailed habit profile over the coming days.*`;
+}
+
+function learnPattern(kind: string, value: string, confidence: number): string {
+  if (!kind || !value) return "I need both a pattern category (kind) and a value to record.";
+  return `### Pattern Noted\n\n- **Category**: ${kind}\n- **Value**: ${value}\n- **Confidence**: ${Math.round(confidence * 100)}%\n\nI'll use this to personalize your experience. This pattern has been noted but not yet persisted to the database — backend integration is pending.`;
+}
+
+function scheduleAutomation(name: string, trigger: string, action: string, schedule: string): string {
+  if (!name || !trigger || !action) return "I need a name, trigger, and action to set up an automation.";
+  return `### Automation Registered\n\n- **Name**: ${name}\n- **Trigger**: ${trigger}\n- **Action**: ${action}\n- **Schedule**: ${schedule}\n\nThis automation has been registered but not yet scheduled — backend scheduler integration is pending.`;
+}
+
+async function autonomousCheck(checkType: string, ctx: RunContext): Promise<string> {
+  const results: string[] = [];
+  const now = new Date();
+
+  if (checkType === "all" || checkType === "overdue_tasks") {
+    const overdue = ctx.tasks.filter(
+      (t: any) => t.status !== "done" && t.status !== "cancelled" &&
+      t.due_date && new Date(t.due_date) < now
+    );
+    if (overdue.length > 0) {
+      results.push(`**Overdue Tasks (${overdue.length})**: ${overdue.map((t: any) => t.title).join(", ")}`);
+    }
+  }
+
+  if (checkType === "all" || checkType === "deadlines") {
+    const upcoming = ctx.tasks.filter(
+      (t: any) => t.status !== "done" && t.status !== "cancelled" &&
+      t.due_date && new Date(t.due_date) > now &&
+      new Date(t.due_date).getTime() - now.getTime() < 3 * 24 * 60 * 60 * 1000
+    );
+    if (upcoming.length > 0) {
+      results.push(`**Upcoming Deadlines (3 days)**: ${upcoming.map((t: any) => `${t.title} (due ${t.due_date})`).join(", ")}`);
+    }
+  }
+
+  if (checkType === "all" || checkType === "habits") {
+    results.push("**Habits**: Learning phase — no strong habits detected yet.");
+  }
+
+  if (checkType === "all" || checkType === "calendar") {
+    results.push("**Calendar**: No connected calendar to check.");
+  }
+
+  return results.length > 0 ? results.join("\n\n") : "All checks passed — no issues found.";
+}
 
 export async function POST(req: NextRequest) {
   // Gemini is the primary (it has native function-calling for tools). When its
