@@ -67,6 +67,16 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **learn_pattern**: when user wants to teach you a new pattern or preference, or when you notice a new pattern worth recording
 - **schedule_automation**: when user wants to set up automated actions — overdue alerts, morning briefings, weekly reviews, habit reminders
 - **autonomous_check**: USE PROACTIVELY to run background checks — overdue tasks, approaching deadlines, calendar conflicts, pattern-based actions
+- **generate_image**: when user asks to create, draw, or generate an image, illustration, logo, icon, wallpaper, or any visual content
+- **generate_qr**: when user asks to create a QR code for a website, contact info, WiFi password, or any data
+- **create_chart**: when user wants to see data as a bar chart, line chart, pie chart, or comparison table
+- **generate_invoice**: when user asks to create, draft, or send an invoice, bill, or receipt
+- **build_resume**: when user asks to create, update, or improve their resume, CV, or LinkedIn profile content
+- **capture_screenshot**: when user wants to see or save a screenshot of a webpage
+- **shorten_url**: when user asks to shorten, compress, or create a short link for a URL
+- **create_form**: when user asks to create a form, survey, questionnaire, registration form, or feedback form
+- **analyze_data**: when user wants to analyze CSV data, JSON, spreadsheets, or any tabular data
+- **generate_pdf**: when user asks to create, export, or download content as a PDF
 
 ## Autonomous intelligence (self-evolving JARVIS behavior)
 - You are a self-learning system. Every interaction teaches you something about the user.
@@ -695,6 +705,135 @@ const geminiTools = [
           },
         },
       },
+      {
+        name: "generate_image",
+        description: "Generate an image from a text description using AI. Use when the user asks to create, draw, or generate an image, illustration, logo, icon, wallpaper, or any visual content. Returns a downloadable image URL.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            prompt: { type: "STRING", description: "Detailed description of the image to generate" },
+            style: { type: "STRING", enum: ["realistic", "artistic", "minimal", "cartoon", "photo"], description: "Visual style (default: realistic)" },
+            size: { type: "STRING", enum: ["square", "landscape", "portrait", "wide"], description: "Aspect ratio (default: square)" },
+          },
+          required: ["prompt"],
+        },
+      },
+      {
+        name: "generate_qr",
+        description: "Generate a QR code for any text, URL, or data. Use when the user asks to create a QR code for a website, contact info, WiFi password, or any data.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            data: { type: "STRING", description: "The text, URL, or data to encode in the QR code" },
+            label: { type: "STRING", description: "Optional label/title for the QR code" },
+          },
+          required: ["data"],
+        },
+      },
+      {
+        name: "create_chart",
+        description: "Create a data visualization chart from structured data. Use when the user wants to see data as a bar chart, line chart, pie chart, or comparison table.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "Chart title" },
+            type: { type: "STRING", enum: ["bar", "line", "pie", "comparison"], description: "Chart type" },
+            data: { type: "STRING", description: "The data as JSON array of {label, value} objects or CSV-like text" },
+          },
+          required: ["title", "type", "data"],
+        },
+      },
+      {
+        name: "generate_invoice",
+        description: "Generate a professional HTML invoice from item details. Use when the user asks to create, draft, or send an invoice, bill, or receipt.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            client: { type: "STRING", description: "Client/company name" },
+            items: { type: "STRING", description: "Line items as text: 'Item, quantity, unit price' per line" },
+            tax_rate: { type: "STRING", description: "Tax rate (e.g. '18%', '10%') (optional)" },
+            notes: { type: "STRING", description: "Payment terms, bank details, or notes (optional)" },
+          },
+          required: ["client", "items"],
+        },
+      },
+      {
+        name: "build_resume",
+        description: "Build a professional resume/CV from user details. Use when the user asks to create, update, or improve their resume, CV, or LinkedIn profile content.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "Full name" },
+            role: { type: "STRING", description: "Target role/title" },
+            experience: { type: "STRING", description: "Work experience as text (company, role, dates, achievements)" },
+            skills: { type: "STRING", description: "Key skills (comma-separated)" },
+            education: { type: "STRING", description: "Education details (optional)" },
+            extras: { type: "STRING", description: "Projects, certifications, or other details (optional)" },
+          },
+          required: ["name", "role", "experience", "skills"],
+        },
+      },
+      {
+        name: "capture_screenshot",
+        description: "Capture a screenshot of any website URL. Use when the user wants to see or save a screenshot of a webpage.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            url: { type: "STRING", description: "The website URL to capture" },
+            width: { type: "NUMBER", description: "Viewport width in pixels (default: 1280)" },
+          },
+          required: ["url"],
+        },
+      },
+      {
+        name: "shorten_url",
+        description: "Shorten a long URL using a URL shortener. Use when the user asks to shorten, compress, or create a short link for a URL.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            url: { type: "STRING", description: "The long URL to shorten" },
+          },
+          required: ["url"],
+        },
+      },
+      {
+        name: "create_form",
+        description: "Create an interactive HTML form or survey. Use when the user asks to create a form, survey, questionnaire, registration form, or feedback form.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "Form title" },
+            fields: { type: "STRING", description: "Form fields as text: 'Field name, type (text/textarea/select/checkbox), options if select' per line" },
+            purpose: { type: "STRING", description: "What the form is for (helps with styling)" },
+          },
+          required: ["title", "fields"],
+        },
+      },
+      {
+        name: "analyze_data",
+        description: "Analyze structured data and return insights. Use when the user wants to analyze CSV data, JSON, spreadsheets, or any tabular data — compute stats, find patterns, or summarize.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            data: { type: "STRING", description: "The data to analyze (CSV, JSON, or tabular text)" },
+            question: { type: "STRING", description: "What to analyze or what insight to find" },
+          },
+          required: ["data", "question"],
+        },
+      },
+      {
+        name: "generate_pdf",
+        description: "Generate a downloadable PDF document from content. Use when the user asks to create, export, or download content as a PDF — reports, articles, receipts, certificates.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "Document title" },
+            content: { type: "STRING", description: "The content to include (markdown or plain text)" },
+            format: { type: "STRING", enum: ["report", "letter", "receipt", "certificate"], description: "Document format/style (default: report)" },
+          },
+          required: ["title", "content"],
+        },
+      },
     ],
   },
 ] as any;
@@ -1191,6 +1330,58 @@ async function runTool(
 
     case "autonomous_check": {
       const result = await autonomousCheck(input.check_type ?? "all", ctx);
+      return { result };
+    }
+
+    // ─── JARVIS 2.0 — New Capability Tools ──────────────────────────────────
+
+    case "generate_image": {
+      const result = generateImage(input.prompt ?? "", input.style ?? "realistic", input.size ?? "square");
+      return { result };
+    }
+
+    case "generate_qr": {
+      const result = generateQR(input.data ?? "", input.label);
+      return { result };
+    }
+
+    case "create_chart": {
+      const result = createChart(input.title ?? "", input.type ?? "bar", input.data ?? "[]");
+      return { result };
+    }
+
+    case "generate_invoice": {
+      const result = generateInvoice(input.client ?? "", input.items ?? "", input.tax_rate, input.notes);
+      return { result };
+    }
+
+    case "build_resume": {
+      const result = buildResume(input.name ?? "", input.role ?? "", input.experience ?? "", input.skills ?? "", input.education, input.extras);
+      return { result };
+    }
+
+    case "capture_screenshot": {
+      const result = await captureScreenshot(input.url ?? "", input.width ?? 1280);
+      return { result };
+    }
+
+    case "shorten_url": {
+      const result = await shortenUrl(input.url ?? "");
+      return { result };
+    }
+
+    case "create_form": {
+      const result = createForm(input.title ?? "", input.fields ?? "", input.purpose);
+      return { result };
+    }
+
+    case "analyze_data": {
+      const result = analyzeData(input.data ?? "", input.question ?? "");
+      return { result };
+    }
+
+    case "generate_pdf": {
+      const result = generatePdf(input.title ?? "", input.content ?? "", input.format ?? "report");
       return { result };
     }
 
@@ -1747,6 +1938,165 @@ async function autonomousCheck(checkType: string, ctx: RunContext): Promise<stri
   }
 
   return results.length > 0 ? results.join("\n\n") : "All checks passed — no issues found.";
+}
+
+// ─── JARVIS 2.0 — New Capability Implementations ──────────────────────────
+
+function generateImage(prompt: string, style: string, size: string): string {
+  const styleMap: Record<string, string> = {
+    realistic: "photorealistic, high detail, professional photography",
+    artistic: "artistic, creative, painterly style",
+    minimal: "minimalist, clean, simple geometric shapes",
+    cartoon: "cartoon style, vibrant colors, playful",
+    photo: "high-quality photograph, natural lighting",
+  };
+  const sizeMap: Record<string, string> = {
+    square: "1024x1024", landscape: "1280x720", portrait: "720x1280", wide: "1536x640",
+  };
+  const styledPrompt = `${prompt}, ${styleMap[style] || styleMap.realistic}`;
+  const encoded = encodeURIComponent(styledPrompt);
+  const w = (sizeMap[size] || "1024x1024").split("x");
+  return `**Image Generated**\n\nPrompt: ${styledPrompt}\nSize: ${sizeMap[size] || "1024x1024"}\n\n[Open in new tab](https://image.pollinations.ai/prompt/${encoded}?width=${w[0]}&height=${w[1]}&nologo=true)\n\nClick the link above to view and download your generated image. The image is rendered by Pollinations AI from your prompt.`;
+}
+
+function generateQR(data: string, label?: string): string {
+  const encoded = encodeURIComponent(data);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encoded}&format=png`;
+  return `**QR Code Generated**${label ? ` — ${label}` : ""}\n\nData: ${data}\n\n![QR Code](${qrUrl})\n\n[Download QR Code](${qrUrl})\n\nRight-click the image or click the link to download.`;
+}
+
+function createChart(title: string, type: string, dataStr: string): string {
+  let items: Array<{ label: string; value: number }> = [];
+  try {
+    const parsed = JSON.parse(dataStr);
+    if (Array.isArray(parsed)) items = parsed;
+  } catch {
+    const lines = dataStr.trim().split("\n").filter(Boolean);
+    for (const line of lines) {
+      const parts = line.split(/[,:|\t]/).map((s: string) => s.trim());
+      if (parts.length >= 2) {
+        const val = parseFloat(parts[parts.length - 1]);
+        if (!isNaN(val)) items.push({ label: parts.slice(0, -1).join(" "), value: val });
+      }
+    }
+  }
+  if (!items.length) return "Could not parse the data. Provide JSON array or CSV-like text with label,value pairs.";
+  const max = Math.max(...items.map((i) => i.value));
+  if (type === "pie") {
+    const total = items.reduce((s, i) => s + i.value, 0);
+    const lines = items.map((i) => `- **${i.label}**: ${i.value} (${((i.value / total) * 100).toFixed(1)}%)`);
+    return `**${title}**\n\n${lines.join("\n")}\n\n*Pie chart data — total: ${total}*`;
+  }
+  if (type === "bar") {
+    const bars = items.map((i) => { const pct = max > 0 ? (i.value / max) * 100 : 0; return `- **${i.label}**: ${"█".repeat(Math.round(pct / 5))}${"░".repeat(20 - Math.round(pct / 5))} ${i.value}`; });
+    return `**${title}**\n\n${bars.join("\n")}`;
+  }
+  if (type === "line") {
+    const points = items.map((i) => `${i.label}: ${i.value}`);
+    return `**${title}**\n\n${points.join(" → ")}`;
+  }
+  const lines = items.map((i) => `- **${i.label}**: ${i.value}`);
+  return `**${title}**\n\n${lines.join("\n")}`;
+}
+
+function generateInvoice(client: string, itemsStr: string, taxRate?: string, notes?: string): string {
+  const lines = itemsStr.trim().split("\n").filter(Boolean);
+  let subtotal = 0;
+  const rows = lines.map((line) => {
+    const parts = line.split(/[,:|\t]/).map((s: string) => s.trim());
+    const name = parts[0] || "Item";
+    const qty = parseInt(parts[1]) || 1;
+    const price = parseFloat(parts[2]) || 0;
+    const total = qty * price;
+    subtotal += total;
+    return `| ${name} | ${qty} | $${price.toFixed(2)} | $${total.toFixed(2)} |`;
+  }).join("\n");
+  const tax = taxRate ? parseFloat(taxRate.replace("%", "")) / 100 : 0;
+  const taxAmount = subtotal * tax;
+  const grandTotal = subtotal + taxAmount;
+  const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
+  return `# Invoice\n\n**Invoice #:** ${invNum}\n**Date:** ${new Date().toLocaleDateString()}\n**Client:** ${client}\n\n| Item | Qty | Unit Price | Total |\n|------|-----|-----------|-------|\n${rows}\n\n**Subtotal:** $${subtotal.toFixed(2)}${tax > 0 ? `\n**Tax (${(tax * 100).toFixed(0)}%):** $${taxAmount.toFixed(2)}` : ""}\n**Total:** $${grandTotal.toFixed(2)}\n\n${notes ? `**Notes:** ${notes}` : ""}\n\n*Generated by JARVIS — The Third Eye*`;
+}
+
+function buildResume(name: string, role: string, experience: string, skills: string, education?: string, extras?: string): string {
+  const skillList = skills.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean);
+  return `# ${name}\n\n**${role}**\n\n---\n\n## Experience\n\n${experience}\n\n## Skills\n\n${skillList.map((s) => `- ${s}`).join("\n")}\n\n${education ? `## Education\n\n${education}\n\n` : ""}${extras ? `## Additional\n\n${extras}\n\n` : ""}---\n\n*Resume generated by JARVIS — The Third Eye*`;
+}
+
+async function captureScreenshot(url: string, width: number): Promise<string> {
+  try {
+    const { chromium } = await import("playwright").catch(() => ({ chromium: null }));
+    if (!chromium) return "Screenshot service not available. Use a browser extension or online tool to capture: " + url;
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      await page.goto(url, { waitUntil: "networkidle", timeout: 15000 });
+      const buffer = await page.screenshot({ type: "png" });
+      const base64 = buffer.toString("base64");
+      return `**Screenshot Captured**\n\nURL: ${url}\nWidth: ${width}px\n\n![Screenshot](data:image/png;base64,${base64})\n\n*Served inline — right-click to save.*`;
+    } finally {
+      await browser.close().catch(() => {});
+    }
+  } catch (e) {
+    return `Screenshot capture failed: ${e instanceof Error ? e.message : "unknown error"}. Try opening the URL directly.`;
+  }
+}
+
+async function shortenUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return `URL shortening failed (HTTP ${res.status}).`;
+    const short = await res.text();
+    return `**URL Shortened**\n\nOriginal: ${url}\nShort: ${short}\n\nCopy the short URL above.`;
+  } catch {
+    return `URL shortening service unavailable.`;
+  }
+}
+
+function createForm(title: string, fieldsStr: string, purpose?: string): string {
+  const lines = fieldsStr.trim().split("\n").filter(Boolean);
+  const formFields = lines.map((line) => {
+    const parts = line.split(/[,:|]/).map((s: string) => s.trim());
+    const name = parts[0] || "field";
+    const type = parts[1] || "text";
+    const options = parts.slice(2).join(", ");
+    if (type === "select") return `    <label>${name}</label>\n    <select name="${name.replace(/\s+/g, "_").toLowerCase()}">\n${options.split(",").map((o: string) => `      <option>${o.trim()}</option>`).join("\n")}\n    </select>`;
+    if (type === "textarea") return `    <label>${name}</label>\n    <textarea name="${name.replace(/\s+/g, "_").toLowerCase()}" rows="4" placeholder="${name}"></textarea>`;
+    if (type === "checkbox") return `    <label><input type="checkbox" name="${name.replace(/\s+/g, "_").toLowerCase()}"> ${name}</label>`;
+    return `    <label>${name}</label>\n    <input type="${type}" name="${name.replace(/\s+/g, "_").toLowerCase()}" placeholder="${name}">`;
+  }).join("\n\n");
+  return `## ${title}${purpose ? ` — ${purpose}` : ""}\n\n<form>\n${formFields}\n\n  <button type="submit">Submit</button>\n</form>\n\n*Form generated by JARVIS — The Third Eye*`;
+}
+
+function analyzeData(data: string, question: string): string {
+  const lines = data.trim().split("\n").filter(Boolean);
+  if (lines.length < 2) return "Need at least a header row and one data row.";
+  const headers = lines[0].split(/[,:|\t]/).map((s: string) => s.trim());
+  const rows = lines.slice(1).map((line) => line.split(/[,:|\t]/).map((s: string) => s.trim()));
+  const numericCols = headers.map((_, ci) => {
+    const vals = rows.map((r) => parseFloat(r[ci])).filter((v) => !isNaN(v));
+    return vals.length > rows.length * 0.5;
+  });
+  const stats = headers.map((h, ci) => {
+    if (!numericCols[ci]) return { header: h, type: "text", count: rows.length };
+    const vals = rows.map((r) => parseFloat(r[ci])).filter((v) => !isNaN(v));
+    const sum = vals.reduce((s, v) => s + v, 0);
+    const avg = sum / vals.length;
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    return { header: h, type: "numeric", count: vals.length, sum, avg, min, max };
+  });  let report = `**Data Analysis: ${question}**\n\n`;
+  report += `**Rows:** ${rows.length} | **Columns:** ${headers.length}\n\n`;
+  report += stats.map((s) => {
+    if (s.type === "text") return `- **${s.header}**: ${s.count} text values`;
+    return `- **${s.header}**: avg=${(s as any).avg?.toFixed(2)}, min=${(s as any).min}, max=${(s as any).max}, sum=${(s as any).sum?.toFixed(2)}`;
+  }).join("\n");
+  return report;
+}
+
+function generatePdf(title: string, content: string, format: string): string {
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;line-height:1.6}h1{border-bottom:2px solid #333;padding-bottom:8px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px;text-align:left}</style></head><body><h1>${title}</h1><div>${content.replace(/\n/g, "<br>")}</div></body></html>`;
+  return `**Document Generated**\n\nTitle: ${title}\nFormat: ${format}\n\n[Open in new tab](data:text/html;base64,${Buffer.from(html).toString("base64")})\n\nClick the link to view and print as PDF (use browser Print → Save as PDF).`;
 }
 
 export async function POST(req: NextRequest) {
