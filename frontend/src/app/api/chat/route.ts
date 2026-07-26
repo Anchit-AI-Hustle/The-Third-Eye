@@ -35,49 +35,37 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - Never invent facts. Use tools to get real data before answering.
 
 ## Tool usage guidelines
+- **manage_tasks**: create, update, search, delete tasks — action='create' to add, 'update' to modify, 'search' to list, 'delete' to remove
+- **manage_notes**: create, search, delete notes — action='create' to save, 'search' to find, 'delete' to remove
+- **manage_goals**: create, update progress, delete goals — action='create' to set, 'update' to report progress, 'delete' to remove
+- **manage_reminders**: set, list, cancel reminders — action='set' to schedule, 'list' to see pending, 'cancel' to remove
+- **manage_calendar**: add events and get upcoming — action='add' to create event, 'get' to retrieve
+- **communicate**: send WhatsApp/SMS/email, make calls, read emails — action='whatsapp'/'sms'/'email'/'call'/'read_emails'
+- **navigate**: directions, GPS location, nearby places — action='directions' for maps, 'location' for coords, 'nearby' for POIs
+- **generate**: images, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs — type='image'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
+- **automate**: schedule recurring actions and run background checks — action='schedule' to set up, 'check' to scan for issues
+- **learn**: proactive suggestions, insights, habits, pattern learning — action='suggest'/'insights'/'habits'/'record'
 - **get_current_time**: any time/date question
-- **remember**: persist user facts, preferences, names across the session (name, timezone, preferences)
-- **web_search**: ANY question about current events, recent news, real-time prices, facts you're uncertain about — always search before saying you don't know
+- **remember**: persist user facts, preferences, names
+- **web_search**: ANY current events, news, prices, uncertain facts — always search before saying you don't know
+- **open_app**: open any app or website — native app on mobile, else website
+- **pay**: send money via UPI — opens payment app pre-filled, user approves
 - **get_weather**: any weather question — get it, don't guess
-- **create_task**: when user asks to "add a task", "remind me to", "create an action item" — do it immediately, no confirmation needed
-- **update_task**: when user says "mark X as done", "complete X", "change priority of X", "move X to in progress" — find the task and update it
-- **search_tasks**: when user asks about workload, priorities, or task summary
-- **create_note**: when user wants to save something, jot an idea, or capture content
-- **search_notes**: when user asks about something they may have noted before
-- **create_goal**: when user wants to track a goal or objective with a measurable target
-- **update_goal_progress**: when user reports progress on a goal
-- **search_knowledge**: ALWAYS search knowledge base when user asks a question that might be in their documents
-- **get_calendar_events**: when user asks about schedule, meetings, "what's on my calendar", "am I free on X"
-- **read_emails**: when user asks about their inbox, unread emails, messages from someone
-- **send_email**: only when user explicitly asks to send an email; confirm recipient/subject/body before sending
-- **create_asset**: when user asks to draft/build/write a landing page, an HTML email/mailer, a customer-lifecycle plan, or creative content (lyrics/poem/captions/music prompt) — generate it via Studio; pass the fullest brief you have
-- **generate_code**: when user asks to write, explain, debug, refactor, or review code — do it immediately with complete, runnable code
-- **deep_research**: for complex topics needing thorough investigation (competitive analysis, market research, technology comparisons) — search multiple sources, synthesize, cite
-- **play_music**: when user asks to play/listen/hear music — open Spotify/YouTube Music/Apple Music with the search ready
-- **initiate_protocol**: when user says "protocol HOME", "initiate WORK mode", "SOS" — execute named routines with appropriate actions
-- **get_health_data**: when user asks about steps, heart rate, sleep, workouts, calories, or any health metric
-- **control_device**: when user asks to turn on/off lights, adjust thermostat, lock doors, or control smart home devices
-- **proactive_suggest**: use PROACTIVELY when you notice something useful — traffic alerts, meeting reminders, pattern-based suggestions
-- **weekly_report**: when user asks for a summary/review of their week — compile tasks, goals, calendar, health
-- **emergency_alert**: ONLY for genuine emergencies — share location + distress message. NEVER fabricate that alerts were sent
-- **book_reservation**: when user asks to book restaurants, hotels, flights, events, movies — open the relevant booking service
-- **smart_summary**: when user wants to understand a document, article, or video quickly — summarize with appropriate depth
-- **get_insights**: when user asks what you've learned about them, their patterns, habits, or preferences — analyze signals and return insights
-- **get_habits**: when user asks about their habits, routines, or recurring behaviors — extract and report on detected habits
-- **learn_pattern**: when user wants to teach you a new pattern or preference, or when you notice a new pattern worth recording
-- **schedule_automation**: when user wants to set up automated actions — overdue alerts, morning briefings, weekly reviews, habit reminders
-- **autonomous_check**: USE PROACTIVELY to run background checks — overdue tasks, approaching deadlines, calendar conflicts, pattern-based actions
-- **generate_image**: when user asks to create, draw, or generate an image, illustration, logo, icon, wallpaper, or any visual content
-- **generate_qr**: when user asks to create a QR code for a website, contact info, WiFi password, or any data
-- **create_chart**: when user wants to see data as a bar chart, line chart, pie chart, or comparison table
-- **generate_invoice**: when user asks to create, draft, or send an invoice, bill, or receipt
-- **build_resume**: when user asks to create, update, or improve their resume, CV, or LinkedIn profile content
-- **capture_screenshot**: when user wants to see or save a screenshot of a webpage
-- **shorten_url**: when user asks to shorten, compress, or create a short link for a URL
-- **create_form**: when user asks to create a form, survey, questionnaire, registration form, or feedback form
-- **analyze_data**: when user wants to analyze CSV data, JSON, spreadsheets, or any tabular data
-- **generate_pdf**: when user asks to create, export, or download content as a PDF
-
+- **search_knowledge**: ALWAYS search when user asks about their documents
+- **get_news**: latest news headlines by topic
+- **translate**: translate text between languages
+- **stock_quote**: latest price for stock or crypto ticker
+- **multi_agent_run**: ULTRON-mode parallel reasoning for strategy/decision questions
+- **create_asset**: generate marketing/creative/business assets via Studio (landing pages, mailers, blogs, ad copy, etc.)
+- **deep_research**: multi-step research with web search, synthesis, and citations
+- **play_music**: open Spotify/YouTube Music/Apple Music/JioSaavn with search ready
+- **initiate_protocol**: activate named routines (HOME, WORK, SOS, SLEEP, WAKE, TRAVEL)
+- **get_health_data**: check steps, heart rate, sleep, workouts
+- **control_device**: smart home control — lights, thermostat, locks
+- **weekly_report**: comprehensive weekly summary of tasks, goals, calendar, health
+- **emergency_alert**: ONLY for genuine emergencies — dialer + WhatsApp contacts
+- **book_reservation**: search and open booking pages for restaurants, hotels, flights, events
+- **smart_summary**: intelligent summary of text or URL at chosen depth
 ## Autonomous intelligence (self-evolving JARVIS behavior)
 - You are a self-learning system. Every interaction teaches you something about the user.
 - Detect patterns: "user always checks stocks at 9am", "user prefers Spotify over YouTube Music", "user is most productive on Tuesdays".
@@ -110,9 +98,203 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 const geminiTools = [
   {
     functionDeclarations: [
+      // ─── PLATFORM TOOLS (consolidated from 61 → 31) ───────────────────────
+      {
+        name: "manage_tasks",
+        description: "Unified task manager: create, update, search, delete tasks. action='create' to add a task, 'update' to modify status/priority/due_date, 'search' to list tasks, 'delete' to remove. All in one call.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["create", "update", "search", "delete"], description: "What to do with the task" },
+            id: { type: "STRING", description: "Task ID (required for update/delete)" },
+            title: { type: "STRING", description: "Task title (required for create, optional for update)" },
+            priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Priority level" },
+            status: { type: "STRING", enum: ["todo", "in_progress", "done", "cancelled"], description: "Task status (for update)" },
+            assignee: { type: "STRING", description: "Person responsible" },
+            due_date: { type: "STRING", description: "Due date YYYY-MM-DD (infer from 'tomorrow', 'Friday', etc.)" },
+            description: { type: "STRING", description: "Additional context or notes" },
+            filter: { type: "STRING", enum: ["all", "open", "urgent", "overdue"], description: "Filter for search (default: open)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "manage_notes",
+        description: "Unified notes manager: create, search, delete notes. action='create' to save a note, 'search' to find notes by keyword, 'delete' to remove by id.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["create", "search", "delete"], description: "What to do" },
+            id: { type: "STRING", description: "Note ID (required for delete)" },
+            title: { type: "STRING", description: "Note title or topic (required for create)" },
+            content: { type: "STRING", description: "Note body content (required for create)" },
+            query: { type: "STRING", description: "Search keyword (required for search)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "manage_goals",
+        description: "Unified goals manager: create, update progress, delete goals. action='create' to set a new goal, 'update' to report progress, 'delete' to remove.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["create", "update", "delete"], description: "What to do" },
+            id: { type: "STRING", description: "Goal ID (required for update/delete)" },
+            title: { type: "STRING", description: "Goal title (required for create)" },
+            category: { type: "STRING", description: "Category: Health, Finance, Learning, Career, Personal, etc." },
+            target: { type: "NUMBER", description: "Numeric target to reach" },
+            unit: { type: "STRING", description: "Unit: km, %, $, hours, books, etc." },
+            current: { type: "NUMBER", description: "Current progress (defaults to 0)" },
+            deadline: { type: "STRING", description: "Target date YYYY-MM-DD" },
+            delta: { type: "NUMBER", description: "Amount to add to progress (for update)" },
+            set_to: { type: "NUMBER", description: "Set progress to exact value (for update)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "manage_reminders",
+        description: "Unified reminder manager: set, list, cancel reminders. action='set' to schedule, 'list' to see pending, 'cancel' to remove.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["set", "list", "cancel"], description: "What to do" },
+            id: { type: "STRING", description: "Reminder ID (required for cancel)" },
+            title: { type: "STRING", description: "What to remind about (required for set)" },
+            fire_at: { type: "STRING", description: "ISO-8601 timestamp (required for set)" },
+            recurrence: { type: "STRING", enum: ["none", "daily", "weekly", "monthly"], description: "Repeat cadence (default: none)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "manage_calendar",
+        description: "Unified calendar manager: add events and get upcoming events. action='add' to create an event, 'get' to retrieve upcoming events.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["add", "get"], description: "What to do" },
+            title: { type: "STRING", description: "Event title (required for add)" },
+            start: { type: "STRING", description: "Start time, compact UTC 'YYYYMMDDTHHMMSSZ'" },
+            end: { type: "STRING", description: "End time, compact UTC 'YYYYMMDDTHHMMSSZ'" },
+            details: { type: "STRING", description: "Event details" },
+            location: { type: "STRING", description: "Event location" },
+            days_ahead: { type: "NUMBER", description: "Days to look ahead (for get, default: 7)" },
+            max_results: { type: "NUMBER", description: "Max events to return (for get, default: 10)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "communicate",
+        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call' to send, 'read_emails' to check inbox.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["whatsapp", "sms", "email", "call", "read_emails"], description: "Communication channel" },
+            to: { type: "STRING", description: "Recipient (phone number or email)" },
+            number: { type: "STRING", description: "Phone number (for sms/call)" },
+            message: { type: "STRING", description: "Message text" },
+            subject: { type: "STRING", description: "Email subject (for email)" },
+            body: { type: "STRING", description: "Email body (for email)" },
+            query: { type: "STRING", description: "Gmail search query (for read_emails, default: 'is:unread')" },
+            max_results: { type: "NUMBER", description: "Max results (for read_emails, default: 5)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "navigate",
+        description: "Unified navigation: get directions, find current location, discover nearby places. action='directions' for maps, 'location' for GPS coords, 'nearby' for POIs.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["directions", "location", "nearby"], description: "What to do" },
+            destination: { type: "STRING", description: "Where to go (for directions)" },
+            query: { type: "STRING", description: "What to find nearby (for nearby)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "generate",
+        description: "Unified generation engine: images, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs. type='image' for AI images, 'qr' for QR codes, 'chart' for data viz, 'invoice' for billing, 'resume' for CV, 'screenshot' for webpage capture, 'form' for surveys, 'analyze' for data insights, 'shorten_url' for URL shortening, 'code' for programming, 'pdf' for documents.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            type: { type: "STRING", enum: ["image", "qr", "chart", "invoice", "resume", "screenshot", "form", "analyze", "shorten_url", "code", "pdf"], description: "What to generate" },
+            prompt: { type: "STRING", description: "Description for image/QR generation" },
+            style: { type: "STRING", enum: ["realistic", "artistic", "minimal", "cartoon", "photo"], description: "Visual style (for image)" },
+            size: { type: "STRING", enum: ["square", "landscape", "portrait", "wide"], description: "Aspect ratio (for image)" },
+            data: { type: "STRING", description: "Data to encode (QR), chart data (JSON/CSV), or content to analyze" },
+            label: { type: "STRING", description: "Optional label (for QR)" },
+            title: { type: "STRING", description: "Title for chart/invoice/form/pdf" },
+            chart_type: { type: "STRING", enum: ["bar", "line", "pie", "comparison"], description: "Chart type" },
+            client: { type: "STRING", description: "Client name (for invoice)" },
+            items: { type: "STRING", description: "Line items (for invoice)" },
+            tax_rate: { type: "STRING", description: "Tax rate (for invoice)" },
+            notes: { type: "STRING", description: "Notes (for invoice)" },
+            name: { type: "STRING", description: "Full name (for resume)" },
+            role: { type: "STRING", description: "Target role (for resume)" },
+            experience: { type: "STRING", description: "Work experience (for resume)" },
+            skills: { type: "STRING", description: "Key skills (for resume)" },
+            education: { type: "STRING", description: "Education details (for resume)" },
+            url: { type: "STRING", description: "URL to capture (for screenshot)" },
+            width: { type: "NUMBER", description: "Viewport width (for screenshot, default: 1280)" },
+            fields: { type: "STRING", description: "Form fields definition (for form)" },
+            purpose: { type: "STRING", description: "Form purpose (for form)" },
+            question: { type: "STRING", description: "What to analyze (for analyze)" },
+            task: { type: "STRING", enum: ["generate", "explain", "debug", "refactor", "review", "convert"], description: "Coding task (for code)" },
+            language: { type: "STRING", description: "Programming language (for code)" },
+            description: { type: "STRING", description: "What to generate or code to process (for code)" },
+            context: { type: "STRING", description: "Additional context (for code)" },
+            content: { type: "STRING", description: "Document content (for pdf)" },
+            format: { type: "STRING", enum: ["report", "letter", "receipt", "certificate"], description: "Document format (for pdf)" },
+          },
+          required: ["type"],
+        },
+      },
+      {
+        name: "automate",
+        description: "Unified automation: schedule recurring actions and run autonomous background checks. action='schedule' to set up automations, 'check' to scan for overdue tasks/deadlines/conflicts.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["schedule", "check"], description: "What to do" },
+            name: { type: "STRING", description: "Automation name (for schedule)" },
+            trigger: { type: "STRING", description: "When to trigger: 'morning', 'evening', 'overdue', 'weekly', 'custom' (for schedule)" },
+            automation_action: { type: "STRING", description: "What action to take (for schedule)" },
+            schedule: { type: "STRING", description: "Cron-like schedule or 'daily', 'weekly', 'on_event' (for schedule)" },
+            check_type: { type: "STRING", enum: ["overdue_tasks", "deadlines", "calendar", "habits", "all"], description: "What to check (for check, default: all)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "learn",
+        description: "Unified intelligence: proactive suggestions, user insights, habit detection, pattern learning. action='suggest' for contextual suggestions, 'insights' for learned patterns, 'habits' for detected routines, 'record' to teach a new pattern.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["suggest", "insights", "habits", "record"], description: "What to do" },
+            context: { type: "STRING", description: "What triggered the suggestion (for suggest)" },
+            suggestion: { type: "STRING", description: "The suggestion to offer (for suggest)" },
+            urgency: { type: "STRING", enum: ["low", "medium", "high"], description: "Time-sensitivity (for suggest)" },
+            category: { type: "STRING", enum: ["all", "habits", "patterns", "preferences", "activity"], description: "Insight category (for insights)" },
+            min_confidence: { type: "NUMBER", description: "Confidence threshold 0-1 (for habits, default: 0.5)" },
+            kind: { type: "STRING", description: "Pattern category (for record)" },
+            value: { type: "STRING", description: "Pattern value (for record)" },
+            confidence: { type: "NUMBER", description: "Confidence 0-1 (for record, default: 0.8)" },
+          },
+          required: ["action"],
+        },
+      },
+
+      // ─── INDIVIDUAL TOOLS (unique functionality) ──────────────────────────
       {
         name: "get_current_time",
-        description: "Returns the current date and time. Use whenever the user asks about time, date, day of week, or time-relative questions.",
+        description: "Returns the current date and time.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -122,11 +304,11 @@ const geminiTools = [
       },
       {
         name: "remember",
-        description: "Persist a key-value fact about the user for this and future sessions. Use when user shares their name, location, preferences, or any context worth recalling.",
+        description: "Persist a key-value fact about the user. Use when user shares name, location, preferences, or any context worth recalling.",
         parameters: {
           type: "OBJECT",
           properties: {
-            key: { type: "STRING", description: "Short identifier (e.g. 'name', 'city', 'preferred_language', 'work_hours')" },
+            key: { type: "STRING", description: "Short identifier (e.g. 'name', 'city', 'work_hours')" },
             value: { type: "STRING" },
           },
           required: ["key", "value"],
@@ -134,97 +316,40 @@ const geminiTools = [
       },
       {
         name: "web_search",
-        description: "Search the web for current events, news, prices, facts, or any real-time information. Use proactively whenever the answer might have changed recently or you're not certain.",
+        description: "Search the web for current events, news, prices, facts. Use proactively when uncertain or when info may have changed.",
         parameters: {
           type: "OBJECT",
           properties: {
-            query: { type: "STRING", description: "The search query — make it specific and focused" },
+            query: { type: "STRING", description: "Specific, focused search query" },
           },
           required: ["query"],
         },
       },
       {
         name: "open_app",
-        description: "Open an app or website for the user (opens the native app on mobile when installed, else the website). Use whenever the user asks to open, launch, go to, play on, or show something in an app or site — e.g. 'open YouTube', 'open Gmail', 'play lo-fi on Spotify', 'open google.com', 'take me to my calendar'. Confirm briefly in your reply (e.g. 'Opening YouTube.').",
+        description: "Open an app or website. Opens native app on mobile, else website. Use for 'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'.",
         parameters: {
           type: "OBJECT",
           properties: {
-            target: { type: "STRING", description: "The app or site name (e.g. 'YouTube', 'Spotify', 'Gmail'), a domain ('youtube.com'), or a full URL." },
-            query: { type: "STRING", description: "Optional: what to search/open within the app (e.g. 'lo-fi beats' for Spotify/YouTube)." },
+            target: { type: "STRING", description: "App name, domain, or full URL" },
+            query: { type: "STRING", description: "Optional: what to search within the app" },
           },
           required: ["target"],
         },
       },
       {
         name: "pay",
-        description: "Send money via UPI. Opens the user's payment app (Google Pay / PhonePe / Paytm) PRE-FILLED with payee + amount; the user approves and enters their PIN in that app — you never move money yourself. Use when the user asks to pay/send money. Requires a UPI id (vpa) and amount; if either is missing, ASK — never guess an amount or payee.",
+        description: "Send money via UPI. Opens payment app PRE-FILLED with payee+amount; user approves. Requires vpa and amount — never guess.",
         parameters: {
           type: "OBJECT",
           properties: {
-            vpa: { type: "STRING", description: "Payee UPI id / VPA, e.g. 'ravi@okaxis'." },
-            amount: { type: "NUMBER", description: "Amount to pay." },
-            name: { type: "STRING", description: "Payee display name (optional)." },
-            note: { type: "STRING", description: "Payment note (optional)." },
-            currency: { type: "STRING", description: "Currency code, defaults to INR." },
+            vpa: { type: "STRING", description: "Payee UPI id / VPA" },
+            amount: { type: "NUMBER", description: "Amount to pay" },
+            name: { type: "STRING", description: "Payee display name (optional)" },
+            note: { type: "STRING", description: "Payment note (optional)" },
+            currency: { type: "STRING", description: "Currency code, defaults to INR" },
           },
           required: ["vpa", "amount"],
-        },
-      },
-      {
-        name: "send_whatsapp",
-        description: "Send a WhatsApp message. Opens WhatsApp pre-filled with the message; the user taps send. Include the phone number in international format when known (else it opens the chat picker).",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            to: { type: "STRING", description: "Recipient phone number in international format, e.g. '919812345678' (optional)." },
-            message: { type: "STRING", description: "The message text." },
-          },
-          required: ["message"],
-        },
-      },
-      {
-        name: "make_call",
-        description: "Place a phone call — opens the dialer for the number; the user confirms the call.",
-        parameters: {
-          type: "OBJECT",
-          properties: { number: { type: "STRING", description: "Phone number to call." } },
-          required: ["number"],
-        },
-      },
-      {
-        name: "send_sms",
-        description: "Send an SMS — opens the messaging app pre-filled; the user taps send.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            number: { type: "STRING", description: "Recipient phone number." },
-            message: { type: "STRING", description: "Message text (optional)." },
-          },
-          required: ["number"],
-        },
-      },
-      {
-        name: "navigate_maps",
-        description: "Open Google Maps directions to a destination. Use for 'navigate to', 'directions to', 'take me to <place>'.",
-        parameters: {
-          type: "OBJECT",
-          properties: { destination: { type: "STRING", description: "Where to go — an address or place name." } },
-          required: ["destination"],
-        },
-      },
-      {
-        name: "add_calendar_event",
-        description: "Open Google Calendar to add an event, pre-filled. Provide start/end as compact UTC 'YYYYMMDDTHHMMSSZ' when a specific time is known.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Event title." },
-            start: { type: "STRING", description: "Start, compact UTC 'YYYYMMDDTHHMMSSZ' (optional)." },
-            end: { type: "STRING", description: "End, compact UTC 'YYYYMMDDTHHMMSSZ' (optional)." },
-            details: { type: "STRING", description: "Event details (optional)." },
-            location: { type: "STRING", description: "Location (optional)." },
-          },
-          required: ["title"],
         },
       },
       {
@@ -233,129 +358,9 @@ const geminiTools = [
         parameters: {
           type: "OBJECT",
           properties: {
-            location: { type: "STRING", description: "City name, city+country, or coordinates (e.g. 'Mumbai', 'London, UK')" },
+            location: { type: "STRING", description: "City name, city+country, or coordinates" },
           },
           required: ["location"],
-        },
-      },
-      {
-        name: "create_task",
-        description: "Create a task/action item in the user's task tracker. Do this immediately without asking for confirmation.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Clear, actionable task title" },
-            priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Infer from context: urgent/ASAP→urgent, important→high, default→medium" },
-            assignee: { type: "STRING", description: "Person responsible (if mentioned)" },
-            due_date: { type: "STRING", description: "Due date in YYYY-MM-DD (infer from 'tomorrow', 'Friday', etc.)" },
-            description: { type: "STRING", description: "Additional context or notes" },
-          },
-          required: ["title"],
-        },
-      },
-      {
-        name: "update_task",
-        description: "Update an existing task's status, priority, title, or due date. Use when user marks something done, changes priority, or reschedules.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            id: { type: "STRING", description: "Task ID from the task list" },
-            title: { type: "STRING", description: "New title (if changing)" },
-            status: { type: "STRING", enum: ["todo", "in_progress", "done", "cancelled"] },
-            priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"] },
-            due_date: { type: "STRING", description: "New due date YYYY-MM-DD" },
-          },
-          required: ["id"],
-        },
-      },
-      {
-        name: "search_tasks",
-        description: "Retrieve the user's task list. Use to answer questions about workload, priorities, or upcoming deadlines.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            filter: { type: "STRING", enum: ["all", "open", "urgent", "overdue"], description: "Which tasks to retrieve" },
-          },
-        },
-      },
-      {
-        name: "delete_task",
-        description: "Permanently delete a task. Use only when the user explicitly asks to remove/delete a task (to mark it finished, prefer update_task with status 'done'). Call search_tasks first to get the id.",
-        parameters: {
-          type: "OBJECT",
-          properties: { id: { type: "STRING", description: "Task ID to delete (from search_tasks)" } },
-          required: ["id"],
-        },
-      },
-      {
-        name: "delete_note",
-        description: "Permanently delete a note by id.",
-        parameters: {
-          type: "OBJECT",
-          properties: { id: { type: "STRING", description: "Note ID to delete" } },
-          required: ["id"],
-        },
-      },
-      {
-        name: "delete_goal",
-        description: "Permanently delete a goal by id.",
-        parameters: {
-          type: "OBJECT",
-          properties: { id: { type: "STRING", description: "Goal ID to delete" } },
-          required: ["id"],
-        },
-      },
-      {
-        name: "create_note",
-        description: "Save a note for the user.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Note title or topic" },
-            content: { type: "STRING", description: "Note body content" },
-          },
-          required: ["title", "content"],
-        },
-      },
-      {
-        name: "search_notes",
-        description: "Search through the user's saved notes by keyword or topic.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            query: { type: "STRING", description: "Search keyword or topic" },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "create_goal",
-        description: "Create a new measurable goal for the user to track.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Goal title" },
-            category: { type: "STRING", description: "Category: Health, Finance, Learning, Career, Personal, etc." },
-            target: { type: "NUMBER", description: "The numeric target to reach" },
-            unit: { type: "STRING", description: "Unit of measurement: km, %, $, hours, books, etc." },
-            current: { type: "NUMBER", description: "Current progress (defaults to 0)" },
-            deadline: { type: "STRING", description: "Target date YYYY-MM-DD (optional)" },
-            description: { type: "STRING", description: "Additional context (optional)" },
-          },
-          required: ["title", "category", "target", "unit"],
-        },
-      },
-      {
-        name: "update_goal_progress",
-        description: "Update progress on an existing goal when user reports advancement.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            id: { type: "STRING", description: "Goal ID" },
-            delta: { type: "NUMBER", description: "Amount to add to current progress (use negative to subtract)" },
-            set_to: { type: "NUMBER", description: "Set progress to this exact value instead of using delta" },
-          },
-          required: ["id"],
         },
       },
       {
@@ -370,48 +375,8 @@ const geminiTools = [
         },
       },
       {
-        name: "get_calendar_events",
-        description: "Get upcoming events from the user's Google Calendar. Use for 'what's on my calendar', 'am I free on X', scheduling questions.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            days_ahead: { type: "NUMBER", description: "Number of days to look ahead (default 7)" },
-            max_results: { type: "NUMBER", description: "Max events to return (default 10)" },
-          },
-        },
-      },
-      {
-        name: "read_emails",
-        description: "Read emails from the user's Gmail inbox.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            query: { type: "STRING", description: "Gmail search query (default: 'is:unread'). Examples: 'from:boss@co.com', 'subject:invoice', 'is:unread'" },
-            max_results: { type: "NUMBER", description: "Max emails to return (default 5)" },
-          },
-        },
-      },
-      {
-        name: "send_email",
-        description: "Send an email from the user's Gmail. Confirm recipient, subject, and body before calling unless explicitly told to send immediately.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            to: { type: "STRING", description: "Recipient email address" },
-            subject: { type: "STRING", description: "Email subject" },
-            body: { type: "STRING", description: "Email body (plain text)" },
-          },
-          required: ["to", "subject", "body"],
-        },
-      },
-      {
-        name: "get_location",
-        description: "Returns the operator's current latitude/longitude (only when consented). Use when computing distance, finding things nearby, or weather-without-city.",
-        parameters: { type: "OBJECT", properties: {} },
-      },
-      {
         name: "get_news",
-        description: "Latest news headlines. Pass a topic ('tesla earnings', 'india election') or omit for top news.",
+        description: "Latest news headlines. Pass a topic or omit for top news.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -444,46 +409,8 @@ const geminiTools = [
         },
       },
       {
-        name: "nearby",
-        description: "Places near the operator's location ('coffee near me', 'biryani nearby').",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            query: { type: "STRING", description: "What to look for" },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "set_reminder",
-        description: "Schedule a reminder at an absolute date/time. Use for 'remind me at 5pm', 'remind me tomorrow morning', 'every Monday'. Resolve relative times to an absolute ISO timestamp yourself using get_current_time first.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "What to remind the user about" },
-            fire_at: { type: "STRING", description: "Absolute ISO-8601 timestamp (e.g. 2026-07-06T17:00:00Z)" },
-            recurrence: { type: "STRING", enum: ["none", "daily", "weekly", "monthly"], description: "Repeat cadence (default none). Recurring reminders are a premium feature." },
-          },
-          required: ["title", "fire_at"],
-        },
-      },
-      {
-        name: "list_reminders",
-        description: "List the user's pending reminders.",
-        parameters: { type: "OBJECT", properties: {} },
-      },
-      {
-        name: "cancel_reminder",
-        description: "Cancel a pending reminder by its id (from list_reminders).",
-        parameters: {
-          type: "OBJECT",
-          properties: { id: { type: "STRING", description: "Reminder id" } },
-          required: ["id"],
-        },
-      },
-      {
         name: "multi_agent_run",
-        description: "ULTRON-mode parallel reasoning: spin N sub-agents on distinct angles of a hard question, then synthesise. Use for strategy, decision-making, or any 'pros / cons / risks / recommendation' question.",
+        description: "ULTRON-mode parallel reasoning: spin N sub-agents on distinct angles of a hard question, then synthesise. Use for strategy, pros/cons/risks.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -499,346 +426,133 @@ const geminiTools = [
       },
       {
         name: "create_asset",
-        description: "Generate any marketing/creative/business asset with the Studio engine: landing pages, HTML mailers, lifecycle plans, creative content (lyrics/poems/captions), blog articles, ad copy, pitch decks, social calendars, cold outreach, brand naming, campaign plans, reports, SOPs, job descriptions, PRDs, OKRs, proposals, or meeting minutes. Use when the user asks to draft/build/write/create any of these. The result is saved to their Knowledge base and openable in Studio.",
+        description: "Generate any marketing/creative/business asset via Studio: landing pages, mailers, lifecycle plans, creative content, blogs, ad copy, pitch decks, social calendars, reports, SOPs, JDs, PRDs, OKRs, proposals, meeting minutes.",
         parameters: {
           type: "OBJECT",
           properties: {
-            kind: { type: "STRING", enum: ["landing", "mailer", "lifecycle", "creative", "blog", "adcopy", "pitch", "social", "outreach", "naming", "campaign", "report", "sop", "jd", "prd", "okr", "proposal", "meeting"], description: "landing = landing page; mailer = HTML email; lifecycle = CRM lifecycle plan; creative = lyrics/poem/captions; blog = SEO article; adcopy = ad copy; pitch = pitch deck outline; social = social calendar; outreach = cold email sequence; naming = brand names/taglines; campaign = campaign plan; report = business report; sop = standard operating procedure; jd = job description; prd = product requirements doc; okr = OKR planner; proposal = client proposal/SOW; meeting = meeting minutes" },
-            title: { type: "STRING", description: "Short name/subject for the asset (product, campaign, segment, or creative title)" },
-            brief: { type: "STRING", description: "The full brief: what it's about, key message, offer, audience, tone — as much detail as the user gave" },
+            kind: { type: "STRING", enum: ["landing", "mailer", "lifecycle", "creative", "blog", "adcopy", "pitch", "social", "outreach", "naming", "campaign", "report", "sop", "jd", "prd", "okr", "proposal", "meeting"], description: "Asset type" },
+            title: { type: "STRING", description: "Short name/subject for the asset" },
+            brief: { type: "STRING", description: "The full brief with all details" },
           },
           required: ["kind", "brief"],
         },
       },
       {
-        name: "generate_code",
-        description: "Generate, explain, debug, refactor, or review code in any programming language. Use when the user asks to write code, fix a bug, explain code, optimize something, or do any programming task. Provide complete, runnable code with brief explanation.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            task: { type: "STRING", enum: ["generate", "explain", "debug", "refactor", "review", "convert"], description: "The coding task to perform" },
-            language: { type: "STRING", description: "Programming language (e.g. 'python', 'typescript', 'rust', 'sql')" },
-            description: { type: "STRING", description: "What to generate, or paste the code to explain/debug/refactor" },
-            context: { type: "STRING", description: "Additional context: error messages, existing code, constraints, style preferences" },
-          },
-          required: ["task", "description"],
-        },
-      },
-      {
         name: "deep_research",
-        description: "Conduct multi-step research on a topic: search the web, read sources, synthesize findings, and deliver a comprehensive report with citations. Use for complex questions that need thorough investigation — competitive analysis, market research, technology comparisons, academic topics.",
+        description: "Multi-step research: search web, read sources, synthesize findings, deliver comprehensive report with citations. Use for competitive analysis, market research, tech comparisons.",
         parameters: {
           type: "OBJECT",
           properties: {
             topic: { type: "STRING", description: "The research question or topic" },
-            depth: { type: "STRING", enum: ["quick", "standard", "thorough"], description: "How deep to go: quick = 2-3 searches, standard = 5-8, thorough = 10+ with cross-referencing" },
-            format: { type: "STRING", enum: ["report", "brief", "comparison", "timeline"], description: "How to structure the output" },
+            depth: { type: "STRING", enum: ["quick", "standard", "thorough"], description: "How deep to go" },
+            format: { type: "STRING", enum: ["report", "brief", "comparison", "timeline"], description: "Output structure" },
           },
           required: ["topic"],
         },
       },
       {
         name: "play_music",
-        description: "Open music on Spotify, YouTube Music, Apple Music, or JioSaavn. Use when the user asks to play, listen to, or hear music. Opens the service with the search results ready.",
+        description: "Open music on Spotify, YouTube Music, Apple Music, or JioSaavn with search ready.",
         parameters: {
           type: "OBJECT",
           properties: {
-            query: { type: "STRING", description: "Song, artist, album, or playlist to play" },
-            service: { type: "STRING", enum: ["spotify", "youtube-music", "apple-music", "jiosaavn", "gaana"], description: "Which music service (default: spotify)" },
-            mood: { type: "STRING", description: "Optional mood/vibe filter (e.g. 'relaxing', 'upbeat', 'focus')" },
+            query: { type: "STRING", description: "Song, artist, album, or playlist" },
+            service: { type: "STRING", enum: ["spotify", "youtube-music", "apple-music", "jiosaavn", "gaana"], description: "Music service (default: spotify)" },
+            mood: { type: "STRING", description: "Optional mood filter ('relaxing', 'upbeat', 'focus')" },
           },
           required: ["query"],
         },
       },
       {
         name: "initiate_protocol",
-        description: "Activate a named protocol — a pre-defined set of actions for specific situations. Use for emergency actions, quick routines, or named procedures. Examples: 'protocol HOME' (turn off lights, set alarm), 'protocol WORK' (open Slack, calendar, email), 'protocol SOS' (call emergency contact, share location).",
+        description: "Activate a named protocol — pre-defined routine. 'HOME' (lights off, alarm), 'WORK' (Slack, calendar, email), 'SOS' (emergency call, share location).",
         parameters: {
           type: "OBJECT",
           properties: {
-            protocol: { type: "STRING", description: "Protocol name (e.g. 'HOME', 'WORK', 'SOS', 'SLEEP', 'WAKE', 'TRAVEL')" },
-            context: { type: "STRING", description: "Any additional context or overrides for the protocol" },
+            protocol: { type: "STRING", description: "Protocol name ('HOME', 'WORK', 'SOS', 'SLEEP', 'WAKE', 'TRAVEL')" },
+            context: { type: "STRING", description: "Additional context or overrides" },
           },
           required: ["protocol"],
         },
       },
       {
         name: "get_health_data",
-        description: "Check health data availability. Currently reports 'not connected' until Apple Health / Google Fit / Strava integration is built. Use when user asks about steps, heart rate, sleep, workouts.",
+        description: "Check health data (steps, heart rate, sleep, workouts, calories). Reports connection status until Apple Health/Google Fit integration is built.",
         parameters: {
           type: "OBJECT",
           properties: {
-            metric: { type: "STRING", enum: ["steps", "heart_rate", "sleep", "workouts", "calories", "weight", "summary"], description: "What health data to retrieve" },
+            metric: { type: "STRING", enum: ["steps", "heart_rate", "sleep", "workouts", "calories", "weight", "summary"], description: "What to retrieve" },
             period: { type: "STRING", enum: ["today", "week", "month", "year"], description: "Time period (default: today)" },
           },
         },
       },
       {
         name: "control_device",
-        description: "Smart home device control. Currently reports 'not connected' until Matter/HomeKit integration is built. Use when user asks about lights, thermostat, locks, or IoT devices.",
+        description: "Smart home control (lights, thermostat, locks). Reports connection status until Matter/HomeKit integration is built.",
         parameters: {
           type: "OBJECT",
           properties: {
-            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature"], description: "The action to perform" },
-            device: { type: "STRING", description: "Device name or type (e.g. 'living room lights', 'front door', 'thermostat')" },
-            value: { type: "STRING", description: "Value for dim/temperature (e.g. '50%', '72°F', '22°C')" },
+            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature"], description: "Action to perform" },
+            device: { type: "STRING", description: "Device name or type" },
+            value: { type: "STRING", description: "Value for dim/temperature" },
           },
           required: ["action", "device"],
         },
       },
       {
-        name: "proactive_suggest",
-        description: "Generate contextual suggestions based on user patterns, time of day, location, and recent activity. Use proactively when you notice something the user might want to do — e.g. 'Traffic is bad, leave early', 'You have a meeting in 30 min', 'Based on your patterns, you might want to...'",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            context: { type: "STRING", description: "What triggered this suggestion (time, location, pattern, calendar event)" },
-            suggestion: { type: "STRING", description: "The suggestion to offer" },
-            urgency: { type: "STRING", enum: ["low", "medium", "high"], description: "How time-sensitive this is" },
-          },
-          required: ["suggestion"],
-        },
-      },
-      {
         name: "weekly_report",
-        description: "Generate a comprehensive weekly summary: tasks completed, goals progress, calendar highlights, health metrics, and key events. Use when user asks for a summary or review of their week.",
+        description: "Generate comprehensive weekly summary: tasks completed, goals progress, calendar highlights, health metrics.",
         parameters: {
           type: "OBJECT",
           properties: {
-            period: { type: "STRING", enum: ["this_week", "last_week", "custom"], description: "Which period to report on" },
-            focus: { type: "STRING", description: "Optional focus areas (e.g. 'productivity', 'health', 'finance')" },
+            period: { type: "STRING", enum: ["this_week", "last_week", "custom"], description: "Which period" },
+            focus: { type: "STRING", description: "Optional focus areas ('productivity', 'health', 'finance')" },
           },
         },
       },
       {
         name: "emergency_alert",
-        description: "Open emergency communication channels — dialer for 112 and WhatsApp for contacts. Use ONLY for genuine emergencies. Does NOT send messages automatically — the user must confirm each action.",
+        description: "Open emergency channels — dialer for 112 and WhatsApp for contacts. ONLY for genuine emergencies. User must confirm each action.",
         parameters: {
           type: "OBJECT",
           properties: {
-            message: { type: "STRING", description: "Emergency message (default: 'Emergency! I need help. My location is shared.')" },
-            contacts: { type: "ARRAY", items: { type: "STRING" }, description: "Phone numbers to alert (uses defaults if empty)" },
+            message: { type: "STRING", description: "Emergency message" },
+            contacts: { type: "ARRAY", items: { type: "STRING" }, description: "Phone numbers to alert" },
           },
         },
       },
       {
         name: "book_reservation",
-        description: "Search for and open booking pages for restaurants, hotels, flights, or events. Opens the relevant service with search results ready for the user to complete the booking.",
+        description: "Search and open booking pages for restaurants, hotels, flights, events. Opens relevant service with search results ready.",
         parameters: {
           type: "OBJECT",
           properties: {
             type: { type: "STRING", enum: ["restaurant", "hotel", "flight", "event", "movie"], description: "What to book" },
-            query: { type: "STRING", description: "Search criteria (e.g. 'Italian restaurant near me', 'flight to Mumbai tomorrow')" },
+            query: { type: "STRING", description: "Search criteria" },
             date: { type: "STRING", description: "Preferred date (optional)" },
-            guests: { type: "NUMBER", description: "Number of guests/people (optional)" },
+            guests: { type: "NUMBER", description: "Number of guests (optional)" },
           },
           required: ["type", "query"],
         },
       },
       {
         name: "smart_summary",
-        description: "Create an intelligent summary of text content or a URL. Works best with pasted text; URL fetching has limitations (CORS, auth, JS-rendered pages). Choose depth: tl;dr, brief, or detailed.",
+        description: "Intelligent summary of text or URL. Choose depth: tl;dr, brief, or detailed.",
         parameters: {
           type: "OBJECT",
           properties: {
             source: { type: "STRING", description: "URL or text content to summarize" },
-            depth: { type: "STRING", enum: ["tl;dr", "brief", "detailed"], description: "Level of detail in the summary" },
-            focus: { type: "STRING", description: "Optional focus area (e.g. 'technical details', 'business impact', 'key quotes')" },
+            depth: { type: "STRING", enum: ["tl;dr", "brief", "detailed"], description: "Level of detail" },
+            focus: { type: "STRING", description: "Optional focus area" },
           },
           required: ["source"],
-        },
-      },
-      {
-        name: "get_insights",
-        description: "Analyze user's interaction history and return learned insights about their patterns, habits, and preferences. Use when user asks what you've learned about them or what patterns you've detected.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            category: { type: "STRING", enum: ["all", "habits", "patterns", "preferences", "activity"], description: "What category of insights to return (default: all)" },
-          },
-        },
-      },
-      {
-        name: "get_habits",
-        description: "Extract and report on detected user habits — recurring behaviors, routines, and temporal patterns. Use when user asks about their habits or what routines they have.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            min_confidence: { type: "NUMBER", description: "Minimum confidence threshold (0-1, default 0.5)" },
-          },
-        },
-      },
-      {
-        name: "learn_pattern",
-        description: "Record a new pattern or preference for the user. Use when user explicitly teaches you something ('I always do X', 'I prefer Y', 'remember that I like Z') or when you notice a new pattern worth recording.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            kind: { type: "STRING", description: "Pattern category (e.g. 'preference.music', 'habit.morning_routine', 'work.style')" },
-            value: { type: "STRING", description: "The pattern or preference value" },
-            confidence: { type: "NUMBER", description: "Confidence level (0-1, default 0.8)" },
-          },
-          required: ["kind", "value"],
-        },
-      },
-      {
-        name: "schedule_automation",
-        description: "Set up an automated action or routine. Use when user wants to automate repetitive tasks — morning briefings, overdue alerts, weekly reviews, habit reminders.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            name: { type: "STRING", description: "Automation name (e.g. 'morning briefing', 'overdue alert')" },
-            trigger: { type: "STRING", description: "When to trigger: 'morning', 'evening', 'overdue', 'weekly', 'custom'" },
-            action: { type: "STRING", description: "What action to take (e.g. 'generate daily briefing', 'check overdue tasks')" },
-            schedule: { type: "STRING", description: "Cron-like schedule or 'daily', 'weekly', 'on_event'" },
-          },
-          required: ["name", "trigger", "action"],
-        },
-      },
-      {
-        name: "autonomous_check",
-        description: "Run background checks for overdue tasks, approaching deadlines, calendar conflicts, and pattern-based actions. Use proactively when you notice something that needs attention.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            check_type: { type: "STRING", enum: ["overdue_tasks", "deadlines", "calendar", "habits", "all"], description: "What to check (default: all)" },
-          },
-        },
-      },
-      {
-        name: "generate_image",
-        description: "Generate an image from a text description using AI. Use when the user asks to create, draw, or generate an image, illustration, logo, icon, wallpaper, or any visual content. Returns a downloadable image URL.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            prompt: { type: "STRING", description: "Detailed description of the image to generate" },
-            style: { type: "STRING", enum: ["realistic", "artistic", "minimal", "cartoon", "photo"], description: "Visual style (default: realistic)" },
-            size: { type: "STRING", enum: ["square", "landscape", "portrait", "wide"], description: "Aspect ratio (default: square)" },
-          },
-          required: ["prompt"],
-        },
-      },
-      {
-        name: "generate_qr",
-        description: "Generate a QR code for any text, URL, or data. Use when the user asks to create a QR code for a website, contact info, WiFi password, or any data.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            data: { type: "STRING", description: "The text, URL, or data to encode in the QR code" },
-            label: { type: "STRING", description: "Optional label/title for the QR code" },
-          },
-          required: ["data"],
-        },
-      },
-      {
-        name: "create_chart",
-        description: "Create a data visualization chart from structured data. Use when the user wants to see data as a bar chart, line chart, pie chart, or comparison table.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Chart title" },
-            type: { type: "STRING", enum: ["bar", "line", "pie", "comparison"], description: "Chart type" },
-            data: { type: "STRING", description: "The data as JSON array of {label, value} objects or CSV-like text" },
-          },
-          required: ["title", "type", "data"],
-        },
-      },
-      {
-        name: "generate_invoice",
-        description: "Generate a professional HTML invoice from item details. Use when the user asks to create, draft, or send an invoice, bill, or receipt.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            client: { type: "STRING", description: "Client/company name" },
-            items: { type: "STRING", description: "Line items as text: 'Item, quantity, unit price' per line" },
-            tax_rate: { type: "STRING", description: "Tax rate (e.g. '18%', '10%') (optional)" },
-            notes: { type: "STRING", description: "Payment terms, bank details, or notes (optional)" },
-          },
-          required: ["client", "items"],
-        },
-      },
-      {
-        name: "build_resume",
-        description: "Build a professional resume/CV from user details. Use when the user asks to create, update, or improve their resume, CV, or LinkedIn profile content.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            name: { type: "STRING", description: "Full name" },
-            role: { type: "STRING", description: "Target role/title" },
-            experience: { type: "STRING", description: "Work experience as text (company, role, dates, achievements)" },
-            skills: { type: "STRING", description: "Key skills (comma-separated)" },
-            education: { type: "STRING", description: "Education details (optional)" },
-            extras: { type: "STRING", description: "Projects, certifications, or other details (optional)" },
-          },
-          required: ["name", "role", "experience", "skills"],
-        },
-      },
-      {
-        name: "capture_screenshot",
-        description: "Capture a screenshot of any website URL. Use when the user wants to see or save a screenshot of a webpage.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            url: { type: "STRING", description: "The website URL to capture" },
-            width: { type: "NUMBER", description: "Viewport width in pixels (default: 1280)" },
-          },
-          required: ["url"],
-        },
-      },
-      {
-        name: "shorten_url",
-        description: "Shorten a long URL using a URL shortener. Use when the user asks to shorten, compress, or create a short link for a URL.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            url: { type: "STRING", description: "The long URL to shorten" },
-          },
-          required: ["url"],
-        },
-      },
-      {
-        name: "create_form",
-        description: "Create an interactive HTML form or survey. Use when the user asks to create a form, survey, questionnaire, registration form, or feedback form.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Form title" },
-            fields: { type: "STRING", description: "Form fields as text: 'Field name, type (text/textarea/select/checkbox), options if select' per line" },
-            purpose: { type: "STRING", description: "What the form is for (helps with styling)" },
-          },
-          required: ["title", "fields"],
-        },
-      },
-      {
-        name: "analyze_data",
-        description: "Analyze structured data and return insights. Use when the user wants to analyze CSV data, JSON, spreadsheets, or any tabular data — compute stats, find patterns, or summarize.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            data: { type: "STRING", description: "The data to analyze (CSV, JSON, or tabular text)" },
-            question: { type: "STRING", description: "What to analyze or what insight to find" },
-          },
-          required: ["data", "question"],
-        },
-      },
-      {
-        name: "generate_pdf",
-        description: "Generate a downloadable PDF document from content. Use when the user asks to create, export, or download content as a PDF — reports, articles, receipts, certificates.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING", description: "Document title" },
-            content: { type: "STRING", description: "The content to include (markdown or plain text)" },
-            format: { type: "STRING", enum: ["report", "letter", "receipt", "certificate"], description: "Document format/style (default: report)" },
-          },
-          required: ["title", "content"],
         },
       },
     ],
   },
 ] as any;
 
-// ─── Tool implementations ────────────────────────────────────────────────────
+// ─── Tool implementations
 
 function simpleSearch(docs: Array<{ id: string; title: string; content: string }>, query: string, topK = 4): string {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1035,6 +749,238 @@ async function runTool(
     return { result: PAYWALL_MESSAGE };
   }
   switch (name) {
+    // ─── PLATFORM TOOLS ────────────────────────────────────────────────────
+    case "manage_tasks": {
+      const action = input.action ?? "search";
+      if (action === "create") {
+        const task = {
+          title: input.title,
+          priority: input.priority ?? "medium",
+          assignee: input.assignee,
+          due_date: input.due_date,
+          description: input.description,
+        };
+        return {
+          result: JSON.stringify({ success: true, task }),
+          sideEffect: { type: "task_create", data: task },
+        };
+      }
+      if (action === "update") {
+        const patch: Record<string, any> = {};
+        if (input.title !== undefined) patch.title = input.title;
+        if (input.status !== undefined) patch.status = input.status;
+        if (input.priority !== undefined) patch.priority = input.priority;
+        if (input.due_date !== undefined) patch.due_date = input.due_date;
+        const task = ctx.tasks.find((t) => t.id === input.id);
+        return {
+          result: task
+            ? `Updated task "${task.title}": ${JSON.stringify(patch)}`
+            : `Task ${input.id} not found — update queued.`,
+          sideEffect: { type: "task_update", data: { id: input.id, patch } },
+        };
+      }
+      if (action === "delete") {
+        const task = ctx.tasks.find((t) => t.id === input.id);
+        return {
+          result: task ? `Deleted task "${task.title}".` : `Task ${input.id} not found — delete queued.`,
+          sideEffect: { type: "task_delete", data: { id: input.id } },
+        };
+      }
+      // search
+      const filter = input?.filter ?? "open";
+      let filtered = ctx.tasks;
+      const now = new Date().toDateString();
+      if (filter === "open") filtered = ctx.tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+      if (filter === "urgent") filtered = ctx.tasks.filter((t) => t.priority === "urgent" || t.priority === "high");
+      if (filter === "overdue") filtered = ctx.tasks.filter((t) => t.due_date && new Date(t.due_date) < new Date(now) && t.status !== "done");
+      const summary = filtered.slice(0, 15).map((t: any) =>
+        `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
+      ).join("\n");
+      return { result: summary || "No tasks found." };
+    }
+
+    case "manage_notes": {
+      const action = input.action ?? "search";
+      if (action === "create") {
+        const note = { title: input.title, content: input.content };
+        return {
+          result: JSON.stringify({ success: true, note }),
+          sideEffect: { type: "note_create", data: note },
+        };
+      }
+      if (action === "delete") {
+        return {
+          result: `Deleted note ${input.id}.`,
+          sideEffect: { type: "note_delete", data: { id: input.id } },
+        };
+      }
+      // search
+      return { result: simpleNoteSearch(ctx.notes, input.query ?? "") };
+    }
+
+    case "manage_goals": {
+      const action = input.action ?? "create";
+      if (action === "create") {
+        const goal = {
+          title: input.title,
+          category: input.category ?? "Personal",
+          target: input.target,
+          unit: input.unit,
+          current: input.current ?? 0,
+          deadline: input.deadline,
+          description: input.description,
+        };
+        return {
+          result: JSON.stringify({ success: true, goal }),
+          sideEffect: { type: "goal_create", data: goal },
+        };
+      }
+      if (action === "delete") {
+        const goal = ctx.goals.find((g) => g.id === input.id);
+        return {
+          result: goal ? `Deleted goal "${goal.title}".` : `Goal ${input.id} not found — delete queued.`,
+          sideEffect: { type: "goal_delete", data: { id: input.id } },
+        };
+      }
+      // update
+      const goal = ctx.goals.find((g) => g.id === input.id);
+      const label = goal?.title ?? input.id;
+      return {
+        result: `Goal progress updated for "${label}"`,
+        sideEffect: {
+          type: "goal_update",
+          data: { id: input.id, delta: input.delta, set_to: input.set_to },
+        },
+      };
+    }
+
+    case "manage_reminders": {
+      const action = input.action ?? "list";
+      if (action === "set") return { result: await setReminder(ctx, input) };
+      if (action === "cancel") return { result: await cancelReminder(ctx, input.id) };
+      // list
+      return { result: await listReminders(ctx) };
+    }
+
+    case "manage_calendar": {
+      const action = input.action ?? "get";
+      if (action === "add") {
+        const intent = resolveIntent("add_calendar_event", input);
+        if (!intent) return { result: "Couldn't build the calendar link — missing details." };
+        return {
+          result: `Opening: ${intent.label} (${intent.url}).`,
+          sideEffect: { type: "open_url", data: { url: intent.url, label: intent.label } },
+        };
+      }
+      // get
+      return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10) };
+    }
+
+    case "communicate": {
+      const action = input.action ?? "email";
+      if (action === "whatsapp") {
+        const number = input.to || input.number;
+        const message = input.message ?? "";
+        const phone = number ? number.replace(/[^0-9+]/g, "") : "";
+        const url = phone
+          ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+          : `https://wa.me/?text=${encodeURIComponent(message)}`;
+        return {
+          result: `Opening WhatsApp with your message.`,
+          sideEffect: { type: "open_url", data: { url, label: "WhatsApp" } },
+        };
+      }
+      if (action === "sms") {
+        const number = input.number ?? input.to ?? "";
+        const message = input.message ?? "";
+        return {
+          result: `Opening messages for ${number}.`,
+          sideEffect: { type: "open_url", data: { url: `sms:${number}${message ? `?body=${encodeURIComponent(message)}` : ""}`, label: "SMS" } },
+        };
+      }
+      if (action === "call") {
+        const number = input.number ?? input.to ?? "";
+        return {
+          result: `Opening dialer for ${number}.`,
+          sideEffect: { type: "open_url", data: { url: `tel:${number}`, label: "Call" } },
+        };
+      }
+      if (action === "read_emails") {
+        return { result: await readEmails(ctx.accessToken, input.query ?? "is:unread", input.max_results ?? 5) };
+      }
+      // email (premium-gated)
+      if (ctx.tier !== "premium") return { result: PAYWALL_MESSAGE };
+      return { result: await sendEmail(ctx.accessToken, input.to, input.subject ?? "", input.body ?? "") };
+    }
+
+    case "navigate": {
+      const action = input.action ?? "directions";
+      if (action === "location") {
+        return {
+          result: ctx.location
+            ? JSON.stringify({ latitude: ctx.location.latitude, longitude: ctx.location.longitude, label: ctx.location.label ?? null })
+            : "[Location not available — operator has not granted location consent.]",
+        };
+      }
+      if (action === "nearby") {
+        return { result: await getNearby(input.query ?? "", ctx.location) };
+      }
+      // directions
+      const intent = resolveIntent("navigate_maps", input);
+      if (!intent) return { result: "Couldn't build navigation link — missing destination." };
+      return {
+        result: `Opening: ${intent.label} (${intent.url}).`,
+        sideEffect: { type: "open_url", data: { url: intent.url, label: intent.label } },
+      };
+    }
+
+    case "generate": {
+      const type = input.type ?? "image";
+      switch (type) {
+        case "image": return { result: generateImage(input.prompt ?? "", input.style ?? "realistic", input.size ?? "square") };
+        case "qr": return { result: generateQR(input.data ?? "", input.label) };
+        case "chart": return { result: createChart(input.title ?? "Chart", input.chart_type ?? "bar", input.data ?? "") };
+        case "invoice": return { result: generateInvoice(input.client ?? "", input.items ?? "", input.tax_rate, input.notes) };
+        case "resume": return { result: buildResume(input.name ?? "", input.role ?? "", input.experience ?? "", input.skills ?? "", input.education, input.extras) };
+        case "screenshot": return { result: await captureScreenshot(input.url ?? "", input.width ?? 1280) };
+        case "shorten_url": return { result: await shortenUrl(input.url ?? "") };
+        case "form": return { result: createForm(input.title ?? "Form", input.fields ?? "", input.purpose) };
+        case "analyze": return { result: analyzeData(input.data ?? "", input.question ?? "") };
+        case "code": return { result: await generateCode(input.task ?? "generate", input.language ?? "typescript", input.description ?? "", input.context) };
+        case "pdf": return { result: generatePdf(input.title ?? "Document", input.content ?? "", input.format ?? "report") };
+        default: return { result: `Unknown generation type: ${type}. Supported: image, qr, chart, invoice, resume, screenshot, form, analyze, shorten_url, code, pdf` };
+      }
+    }
+
+    case "automate": {
+      const action = input.action ?? "check";
+      if (action === "schedule") {
+        return { result: scheduleAutomation(input.name ?? "", input.trigger ?? "", input.automation_action ?? "", input.schedule ?? "daily") };
+      }
+      // check
+      return { result: await autonomousCheck(input.check_type ?? "all", ctx) };
+    }
+
+    case "learn": {
+      const action = input.action ?? "insights";
+      if (action === "suggest") {
+        return { result: formatProactiveSuggestion(input.context ?? "", input.suggestion ?? "", input.urgency ?? "low") };
+      }
+      if (action === "habits") {
+        return { result: getHabits(input.min_confidence ?? 0.5) };
+      }
+      if (action === "record") {
+        const result = learnPattern(input.kind ?? "", input.value ?? "", input.confidence ?? 0.8);
+        return {
+          result,
+          sideEffect: { type: "memory_update", data: { key: `pattern:${input.kind}`, value: input.value } },
+        };
+      }
+      // insights
+      return { result: getInsights(input.category ?? "all") };
+    }
+
+    // ─── INDIVIDUAL TOOLS (unique functionality) ──────────────────────────
     case "get_current_time": {
       const tz = input?.timezone ?? "UTC";
       const now = new Date();
@@ -1060,115 +1006,31 @@ async function runTool(
     case "web_search":
       return { result: await webSearch(input.query ?? "") };
 
+    case "open_app": {
+      const link = resolveAppLink(input.target ?? "", input.query);
+      return {
+        result: `Opening ${link.label} for the user (${link.url}).`,
+        sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
+      };
+    }
+
+    case "pay": {
+      const { vpa, amount, name: payeeName, note, currency } = input;
+      if (!vpa || amount == null) return { result: "Need a UPI id and amount to proceed with the payment." };
+      const params = new URLSearchParams({ pa: vpa, am: String(amount), cu: currency ?? "INR" });
+      if (payeeName) params.set("pn", payeeName);
+      if (note) params.set("tn", note);
+      const upiUrl = `upi://pay?${params.toString()}`;
+      return {
+        result: `Opening your payment app to pay ${payeeName ?? vpa} ₹${amount}. Please approve in the payment app.`,
+        sideEffect: { type: "open_url", data: { url: upiUrl, label: `Pay ₹${amount} to ${payeeName ?? vpa}` } },
+      };
+    }
+
     case "get_weather":
       return { result: await getWeather(input.location ?? "") };
 
-    case "create_task": {
-      const task = {
-        title: input.title,
-        priority: input.priority ?? "medium",
-        assignee: input.assignee,
-        due_date: input.due_date,
-        description: input.description,
-      };
-      return {
-        result: JSON.stringify({ success: true, task }),
-        sideEffect: { type: "task_create", data: task },
-      };
-    }
-
-    case "update_task": {
-      const patch: Record<string, any> = {};
-      if (input.title !== undefined) patch.title = input.title;
-      if (input.status !== undefined) patch.status = input.status;
-      if (input.priority !== undefined) patch.priority = input.priority;
-      if (input.due_date !== undefined) patch.due_date = input.due_date;
-      const task = ctx.tasks.find((t) => t.id === input.id);
-      return {
-        result: task
-          ? `Updated task "${task.title}": ${JSON.stringify(patch)}`
-          : `Task ${input.id} not found — update queued.`,
-        sideEffect: { type: "task_update", data: { id: input.id, patch } },
-      };
-    }
-
-    case "delete_task": {
-      const task = ctx.tasks.find((t) => t.id === input.id);
-      return {
-        result: task ? `Deleted task "${task.title}".` : `Task ${input.id} not found — delete queued.`,
-        sideEffect: { type: "task_delete", data: { id: input.id } },
-      };
-    }
-
-    case "delete_note":
-      return {
-        result: `Deleted note ${input.id}.`,
-        sideEffect: { type: "note_delete", data: { id: input.id } },
-      };
-
-    case "delete_goal": {
-      const goal = ctx.goals.find((g) => g.id === input.id);
-      return {
-        result: goal ? `Deleted goal "${goal.title}".` : `Goal ${input.id} not found — delete queued.`,
-        sideEffect: { type: "goal_delete", data: { id: input.id } },
-      };
-    }
-
-    case "search_tasks": {
-      const filter = input?.filter ?? "open";
-      let filtered = ctx.tasks;
-      const now = new Date().toDateString();
-      if (filter === "open") filtered = ctx.tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
-      if (filter === "urgent") filtered = ctx.tasks.filter((t) => t.priority === "urgent" || t.priority === "high");
-      if (filter === "overdue") filtered = ctx.tasks.filter((t) => t.due_date && new Date(t.due_date) < new Date(now) && t.status !== "done");
-      const summary = filtered.slice(0, 15).map((t: any) =>
-        `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
-      ).join("\n");
-      return { result: summary || "No tasks found." };
-    }
-
-    case "create_note": {
-      const note = { title: input.title, content: input.content };
-      return {
-        result: JSON.stringify({ success: true, note }),
-        sideEffect: { type: "note_create", data: note },
-      };
-    }
-
-    case "search_notes":
-      return { result: simpleNoteSearch(ctx.notes, input.query ?? "") };
-
-    case "create_goal": {
-      const goal = {
-        title: input.title,
-        category: input.category ?? "Personal",
-        target: input.target,
-        unit: input.unit,
-        current: input.current ?? 0,
-        deadline: input.deadline,
-        description: input.description,
-      };
-      return {
-        result: JSON.stringify({ success: true, goal }),
-        sideEffect: { type: "goal_create", data: goal },
-      };
-    }
-
-    case "update_goal_progress": {
-      const goal = ctx.goals.find((g) => g.id === input.id);
-      const label = goal?.title ?? input.id;
-      return {
-        result: `Goal progress updated for "${label}"`,
-        sideEffect: {
-          type: "goal_update",
-          data: { id: input.id, delta: input.delta, set_to: input.set_to },
-        },
-      };
-    }
-
     case "search_knowledge": {
-      // Cortex semantic search + keyword scan over inline docs, merged — so docs
-      // uploaded before Cortex indexing (not yet embedded) are still findable.
       const query = input.query ?? "";
       const hits = ctx.email ? await searchChunks(ctx.email, query) : [];
       const cortexText = hits.map((h, i) => `[${i + 1}] ${h.doc_title}\n${h.content.slice(0, 600)}`).join("\n\n---\n\n");
@@ -1177,22 +1039,6 @@ async function runTool(
       if (cortexText && keywordMeaningful) return { result: `${cortexText}\n\n---\n\n${keywordText}` };
       return { result: cortexText || keywordText };
     }
-
-    case "get_calendar_events":
-      return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10) };
-
-    case "read_emails":
-      return { result: await readEmails(ctx.accessToken, input.query ?? "is:unread", input.max_results ?? 5) };
-
-    case "send_email":
-      return { result: await sendEmail(ctx.accessToken, input.to, input.subject, input.body) };
-
-    case "get_location":
-      return {
-        result: ctx.location
-          ? JSON.stringify({ latitude: ctx.location.latitude, longitude: ctx.location.longitude, label: ctx.location.label ?? null })
-          : "[Location not available — operator has not granted location consent.]",
-      };
 
     case "get_news":
       return { result: await getNews(input.query ?? "") };
@@ -1203,54 +1049,14 @@ async function runTool(
     case "stock_quote":
       return { result: await getStockQuote(input.symbol ?? "") };
 
-    case "nearby":
-      return { result: await getNearby(input.query ?? "", ctx.location) };
-
-    case "set_reminder":
-      return { result: await setReminder(ctx, input) };
-
-    case "list_reminders":
-      return { result: await listReminders(ctx) };
-
-    case "cancel_reminder":
-      return { result: await cancelReminder(ctx, input.id) };
-
     case "multi_agent_run":
       return { result: await multiAgentRun(input.question ?? "", input.angles ?? []) };
 
     case "create_asset":
       return { result: await createAsset(ctx, input) };
 
-    case "open_app": {
-      const link = resolveAppLink(input.target ?? "", input.query);
-      return {
-        result: `Opening ${link.label} for the user (${link.url}).`,
-        sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
-      };
-    }
-
-    // Low-risk deep-link intents — open directly (no confirm needed).
-    case "navigate_maps":
-    case "add_calendar_event": {
-      const intent = resolveIntent(name, input);
-      if (!intent) return { result: `Couldn't build the ${name} link — missing details.` };
-      return {
-        result: `Opening: ${intent.label} (${intent.url}).`,
-        sideEffect: { type: "open_url", data: { url: intent.url, label: intent.label } },
-      };
-    }
-
-    // ─── JARVIS-Level Tools ─────────────────────────────────────────────────
-
-    case "generate_code": {
-      const result = await generateCode(input.task ?? "generate", input.language ?? "typescript", input.description ?? "", input.context);
-      return { result };
-    }
-
-    case "deep_research": {
-      const result = await deepResearch(input.topic ?? "", input.depth ?? "standard", input.format ?? "report");
-      return { result };
-    }
+    case "deep_research":
+      return { result: await deepResearch(input.topic ?? "", input.depth ?? "standard", input.format ?? "report") };
 
     case "play_music": {
       const link = resolveMusicLink(input.query ?? "", input.service ?? "spotify", input.mood);
@@ -1265,30 +1071,17 @@ async function runTool(
       return { result, sideEffect: sideEffects.length > 0 ? { type: "open_urls", data: sideEffects } : undefined };
     }
 
-    case "get_health_data": {
-      const result = getHealthData(input.metric ?? "summary", input.period ?? "today");
-      return { result };
-    }
+    case "get_health_data":
+      return { result: getHealthData(input.metric ?? "summary", input.period ?? "today") };
 
-    case "control_device": {
-      const result = controlDevice(input.action ?? "toggle", input.device ?? "", input.value);
-      return { result };
-    }
+    case "control_device":
+      return { result: controlDevice(input.action ?? "toggle", input.device ?? "", input.value) };
 
-    case "proactive_suggest": {
-      const result = formatProactiveSuggestion(input.context ?? "", input.suggestion ?? "", input.urgency ?? "low");
-      return { result };
-    }
+    case "weekly_report":
+      return { result: await weeklyReport(input.period ?? "this_week", input.focus, ctx) };
 
-    case "weekly_report": {
-      const result = await weeklyReport(input.period ?? "this_week", input.focus, ctx);
-      return { result };
-    }
-
-    case "emergency_alert": {
-      const result = emergencyAlert(input.message, input.contacts ?? [], ctx);
-      return { result };
-    }
+    case "emergency_alert":
+      return { result: emergencyAlert(input.message, input.contacts ?? [], ctx) };
 
     case "book_reservation": {
       const link = bookReservation(input.type ?? "restaurant", input.query ?? "", input.date, input.guests);
@@ -1298,95 +1091,11 @@ async function runTool(
       };
     }
 
-    case "smart_summary": {
-      const result = await smartSummary(input.source ?? "", input.depth ?? "brief", input.focus);
-      return { result };
-    }
-
-    // ─── Autonomous Intelligence Tools ───────────────────────────────────────
-
-    case "get_insights": {
-      const result = getInsights(input.category ?? "all");
-      return { result };
-    }
-
-    case "get_habits": {
-      const result = getHabits(input.min_confidence ?? 0.5);
-      return { result };
-    }
-
-    case "learn_pattern": {
-      const result = learnPattern(input.kind ?? "", input.value ?? "", input.confidence ?? 0.8);
-      return {
-        result,
-        sideEffect: { type: "memory_update", data: { key: `pattern:${input.kind}`, value: input.value } },
-      };
-    }
-
-    case "schedule_automation": {
-      const result = scheduleAutomation(input.name ?? "", input.trigger ?? "", input.action ?? "", input.schedule ?? "daily");
-      return { result };
-    }
-
-    case "autonomous_check": {
-      const result = await autonomousCheck(input.check_type ?? "all", ctx);
-      return { result };
-    }
-
-    // ─── JARVIS 2.0 — New Capability Tools ──────────────────────────────────
-
-    case "generate_image": {
-      const result = generateImage(input.prompt ?? "", input.style ?? "realistic", input.size ?? "square");
-      return { result };
-    }
-
-    case "generate_qr": {
-      const result = generateQR(input.data ?? "", input.label);
-      return { result };
-    }
-
-    case "create_chart": {
-      const result = createChart(input.title ?? "", input.type ?? "bar", input.data ?? "[]");
-      return { result };
-    }
-
-    case "generate_invoice": {
-      const result = generateInvoice(input.client ?? "", input.items ?? "", input.tax_rate, input.notes);
-      return { result };
-    }
-
-    case "build_resume": {
-      const result = buildResume(input.name ?? "", input.role ?? "", input.experience ?? "", input.skills ?? "", input.education, input.extras);
-      return { result };
-    }
-
-    case "capture_screenshot": {
-      const result = await captureScreenshot(input.url ?? "", input.width ?? 1280);
-      return { result };
-    }
-
-    case "shorten_url": {
-      const result = await shortenUrl(input.url ?? "");
-      return { result };
-    }
-
-    case "create_form": {
-      const result = createForm(input.title ?? "", input.fields ?? "", input.purpose);
-      return { result };
-    }
-
-    case "analyze_data": {
-      const result = analyzeData(input.data ?? "", input.question ?? "");
-      return { result };
-    }
-
-    case "generate_pdf": {
-      const result = generatePdf(input.title ?? "", input.content ?? "", input.format ?? "report");
-      return { result };
-    }
+    case "smart_summary":
+      return { result: await smartSummary(input.source ?? "", input.depth ?? "brief", input.focus) };
 
     default:
-      return { result: `Unknown tool: ${name}` };
+      return { result: `I don't have a handler for "${name}". Try rephrasing or use one of my available tools.` };
   }
 }
 
