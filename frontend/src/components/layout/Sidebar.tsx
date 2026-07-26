@@ -10,7 +10,7 @@ import {
   FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode, type ModeId } from "@/hooks/useMode";
 import { CloudSyncBadge } from "./CloudSyncBadge";
@@ -85,12 +85,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
   const { active: agent } = useAgentProfile();
   const { mode, modes, setMode } = useMode();
 
-  // Auto-close mobile drawer on route change
+  // Auto-close mobile drawer on route change (only when pathname actually changes)
+  const prevPathnameRef = useRef(pathname);
   useEffect(() => {
-    if (mobileOpen && onMobileClose) {
+    if (pathname !== prevPathnameRef.current && mobileOpen && onMobileClose) {
       onMobileClose();
     }
-  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+    prevPathnameRef.current = pathname;
+  }, [pathname]);
 
   return (
     <>

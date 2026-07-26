@@ -1358,10 +1358,15 @@ async function createAsset(
   if (!brief) return "I need a brief describing what to create.";
   const title = (input.title ?? "").trim() || brief.slice(0, 60);
 
-  // Map the free-form brief/title onto the tool's fields; fill required ones.
+  // Smart field mapping: match title/brief to the right fields by name patterns.
   const inputs: Record<string, string> = {};
-  const textField = tool.fields.find((f) => f.type === "text");
-  const areaField = tool.fields.find((f) => f.type === "textarea");
+  // Heuristic: title-like fields get the title, description/brief-like fields get the brief.
+  const titleFieldNames = ["product", "company", "brand", "role", "feature", "client", "team", "process", "topic", "offer", "what", "campaign"];
+  const briefFieldNames = ["brief", "description", "context", "message", "details", "angle", "concept", "notes", "scope", "objective", "priorities", "inputs", "must", "problem", "constraints"];
+  const textField = tool.fields.find((f) => f.type === "text" && titleFieldNames.includes(f.name))
+    || tool.fields.find((f) => f.type === "text");
+  const areaField = tool.fields.find((f) => f.type === "textarea" && briefFieldNames.includes(f.name))
+    || tool.fields.find((f) => f.type === "textarea");
   if (textField) inputs[textField.name] = title;
   if (areaField) inputs[areaField.name] = brief;
   for (const f of tool.fields) if (f.required && !inputs[f.name]?.trim()) inputs[f.name] = brief;
