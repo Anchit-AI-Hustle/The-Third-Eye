@@ -350,15 +350,15 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
     setProgress(0);
   }, [script, style]);
 
-  // Cleanup on unmount
+  // Track videoUrl for cleanup on unmount
+  const videoUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    videoUrlRef.current = state.videoUrl ?? null;
+  }, [state.videoUrl]);
   useEffect(() => {
     return () => {
       speechSynthesis.cancel();
-      // Revoke any blob URLs to prevent memory leaks
-      setState((s) => {
-        if (s.videoUrl) URL.revokeObjectURL(s.videoUrl);
-        return s;
-      });
+      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
     };
   }, []);
 

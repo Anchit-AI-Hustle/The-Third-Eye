@@ -139,7 +139,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "avatar", label: "Video Avatar Studio", mode: "personal", icon: "Video", accent: "#A78BFA",
-    blurb: "Generate a talking video avatar from audio + text — powered by LongCat-Video-Avatar. Upload a voice clip or record one, add your script, and get a lip-synced avatar video.",
+    blurb: "Generate an animated avatar video from a script — canvas-rendered visual with browser TTS voice playback. Download as .webm with audio track.",
     format: "markdown", downloadExt: "mp4", cta: "Generate avatar",
     fields: [
       { name: "script", label: "What the avatar says", type: "textarea", placeholder: "Type the script or transcript for the avatar to speak…", required: true },
