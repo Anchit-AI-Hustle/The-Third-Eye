@@ -112,7 +112,7 @@ export function NotesClient() {
           <Search size={13} className="text-text-muted flex-none" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search notes…"
             className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none" />
-          {search && <button onClick={() => setSearch("")}><X size={11} className="text-text-muted" /></button>}
+          {search && <button onClick={() => setSearch("")} aria-label="Clear search"><X size={11} className="text-text-muted" aria-hidden="true" /></button>}
         </div>
 
         {/* Mode scope */}

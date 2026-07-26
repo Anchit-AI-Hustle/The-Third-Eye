@@ -11,6 +11,7 @@ import {
   FB_DOMAIN_VERIFICATION,
   BING_SITE_VERIFICATION,
 } from "@/lib/site";
+import { PWAInstall } from "@/components/PWAInstall";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const PORTFOLIO_ASSETS = "https://anchit-tandon.com/assets";
@@ -68,7 +69,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         {/* Shared portfolio navigation + project-level SkillTree / prompt library. */}
         <link rel="stylesheet" href={`${PORTFOLIO_ASSETS}/app-skill-map.css`} />
@@ -77,9 +78,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${inter.variable} ${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>
         <Script src={`${PORTFOLIO_ASSETS}/app-skill-map.js`} strategy="afterInteractive" />
         <Script src={`${PORTFOLIO_ASSETS}/project-playbooks.js`} strategy="afterInteractive" />
+        <PWAInstall />
         <script
           dangerouslySetInnerHTML={{
             // Register after load so it never competes with first paint / hydration.

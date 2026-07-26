@@ -9,8 +9,8 @@
   --color-border: #1E1E38;
   --color-border-hover: #2A2A50;
   --color-text-primary: #E8E8FF;
-  --color-text-secondary: #7878A8;
-  --color-text-muted: #3A3A5A;
+  --color-text-secondary: #9494B8;
+  --color-text-muted: #5A5A7A;
   --color-accent-blue: #4F8EF7;
   --color-accent-violet: #7B5CF0;
   --color-accent-red: #F05B8D;
@@ -43,7 +43,43 @@ body {
 ::-webkit-scrollbar-thumb  { background: var(--color-border-hover); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
-:focus-visible { outline: 1px solid var(--color-accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--color-accent-blue); outline-offset: 2px; }
+
+/* Skip to content link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 8px 16px;
+  background: var(--color-accent-blue);
+  color: #000;
+  font-weight: 600;
+  border-radius: 0 0 8px 8px;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Reduced motion: disable non-essential animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .hud-scanline::after { animation: none !important; }
+  .arc-reactor::before, .arc-reactor::after { animation: none !important; }
+  .arc-reactor-core { animation: none !important; }
+  .holo-card::before { transition: none !important; }
+  .data-ticker-inner { animation: none !important; }
+}
+
+/* Touch target sizing handled via Tailwind min-h-[48px] on BottomNav */
 
 /* ── Glow utilities ───────────────────────────────────── */
 .glow-cyan   { box-shadow: var(--glow-cyan); }

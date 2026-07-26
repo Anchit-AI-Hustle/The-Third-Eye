@@ -12,6 +12,8 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
     <div className="flex h-screen bg-background-base overflow-hidden">
       <Sidebar />
       <main
+        id="main-content"
+        tabIndex={-1}
         className={
           mainClassName ??
           "flex-1 overflow-y-auto pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pb-10"

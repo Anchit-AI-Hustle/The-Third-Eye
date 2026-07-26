@@ -170,7 +170,7 @@ export function CaptureClient() {
                   <span className="px-2 py-0.5 rounded-full border text-[10px] flex-none" style={{ borderColor: TYPE_META[s.type].color, color: TYPE_META[s.type].color }}>{TYPE_META[s.type].label}</span>
                   <span className="text-sm text-text-primary flex-1 min-w-0 truncate">{s.summary || "(no summary)"}</span>
                   <span className="text-[11px] text-text-muted font-mono flex-none">{new Date(s.started_at).toLocaleString()}</span>
-                  <button onClick={() => deleteSession(s.id)} className="text-text-muted hover:text-rose-400 flex-none"><Trash2 size={13} /></button>
+                  <button onClick={() => deleteSession(s.id)} className="text-text-muted hover:text-rose-400 flex-none" aria-label="Delete session"><Trash2 size={13} aria-hidden="true" /></button>
                 </div>
                 <div className="text-[11px] text-text-muted font-mono">{s.tasks.length} tasks · {s.reminders.length} reminders · {s.ideas.length} ideas</div>
               </div>

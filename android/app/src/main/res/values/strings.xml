@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JARVIS OS</string>
+    <string name="title_activity_main">JARVIS OS</string>
+    <string name="package_name">com.jarvis.app</string>
+    <string name="custom_url_scheme">com.jarvis.app</string>
+</resources>

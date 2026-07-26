@@ -22,8 +22,8 @@ const config: Config = {
         },
         text: {
           primary:   "#FFFFFF",
-          secondary: "#A0AEC0",
-          muted:     "#4A6080",
+          secondary: "#B0B8C8",
+          muted:     "#6B7394",
         },
         accent: {
           blue:   "#00D4FF",   // Electric Cyan — primary brand

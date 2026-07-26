@@ -112,8 +112,9 @@ export function Sidebar() {
 
         {!collapsed && (
           <button onClick={() => setCollapsed(true)}
-            className="text-text-muted hover:text-text-primary transition-colors p-1 rounded"
-            title="Collapse">
+            className="text-text-muted hover:text-text-primary transition-colors p-1.5 rounded"
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar">
             <PanelLeftClose size={14} />
           </button>
         )}
@@ -121,8 +122,9 @@ export function Sidebar() {
 
       {collapsed && (
         <button onClick={() => setCollapsed(false)}
-          className="mx-auto mt-3 p-1.5 text-text-muted hover:text-text-primary hover:bg-background-elevated rounded transition-colors"
-          title="Expand">
+          className="mx-auto mt-3 p-2 text-text-muted hover:text-text-primary hover:bg-background-elevated rounded transition-colors"
+          title="Expand sidebar"
+          aria-label="Expand sidebar">
           <PanelLeftOpen size={14} />
         </button>
       )}
@@ -241,8 +243,9 @@ export function Sidebar() {
                   {session.user.name?.split(" ")[0] ?? session.user.email}
                 </span>
                 <button onClick={() => signOutAndClear({ callbackUrl: "/auth/signin" })}
-                  className="text-text-muted hover:text-accent-red transition-colors p-0.5"
-                  title="Sign out">
+                  className="text-text-muted hover:text-accent-red transition-colors p-1.5"
+                  title="Sign out"
+                  aria-label="Sign out"
                   <LogOut size={13} />
                 </button>
               </>

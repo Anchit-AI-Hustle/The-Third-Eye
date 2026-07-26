@@ -12,13 +12,23 @@
         border-radius: 50%; animation: spin 0.9s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
       .name { font-weight: 700; letter-spacing: .18em; font-size: 14px; color: #4FC3F7; }
+      .err { display: none; color: #EF4444; font-size: 13px; margin-top: 12px; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="ring"></div>
       <div class="name">J.A.R.V.I.S.</div>
+      <div class="err" id="err">
+        Unable to connect. Check your internet and try again.
+        <br><a href="javascript:location.reload()" style="color:#4FC3F7">Retry</a>
+      </div>
     </div>
-    <!-- Capacitor loads the live app via server.url; this is only shown briefly. -->
+    <script>
+      // Show error after 8s if still on splash (app hasn't loaded)
+      setTimeout(function() {
+        document.getElementById('err').style.display = 'block';
+      }, 8000);
+    </script>
   </body>
 </html>

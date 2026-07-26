@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TeamMember } from "@/hooks/useLocalTasks";
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
@@ -192,7 +193,7 @@ export function TasksClient() {
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tasks…"
             className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none" />
-          {search && <button onClick={() => setSearch("")}><X size={12} className="text-text-muted hover:text-text-primary" /></button>}
+          {search && <button onClick={() => setSearch("")} aria-label="Clear search"><X size={12} className="text-text-muted hover:text-text-primary" aria-hidden="true" /></button>}
         </div>
 
         <FilterSelect value={filterAssignee} onChange={setFilterAssignee}
@@ -439,6 +440,7 @@ function ActionModal({ task, team, onSave, onClose }: {
   onSave: (data: Omit<LocalTask, "id" | "created_at">) => void;
   onClose: () => void;
 }) {
+  const trapRef = useFocusTrap(true);
   const [form, setForm] = useState<Omit<LocalTask, "id" | "created_at">>(
     task ? { title: task.title, description: task.description ?? "", assignee: task.assignee ?? "",
       status: task.status, priority: task.priority, start_date: task.start_date ?? "",
@@ -463,11 +465,11 @@ function ActionModal({ task, team, onSave, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-background-elevated border border-border-default rounded-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()} role="dialog" aria-modal="true" aria-label={task ? "Edit task" : "New task"}>
+      <div ref={trapRef} className="bg-background-elevated border border-border-default rounded-card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-5 border-b border-border-default">
           <h2 className="font-semibold text-text-primary">{task ? "Edit task" : "New task"}</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors"><X size={16} /></button>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors" aria-label="Close"><X size={16} aria-hidden="true" /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
@@ -540,21 +542,21 @@ function TeamModal({ team, newName, onNameChange, onAdd, onRemove, onClose }: {
   onRemove: (id: string) => void;
   onClose: () => void;
 }) {
+  const trapRef = useFocusTrap(true);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-background-elevated border border-border-default rounded-card w-full max-w-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()} role="dialog" aria-modal="true" aria-label="Team members">
+      <div ref={trapRef} className="bg-background-elevated border border-border-default rounded-card w-full max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-default">
           <h2 className="font-semibold text-text-primary">Team Members</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={16} /></button>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary" aria-label="Close"><X size={16} aria-hidden="true" /></button>
         </div>
         <div className="px-5 py-4 space-y-3">
           <div className="flex gap-2">
             <input value={newName} onChange={(e) => onNameChange(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onAdd()}
-              placeholder="Member name…" className={cn(inputCls, "flex-1")} />
-            <button onClick={onAdd} disabled={!newName.trim()}
+              placeholder="Member name…" className={cn(inputCls, "flex-1")} />              <button onClick={onAdd} disabled={!newName.trim()} aria-label="Add team member"
               className="px-3 py-2 rounded-input bg-accent-blue text-white text-sm disabled:opacity-40 transition-colors">
-              <Plus size={14} />
+              <Plus size={14} aria-hidden="true" />
             </button>
           </div>
           {team.length === 0 ? (
@@ -569,8 +571,8 @@ function TeamModal({ team, newName, onNameChange, onAdd, onRemove, onClose }: {
                     </div>
                     <span className="text-text-primary text-sm">{m.name}</span>
                   </div>
-                  <button onClick={() => onRemove(m.id)} className="text-text-muted hover:text-accent-red transition-colors">
-                    <X size={13} />
+                  <button onClick={() => onRemove(m.id)} className="text-text-muted hover:text-accent-red transition-colors" aria-label={`Remove ${m.name}`}>
+                    <X size={13} aria-hidden="true" />
                   </button>
                 </li>
               ))}

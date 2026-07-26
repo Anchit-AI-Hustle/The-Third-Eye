@@ -21,13 +21,13 @@ export function BottomNav() {
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = pathname.startsWith(href);
           return (
-            <Link key={href} href={href} className={cn(
-              "flex-1 flex flex-col items-center justify-center gap-1 transition-colors",
+            <Link key={href} href={href} aria-label={label} aria-current={isActive ? "page" : undefined} className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-1.5 transition-colors min-h-[48px]",
               isActive ? "text-[#4FC3F7]" : "text-text-muted"
             )}>
-              <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
+              <Icon size={20} strokeWidth={isActive ? 2 : 1.5} aria-hidden="true" />
               <span className={cn(
-                "text-[10px] font-medium leading-none",
+                "text-[11px] font-medium leading-none",
                 isActive ? "text-accent-blue" : "text-text-muted"
               )}>{label}</span>
             </Link>

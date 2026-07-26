@@ -655,10 +655,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <span className="text-[10px] font-mono text-accent-red ml-2">· Add GEMINI_API_KEY in Vercel</span>
           )}
         </div>
-        <div className="flex items-center gap-1 relative">
-          <button onClick={() => setShowLang((v) => !v)}
+        <div className="flex items-center gap-1 relative">            <button onClick={() => setShowLang((v) => !v)} aria-label="Select language" aria-expanded={showLang}
             className={cn("p-1.5 rounded-input transition-colors", showLang ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
-            <Globe size={12} />
+            <Globe size={12} aria-hidden="true" />
           </button>
           {showLang && (
             <div className="absolute top-8 right-8 bg-background-elevated border border-border-default rounded-card shadow-xl z-50 min-w-[180px] py-1 max-h-60 overflow-y-auto">
@@ -672,9 +671,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </div>
           )}
           {messages.length > 0 && (
-            <button onClick={handleClear} title="Clear conversation"
+            <button onClick={handleClear} title="Clear conversation" aria-label="Clear conversation"
               className="p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
-              <RotateCcw size={13} />
+              <RotateCcw size={13} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -708,7 +707,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
       )}
 
       {/* Conversation */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5" role="log" aria-label="Conversation" aria-live={isStreaming ? "off" : "polite"} aria-relevant="additions">
         {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} persona={persona} speaking={tts.speaking} />}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
@@ -801,6 +800,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
+            aria-label="Message input"
             rows={1}
             disabled={isStreaming}
             className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
