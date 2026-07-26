@@ -46,7 +46,6 @@ export const TIERS: Record<Tier, TierLimits> = {
 // Tools gated behind premium. When a free user's model tries to call one, the
 // server returns a paywall notice as the tool result instead of executing it.
 export const PREMIUM_TOOLS = new Set<string>([
-  "send_email",
   "multi_agent_run",
 ]);
 
