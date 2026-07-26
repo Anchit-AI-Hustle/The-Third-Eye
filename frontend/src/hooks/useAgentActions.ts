@@ -97,6 +97,18 @@ export function useAgentActions() {
           case "goal_delete":
             if (d.id) removeGoal(d.id);
             break;
+          case "open_url":
+            if (d.url) window.open(d.url, "_blank");
+            break;
+          case "open_urls":
+            // Multiple URLs from protocol activation — each item is { type, data: { url, label } }
+            if (Array.isArray(d.data)) {
+              for (const item of d.data) {
+                const url = item?.data?.url ?? item?.url;
+                if (url) window.open(url, "_blank");
+              }
+            }
+            break;
           // memory_update is handled server-side; nothing to apply on the client.
           default:
             break;

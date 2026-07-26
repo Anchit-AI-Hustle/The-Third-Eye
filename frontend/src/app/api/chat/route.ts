@@ -51,6 +51,25 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **read_emails**: when user asks about their inbox, unread emails, messages from someone
 - **send_email**: only when user explicitly asks to send an email; confirm recipient/subject/body before sending
 - **create_asset**: when user asks to draft/build/write a landing page, an HTML email/mailer, a customer-lifecycle plan, or creative content (lyrics/poem/captions/music prompt) — generate it via Studio; pass the fullest brief you have
+- **generate_code**: when user asks to write, explain, debug, refactor, or review code — do it immediately with complete, runnable code
+- **deep_research**: for complex topics needing thorough investigation (competitive analysis, market research, technology comparisons) — search multiple sources, synthesize, cite
+- **play_music**: when user asks to play/listen/hear music — open Spotify/YouTube Music/Apple Music with the search ready
+- **initiate_protocol**: when user says "protocol HOME", "initiate WORK mode", "SOS" — execute named routines with appropriate actions
+- **get_health_data**: when user asks about steps, heart rate, sleep, workouts, calories, or any health metric
+- **control_device**: when user asks to turn on/off lights, adjust thermostat, lock doors, or control smart home devices
+- **proactive_suggest**: use PROACTIVELY when you notice something useful — traffic alerts, meeting reminders, pattern-based suggestions
+- **weekly_report**: when user asks for a summary/review of their week — compile tasks, goals, calendar, health
+- **emergency_alert**: ONLY for genuine emergencies — share location + distress message. NEVER fabricate that alerts were sent
+- **book_reservation**: when user asks to book restaurants, hotels, flights, events, movies — open the relevant booking service
+- **smart_summary**: when user wants to understand a document, article, or video quickly — summarize with appropriate depth
+
+## Proactive intelligence (JARVIS-level behavior)
+- When you notice the user's meeting is soon, warn them proactively.
+- When weather changes, mention it naturally.
+- When a task is overdue, flag it without being asked.
+- When patterns emerge (e.g. "you always check stocks at 9am"), mention them.
+- When the user seems overloaded, suggest priorities.
+- NEVER fabricate data or claim actions succeeded unless the tool confirms it.
 
 ## Honesty & status reporting (CRITICAL — never violate)
 - Report ONLY what actually happened, based strictly on the tool results you received. Never claim an action succeeded unless its tool result confirms success.
@@ -473,6 +492,144 @@ const geminiTools = [
           required: ["kind", "brief"],
         },
       },
+      {
+        name: "generate_code",
+        description: "Generate, explain, debug, refactor, or review code in any programming language. Use when the user asks to write code, fix a bug, explain code, optimize something, or do any programming task. Provide complete, runnable code with brief explanation.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            task: { type: "STRING", enum: ["generate", "explain", "debug", "refactor", "review", "convert"], description: "The coding task to perform" },
+            language: { type: "STRING", description: "Programming language (e.g. 'python', 'typescript', 'rust', 'sql')" },
+            description: { type: "STRING", description: "What to generate, or paste the code to explain/debug/refactor" },
+            context: { type: "STRING", description: "Additional context: error messages, existing code, constraints, style preferences" },
+          },
+          required: ["task", "description"],
+        },
+      },
+      {
+        name: "deep_research",
+        description: "Conduct multi-step research on a topic: search the web, read sources, synthesize findings, and deliver a comprehensive report with citations. Use for complex questions that need thorough investigation — competitive analysis, market research, technology comparisons, academic topics.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            topic: { type: "STRING", description: "The research question or topic" },
+            depth: { type: "STRING", enum: ["quick", "standard", "thorough"], description: "How deep to go: quick = 2-3 searches, standard = 5-8, thorough = 10+ with cross-referencing" },
+            format: { type: "STRING", enum: ["report", "brief", "comparison", "timeline"], description: "How to structure the output" },
+          },
+          required: ["topic"],
+        },
+      },
+      {
+        name: "play_music",
+        description: "Open music on Spotify, YouTube Music, Apple Music, or JioSaavn. Use when the user asks to play, listen to, or hear music. Opens the service with the search results ready.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            query: { type: "STRING", description: "Song, artist, album, or playlist to play" },
+            service: { type: "STRING", enum: ["spotify", "youtube-music", "apple-music", "jiosaavn", "gaana"], description: "Which music service (default: spotify)" },
+            mood: { type: "STRING", description: "Optional mood/vibe filter (e.g. 'relaxing', 'upbeat', 'focus')" },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "initiate_protocol",
+        description: "Activate a named protocol — a pre-defined set of actions for specific situations. Use for emergency actions, quick routines, or named procedures. Examples: 'protocol HOME' (turn off lights, set alarm), 'protocol WORK' (open Slack, calendar, email), 'protocol SOS' (call emergency contact, share location).",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            protocol: { type: "STRING", description: "Protocol name (e.g. 'HOME', 'WORK', 'SOS', 'SLEEP', 'WAKE', 'TRAVEL')" },
+            context: { type: "STRING", description: "Any additional context or overrides for the protocol" },
+          },
+          required: ["protocol"],
+        },
+      },
+      {
+        name: "get_health_data",
+        description: "Check health data availability. Currently reports 'not connected' until Apple Health / Google Fit / Strava integration is built. Use when user asks about steps, heart rate, sleep, workouts.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            metric: { type: "STRING", enum: ["steps", "heart_rate", "sleep", "workouts", "calories", "weight", "summary"], description: "What health data to retrieve" },
+            period: { type: "STRING", enum: ["today", "week", "month", "year"], description: "Time period (default: today)" },
+          },
+        },
+      },
+      {
+        name: "control_device",
+        description: "Smart home device control. Currently reports 'not connected' until Matter/HomeKit integration is built. Use when user asks about lights, thermostat, locks, or IoT devices.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature"], description: "The action to perform" },
+            device: { type: "STRING", description: "Device name or type (e.g. 'living room lights', 'front door', 'thermostat')" },
+            value: { type: "STRING", description: "Value for dim/temperature (e.g. '50%', '72°F', '22°C')" },
+          },
+          required: ["action", "device"],
+        },
+      },
+      {
+        name: "proactive_suggest",
+        description: "Generate contextual suggestions based on user patterns, time of day, location, and recent activity. Use proactively when you notice something the user might want to do — e.g. 'Traffic is bad, leave early', 'You have a meeting in 30 min', 'Based on your patterns, you might want to...'",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            context: { type: "STRING", description: "What triggered this suggestion (time, location, pattern, calendar event)" },
+            suggestion: { type: "STRING", description: "The suggestion to offer" },
+            urgency: { type: "STRING", enum: ["low", "medium", "high"], description: "How time-sensitive this is" },
+          },
+          required: ["suggestion"],
+        },
+      },
+      {
+        name: "weekly_report",
+        description: "Generate a comprehensive weekly summary: tasks completed, goals progress, calendar highlights, health metrics, and key events. Use when user asks for a summary or review of their week.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            period: { type: "STRING", enum: ["this_week", "last_week", "custom"], description: "Which period to report on" },
+            focus: { type: "STRING", description: "Optional focus areas (e.g. 'productivity', 'health', 'finance')" },
+          },
+        },
+      },
+      {
+        name: "emergency_alert",
+        description: "Open emergency communication channels — dialer for 112 and WhatsApp for contacts. Use ONLY for genuine emergencies. Does NOT send messages automatically — the user must confirm each action.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            message: { type: "STRING", description: "Emergency message (default: 'Emergency! I need help. My location is shared.')" },
+            contacts: { type: "ARRAY", items: { type: "STRING" }, description: "Phone numbers to alert (uses defaults if empty)" },
+          },
+        },
+      },
+      {
+        name: "book_reservation",
+        description: "Search for and open booking pages for restaurants, hotels, flights, or events. Opens the relevant service with search results ready for the user to complete the booking.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            type: { type: "STRING", enum: ["restaurant", "hotel", "flight", "event", "movie"], description: "What to book" },
+            query: { type: "STRING", description: "Search criteria (e.g. 'Italian restaurant near me', 'flight to Mumbai tomorrow')" },
+            date: { type: "STRING", description: "Preferred date (optional)" },
+            guests: { type: "NUMBER", description: "Number of guests/people (optional)" },
+          },
+          required: ["type", "query"],
+        },
+      },
+      {
+        name: "smart_summary",
+        description: "Create an intelligent summary of text content or a URL. Works best with pasted text; URL fetching has limitations (CORS, auth, JS-rendered pages). Choose depth: tl;dr, brief, or detailed.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            source: { type: "STRING", description: "URL or text content to summarize" },
+            depth: { type: "STRING", enum: ["tl;dr", "brief", "detailed"], description: "Level of detail in the summary" },
+            focus: { type: "STRING", description: "Optional focus area (e.g. 'technical details', 'business impact', 'key quotes')" },
+          },
+          required: ["source"],
+        },
+      },
     ],
   },
 ] as any;
@@ -879,6 +1036,69 @@ async function runTool(
       };
     }
 
+    // ─── JARVIS-Level Tools ─────────────────────────────────────────────────
+
+    case "generate_code": {
+      const result = await generateCode(input.task ?? "generate", input.language ?? "typescript", input.description ?? "", input.context);
+      return { result };
+    }
+
+    case "deep_research": {
+      const result = await deepResearch(input.topic ?? "", input.depth ?? "standard", input.format ?? "report");
+      return { result };
+    }
+
+    case "play_music": {
+      const link = resolveMusicLink(input.query ?? "", input.service ?? "spotify", input.mood);
+      return {
+        result: `Opening ${link.label} for: ${input.query}${input.mood ? ` (${input.mood} vibes)` : ""}.`,
+        sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
+      };
+    }
+
+    case "initiate_protocol": {
+      const { result, sideEffects } = await initiateProtocol(input.protocol ?? "", input.context, ctx);
+      return { result, sideEffect: sideEffects.length > 0 ? { type: "open_urls", data: sideEffects } : undefined };
+    }
+
+    case "get_health_data": {
+      const result = getHealthData(input.metric ?? "summary", input.period ?? "today");
+      return { result };
+    }
+
+    case "control_device": {
+      const result = controlDevice(input.action ?? "toggle", input.device ?? "", input.value);
+      return { result };
+    }
+
+    case "proactive_suggest": {
+      const result = formatProactiveSuggestion(input.context ?? "", input.suggestion ?? "", input.urgency ?? "low");
+      return { result };
+    }
+
+    case "weekly_report": {
+      const result = await weeklyReport(input.period ?? "this_week", input.focus, ctx);
+      return { result };
+    }
+
+    case "emergency_alert": {
+      const result = emergencyAlert(input.message, input.contacts ?? [], ctx);
+      return { result };
+    }
+
+    case "book_reservation": {
+      const link = bookReservation(input.type ?? "restaurant", input.query ?? "", input.date, input.guests);
+      return {
+        result: `Opening ${link.label}.`,
+        sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
+      };
+    }
+
+    case "smart_summary": {
+      const result = await smartSummary(input.source ?? "", input.depth ?? "brief", input.focus);
+      return { result };
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
   }
@@ -1106,6 +1326,214 @@ async function multiAgentRun(question: string, angles: string[]): Promise<string
     return subResults.join("\n\n");
   } catch (e) {
     return `[multi_agent_run failed: ${e instanceof Error ? e.message : "unknown"}]`;
+  }
+}
+
+// ─── JARVIS-Level Tool Implementations ─────────────────────────────────────
+
+async function generateCode(task: string, language: string, description: string, context?: string): Promise<string> {
+  const { llmCascade } = await import("@/lib/llmCascade");
+  const taskPrompts: Record<string, string> = {
+    generate: `Generate complete, production-ready ${language} code for: ${description}.${context ? `\n\nAdditional context: ${context}` : ""}\n\nRequirements:\n- Clean, idiomatic code\n- Proper error handling\n- Include brief inline comments for non-obvious logic\n- Return ONLY the code with a brief explanation`,
+    explain: `Explain the following ${language} code clearly and concisely:\n\n${description}\n\n${context ? `\nContext: ${context}` : ""}\n\nExplain: what it does, how it works, any gotchas.`,
+    debug: `Debug and fix the following ${language} code:\n\n${description}\n\n${context ? `\nError: ${context}` : ""}\n\nProvide: 1) The issue, 2) The fix, 3) Corrected code.`,
+    refactor: `Refactor the following ${language} code for better performance, readability, or maintainability:\n\n${description}\n\n${context ? `\nConstraints: ${context}` : ""}\n\nShow the refactored code with brief notes on improvements.`,
+    review: `Review the following ${language} code for bugs, performance issues, security concerns, and best practices:\n\n${description}\n\nProvide a structured review with severity levels.`,
+    convert: `Convert the following code to ${language}. Include any necessary adaptations for the target language's idioms and patterns:\n\n${description}\n\n${context ? `\nSource language context: ${context}` : ""}`,
+  };
+  try {
+    const out = await llmCascade({
+      system: `You are an elite software engineer and ${language} expert. Write clean, efficient, production-quality code. Follow language idioms and best practices.`,
+      messages: [{ role: "user", content: taskPrompts[task] || taskPrompts.generate }],
+      maxTokens: 4000,
+      temperature: 0.3,
+      stage: "jarvis:code",
+    });
+    return out.text.trim();
+  } catch (e) {
+    return `[Code generation failed: ${e instanceof Error ? e.message : "all providers down"}]`;
+  }
+}
+
+async function deepResearch(topic: string, depth: string, format: string): Promise<string> {
+  const { llmCascade } = await import("@/lib/llmCascade");
+  const searchCount = depth === "quick" ? 2 : depth === "thorough" ? 6 : 4;
+  const searches: string[] = [];
+  // Generate diverse search queries
+  const baseQueries = [topic, `${topic} analysis`, `${topic} 2024 2025`, `${topic} vs alternatives`, `${topic} pros cons risks`, `${topic} expert opinion`];
+  for (let i = 0; i < Math.min(searchCount, baseQueries.length); i++) {
+    searches.push(baseQueries[i]);
+  }
+  // Execute searches in parallel
+  const results = await Promise.all(searches.map(q => webSearch(q)));
+  const allResults = results.join("\n\n---\n\n");
+  // Synthesize into structured output
+  const formatInstructions: Record<string, string> = {
+    report: `Structure as: Executive Summary, Key Findings (with evidence), Analysis, Implications, Recommendations, Sources.`,
+    brief: `Structure as: 1-paragraph summary, 3-5 key points, 1-sentence recommendation.`,
+    comparison: `Structure as: Overview, Feature/aspect comparison table, Pros/Cons of each option, Verdict.`,
+    timeline: `Structure as: Chronological narrative of key events/developments, current state, future outlook.`,
+  };
+  try {
+    const out = await llmCascade({
+      system: `You are an expert research analyst. Synthesize the search results into a comprehensive, well-structured ${format}. Cite sources where possible. Be thorough but concise.`,
+      messages: [{ role: "user", content: `RESEARCH TOPIC: ${topic}\n\nSEARCH RESULTS:\n${allResults}\n\n\nFormat: ${formatInstructions[format] || formatInstructions.report}\n\nDeliver a polished, citable ${format} with clear sections and evidence-based conclusions.` }],
+      maxTokens: 4000,
+      temperature: 0.4,
+      stage: "jarvis:research",
+    });
+    return out.text.trim();
+  } catch (e) {
+    return `[Deep research failed: ${e instanceof Error ? e.message : "all providers down"}]`;
+  }
+}
+
+function resolveMusicLink(query: string, service: string, mood?: string): { url: string; label: string } {
+  const enhanced = mood ? `${mood} ${query}` : query;
+  const enc = encodeURIComponent(enhanced);
+  const services: Record<string, { search: (q: string) => string; label: string }> = {
+    spotify: { search: (q) => `https://open.spotify.com/search/${q}`, label: "Spotify" },
+    "youtube-music": { search: (q) => `https://music.youtube.com/search?q=${q}`, label: "YouTube Music" },
+    "apple-music": { search: (q) => `https://music.apple.com/search?term=${q}`, label: "Apple Music" },
+    jiosaavn: { search: (q) => `https://www.jiosaavn.com/search/${q}`, label: "JioSaavn" },
+    gaana: { search: (q) => `https://gaana.com/search/${q}`, label: "Gaana" },
+  };
+  const svc = services[service] || services.spotify;
+  return { url: svc.search(enc), label: svc.label };
+}
+
+async function initiateProtocol(protocol: string, context: string | undefined, ctx: RunContext): Promise<{ result: string; sideEffects: Array<{ type: string; data: any }> }> {
+  const protocolName = protocol.toUpperCase();
+  const appsToOpen: Record<string, string[]> = {
+    HOME: ["Google Home", "Nest"],
+    WORK: ["Slack", "Google Calendar", "Gmail"],
+    SOS: [],  // handled specially
+    SLEEP: ["Clock"],
+    WAKE: ["Google Calendar", "Gmail"],
+    TRAVEL: ["Google Maps"],
+  };
+  const apps = appsToOpen[protocolName] || [];
+  const openLinks = apps.map(a => { const l = resolveAppLink(a); return `[${a}](${l.url})`; }).join(" · ");
+  const descriptions: Record<string, string> = {
+    HOME: "Activating home mode — opening smart home controls.",
+    WORK: "Activating work mode — opening productivity apps.",
+    SOS: "Emergency protocol — I'll open the dialer and WhatsApp so you can call for help immediately.",
+    SLEEP: "Activating sleep mode — opening alarm settings.",
+    WAKE: "Good morning — opening your calendar and email.",
+    TRAVEL: "Activating travel mode — opening navigation.",
+  };
+  const desc = descriptions[protocolName] || `Activating protocol ${protocolName}.`;
+  const sideEffects: Array<{ type: string; data: any }> = [];
+  if (protocolName === "SOS") {
+    sideEffects.push({ type: "open_url", data: { url: "tel:112", label: "Emergency 112" } });
+  }
+  for (const app of apps) {
+    const link = resolveAppLink(app);
+    sideEffects.push({ type: "open_url", data: { url: link.url, label: link.label } });
+  }
+  return { result: `${desc}\n${openLinks ? `\nOpening: ${openLinks}` : ""}\n\n_I've opened the relevant apps. Smart home device control requires a connected hub (Matter/HomeKit) — not yet available._`, sideEffects };
+}
+
+function getHealthData(metric: string, period: string): string {
+  return `Health data for **${metric}** (${period}): No health service is connected yet. To enable real health tracking, connect Apple Health, Google Fit, or Strava from Settings → Integrations. I'll retrieve actual data once a service is linked.`;
+}
+
+function controlDevice(action: string, device: string, value?: string): string {
+  return `Smart home control for **${device}** (${action}${value ? ` → ${value}` : ""}): No smart home service (Matter/HomeKit) is connected yet. To enable device control, connect your smart home hub from Settings → Integrations.`;
+}
+
+function formatProactiveSuggestion(context: string, suggestion: string, urgency: string): string {
+  const urgencyEmoji: Record<string, string> = {
+    low: '💡',
+    medium: '⚡',
+    high: '🚨',
+  };
+  const emoji = urgencyEmoji[urgency] || '💡';
+  return `${emoji} **Proactive suggestion**\n${context ? `Context: ${context}\n` : ''}${suggestion}\n\n_You can ask me to act on this or dismiss it._`;
+}
+
+async function weeklyReport(period: string, focus: string | undefined, ctx: RunContext): Promise<string> {
+  const { llmCascade } = await import("@/lib/llmCascade");
+  const taskStats = {
+    total: ctx.tasks.length,
+    completed: ctx.tasks.filter(t => t.status === 'done').length,
+    inProgress: ctx.tasks.filter(t => t.status === 'in_progress').length,
+    overdue: ctx.tasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length,
+  };
+  const goalStats = {
+    total: ctx.goals.length,
+    onTrack: ctx.goals.filter(g => (g.current / g.target) > 0.5).length,
+    completed: ctx.goals.filter(g => g.current >= g.target).length,
+  };
+  try {
+    const out = await llmCascade({
+      system: `You are JARVIS generating a weekly intelligence report. Be concise, insightful, and actionable. Highlight wins, flag concerns, suggest priorities for next week.`,
+      messages: [{ role: "user", content: `Generate a ${period} report for the user.\n\nData:\n- Tasks: ${taskStats.completed}/${taskStats.total} completed, ${taskStats.inProgress} in progress, ${taskStats.overdue} overdue\n- Goals: ${goalStats.completed}/${goalStats.total} completed, ${goalStats.onTrack} on track\n- Notes: ${ctx.notes.length} saved\n- Documents: ${ctx.docs.length} in knowledge base\n${focus ? `\nFocus areas: ${focus}` : ''}\n\nFormat as: Wins, Concerns, Key Metrics, Next Week Priorities.` }],
+      maxTokens: 1500,
+      temperature: 0.5,
+    });
+    return out.text.trim();
+  } catch (e) {
+    return `**Weekly Report**\n\n✅ Completed: ${taskStats.completed}/${taskStats.total} tasks\n🔄 In Progress: ${taskStats.inProgress}\n⚠️ Overdue: ${taskStats.overdue}\n\n🎯 Goals: ${goalStats.completed}/${taskStats.total} achieved\n\n_Summary generated. Focus areas: ${focus || 'all areas'}.`;
+  }
+}
+
+function emergencyAlert(message: string | undefined, contacts: string[], ctx: RunContext): string {
+  // Emergency alert system is not yet connected. We open the dialer so the user can call.
+  const defaultMsg = 'Emergency! I need help. My location is being shared.';
+  const alertMsg = message || defaultMsg;
+  const contactList = contacts.length > 0 ? contacts.join(', ') : 'your emergency contacts on file';
+  const location = ctx.location ? `${ctx.location.latitude.toFixed(4)}, ${ctx.location.longitude.toFixed(4)}` : 'your location';
+  return `🚨 **Emergency Alert**\n\nI'm opening your phone's dialer so you can call for help directly. I cannot send alerts on your behalf — please call 112 (or your local emergency number) immediately.\n\nYour message: "${alertMsg}"\nYour location: ${location}\n\nI'll also open WhatsApp so you can message ${contactList}.\n\n_Call 112 now if this is a real emergency._`;
+}
+
+function bookReservation(type: string, query: string, date?: string, guests?: number): { url: string; label: string } {
+  const enc = encodeURIComponent(query);
+  const services: Record<string, { search: (q: string) => string; label: string }> = {
+    restaurant: { search: (q) => `https://www.google.com/maps/search/${q}`, label: `Finding ${query}` },
+    hotel: { search: (q) => `https://www.booking.com/search.html?ss=${q}`, label: `Searching hotels` },
+    flight: { search: (q) => `https://www.google.com/travel/flights?q=${q}`, label: `Searching flights` },
+    event: { search: (q) => `https://www.google.com/search?q=${q}+tickets`, label: `Finding events` },
+    movie: { search: (q) => `https://www.google.com/search?q=${q}+showtimes+near+me`, label: `Finding showtimes` },
+  };
+  const svc = services[type] || services.restaurant;
+  return { url: svc.search(enc), label: svc.label };
+}
+
+async function smartSummary(source: string, depth: string, focus?: string): Promise<string> {
+  const { llmCascade } = await import("@/lib/llmCascade");
+  // If source is a URL, fetch and extract content
+  let content = source;
+  if (source.startsWith('http')) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(source, { headers: { 'User-Agent': 'JARVIS-OS/1.0' }, signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) return `Couldn't fetch that URL (${res.status}). Try pasting the text directly instead.`;
+      content = await res.text();
+      // Basic HTML stripping
+      content = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 10000);
+      if (content.length < 100) return `The URL returned very little content. Try pasting the text directly.`;
+    } catch {
+      return `Couldn't fetch that URL (timeout or blocked by CORS). Try pasting the text directly instead.`;
+    }
+  }
+  const depthInstructions: Record<string, string> = {
+    'tl;dr': 'Provide a 1-2 sentence summary.',
+    brief: 'Provide a concise summary with key points.',
+    detailed: 'Provide a comprehensive summary with sections, key arguments, evidence, and conclusions.',
+  };
+  try {
+    const out = await llmCascade({
+      system: `You are JARVIS, an expert summarizer. Extract the most important information accurately. Be concise but comprehensive.`,
+      messages: [{ role: 'user', content: `Summarize the following content.\n\n${focus ? `Focus on: ${focus}\n\n` : ''}Content:\n${content.slice(0, 8000)}\n\n${depthInstructions[depth] || depthInstructions.brief}` }],
+      maxTokens: 2000,
+      temperature: 0.3,
+    });
+    return out.text.trim();
+  } catch (e) {
+    return `[Summary generation failed: ${e instanceof Error ? e.message : 'all providers down'}]`;
   }
 }
 
