@@ -32,17 +32,21 @@ export async function GET(req: NextRequest) {
   if (!sb) return json({ error: "Supabase not configured" }, 501);
 
   // Best-effort: a provider hiccup shouldn't blank out the list we already have.
-  let discoverError: string | null = null;
+  // Only a boolean crosses the wire — the upstream message can carry request URLs
+  // and other internals, and the client just needs to know it should say "couldn't
+  // refresh". The detail goes to the server log instead.
+  let discoverFailed = false;
   if (req.nextUrl.searchParams.get("discover") === "1" && connector === "google-chat") {
     try {
       await discoverChatSpaces(sb, email);
     } catch (e) {
-      discoverError = e instanceof Error ? e.message : String(e);
+      console.error("chat discovery failed:", e);
+      discoverFailed = true;
     }
   }
 
   const conversations = await listConversations(sb, email, connector);
-  return json({ connector, conversations, discoverError });
+  return json({ connector, conversations, discoverFailed });
 }
 
 export async function PATCH(req: NextRequest) {

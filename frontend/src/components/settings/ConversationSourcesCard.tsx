@@ -27,13 +27,13 @@ export function ConversationSourcesCard() {
     if (discover) setRefreshing(true);
     try {
       const r = await fetch(`/api/conversations?connector=google-chat${discover ? "&discover=1" : ""}`);
-      const d = (await r.json()) as { conversations?: Conversation[]; error?: string; discoverError?: string | null };
+      const d = (await r.json()) as { conversations?: Conversation[]; error?: string; discoverFailed?: boolean };
       if (d.error) {
         setError(d.error);
         setRows([]);
         return;
       }
-      setError(d.discoverError ? "Couldn't refresh from Google — showing the last known list." : null);
+      setError(d.discoverFailed ? "Couldn't refresh from Google — showing the last known list." : null);
       setRows(d.conversations ?? []);
     } catch {
       setError("Couldn't load your chats.");
