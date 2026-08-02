@@ -6,6 +6,7 @@ node_modules/
 *.pyc
 __pycache__/
 .pytest_cache/
+.coverage
 .venv/
 dist/
 build/

@@ -35,7 +35,7 @@ INTENT_PATTERNS: list[tuple[str, str, re.Pattern]] = [
         "task_management",
         "productivity",
         re.compile(
-            r"\b(create|add|make|new|finish|complete|done|update|delete|remove)\s+(task|todo|reminder|to-do)|\b(my\s+(tasks|todos|to-do|schedule)|what'?s\s+on\s+my\s+(plate|todo|list))",
+            r"\b(create|add|make|new|finish|complete|done|update|delete|remove)\s+(?:(?:a|an|the|my)\s+)?(task|todo|reminder|to-do)|\b(my\s+(tasks|todos|to-do|schedule)|what'?s\s+on\s+my\s+(plate|todo|list))",
             re.IGNORECASE,
         ),
     ),

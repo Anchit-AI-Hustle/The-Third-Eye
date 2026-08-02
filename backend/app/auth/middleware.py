@@ -4,8 +4,8 @@ import jwt
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.auth import service
 from app.auth.models import User
-from app.auth.service import validate_session_token, verify_nextauth_token
 from app.database import AsyncSession, get_db
 
 bearer = HTTPBearer(auto_error=False)
@@ -29,14 +29,16 @@ async def get_current_user(
 
     token = credentials.credentials
 
-    # Attempt JARVIS session validation first
-    user = await validate_session_token(db, token)
+    # Attempt JARVIS session validation first.
+    # NOTE: call via the `service` module (not a name imported into this module)
+    # so patches to app.auth.service.validate_session_token are honored.
+    user = await service.validate_session_token(db, token)
     if user:
         return user
 
     # Fall back to NextAuth JWT
     try:
-        payload = verify_nextauth_token(token)
+        payload = service.verify_nextauth_token(token)
     except jwt.PyJWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -44,9 +46,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
 
-    from app.auth.service import get_or_create_oauth_user
-
-    user = await get_or_create_oauth_user(
+    user = await service.get_or_create_oauth_user(
         db,
         email=payload.email,
         name=payload.name,

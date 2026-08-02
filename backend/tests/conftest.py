@@ -94,7 +94,7 @@ async def db(test_engine) -> AsyncGenerator[AsyncSession, None]:
 async def test_user(db: AsyncSession) -> User:
     user = User(
         id=uuid.uuid4(),
-        email=f"test-{uuid.uuid4()}@jarvis.local",
+        email=f"test-{uuid.uuid4()}@example.com",  # example.com: RFC-reserved, passes EmailStr
         name="Test User",
         is_active=True,
         is_verified=True,

@@ -114,10 +114,16 @@ async def consolidate_for_user(db: AsyncSession, *, user_id: uuid.UUID) -> Conso
     # 3. Prune episodic past the retention window
     cutoff = now - timedelta(days=PRUNE_AFTER_DAYS)
     prune_result = await db.execute(
-        delete(EpisodicMemory).where(
+        # synchronize_session=False: this is a bulk background-job delete, so skip
+        # the in-Python "evaluate" pass. That pass breaks under SQLite (tz-aware
+        # created_at reloads as naive, TypeError vs the aware cutoff); letting the
+        # DB do the comparison is both correct and cheaper here.
+        delete(EpisodicMemory)
+        .where(
             EpisodicMemory.user_id == user_id,
             EpisodicMemory.created_at < cutoff,
         )
+        .execution_options(synchronize_session=False)
     )
     stats.episodic_pruned = prune_result.rowcount or 0
 
