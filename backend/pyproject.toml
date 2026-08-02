@@ -25,6 +25,8 @@ dependencies = [
 
     # Auth & Security
     "python-jose[cryptography]>=3.3.0",
+    # app.auth.service / middleware use the PyJWT API (jwt.encode / jwt.decode)
+    "pyjwt>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
     "pyotp>=2.9.0",
     "cryptography>=42.0.0",
