@@ -52,7 +52,8 @@ import uuid
 from typing import AsyncGenerator
 
 # pyrefly: ignore [missing-import]
-from pytest import pytest, pytest_asyncio
+import pytest_asyncio
+# pyrefly: ignore [missing-import]
 from httpx import ASGITransport, AsyncClient
 # pyrefly: ignore [missing-import]
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
