@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 import { ConnectionsCard } from "@/components/settings/ConnectionsCard";
+import { ConversationSourcesCard } from "@/components/settings/ConversationSourcesCard";
 
 export const metadata = { title: "Settings — The Third Eye" };
 
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
       </div>
       <SettingsClient user={session?.user ?? null} />
       <ConnectionsCard />
+      <ConversationSourcesCard />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { extractEmailTasks, extractMeetingTasks } from "@/lib/extract";
 import { saveExtractedTasks } from "@/lib/tasks";
 import { logActivity } from "@/lib/activity";
 import { alreadyProcessed, markProcessed, type Sb } from "@/lib/cron";
+import { discoverConversations, includedConversations } from "@/lib/conversationSources";
 
 const GMAIL_MAX_PER_USER = 25;
 const GMAIL_QUERY = "is:unread newer_than:2d";
@@ -134,15 +135,58 @@ async function setWatermark(sb: Sb, email: string, space: string, ts: string): P
   );
 }
 
+/**
+ * List the Chat spaces this account can see and record them as discovered.
+ *
+ * Split out of scrapeChatForUser so the settings picker can populate itself on
+ * demand — otherwise a freshly-connected user stares at an empty list until the
+ * next cron poll. Never flips `included`, so calling it repeatedly is safe.
+ */
+export async function discoverChatSpaces(sb: Sb, email: string) {
+  const tok = await getGoogleAccessToken(email);
+  if (!tok || !(tok.scope ?? "").includes("chat.messages.readonly")) return { skipped: "chat not connected" as const };
+
+  const spacesRes = (await gget(tok.accessToken, "https://chat.googleapis.com/v1/spaces?pageSize=100")) as {
+    spaces?: { name?: string; displayName?: string; spaceType?: string }[];
+  };
+  const visible = (spacesRes.spaces ?? []).filter(
+    (s): s is { name: string; displayName?: string; spaceType?: string } => !!s.name,
+  );
+
+  const { discovered } = await discoverConversations(
+    sb,
+    email,
+    "google-chat",
+    visible.map((s) => ({
+      conversationId: s.name,
+      label: s.displayName ?? s.name.replace(/^spaces\//, ""),
+      link: `https://mail.google.com/chat/u/0/#chat/space/${s.name.replace(/^spaces\//, "")}`,
+      isGroup: s.spaceType === "SPACE",
+    })),
+  );
+  return { visible: visible.length, discovered };
+}
+
 export async function scrapeChatForUser(sb: Sb, email: string) {
   const tok = await getGoogleAccessToken(email);
   if (!tok || !(tok.scope ?? "").includes("chat.messages.readonly")) return { skipped: "chat not connected" };
   const access = tok.accessToken;
 
-  const spacesRes = (await gget(access, "https://chat.googleapis.com/v1/spaces?pageSize=100")) as {
-    spaces?: { name?: string }[];
-  };
-  const spaces = (spacesRes.spaces ?? []).map((s) => s.name).filter((n): n is string => !!n).slice(0, CHAT_MAX_SPACES);
+  // Record what this account can see so the picker has something to list. This
+  // never flips `included`, so re-polling can't change the user's selection.
+  const seen = await discoverChatSpaces(sb, email);
+  const visibleCount = "visible" in seen ? seen.visible : 0;
+
+  // Ingest ONLY opted-in spaces. Previously this took whichever spaces the API
+  // returned first, so every conversation the user belonged to fed the tracker.
+  // A freshly-connected account now discovers chats and ingests none until the
+  // user picks which ones to watch.
+  const watched = await includedConversations(sb, email, "google-chat");
+  const meta = new Map(watched.map((w) => [w.conversationId, w]));
+  const spaces = watched.map((w) => w.conversationId).slice(0, CHAT_MAX_SPACES);
+  if (!spaces.length) {
+    return { processed: 0, inserted: 0, merged: 0, spaces: 0, visible: visibleCount };
+  }
 
   let processed = 0, inserted = 0, merged = 0;
   for (const space of spaces) {
@@ -179,13 +223,17 @@ export async function scrapeChatForUser(sb: Sb, email: string) {
         });
         if (ex.tasks.length) {
           const bare = space.replace(/^spaces\//, "");
+          const chat = meta.get(space);
+          const sender = m.sender?.displayName;
           const r = await saveExtractedTasks(
             {
               userId: email,
               sourceType: "Chat",
               sourceRefId: `chat:${id}`,
-              sourceDetail: `Google Chat${m.sender?.displayName ? ` with ${m.sender.displayName}` : ""}`,
-              sourceLink: `https://mail.google.com/chat/u/0/#chat/space/${bare}`,
+              // Name the CHAT first: a tracker row has to say which conversation it
+              // came from, not just who happened to speak in it.
+              sourceDetail: `Google Chat · ${chat?.label ?? bare}${sender ? ` · ${sender}` : ""}`,
+              sourceLink: chat?.link ?? `https://mail.google.com/chat/u/0/#chat/space/${bare}`,
               dateGiven: m.createTime ?? null,
             },
             ex.tasks,

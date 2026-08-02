@@ -1734,7 +1734,12 @@ function buildResume(name: string, role: string, experience: string, skills: str
 
 async function captureScreenshot(url: string, width: number): Promise<string> {
   try {
-    const { chromium } = await import("playwright").catch(() => ({ chromium: null }));
+    // playwright is an optional runtime dependency (heavy browser binaries; intentionally
+    // not installed/bundled). Use a non-literal specifier + webpackIgnore so neither tsc
+    // nor `next build` resolves it at build time; it degrades gracefully at runtime.
+    const playwrightModule: string = "playwright";
+    const pw = await import(/* webpackIgnore: true */ playwrightModule).catch(() => null);
+    const chromium = pw?.chromium ?? null;
     if (!chromium) return "Screenshot service not available. Use a browser extension or online tool to capture: " + url;
     const browser = await chromium.launch({ headless: true });
     try {
