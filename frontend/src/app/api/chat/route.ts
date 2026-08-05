@@ -796,6 +796,7 @@ async function runTool(
       if (filter === "open") filtered = ctx.tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
       if (filter === "urgent") filtered = ctx.tasks.filter((t) => t.priority === "urgent" || t.priority === "high");
       if (filter === "overdue") filtered = ctx.tasks.filter((t) => t.due_date && new Date(t.due_date) < new Date(now) && t.status !== "done");
+      if (input.agent) filtered = filtered.filter((t: any) => t.agent === input.agent);
       const summary = filtered.slice(0, 15).map((t: any) =>
         `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.agent ? ` · agent:${t.agent}` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
       ).join("\n");
