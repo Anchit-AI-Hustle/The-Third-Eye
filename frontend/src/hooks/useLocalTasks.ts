@@ -23,6 +23,7 @@ export interface LocalTask {
   source_link?: string;
   source_detail?: string;
   workspace?: TaskWorkspace;
+  agent?: string; // appointed AgentProfile id
   all_updates?: string;
 }
 
