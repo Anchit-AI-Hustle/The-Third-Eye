@@ -415,6 +415,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             ? (window as any).__teLocation
             : undefined,
           agentName: agent?.name,
+          agentId: agent?.id,
           agentPersona: agent?.personality,
           mode: modeId,
         }),

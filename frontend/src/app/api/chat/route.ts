@@ -1568,6 +1568,7 @@ interface ChatRequest {
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
   agentName?: string;
+  agentId?: string;
   agentPersona?: string;
   mode?: string;
 }
@@ -1828,7 +1829,7 @@ export async function POST(req: NextRequest) {
   const {
     message, history = [], memory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], location,
-    agentName, agentPersona, mode,
+    agentName, agentId, agentPersona, mode,
   } = body;
 
   if (!message?.trim()) {
@@ -1882,6 +1883,7 @@ export async function POST(req: NextRequest) {
   // All intelligence, tool-use, honesty and security rules above still apply.
   if (agentPersona) {
     systemInstruction += `\n\n## Active persona (overrides the Character section above)\nYou are currently operating as ${agentName || "the selected assistant"}. Embody this personality in voice, tone and how you address the user:\n${agentPersona}`;
+    if (agentId) systemInstruction += `\nYour agent profile id is "${agentId}" — tasks marked agent:${agentId} are appointed to YOU.`;
   }
   // Mode-aware framing (Mirror-style runtime) — biases priorities/tone per mode.
   const modeContext = mode ? MODE_CONTEXT[mode] : undefined;
