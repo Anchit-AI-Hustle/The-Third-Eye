@@ -28,7 +28,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          language: ${{ matrix.language }}
+          languages: ${{ matrix.language }}
           # security-extended adds the higher-signal security queries on top of
           # the default set (injection, SSRF, auth, sensitive-data-flow).
           queries: security-extended
