@@ -532,7 +532,9 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
       completed_at: form.completed_at || undefined,
       description: form.description || undefined,
       assignee: form.assignee || undefined,
-      agent: form.agent || undefined,
+      // Keep "" rather than dropping the key — undefined is stripped by JSON
+      // serialization, so clearing an appointed agent would never persist.
+      agent: form.agent ?? "",
     });
   }
 
