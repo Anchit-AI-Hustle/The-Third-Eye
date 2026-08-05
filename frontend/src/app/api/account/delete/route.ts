@@ -23,7 +23,7 @@ const TABLES = [
   "applications", "application_answers", "application_events", "agent_runs",
   "job_agent_settings", "job_agent_audit",
   "cortex_memories", "cortex_doc_chunks", "reminders", "push_subscriptions",
-  "notification_log", "processed_messages", "chat_watermarks", "activity_log",
+  "notification_log", "processed_messages", "chat_watermarks", "activity_log", "device_logs",
   "profiles", "google_tokens",
 ];
 

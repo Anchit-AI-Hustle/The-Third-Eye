@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, Radio, ListChecks, Network } from "lucide-react";
 import { CaptureClient } from "@/components/capture/CaptureClient";
 import { TasksClient } from "@/components/tasks/TasksClient";
+import { LogSyncCard } from "@/components/tasks/LogSyncCard";
 import { useCapture } from "@/components/capture/CaptureContext";
 import { useMode } from "@/hooks/useMode";
 import { TeamOS } from "@/components/team/TeamOS";
@@ -43,6 +44,9 @@ export function TrackerWorkspace() {
     <div className="space-y-6">
       {/* Auto-capture requires the Gmail/Chat scopes — prompt if not connected. */}
       <GmailConnectBanner />
+
+      {/* Device activity → AI summary → tracker updates */}
+      <LogSyncCard />
 
       {/* Capture & Sources — collapsible intake panel */}
       <section className="rounded-card border border-border-default bg-background-surface/30 overflow-hidden">

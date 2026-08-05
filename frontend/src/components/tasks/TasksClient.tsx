@@ -2,10 +2,11 @@
 
 import { useState, useRef } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
-import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TeamMember } from "@/hooks/useLocalTasks";
+import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TaskWorkspace, TeamMember } from "@/hooks/useLocalTasks";
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
   LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
+  Briefcase, Heart, MonitorSmartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMode } from "@/hooks/useMode";
@@ -23,6 +24,18 @@ const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "done", label: "Done" },
   { value: "cancelled", label: "Cancelled" },
 ];
+
+// Tab split: Office = Vahdam work, Personal = everything else. Tasks without a
+// workspace (legacy rows, Vahdam-gated email/chat extraction) land on Office.
+const WORKSPACES: { value: TaskWorkspace; label: string; icon: typeof Briefcase }[] = [
+  { value: "office", label: "Office · Vahdam", icon: Briefcase },
+  { value: "personal", label: "Personal", icon: Heart },
+];
+const WS_KEY = "te_tasks_workspace_v1";
+
+function workspaceOf(t: LocalTask): TaskWorkspace {
+  return t.workspace === "personal" ? "personal" : "office";
+}
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "low", label: "Low" },
@@ -58,9 +71,9 @@ function fmtDate(iso?: string): string {
 
 // ─── Empty form ──────────────────────────────────────────────────────────────
 
-function emptyForm(): Omit<LocalTask, "id" | "created_at"> {
+function emptyForm(workspace: TaskWorkspace): Omit<LocalTask, "id" | "created_at"> {
   return { title: "", description: "", assignee: "", status: "todo", priority: "medium",
-    start_date: "", due_date: "", completed_at: "" };
+    start_date: "", due_date: "", completed_at: "", workspace };
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -71,6 +84,10 @@ export function TasksClient() {
   const { modeId } = useMode();
   const { tags, tagItem } = useModeTags();
   const [showAllModes, setShowAllModes] = useState(false);
+  const [workspace, setWorkspace] = useState<TaskWorkspace>(() => {
+    if (typeof window === "undefined") return "office";
+    return localStorage.getItem(WS_KEY) === "personal" ? "personal" : "office";
+  });
 
   const [view, setView] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");
@@ -86,8 +103,19 @@ export function TasksClient() {
   const [newMemberName, setNewMemberName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
+  function switchWorkspace(ws: TaskWorkspace) {
+    setWorkspace(ws);
+    try { localStorage.setItem(WS_KEY, ws); } catch { /* noop */ }
+  }
+
   // ── Filtering ─────────────────────────────────────────────────────────────
-  const filtered = filterByMode(allTasks, tags, modeId, showAllModes)
+  const modeTasks = filterByMode(allTasks, tags, modeId, showAllModes);
+  const wsCounts = modeTasks.reduce(
+    (acc, t) => { acc[workspaceOf(t)]++; return acc; },
+    { office: 0, personal: 0 } as Record<TaskWorkspace, number>,
+  );
+  const filtered = modeTasks
+    .filter((t) => workspaceOf(t) === workspace)
     .filter((t) => {
       if (search && !t.title.toLowerCase().includes(search.toLowerCase()) &&
           !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false;
@@ -186,6 +214,32 @@ export function TasksClient() {
         </div>
       </div>
 
+      {/* ── Workspace tabs ─────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 border-b border-border-default" role="tablist" aria-label="Workspace">
+        {WORKSPACES.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={workspace === value}
+            onClick={() => switchWorkspace(value)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors",
+              workspace === value
+                ? "border-accent-blue text-text-primary font-medium"
+                : "border-transparent text-text-muted hover:text-text-secondary",
+            )}
+          >
+            <Icon size={14} /> {label}
+            <span className={cn(
+              "text-[10px] font-mono px-1.5 py-0.5 rounded-full",
+              workspace === value ? "bg-accent-blue/15 text-accent-blue" : "bg-background-elevated text-text-muted",
+            )}>
+              {wsCounts[value]}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* ── Search + Filters ───────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
@@ -232,6 +286,7 @@ export function TasksClient() {
         <ActionModal
           task={editTask}
           team={team}
+          defaultWorkspace={workspace}
           onSave={async (data) => {
             if (editTask) update(editTask.id, data);
             else {
@@ -434,9 +489,10 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
 
 // ─── Action Modal ─────────────────────────────────────────────────────────────
 
-function ActionModal({ task, team, onSave, onClose }: {
+function ActionModal({ task, team, defaultWorkspace, onSave, onClose }: {
   task: LocalTask | null;
   team: TeamMember[];
+  defaultWorkspace: TaskWorkspace;
   onSave: (data: Omit<LocalTask, "id" | "created_at">) => void;
   onClose: () => void;
 }) {
@@ -444,8 +500,9 @@ function ActionModal({ task, team, onSave, onClose }: {
   const [form, setForm] = useState<Omit<LocalTask, "id" | "created_at">>(
     task ? { title: task.title, description: task.description ?? "", assignee: task.assignee ?? "",
       status: task.status, priority: task.priority, start_date: task.start_date ?? "",
-      due_date: task.due_date ?? "", completed_at: task.completed_at ?? "" }
-      : emptyForm()
+      due_date: task.due_date ?? "", completed_at: task.completed_at ?? "",
+      workspace: workspaceOf(task) }
+      : emptyForm(defaultWorkspace)
   );
 
   const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -510,11 +567,26 @@ function ActionModal({ task, team, onSave, onClose }: {
             </Field>
           </div>
 
-          <Field label="Status">
-            <select value={form.status} onChange={f("status")} className={inputCls}>
-              {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Status">
+              <select value={form.status} onChange={f("status")} className={inputCls}>
+                {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Workspace">
+              <select value={form.workspace} onChange={f("workspace")} className={inputCls}>
+                {WORKSPACES.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          {task?.all_updates && (
+            <Field label="Update trail">
+              <div className="max-h-32 overflow-y-auto rounded-input border border-border-default bg-background-surface px-3 py-2">
+                <pre className="text-xs text-text-muted whitespace-pre-wrap font-mono leading-relaxed">{task.all_updates}</pre>
+              </div>
+            </Field>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
@@ -591,6 +663,7 @@ const SOURCE_META: Record<string, { label: string; icon: typeof Mail; color: str
   chat:    { label: "Chat",  icon: MessageSquare, color: "#A78BFA" },
   voice:   { label: "Voice", icon: Mic,           color: "#34D399" },
   meeting: { label: "Meeting", icon: MessageSquare, color: "#F0C94E" },
+  devicelog: { label: "Log Sync", icon: MonitorSmartphone, color: "#A78BFA" },
 };
 
 function SourceBadge({ type, link, detail }: { type?: string; link?: string; detail?: string }) {

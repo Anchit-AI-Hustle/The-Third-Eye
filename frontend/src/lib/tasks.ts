@@ -21,6 +21,8 @@ export const GROWTH_PILLARS = [
 
 export type Urgency = "Low" | "Medium" | "High" | "Critical";
 
+export type TaskWorkspace = "office" | "personal";
+
 export interface ExtractedTask {
   taskHeading: string;
   taskDescription?: string | null;
@@ -30,6 +32,7 @@ export interface ExtractedTask {
   urgency?: string | null;
   owner?: string | null; // SPOC
   ownerContact?: string | null;
+  workspace?: TaskWorkspace | null;
 }
 
 // ─── normalization ───────────────────────────────────────────────────────────
@@ -119,11 +122,12 @@ export function normalizeUrgencyToPriority(u?: string | null): string {
 
 export interface SaveContext {
   userId: string;
-  sourceType: string; // Email | Chat | Meeting
+  sourceType: string; // Email | Chat | Meeting | DeviceLog
   sourceRefId: string;
   sourceDetail?: string | null;
   sourceLink?: string | null;
   dateGiven?: string | null;
+  workspace?: TaskWorkspace | null;
 }
 
 /**
@@ -149,20 +153,28 @@ export async function saveExtractedTasks(
     const spoc = cleanIdentifier(t.owner);
     const normalized = normalizeHeading(heading);
     const hash = dedupeHash(ctx.sourceType, ctx.sourceRefId, heading);
+    // Email/Chat extraction is Vahdam-gated, so anything without an explicit
+    // classification lands on the Office tab.
+    const workspace: TaskWorkspace = t.workspace ?? ctx.workspace ?? "office";
 
     // (1) hard dedup
     const { data: dup } = await sb
       .from("tasks").select("id").eq("user_id", ctx.userId).eq("dedupe_hash", hash).maybeSingle();
     if (dup) { skipped++; continue; }
 
-    // (2) soft merge on (normalized_heading, spoc) among open tasks.
+    // (2) soft merge on (normalized_heading, spoc) among open tasks of the SAME
+    // workspace — a personal follow-up must never fold into an office task.
     // spoc is stored NULL when there's no owner, so match with .is(null) rather
     // than .eq("") — otherwise owner-less tasks never merge and duplicate.
+    // Legacy rows have NULL workspace and belong to office.
     let mergeQuery = sb
       .from("tasks").select("id, all_updates")
       .eq("user_id", ctx.userId).eq("status", "todo")
       .eq("normalized_heading", normalized);
     mergeQuery = spoc === null ? mergeQuery.is("spoc", null) : mergeQuery.eq("spoc", spoc);
+    mergeQuery = workspace === "personal"
+      ? mergeQuery.eq("workspace", "personal")
+      : mergeQuery.or("workspace.is.null,workspace.eq.office");
     const { data: openMatch } = await mergeQuery.limit(1).maybeSingle();
 
     const updateLine = formatUpdateLine(ctx, spoc, t);
@@ -194,6 +206,7 @@ export async function saveExtractedTasks(
       date_given: ctx.dateGiven ?? null,
       normalized_heading: normalized,
       dedupe_hash: hash,
+      workspace,
     });
     inserted++;
   }

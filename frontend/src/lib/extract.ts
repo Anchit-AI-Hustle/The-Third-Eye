@@ -53,7 +53,7 @@ assignment — never a mere mention. Never attribute a task to a named person
 without a verbatim same-utterance assignment. On garbled/near-silent/repetitive
 audio return tasks=[] and an honest "transcript unclear" summary.`;
 
-function parseJsonBlock(text: string): Record<string, unknown> {
+export function parseJsonBlock(text: string): Record<string, unknown> {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : (text.match(/\{[\s\S]*\}/)?.[0] ?? "");
   if (!candidate) throw new Error("no JSON in LLM output");
