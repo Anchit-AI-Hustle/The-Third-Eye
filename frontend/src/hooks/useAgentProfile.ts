@@ -130,7 +130,14 @@ function loadProfiles(): AgentProfile[] {
   if (!raw) return PRESETS;
   try {
     const custom: AgentProfile[] = JSON.parse(raw);
-    return [...PRESETS, ...custom.filter((c) => !PRESETS.some((p) => p.id === c.id))];
+    // Custom profiles saved before the quality contract existed get it
+    // retrofitted on load, so every persona carries the same output bar.
+    const upgraded = custom.map((c) =>
+      c.personality?.includes("NON-NEGOTIABLE OUTPUT QUALITY")
+        ? c
+        : { ...c, personality: `${c.personality ?? ""}\n\n${QUALITY_CONTRACT}`.trim() },
+    );
+    return [...PRESETS, ...upgraded.filter((c) => !PRESETS.some((p) => p.id === c.id))];
   } catch { return PRESETS; }
 }
 

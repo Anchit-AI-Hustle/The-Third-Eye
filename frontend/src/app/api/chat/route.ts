@@ -111,6 +111,7 @@ const geminiTools = [
             priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Priority level" },
             status: { type: "STRING", enum: ["todo", "in_progress", "done", "cancelled"], description: "Task status (for update)" },
             assignee: { type: "STRING", description: "Person responsible" },
+            agent: { type: "STRING", description: "Appointed AI agent profile id (jarvis|friday|edith|ultron|zeus|athena) — set when the user appoints an agent to the task, '' to un-appoint" },
             due_date: { type: "STRING", description: "Due date YYYY-MM-DD (infer from 'tomorrow', 'Friday', etc.)" },
             description: { type: "STRING", description: "Additional context or notes" },
             filter: { type: "STRING", enum: ["all", "open", "urgent", "overdue"], description: "Filter for search (default: open)" },
@@ -757,6 +758,7 @@ async function runTool(
           title: input.title,
           priority: input.priority ?? "medium",
           assignee: input.assignee,
+          agent: input.agent,
           due_date: input.due_date,
           description: input.description,
         };
@@ -771,6 +773,7 @@ async function runTool(
         if (input.status !== undefined) patch.status = input.status;
         if (input.priority !== undefined) patch.priority = input.priority;
         if (input.due_date !== undefined) patch.due_date = input.due_date;
+        if (input.agent !== undefined) patch.agent = input.agent;
         const task = ctx.tasks.find((t) => t.id === input.id);
         return {
           result: task
@@ -794,7 +797,7 @@ async function runTool(
       if (filter === "urgent") filtered = ctx.tasks.filter((t) => t.priority === "urgent" || t.priority === "high");
       if (filter === "overdue") filtered = ctx.tasks.filter((t) => t.due_date && new Date(t.due_date) < new Date(now) && t.status !== "done");
       const summary = filtered.slice(0, 15).map((t: any) =>
-        `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
+        `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.agent ? ` · agent:${t.agent}` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
       ).join("\n");
       return { result: summary || "No tasks found." };
     }
@@ -1900,9 +1903,12 @@ export async function POST(req: NextRequest) {
     const open = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
     const overdue = open.filter((t) => t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()));
     const taskSummary = open.slice(0, 20).map((t: any) =>
-      `- [${t.priority}] ${t.title}${t.assignee ? ` (@${t.assignee})` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
+      `- [${t.priority}] ${t.title}${t.assignee ? ` (@${t.assignee})` : ""}${t.agent ? ` · agent:${t.agent}` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
     ).join("\n");
     systemInstruction += `\n\n**Tasks** (${open.length} open${overdue.length ? `, ${overdue.length} overdue` : ""}):\n${taskSummary}`;
+    if (open.some((t: any) => t.agent)) {
+      systemInstruction += `\n"agent:<id>" marks a task appointed to that AI agent profile. Tasks appointed to the persona you are currently operating as are YOUR tasks — own them: report their status when asked, drive them forward, and hold them to the quality contract. Use manage_tasks (agent field) to appoint or reassign.`;
+    }
   }
 
   if (goals.length > 0) {

@@ -56,6 +56,7 @@ export function useAgentActions() {
                 priority: d.priority ?? "medium",
                 status: "todo",
                 assignee: d.assignee,
+                agent: d.agent,
                 due_date: d.due_date,
                 description: d.description,
               });
