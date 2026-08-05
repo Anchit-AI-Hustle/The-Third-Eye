@@ -21,6 +21,8 @@ export const GROWTH_PILLARS = [
 
 export type Urgency = "Low" | "Medium" | "High" | "Critical";
 
+export type TaskWorkspace = "office" | "personal";
+
 export interface ExtractedTask {
   taskHeading: string;
   taskDescription?: string | null;
@@ -30,6 +32,7 @@ export interface ExtractedTask {
   urgency?: string | null;
   owner?: string | null; // SPOC
   ownerContact?: string | null;
+  workspace?: TaskWorkspace | null;
 }
 
 // ─── normalization ───────────────────────────────────────────────────────────
@@ -119,11 +122,12 @@ export function normalizeUrgencyToPriority(u?: string | null): string {
 
 export interface SaveContext {
   userId: string;
-  sourceType: string; // Email | Chat | Meeting
+  sourceType: string; // Email | Chat | Meeting | DeviceLog
   sourceRefId: string;
   sourceDetail?: string | null;
   sourceLink?: string | null;
   dateGiven?: string | null;
+  workspace?: TaskWorkspace | null;
 }
 
 /**
@@ -194,6 +198,9 @@ export async function saveExtractedTasks(
       date_given: ctx.dateGiven ?? null,
       normalized_heading: normalized,
       dedupe_hash: hash,
+      // Email/Chat extraction is Vahdam-gated, so anything without an explicit
+      // classification lands on the Office tab.
+      workspace: t.workspace ?? ctx.workspace ?? "office",
     });
     inserted++;
   }

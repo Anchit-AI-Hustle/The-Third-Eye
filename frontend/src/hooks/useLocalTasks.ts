@@ -6,6 +6,7 @@ import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export type TaskStatus = "todo" | "in_progress" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskWorkspace = "office" | "personal";
 
 export interface LocalTask {
   id: string;
@@ -21,6 +22,8 @@ export interface LocalTask {
   source_type?: string;
   source_link?: string;
   source_detail?: string;
+  workspace?: TaskWorkspace;
+  all_updates?: string;
 }
 
 export interface TeamMember {

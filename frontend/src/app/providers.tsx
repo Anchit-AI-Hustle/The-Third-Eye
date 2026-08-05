@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { ConsentDialog } from "@/components/layout/ConsentDialog";
 import { CaptureProvider } from "@/components/capture/CaptureContext";
 import { IngestBridge } from "@/components/tasks/IngestBridge";
+import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { getConsent, getCurrentLocation } from "@/lib/consent";
 
@@ -53,6 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <ConsentDialog />
           <LocationBridge />
           <IngestBridge />
+          <DeviceLogBridge />
           <SystemsOnline />
         </CaptureProvider>
       </QueryClientProvider>
