@@ -50,5 +50,8 @@ export async function POST() {
   lastRun.set(email, now);
 
   const result = await summarizeDeviceLogs(email);
+  // A too-small batch makes no LLM call — don't burn the cooldown on it, or a
+  // user who generates activity right after a no-op warmup is locked out.
+  if (result.skipped === "not enough logs") lastRun.delete(email);
   return Response.json({ ...result, changed: result.updated + result.inserted + result.merged > 0 });
 }
