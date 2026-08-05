@@ -45,11 +45,29 @@ function writeBuf(events: LogEvent[]) {
   try { localStorage.setItem(BUF_KEY, JSON.stringify(events.slice(-200))); } catch { /* full/blocked */ }
 }
 
+// Shared with LogSyncCard so an on-demand "Sync now" ships this device's
+// buffered events before asking the server to summarize.
+let flushing = false;
+export async function flushDeviceLogs(): Promise<void> {
+  if (flushing) return;
+  const events = readBuf();
+  if (!events.length) return;
+  flushing = true;
+  try {
+    const res = await fetch("/api/device-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(events),
+    });
+    if (res.ok) writeBuf(readBuf().slice(events.length));
+  } catch { /* transient — next tick retries */ }
+  flushing = false;
+}
+
 export function DeviceLogBridge() {
   const { status } = useSession();
   const pathname = usePathname();
   const segRef = useRef<{ path: string; title: string; start: number } | null>(null);
-  const flushingRef = useRef(false);
 
   // ── segment tracking: one event per (page, continuous visible stretch) ────
   useEffect(() => {
@@ -96,22 +114,6 @@ export function DeviceLogBridge() {
   useEffect(() => {
     if (status !== "authenticated") return;
 
-    const flush = async () => {
-      if (flushingRef.current) return;
-      const events = readBuf();
-      if (!events.length) return;
-      flushingRef.current = true;
-      try {
-        const res = await fetch("/api/device-log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(events),
-        });
-        if (res.ok) writeBuf(readBuf().slice(events.length));
-      } catch { /* transient — next tick retries */ }
-      flushingRef.current = false;
-    };
-
     const beacon = () => {
       const events = readBuf();
       if (!events.length) return;
@@ -123,7 +125,7 @@ export function DeviceLogBridge() {
     };
 
     const sync = async () => {
-      await flush();
+      await flushDeviceLogs();
       try {
         const res = await fetch("/api/ingest/logs", { method: "POST" });
         if (res.ok) {
@@ -133,7 +135,7 @@ export function DeviceLogBridge() {
       } catch { /* transient */ }
     };
 
-    const flushId = setInterval(flush, FLUSH_MS);
+    const flushId = setInterval(flushDeviceLogs, FLUSH_MS);
     const syncId = setInterval(sync, SYNC_MS);
     const warmup = setTimeout(sync, 45_000); // fold in anything left from the last session
     window.addEventListener("pagehide", beacon);

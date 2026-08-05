@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { MonitorSmartphone, Sparkles, RefreshCw } from "lucide-react";
-import { deviceLabel } from "./DeviceLogBridge";
+import { deviceLabel, flushDeviceLogs } from "./DeviceLogBridge";
 import { cn } from "@/lib/utils";
 
 // Status surface for AI Log Sync: shows that this device's activity is being
@@ -38,6 +38,7 @@ export function LogSyncCard() {
     setSyncing(true);
     setNote(null);
     try {
+      await flushDeviceLogs(); // ship this device's buffered events first
       const res = await fetch("/api/ingest/logs", { method: "POST" });
       const d = await res.json().catch(() => ({}));
       if (d.skipped === "cooldown") setNote("Synced recently — try again in a few minutes.");
