@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { MonitorSmartphone, Sparkles, RefreshCw } from "lucide-react";
 import { deviceLabel, flushDeviceLogs } from "./DeviceLogBridge";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ interface SyncStatus {
 }
 
 export function LogSyncCard() {
+  const { data: session } = useSession();
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export function LogSyncCard() {
     setSyncing(true);
     setNote(null);
     try {
-      await flushDeviceLogs(); // ship this device's buffered events first
+      await flushDeviceLogs(session?.user?.email); // ship this device's buffered events first
       const res = await fetch("/api/ingest/logs", { method: "POST" });
       const d = await res.json().catch(() => ({}));
       if (d.skipped === "cooldown") setNote("Synced recently — try again in a few minutes.");

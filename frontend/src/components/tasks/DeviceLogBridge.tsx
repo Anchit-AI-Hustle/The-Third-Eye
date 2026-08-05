@@ -10,7 +10,9 @@ import { useSession } from "next-auth/react";
 // ships them to /api/device-log. A slow background tick then asks the server
 // to run AI Log Sync, which folds the logs into the Task Tracker.
 
-const BUF_KEY = "te_device_log_buf_v1";
+// jarvis_ prefix → wiped by clearSensitiveLocalData on sign-out; scoped by
+// email so a shared machine never flushes one user's events as another's.
+const BUF_PREFIX = "jarvis_device_log_buf_v1:";
 const MIN_SEGMENT_S = 5;
 const FLUSH_MS = 60_000;
 const SYNC_MS = 30 * 60_000;
@@ -38,19 +40,20 @@ export function deviceLabel(): string {
   return "Unknown device";
 }
 
-function readBuf(): LogEvent[] {
-  try { return JSON.parse(localStorage.getItem(BUF_KEY) ?? "[]"); } catch { return []; }
+function readBuf(key: string): LogEvent[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? "[]"); } catch { return []; }
 }
-function writeBuf(events: LogEvent[]) {
-  try { localStorage.setItem(BUF_KEY, JSON.stringify(events.slice(-200))); } catch { /* full/blocked */ }
+function writeBuf(key: string, events: LogEvent[]) {
+  try { localStorage.setItem(key, JSON.stringify(events.slice(-200))); } catch { /* full/blocked */ }
 }
 
 // Shared with LogSyncCard so an on-demand "Sync now" ships this device's
 // buffered events before asking the server to summarize.
 let flushing = false;
-export async function flushDeviceLogs(): Promise<void> {
-  if (flushing) return;
-  const events = readBuf();
+export async function flushDeviceLogs(email: string | null | undefined): Promise<void> {
+  if (!email || flushing) return;
+  const key = BUF_PREFIX + email;
+  const events = readBuf(key);
   if (!events.length) return;
   flushing = true;
   try {
@@ -59,20 +62,22 @@ export async function flushDeviceLogs(): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(events),
     });
-    if (res.ok) writeBuf(readBuf().slice(events.length));
+    if (res.ok) writeBuf(key, readBuf(key).slice(events.length));
   } catch { /* transient — next tick retries */ }
   flushing = false;
 }
 
 export function DeviceLogBridge() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  const email = session?.user?.email ?? null;
   const pathname = usePathname();
   const segRef = useRef<{ path: string; title: string; start: number } | null>(null);
 
   // ── segment tracking: one event per (page, continuous visible stretch) ────
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status !== "authenticated" || !email) return;
 
+    const key = BUF_PREFIX + email;
     const device = deviceLabel();
     const platform = navigator.userAgent.slice(0, 120);
 
@@ -82,7 +87,7 @@ export function DeviceLogBridge() {
       if (!seg) return;
       const dur = Math.round((Date.now() - seg.start) / 1000);
       if (dur < MIN_SEGMENT_S) return;
-      writeBuf([...readBuf(), {
+      writeBuf(key, [...readBuf(key), {
         device, platform, kind: "app_usage",
         title: seg.title, url: seg.path, duration_s: dur,
         started_at: new Date(seg.start).toISOString(),
@@ -108,24 +113,25 @@ export function DeviceLogBridge() {
       window.removeEventListener("pagehide", close);
       close();
     };
-  }, [status, pathname]);
+  }, [status, email, pathname]);
 
   // ── flush buffer + periodic AI sync ────────────────────────────────────────
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status !== "authenticated" || !email) return;
 
+    const key = BUF_PREFIX + email;
     const beacon = () => {
-      const events = readBuf();
+      const events = readBuf(key);
       if (!events.length) return;
       const ok = navigator.sendBeacon?.(
         "/api/device-log",
         new Blob([JSON.stringify(events)], { type: "application/json" }),
       );
-      if (ok) writeBuf([]);
+      if (ok) writeBuf(key, []);
     };
 
     const sync = async () => {
-      await flushDeviceLogs();
+      await flushDeviceLogs(email);
       try {
         const res = await fetch("/api/ingest/logs", { method: "POST" });
         if (res.ok) {
@@ -135,7 +141,7 @@ export function DeviceLogBridge() {
       } catch { /* transient */ }
     };
 
-    const flushId = setInterval(flushDeviceLogs, FLUSH_MS);
+    const flushId = setInterval(() => flushDeviceLogs(email), FLUSH_MS);
     const syncId = setInterval(sync, SYNC_MS);
     const warmup = setTimeout(sync, 45_000); // fold in anything left from the last session
     window.addEventListener("pagehide", beacon);
@@ -145,7 +151,7 @@ export function DeviceLogBridge() {
       clearTimeout(warmup);
       window.removeEventListener("pagehide", beacon);
     };
-  }, [status]);
+  }, [status, email]);
 
   return null;
 }
