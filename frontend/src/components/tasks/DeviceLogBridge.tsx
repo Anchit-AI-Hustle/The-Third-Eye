@@ -13,6 +13,7 @@ import { useSession } from "next-auth/react";
 // jarvis_ prefix → wiped by clearSensitiveLocalData on sign-out; scoped by
 // email so a shared machine never flushes one user's events as another's.
 const BUF_PREFIX = "jarvis_device_log_buf_v1:";
+const SEAL_EVENT = "te:device-log-seal";
 const MIN_SEGMENT_S = 5;
 const FLUSH_MS = 60_000;
 const SYNC_MS = 30 * 60_000;
@@ -52,6 +53,9 @@ function writeBuf(key: string, events: LogEvent[]) {
 let flushing = false;
 export async function flushDeviceLogs(email: string | null | undefined): Promise<void> {
   if (!email || flushing) return;
+  // Seal the in-progress segment first (the bridge's listener is synchronous),
+  // so activity right up to this moment is part of the upload.
+  window.dispatchEvent(new CustomEvent(SEAL_EVENT));
   const key = BUF_PREFIX + email;
   const events = readBuf(key);
   if (!events.length) return;
@@ -106,11 +110,14 @@ export function DeviceLogBridge() {
       if (document.visibilityState === "visible") open();
       else close();
     };
+    const onSeal = () => { close(); open(); };
     window.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", close);
+    window.addEventListener(SEAL_EVENT, onSeal);
     return () => {
       window.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", close);
+      window.removeEventListener(SEAL_EVENT, onSeal);
       close();
     };
   }, [status, email, pathname]);

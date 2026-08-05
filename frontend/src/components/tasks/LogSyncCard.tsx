@@ -43,7 +43,8 @@ export function LogSyncCard() {
       await flushDeviceLogs(session?.user?.email); // ship this device's buffered events first
       const res = await fetch("/api/ingest/logs", { method: "POST" });
       const d = await res.json().catch(() => ({}));
-      if (d.skipped === "cooldown") setNote("Synced recently — try again in a few minutes.");
+      if (!res.ok) setNote("Sync failed — will retry in the background.");
+      else if (d.skipped === "cooldown") setNote("Synced recently — try again in a few minutes.");
       else if (d.skipped === "not enough logs") setNote("Not enough new activity to summarize yet.");
       else if (d.changed) {
         setNote(`Tracker updated: ${d.inserted + d.merged} task(s) added/merged, ${d.updated} progressed.`);
