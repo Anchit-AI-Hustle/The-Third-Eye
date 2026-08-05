@@ -138,10 +138,10 @@ export function TasksClient() {
 
   // ── Export CSV ────────────────────────────────────────────────────────────
   function exportCSV() {
-    const header = "Title,Assignee,Priority,Status,Start Date,Due Date,Completed";
+    const header = "Title,Assignee,Priority,Status,Start Date,Due Date,Completed,Workspace,Agent";
     const rows = allTasks.map((t) =>
       [t.title, t.assignee ?? "", t.priority, t.status,
-       t.start_date ?? "", t.due_date ?? "", t.completed_at ?? ""]
+       t.start_date ?? "", t.due_date ?? "", t.completed_at ?? "", workspaceOf(t), t.agent ?? ""]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
     );
@@ -158,7 +158,7 @@ export function TasksClient() {
     reader.onload = (e) => {
       const lines = (e.target?.result as string).split("\n").slice(1);
       lines.forEach((line) => {
-        const [title, assignee, priority, status, start_date, due_date, completed_at] =
+        const [title, assignee, priority, status, start_date, due_date, completed_at, ws, agent] =
           line.split(",").map((v) => v.replace(/^"|"$/g, "").replace(/""/g, '"'));
         if (!title?.trim()) return;
         create({
@@ -166,6 +166,8 @@ export function TasksClient() {
           priority: (priority as TaskPriority) || "medium",
           start_date: start_date || undefined, due_date: due_date || undefined,
           completed_at: completed_at || undefined,
+          workspace: ws === "personal" ? "personal" : ws === "office" ? "office" : undefined,
+          agent: agent || undefined,
         }).then((t) => { if (t?.id) tagItem(t.id, modeId); });
       });
     };
@@ -713,14 +715,17 @@ function SourceBadge({ type, link, detail }: { type?: string; link?: string; det
 function AgentChip({ id, profiles }: { id?: string; profiles: AgentProfile[] }) {
   if (!id) return null;
   const p = profiles.find((x) => x.id === id);
-  if (!p) return null;
+  // Custom profiles live in this browser's localStorage; on another device the
+  // id won't resolve — keep the appointment visible instead of dropping it.
+  const color = p?.accentColor ?? "#7878A8";
+  const label = p ? p.name.replace(/\./g, "") : "Custom agent";
   return (
     <span
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none"
-      style={{ color: p.accentColor, borderColor: `${p.accentColor}55` }}
-      title={`Appointed agent: ${p.name}`}
+      style={{ color, borderColor: `${color}55` }}
+      title={p ? `Appointed agent: ${p.name}` : `Appointed agent: ${id} (profile not on this device)`}
     >
-      <Bot size={10} /> {p.name.replace(/\./g, "")}
+      <Bot size={10} /> {label}
     </span>
   );
 }
