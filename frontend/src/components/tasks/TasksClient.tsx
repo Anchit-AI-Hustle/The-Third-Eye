@@ -6,9 +6,10 @@ import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TaskWorkspace, Team
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
   LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
-  Briefcase, Heart, MonitorSmartphone,
+  Briefcase, Heart, MonitorSmartphone, Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAgentProfile, type AgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
@@ -73,7 +74,7 @@ function fmtDate(iso?: string): string {
 
 function emptyForm(workspace: TaskWorkspace): Omit<LocalTask, "id" | "created_at"> {
   return { title: "", description: "", assignee: "", status: "todo", priority: "medium",
-    start_date: "", due_date: "", completed_at: "", workspace };
+    start_date: "", due_date: "", completed_at: "", workspace, agent: "" };
 }
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ function emptyForm(workspace: TaskWorkspace): Omit<LocalTask, "id" | "created_at
 export function TasksClient() {
   const { allTasks, team, ready, create, update, remove, addMember, removeMember } =
     useLocalTasks();
+  const { profiles } = useAgentProfile();
   const { modeId } = useMode();
   const { tags, tagItem } = useModeTags();
   const [showAllModes, setShowAllModes] = useState(false);
@@ -92,6 +94,7 @@ export function TasksClient() {
   const [view, setView] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
+  const [filterAgent, setFilterAgent] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("due_date");
@@ -120,6 +123,7 @@ export function TasksClient() {
       if (search && !t.title.toLowerCase().includes(search.toLowerCase()) &&
           !t.assignee?.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterAssignee && t.assignee !== filterAssignee) return false;
+      if (filterAgent && t.agent !== filterAgent) return false;
       if (filterStatus && t.status !== filterStatus) return false;
       if (filterPriority && t.priority !== filterPriority) return false;
       return true;
@@ -134,10 +138,10 @@ export function TasksClient() {
 
   // ── Export CSV ────────────────────────────────────────────────────────────
   function exportCSV() {
-    const header = "Title,Assignee,Priority,Status,Start Date,Due Date,Completed";
+    const header = "Title,Assignee,Priority,Status,Start Date,Due Date,Completed,Workspace,Agent";
     const rows = allTasks.map((t) =>
       [t.title, t.assignee ?? "", t.priority, t.status,
-       t.start_date ?? "", t.due_date ?? "", t.completed_at ?? ""]
+       t.start_date ?? "", t.due_date ?? "", t.completed_at ?? "", workspaceOf(t), t.agent ?? ""]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
     );
@@ -154,7 +158,7 @@ export function TasksClient() {
     reader.onload = (e) => {
       const lines = (e.target?.result as string).split("\n").slice(1);
       lines.forEach((line) => {
-        const [title, assignee, priority, status, start_date, due_date, completed_at] =
+        const [title, assignee, priority, status, start_date, due_date, completed_at, ws, agent] =
           line.split(",").map((v) => v.replace(/^"|"$/g, "").replace(/""/g, '"'));
         if (!title?.trim()) return;
         create({
@@ -162,6 +166,8 @@ export function TasksClient() {
           priority: (priority as TaskPriority) || "medium",
           start_date: start_date || undefined, due_date: due_date || undefined,
           completed_at: completed_at || undefined,
+          workspace: ws === "personal" ? "personal" : ws === "office" ? "office" : undefined,
+          agent: agent || undefined,
         }).then((t) => { if (t?.id) tagItem(t.id, modeId); });
       });
     };
@@ -252,6 +258,8 @@ export function TasksClient() {
 
         <FilterSelect value={filterAssignee} onChange={setFilterAssignee}
           options={[{ value: "", label: "All assignees" }, ...uniqueAssignees.map((a) => ({ value: a, label: a }))]} />
+        <FilterSelect value={filterAgent} onChange={setFilterAgent}
+          options={[{ value: "", label: "All agents" }, ...profiles.map((p) => ({ value: p.id, label: p.name }))]} />
         <FilterSelect value={filterStatus} onChange={setFilterStatus}
           options={[{ value: "", label: "All statuses" }, ...STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label }))]} />
         <FilterSelect value={filterPriority} onChange={setFilterPriority}
@@ -273,12 +281,12 @@ export function TasksClient() {
 
       {/* ── View ───────────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <EmptyState hasFilters={!!(search || filterAssignee || filterStatus || filterPriority || !showAllModes)} onNew={openNew} />
+        <EmptyState hasFilters={!!(search || filterAssignee || filterAgent || filterStatus || filterPriority || !showAllModes)} onNew={openNew} />
       ) : view === "table" ? (
-        <TableView tasks={filtered} sortKey={sortKey} sortAsc={sortAsc}
+        <TableView tasks={filtered} profiles={profiles} sortKey={sortKey} sortAsc={sortAsc}
           onSort={handleSort} onEdit={openEdit} onDelete={remove} />
       ) : (
-        <KanbanView tasks={filtered} onEdit={openEdit} onStatusChange={(id, s) => update(id, { status: s })} />
+        <KanbanView tasks={filtered} profiles={profiles} onEdit={openEdit} onStatusChange={(id, s) => update(id, { status: s })} />
       )}
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
@@ -286,6 +294,7 @@ export function TasksClient() {
         <ActionModal
           task={editTask}
           team={team}
+          profiles={profiles}
           defaultWorkspace={workspace}
           onSave={async (data) => {
             if (editTask) update(editTask.id, data);
@@ -314,8 +323,9 @@ export function TasksClient() {
 
 // ─── Table view ───────────────────────────────────────────────────────────────
 
-function TableView({ tasks, sortKey, sortAsc, onSort, onEdit, onDelete }: {
+function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete }: {
   tasks: LocalTask[];
+  profiles: AgentProfile[];
   sortKey: string;
   sortAsc: boolean;
   onSort: (k: any) => void;
@@ -359,6 +369,7 @@ function TableView({ tasks, sortKey, sortAsc, onSort, onEdit, onDelete }: {
                         {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
                       </div>
                       <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                      <AgentChip id={t.agent} profiles={profiles} />
                     </div>
                   </td>
                   <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "—"}</td>
@@ -407,8 +418,9 @@ const KANBAN_COLS: { status: TaskStatus; label: string }[] = [
   { status: "cancelled", label: "Cancelled" },
 ];
 
-function KanbanView({ tasks, onEdit, onStatusChange }: {
+function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
   tasks: LocalTask[];
+  profiles: AgentProfile[];
   onEdit: (t: LocalTask) => void;
   onStatusChange: (id: string, s: TaskStatus) => void;
 }) {
@@ -454,7 +466,10 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
                     onClick={() => onEdit(t)}>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <p className="text-text-primary text-sm leading-snug">{t.title}</p>
-                      <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                      <div className="flex items-center gap-1 flex-none">
+                        <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                        <AgentChip id={t.agent} profiles={profiles} />
+                      </div>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <PriorityBadge priority={t.priority} />
@@ -489,9 +504,10 @@ function KanbanView({ tasks, onEdit, onStatusChange }: {
 
 // ─── Action Modal ─────────────────────────────────────────────────────────────
 
-function ActionModal({ task, team, defaultWorkspace, onSave, onClose }: {
+function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }: {
   task: LocalTask | null;
   team: TeamMember[];
+  profiles: AgentProfile[];
   defaultWorkspace: TaskWorkspace;
   onSave: (data: Omit<LocalTask, "id" | "created_at">) => void;
   onClose: () => void;
@@ -501,7 +517,7 @@ function ActionModal({ task, team, defaultWorkspace, onSave, onClose }: {
     task ? { title: task.title, description: task.description ?? "", assignee: task.assignee ?? "",
       status: task.status, priority: task.priority, start_date: task.start_date ?? "",
       due_date: task.due_date ?? "", completed_at: task.completed_at ?? "",
-      workspace: workspaceOf(task) }
+      workspace: workspaceOf(task), agent: task.agent ?? "" }
       : emptyForm(defaultWorkspace)
   );
 
@@ -518,6 +534,9 @@ function ActionModal({ task, team, defaultWorkspace, onSave, onClose }: {
       completed_at: form.completed_at || undefined,
       description: form.description || undefined,
       assignee: form.assignee || undefined,
+      // Keep "" rather than dropping the key — undefined is stripped by JSON
+      // serialization, so clearing an appointed agent would never persist.
+      agent: form.agent ?? "",
     });
   }
 
@@ -554,6 +573,13 @@ function ActionModal({ task, team, defaultWorkspace, onSave, onClose }: {
               </select>
             </Field>
           </div>
+
+          <Field label="AI Agent">
+            <select value={form.agent} onChange={f("agent")} className={inputCls}>
+              <option value="">— No agent appointed —</option>
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
 
           <div className="grid grid-cols-3 gap-3">
             <Field label="Start date">
@@ -684,6 +710,24 @@ function SourceBadge({ type, link, detail }: { type?: string; link?: string; det
       {inner}
     </a>
   ) : inner;
+}
+
+function AgentChip({ id, profiles }: { id?: string; profiles: AgentProfile[] }) {
+  if (!id) return null;
+  const p = profiles.find((x) => x.id === id);
+  // Custom profiles live in this browser's localStorage; on another device the
+  // id won't resolve — keep the appointment visible instead of dropping it.
+  const color = p?.accentColor ?? "#7878A8";
+  const label = p ? p.name.replace(/\./g, "") : "Custom agent";
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none"
+      style={{ color, borderColor: `${color}55` }}
+      title={p ? `Appointed agent: ${p.name}` : `Appointed agent: ${id} (profile not on this device)`}
+    >
+      <Bot size={10} /> {label}
+    </span>
+  );
 }
 
 function PriorityBadge({ priority }: { priority: TaskPriority }) {

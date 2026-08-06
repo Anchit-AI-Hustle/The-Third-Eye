@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Plus, Trash2, X, Cpu, Shield, Gem, Circle } from "lucide-react";
+import { Check, Plus, Trash2, X, Cpu, Shield, Gem, Circle, Zap, Bird } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAgentProfile, type AgentProfile } from "@/hooks/useAgentProfile";
+import { useAgentProfile, QUALITY_CONTRACT, type AgentProfile } from "@/hooks/useAgentProfile";
 
 const AVATARS: { id: AgentProfile["avatar"]; icon: typeof Cpu; label: string }[] = [
   { id: "reactor", icon: Cpu, label: "Reactor" },
   { id: "orb", icon: Circle, label: "Orb" },
   { id: "shield", icon: Shield, label: "Shield" },
   { id: "diamond", icon: Gem, label: "Diamond" },
+  { id: "bolt", icon: Zap, label: "Bolt" },
+  { id: "owl", icon: Bird, label: "Owl" },
 ];
 
 const GENDERS: { id: AgentProfile["gender"]; label: string }[] = [
@@ -36,8 +38,8 @@ export function AgentProfileManager() {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    const p = form.personality.trim() || `You are ${form.name}. You are a helpful, intelligent AI assistant. Be direct and efficient.`;
-    createProfile({ ...form, personality: p, greeting: form.greeting || `${form.name} online.` });
+    const base = form.personality.trim() || `You are ${form.name}. You are a helpful, intelligent AI assistant. Be direct and efficient.`;
+    createProfile({ ...form, personality: `${base}\n\n${QUALITY_CONTRACT}`, greeting: form.greeting || `${form.name} online.` });
     setForm(emptyForm());
     setShowCreate(false);
   }

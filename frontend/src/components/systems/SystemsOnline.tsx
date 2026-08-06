@@ -18,6 +18,7 @@ export function SystemsOnline() {
   const [open, setOpen] = useState(false);
   const [systems, setSystems] = useState<SystemDef[]>([]);
   const [phases, setPhases] = useState<Record<string, Phase>>({});
+  const [lines, setLines] = useState<Record<string, string>>({});
   const running = useRef(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -32,10 +33,12 @@ export function SystemsOnline() {
 
     setSystems(list);
     setPhases(Object.fromEntries(list.map((s) => [s.id, "pending" as Phase])));
+    setLines({});
     setOpen(true);
 
-    await announceSystems(list, (id, phase) => {
+    await announceSystems(list, (id, phase, line) => {
       setPhases((p) => ({ ...p, [id]: phase }));
+      if (line) setLines((l) => ({ ...l, [id]: line }));
     });
 
     try { logAgentAction({ type: "systems.status", label: list.length === 1 ? `${list[0].name} reported online` : `All systems online (${list.length})`, outcome: "applied" }); } catch { /* noop */ }
@@ -94,7 +97,7 @@ export function SystemsOnline() {
                       {ph === "online" && <Check size={13} className="text-[#34D399]" />}
                     </div>
                     <div className="text-[11px] font-mono text-text-muted truncate">
-                      {ph === "pending" ? "standby…" : ph === "speaking" ? s.line : "online"}
+                      {ph === "pending" ? "standby…" : ph === "speaking" ? (lines[s.id] ?? "reporting…") : "online"}
                     </div>
                   </div>
                   <span className="text-[9px] font-mono uppercase tracking-wider flex-none"
