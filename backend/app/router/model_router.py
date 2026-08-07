@@ -32,6 +32,8 @@ class TaskType(StrEnum):
     EMBEDDINGS = "embeddings"
     FINANCIAL_ANALYSIS = "financial_analysis"
     LOCAL_OFFLINE = "local_offline"
+    # Answers grounded in live Google Search results, with source citations.
+    GROUNDED_SEARCH = "grounded_search"
 
 
 class Provider(StrEnum):
@@ -39,6 +41,10 @@ class Provider(StrEnum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
+    # Google AI agent capability: Gemini + the built-in google_search tool.
+    # Distinct from GOOGLE because it uses the newer `google-genai` SDK and
+    # returns grounding metadata, leaving the plain GOOGLE path untouched.
+    GOOGLE_GROUNDED = "google_grounded"
 
 
 @dataclass
@@ -55,14 +61,20 @@ class ModelConfig:
 
 # ─── Model registry ─────────────────────────────────────────────────────────
 
+# Registry key for the grounded route. The underlying Gemini model id comes
+# from settings, so this key stays stable as models are refreshed.
+GROUNDED_MODEL_KEY = "gemini-grounded"
+
 MODELS: dict[str, ModelConfig] = {
-    "gemini-1.5-flash": ModelConfig(
-        Provider.GOOGLE, "gemini-1.5-flash",
-        cost_per_1k_input=0.000075, cost_per_1k_output=0.0003,
+    # Gemini 1.5 (flash, pro, flash-8b) was shut down on 2025-09-29 — calls to
+    # those ids error out, so the flash/pro tiers point at 2.5.
+    "gemini-2.5-flash": ModelConfig(
+        Provider.GOOGLE, "gemini-2.5-flash",
+        cost_per_1k_input=0.0003, cost_per_1k_output=0.0025,
     ),
-    "gemini-1.5-pro": ModelConfig(
-        Provider.GOOGLE, "gemini-1.5-pro",
-        cost_per_1k_input=0.00125, cost_per_1k_output=0.005,
+    "gemini-2.5-pro": ModelConfig(
+        Provider.GOOGLE, "gemini-2.5-pro",
+        cost_per_1k_input=0.00125, cost_per_1k_output=0.010,
     ),
     "gpt-4o-mini": ModelConfig(
         Provider.OPENAI, "gpt-4o-mini",
@@ -81,14 +93,23 @@ MODELS: dict[str, ModelConfig] = {
         cost_per_1k_input=0.00002, cost_per_1k_output=0.0,
         supports_streaming=False,
     ),
-    "text-embedding-004": ModelConfig(
-        Provider.GOOGLE, "text-embedding-004",
-        cost_per_1k_input=0.00001, cost_per_1k_output=0.0,
+    # text-embedding-004 was shut down on 2026-01-14.
+    "gemini-embedding-001": ModelConfig(
+        Provider.GOOGLE, "gemini-embedding-001",
+        cost_per_1k_input=0.00015, cost_per_1k_output=0.0,
         supports_streaming=False,
     ),
     "llama3": ModelConfig(
         Provider.OLLAMA, "llama3",
         cost_per_1k_input=0.0, cost_per_1k_output=0.0,
+    ),
+    # Model id is configurable so the grounded route can be pointed at a newer
+    # Gemini without a code change. Token costs mirror the flash tier; note
+    # that Google bills grounded requests for search usage on top of tokens,
+    # so estimated_cost_usd is a floor for this route, not a total.
+    GROUNDED_MODEL_KEY: ModelConfig(
+        Provider.GOOGLE_GROUNDED, settings.google_grounded_model,
+        cost_per_1k_input=0.0003, cost_per_1k_output=0.0025,
     ),
 }
 
@@ -96,13 +117,16 @@ MODELS: dict[str, ModelConfig] = {
 # (primary, fallback) — "never use" is enforced by omission
 
 ROUTING_TABLE: dict[TaskType, tuple[str, str]] = {
-    TaskType.SIMPLE_CHAT: ("gemini-1.5-flash", "gpt-4o-mini"),
-    TaskType.DOCUMENT_SUMMARIZATION: ("gemini-1.5-flash", "claude-haiku-4-5-20251001"),
-    TaskType.COMPLEX_REASONING: ("gemini-1.5-pro", "gpt-4o"),
-    TaskType.CODE_GENERATION: ("gpt-4o-mini", "gemini-1.5-flash"),
-    TaskType.EMBEDDINGS: ("text-embedding-3-small", "text-embedding-004"),
-    TaskType.FINANCIAL_ANALYSIS: ("gemini-1.5-pro", "gpt-4o"),
+    TaskType.SIMPLE_CHAT: ("gemini-2.5-flash", "gpt-4o-mini"),
+    TaskType.DOCUMENT_SUMMARIZATION: ("gemini-2.5-flash", "claude-haiku-4-5-20251001"),
+    TaskType.COMPLEX_REASONING: ("gemini-2.5-pro", "gpt-4o"),
+    TaskType.CODE_GENERATION: ("gpt-4o-mini", "gemini-2.5-flash"),
+    TaskType.EMBEDDINGS: ("text-embedding-3-small", "gemini-embedding-001"),
+    TaskType.FINANCIAL_ANALYSIS: ("gemini-2.5-pro", "gpt-4o"),
     TaskType.LOCAL_OFFLINE: ("llama3", "llama3"),
+    # Fallback is the ungrounded flash model: it still answers, just without
+    # live search or citations, which is the right degradation here.
+    TaskType.GROUNDED_SEARCH: (GROUNDED_MODEL_KEY, "gemini-2.5-flash"),
 }
 
 
@@ -117,6 +141,10 @@ class RouterLogEntry:
     estimated_cost_usd: float
     attempts: int
     user_id: str | None = None
+    # Populated only by grounded routes: [{"title", "url", "domain"}, ...] and
+    # the search queries Gemini actually issued. Empty for every other route.
+    citations: list[dict[str, str]] = field(default_factory=list)
+    search_queries: list[str] = field(default_factory=list)
 
 
 class ModelRouter:
@@ -200,7 +228,7 @@ class ModelRouter:
             with attempt:
                 attempts += 1
                 t0 = time.monotonic()
-                response_text, prompt_tokens, completion_tokens = await self._dispatch(model, messages)
+                response_text, prompt_tokens, completion_tokens, extra = await self._dispatch(model, messages)
                 latency_ms = int((time.monotonic() - t0) * 1000)
 
                 cost = (
@@ -218,6 +246,8 @@ class ModelRouter:
                     estimated_cost_usd=cost,
                     attempts=attempts,
                     user_id=user_id,
+                    citations=extra.get("citations", []),
+                    search_queries=extra.get("search_queries", []),
                 )
                 return response_text, entry
 
@@ -225,10 +255,18 @@ class ModelRouter:
 
     async def _dispatch(
         self, model: ModelConfig, messages: list[dict]
-    ) -> tuple[str, int, int]:
-        """Routes the actual API call to the correct provider SDK."""
+    ) -> tuple[str, int, int, dict]:
+        """
+        Routes the actual API call to the correct provider SDK.
+
+        Returns (text, prompt_tokens, completion_tokens, extra) where `extra`
+        carries provider-specific metadata — grounding citations today — and is
+        empty for providers that have none.
+        """
         if model.provider == Provider.GOOGLE:
             return await self._call_google(model, messages)
+        if model.provider == Provider.GOOGLE_GROUNDED:
+            return await self._call_google_grounded(model, messages)
         if model.provider == Provider.OPENAI:
             return await self._call_openai(model, messages)
         if model.provider == Provider.ANTHROPIC:
@@ -237,7 +275,7 @@ class ModelRouter:
             return await self._call_ollama(model, messages)
         raise NotImplementedError(f"Provider {model.provider} not implemented")
 
-    async def _call_google(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int]:
+    async def _call_google(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int, dict]:
         import google.generativeai as genai
 
         genai.configure(api_key=settings.google_ai_api_key)
@@ -264,9 +302,93 @@ class ModelRouter:
         usage = response.usage_metadata
         prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
         completion_tokens = getattr(usage, "candidates_token_count", 0) or 0
-        return text, prompt_tokens, completion_tokens
+        return text, prompt_tokens, completion_tokens, {}
 
-    async def _call_openai(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int]:
+    async def _call_google_grounded(
+        self, model: ModelConfig, messages: list[dict]
+    ) -> tuple[str, int, int, dict]:
+        """
+        Google AI agent call: Gemini with the built-in google_search tool.
+
+        Gemini decides whether to search, issues the queries itself, and
+        returns grounding metadata naming the sources it used — so this needs
+        no separate search API key, only GOOGLE_AI_API_KEY.
+        """
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=settings.google_ai_api_key)
+
+        # Convert OpenAI-style messages to Gemini Content; system prompts move
+        # to system_instruction, which has no role in the turn list.
+        contents: list[types.Content] = []
+        system_parts: list[str] = []
+        for m in messages:
+            role = m.get("role")
+            if role == "system":
+                system_parts.append(m["content"])
+            elif role in ("user", "assistant"):
+                contents.append(
+                    types.Content(
+                        role="user" if role == "user" else "model",
+                        parts=[types.Part(text=m["content"])],
+                    )
+                )
+
+        config = types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            max_output_tokens=4096,
+            system_instruction="\n\n".join(system_parts) or None,
+        )
+
+        response = await client.aio.models.generate_content(
+            model=model.model_id,
+            contents=contents,
+            config=config,
+        )
+
+        # .text raises if the candidate carries no text part (e.g. blocked or
+        # search-only turn); an empty answer is preferable to a 500 here.
+        try:
+            text = response.text or ""
+        except Exception:
+            text = ""
+
+        usage = response.usage_metadata
+        prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
+        completion_tokens = getattr(usage, "candidates_token_count", 0) or 0
+
+        citations: list[dict[str, str]] = []
+        search_queries: list[str] = []
+        candidates = response.candidates or []
+        if candidates:
+            meta = candidates[0].grounding_metadata
+            if meta:
+                search_queries = list(meta.web_search_queries or [])
+                seen: set[str] = set()
+                for chunk in meta.grounding_chunks or []:
+                    web = getattr(chunk, "web", None)
+                    if not web or not web.uri or web.uri in seen:
+                        continue
+                    seen.add(web.uri)
+                    citations.append({
+                        "title": web.title or web.domain or web.uri,
+                        "url": web.uri,
+                        "domain": web.domain or "",
+                    })
+
+        log.info(
+            "google_grounded_call",
+            model=model.model_id,
+            citation_count=len(citations),
+            search_queries=search_queries,
+        )
+        return text, prompt_tokens, completion_tokens, {
+            "citations": citations,
+            "search_queries": search_queries,
+        }
+
+    async def _call_openai(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int, dict]:
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -278,9 +400,9 @@ class ModelRouter:
         text = response.choices[0].message.content or ""
         prompt_tokens = response.usage.prompt_tokens if response.usage else 0
         completion_tokens = response.usage.completion_tokens if response.usage else 0
-        return text, prompt_tokens, completion_tokens
+        return text, prompt_tokens, completion_tokens, {}
 
-    async def _call_anthropic(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int]:
+    async def _call_anthropic(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int, dict]:
         from anthropic import AsyncAnthropic
 
         client = AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -296,9 +418,9 @@ class ModelRouter:
         text = response.content[0].text if response.content else ""
         prompt_tokens = response.usage.input_tokens
         completion_tokens = response.usage.output_tokens
-        return text, prompt_tokens, completion_tokens
+        return text, prompt_tokens, completion_tokens, {}
 
-    async def _call_ollama(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int]:
+    async def _call_ollama(self, model: ModelConfig, messages: list[dict]) -> tuple[str, int, int, dict]:
         import httpx
 
         payload = {"model": model.model_id, "messages": messages, "stream": False}
@@ -310,7 +432,7 @@ class ModelRouter:
         text = data.get("message", {}).get("content", "")
         prompt_tokens = data.get("prompt_eval_count", 0)
         completion_tokens = data.get("eval_count", 0)
-        return text, prompt_tokens, completion_tokens
+        return text, prompt_tokens, completion_tokens, {}
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Batch embedding generation using text-embedding-3-small."""
