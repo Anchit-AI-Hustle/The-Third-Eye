@@ -28,7 +28,7 @@ dependencies = [
     # app.auth.service / middleware use the PyJWT API (jwt.encode / jwt.decode)
     "pyjwt>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=4.0.1,<4.1",  # passlib 1.7.4 is incompatible with bcrypt>=4.1
+    "bcrypt>=4.0.1,<5.1",  # passlib 1.7.4 is incompatible with bcrypt>=4.1
     "pyotp>=2.9.0",
     "cryptography>=42.0.0",
 
