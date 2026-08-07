@@ -71,6 +71,7 @@ Application-level tenancy (ADR-001): every domain table has `user_id FK`. A `Bas
 - `components/` — UI primitives (Radix + Tailwind) and feature components like `KnowledgeClient`, the Assistant view (renders agent name, delegation chain, source citations).
 - `lib/` — API client (axios), React Query setup, NextAuth helpers.
 - API base resolved via env; the backend is reached through Nginx in prod, direct in dev.
+- **Design tokens: `frontend/DESIGN.md`** is the source of truth for colours, type, spacing, radius, and motion. Follow it for all UI styling. Note its "known inconsistency" section — `tailwind.config.ts` (canonical) and `globals.css :root` currently define divergent palettes.
 
 ### Chat request flow
 `POST /api/v1/chat` → NextAuth session validation → memory retrieval (embed query, pgvector cosine search top-10, re-rank by recency+relevance, inject top-5) → `Orchestrator.dispatch` (intent classification + agent registry lookup, optional delegation) → `ModelRouter.select_model` → AI provider call (logs model, tokens, latency, cost) → async memory write → response. See `ARCHITECTURE.md` for the full diagram.

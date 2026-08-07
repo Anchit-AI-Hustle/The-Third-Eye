@@ -2,6 +2,12 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
+import { useWakeLock } from "./useWakeLock";
+
+// Mirrors WATCHDOG_MS in useWakeWord: if the recognizer goes quiet for this
+// long while it should be listening, assume it died silently and restart.
+const STT_WATCHDOG_MS = 10_000;
+
 export type AudioState = "idle" | "waiting" | "speaking" | "transcribing";
 
 // ─── Voice STT (Web Speech API + AudioContext level meter) ───────────────────
@@ -30,6 +36,9 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
+  const lastEventRef = useRef(0);
+  const startRecRef = useRef<() => void>(() => {});
+  const wakeLock = useWakeLock();
 
   useEffect(() => {
     const SR = typeof window !== "undefined"
@@ -99,6 +108,9 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     if (!supported || activeRef.current) return;
     activeRef.current = true;
     setPermissionDenied(false);
+    lastEventRef.current = Date.now();
+    // Mid-conversation the screen must not sleep, or the mic is suspended.
+    wakeLock.acquire();
 
     const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!SRClass) { activeRef.current = false; return; }
@@ -112,9 +124,13 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       rec.maxAlternatives = 1;
       rec.lang = cbRef.current.lang || "";
 
-      rec.onstart = () => setAudioState("waiting");
+      rec.onstart = () => {
+        lastEventRef.current = Date.now();
+        setAudioState("waiting");
+      };
 
       rec.onspeechstart = () => {
+        lastEventRef.current = Date.now();
         if (cbRef.current.shouldSuppress?.()) return;
         cbRef.current.onSpeechStart?.();
         setAudioState("speaking");
@@ -126,6 +142,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       };
 
       rec.onresult = (event: any) => {
+        lastEventRef.current = Date.now();
         if (cbRef.current.shouldSuppress?.()) return;
         let interim = "";
         let final = "";
@@ -163,9 +180,10 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       try { rec.start(); } catch { setTimeout(startRec, 500); }
     };
 
+    startRecRef.current = startRec;
     startRec();
     startMeter();
-  }, [supported, startMeter]);
+  }, [supported, startMeter, wakeLock]);
 
   const disable = useCallback(() => {
     activeRef.current = false;
@@ -173,7 +191,49 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     recRef.current = null;
     stopMeter();
     setAudioState("idle");
-  }, [stopMeter]);
+    wakeLock.release();
+  }, [stopMeter, wakeLock]);
+
+  // Recovery: same failure mode as useWakeWord — a hidden tab or a network
+  // blip can kill recognition without onend ever firing.
+  const forceRestart = useCallback(() => {
+    if (!activeRef.current) return;
+    const old = recRef.current;
+    recRef.current = null;
+    // Detach before abort(), otherwise the old onend relaunches and races
+    // the fresh instance (two recognizers fighting over one mic).
+    if (old) {
+      old.onstart = null;
+      old.onspeechstart = null;
+      old.onspeechend = null;
+      old.onresult = null;
+      old.onerror = null;
+      old.onend = null;
+      try { old.abort(); } catch {}
+    }
+    lastEventRef.current = Date.now();
+    startRecRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!supported) return;
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") forceRestart();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    const watchdog = setInterval(() => {
+      if (!activeRef.current) return;
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastEventRef.current > STT_WATCHDOG_MS) forceRestart();
+    }, STT_WATCHDOG_MS / 2);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(watchdog);
+    };
+  }, [supported, forceRestart]);
 
   return { audioState, supported, permissionDenied, whisperAvailable, enable, disable };
 }
