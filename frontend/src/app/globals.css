@@ -21,6 +21,10 @@
   --glow-violet: 0 0 20px rgba(123,92,240,0.15), 0 0 60px rgba(123,92,240,0.05);
   --glow-green: 0 0 20px rgba(61,239,160,0.15), 0 0 60px rgba(61,239,160,0.05);
   --glow-arc: 0 0 15px rgba(79,195,247,0.3), 0 0 40px rgba(79,195,247,0.1), 0 0 80px rgba(79,195,247,0.05);
+  /* Alias: .glow-cyan / .card-glow-blue consume --glow-cyan, but the value
+     above is named --glow-blue, so those utilities resolved to an invalid
+     box-shadow and rendered no glow. Aliasing keeps the palette unchanged. */
+  --glow-cyan: var(--glow-blue);
 }
 
 * { box-sizing: border-box; }

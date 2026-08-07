@@ -29,7 +29,11 @@ export function VoiceOverlay() {
 
   const [expanded, setExpanded] = useState(false);
   const [micOn, setMicOn] = useState(false);
-  const [wakeEnabled, setWakeEnabled] = useState(true);
+  const [wakeEnabled, setWakeEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const v = localStorage.getItem("jarvis_wake_enabled");
+    return v === null ? true : v === "true";
+  });
   const [liveBubble, setLiveBubble] = useState<LiveBubble | null>(null);
   const [lastQuery, setLastQuery] = useState("");
   const [response, setResponse] = useState("");
@@ -127,7 +131,19 @@ export function VoiceOverlay() {
     stt.enable();
     setMicOn(true);
   }, [stt]);
-  useWakeWord({ agentName: agent.name, enabled: wakeEnabled && !micOn, onWake, cooldownMs: 2000 });
+  // !tts.speaking matters even though micOn is normally true after a wake:
+  // a typed question with the mic off still gets a spoken reply, and the wake
+  // recognizer would otherwise hear the agent say its own name and self-trigger.
+  useWakeWord({
+    agentName: agent.name,
+    enabled: wakeEnabled && !micOn && !tts.speaking,
+    onWake,
+    cooldownMs: 2000,
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("jarvis_wake_enabled", String(wakeEnabled));
+  }, [wakeEnabled]);
 
   useEffect(() => {
     if (tts.speaking) {

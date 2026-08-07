@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     ollama_base_url: str = "http://ollama:11434"
+    # Gemini model used for the Google-Search-grounded route. Overridable so
+    # the grounded model can be refreshed without a code change.
+    google_grounded_model: str = "gemini-2.5-flash"
+    # Let the research agent answer via Gemini's google_search tool when no
+    # SERPER_API_KEY is configured, instead of degrading to "search unavailable".
+    enable_google_grounding: bool = True
 
     # Rate limiting
     ai_rate_limit_rpm: int = 60
