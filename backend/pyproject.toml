@@ -72,6 +72,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # CI runs `ruff check app`, which exited 127 without this.
+    "ruff>=0.6.0",
     "aiosqlite>=0.21.0",
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.7",
