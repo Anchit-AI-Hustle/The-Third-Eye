@@ -94,3 +94,13 @@ addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# Selected explicitly rather than left to ruff's defaults. `ruff` is an
+# unpinned dependency, and its default rule set widens between releases — a
+# newer ruff started selecting pyupgrade (UP) and turned CI red with 169
+# findings that no commit here introduced. Naming the rules makes the gate
+# depend on this file instead of on whichever version resolves at install
+# time. Widening the set is then a deliberate commit, with the churn it
+# implies, rather than something a routine upgrade does to you.
+select = ["E4", "E7", "E9", "F"]
