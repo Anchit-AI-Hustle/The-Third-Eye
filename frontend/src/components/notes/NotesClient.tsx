@@ -40,6 +40,15 @@ export function NotesClient() {
   // Flush the previous note's pending edits before switching, and on unmount.
   useEffect(() => flushSave, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Command palette "New note": create a note via a same-page event, or a
+  // pending flag that survives navigation to /notes.
+  useEffect(() => {
+    const open = () => { try { sessionStorage.removeItem("te:compose"); } catch { /* ignore */ } handleNew(); };
+    if (typeof window !== "undefined" && sessionStorage.getItem("te:compose") === "note") open();
+    window.addEventListener("te:new-note", open);
+    return () => window.removeEventListener("te:new-note", open);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filtered = filterByMode(notes, tags, modeId, showAllModes).filter((n) =>
     !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase())
   );
