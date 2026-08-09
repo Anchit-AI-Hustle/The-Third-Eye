@@ -7,6 +7,7 @@ import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, Fi
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { useCapability } from "@/components/permission/PermissionProvider";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentActions } from "@/hooks/useAgentActions";
@@ -59,6 +60,7 @@ export function VoiceOverlay() {
   const { docs } = useLocalKnowledge();
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
+  const requestCapability = useCapability();
   const tts = useTTS(agent.voicePreference);
   const {
     pendingActions,
@@ -160,12 +162,13 @@ export function VoiceOverlay() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [response, liveBubble]);
 
-  function toggleMic() {
+  async function toggleMic() {
     if (micOn) {
       stt.disable();
       setMicOn(false);
       setLiveBubble(null);
     } else {
+      if (!(await requestCapability("microphone"))) return;
       stt.enable();
       setMicOn(true);
     }
@@ -312,6 +315,10 @@ export function VoiceOverlay() {
     ? "bg-success"
     : "bg-text-muted";
 
+  // Only animate the indicator while something is actually happening. A
+  // perpetual pulse on an always-visible corner widget reads as "blinking".
+  const indicatorActive = tts.speaking || isStreaming || !!liveBubble;
+
   return (
     <div className={cn(
       "fixed z-50 transition-all duration-300",
@@ -322,9 +329,12 @@ export function VoiceOverlay() {
       {!expanded && (
         <button
           onClick={() => setExpanded(true)}
-          className="flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group animate-border-glow"
+          className={cn(
+            "flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group",
+            indicatorActive && "animate-border-glow",
+          )}
         >
-          <span className={cn("w-2 h-2 rounded-full animate-pulse", statusColor, micOn && "shadow-[0_0_8px_rgba(79,195,247,0.5)]")} />
+          <span className={cn("w-2 h-2 rounded-full transition-colors", statusColor, indicatorActive && "animate-pulse", micOn && "shadow-[0_0_8px_rgba(79,195,247,0.5)]")} />
           {/* Show truncated last response or status */}
           {response && !isStreaming ? (
             <span className="text-xs font-mono text-text-secondary max-w-[160px] truncate">{response.slice(0, 50)}</span>

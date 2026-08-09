@@ -38,6 +38,47 @@ export function resetConsents() {
     localStorage.removeItem(LS_PREFIX + k),
   );
   localStorage.removeItem(LS_BUNDLE_ASKED);
+  (CAPABILITIES).forEach(clearPolicy);
+}
+
+// ─── Per-capability permission policy ("always" vs "ask each time") ───────────
+//
+// The OS/browser owns the real permission prompt and its own "allow once /
+// allow every time" choice — an app cannot override that. This layer adds the
+// app's own memory on top: for each capability the user can choose to allow it
+// *every time* (we never re-ask; the feature runs straight away) or *just this
+// once* (we ask again next time). Anything not set to "always" is re-requested
+// on every use, which is the behaviour we want when permission wasn't granted.
+
+export type PermissionCapability = "microphone" | "camera" | "screen" | "location" | "notifications";
+export type PermissionPolicy = "always" | "ask";
+
+export const CAPABILITIES: PermissionCapability[] = [
+  "microphone", "camera", "screen", "location", "notifications",
+];
+
+const LS_POLICY = "te_perm_policy_";
+export const PERM_POLICY_EVENT = "te:perm-policy";
+
+export function getPolicy(cap: PermissionCapability): PermissionPolicy {
+  if (typeof window === "undefined") return "ask";
+  return localStorage.getItem(LS_POLICY + cap) === "always" ? "always" : "ask";
+}
+
+export function setPolicy(cap: PermissionCapability, policy: PermissionPolicy) {
+  if (typeof window === "undefined") return;
+  if (policy === "always") localStorage.setItem(LS_POLICY + cap, "always");
+  else localStorage.removeItem(LS_POLICY + cap);
+  window.dispatchEvent(new CustomEvent(PERM_POLICY_EVENT, { detail: { cap, policy } }));
+}
+
+export function clearPolicy(cap: PermissionCapability) {
+  setPolicy(cap, "ask");
+}
+
+export function allPolicies(): Record<PermissionCapability, PermissionPolicy> {
+  return CAPABILITIES.reduce((acc, c) => { acc[c] = getPolicy(c); return acc; },
+    {} as Record<PermissionCapability, PermissionPolicy>);
 }
 
 async function probeBrowserState(key: ConsentKey): Promise<ConsentState | null> {

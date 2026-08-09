@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Eye, Monitor, Camera, Loader2 } from "lucide-react";
+import { useCapability } from "@/components/permission/PermissionProvider";
 
 // Captures a single still frame from screen-share or the webcam, sends it (with
 // the user's question) to /api/vision, and hands the result back to the
@@ -18,6 +19,7 @@ export function VisionButton({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<"screen" | "camera" | null>(null);
   const [supported, setSupported] = useState(true);
+  const requestCapability = useCapability();
 
   useEffect(() => {
     setSupported(typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia);
@@ -52,6 +54,10 @@ export function VisionButton({
 
   async function analyze(kind: "screen" | "camera") {
     setOpen(false);
+    // App-level permission gate first (every-time vs once), then the browser's
+    // own prompt fires when we open the stream.
+    const ok = await requestCapability(kind === "camera" ? "camera" : "screen");
+    if (!ok) return;
     setBusy(kind);
     try {
       const image = await grabFrame(kind);
