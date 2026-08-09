@@ -169,9 +169,12 @@ export async function POST(req: NextRequest) {
       try {
         const p = await submitVocal();
         return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics, ...loopMeta, ...briefMeta });
-      } catch {
+      } catch (vErr) {
+        // Surface WHY the singing model couldn't run — otherwise the user just
+        // gets a silent instrumental and calls it "no melody in the lyrics".
+        const vocalError = vErr instanceof Error ? vErr.message : "vocal model unavailable";
         const { p, model } = await submitInstrumental();
-        return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, fellBackToInstrumental: true, ...instrLoop, ...briefMeta });
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, fellBackToInstrumental: true, vocalModel: VOCAL_MODEL, vocalError, ...instrLoop, ...briefMeta });
       }
     }
     const { p, model } = await submitInstrumental();
