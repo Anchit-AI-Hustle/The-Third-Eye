@@ -3,7 +3,6 @@ Productivity Agent — task suggestions, schedule awareness, task creation.
 """
 
 import re
-from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import select

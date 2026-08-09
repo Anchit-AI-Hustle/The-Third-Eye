@@ -6,13 +6,12 @@ Memory retrieval pipeline:
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import structlog
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.memory.models import EpisodicMemory, SemanticMemory
+from app.memory.models import EpisodicMemory
 from app.router.model_router import model_router
 
 log = structlog.get_logger()

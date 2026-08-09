@@ -114,7 +114,7 @@ async def validate_session_token(db: AsyncSession, token: str) -> User | None:
         select(UserSession)
         .where(
             UserSession.token_hash == token_hash,
-            UserSession.is_active == True,
+            UserSession.is_active.is_(True),
             UserSession.expires_at > datetime.now(timezone.utc),
         )
     )

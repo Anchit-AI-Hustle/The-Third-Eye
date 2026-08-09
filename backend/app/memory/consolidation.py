@@ -65,7 +65,7 @@ async def _find_users_with_consolidation_work(db: AsyncSession) -> list[uuid.UUI
     result = await db.execute(
         select(EpisodicMemory.user_id)
         .where(
-            EpisodicMemory.consolidated == False,
+            EpisodicMemory.consolidated.is_(False),
             EpisodicMemory.created_at < threshold,
         )
         .distinct()
@@ -83,7 +83,7 @@ async def consolidate_for_user(db: AsyncSession, *, user_id: uuid.UUID) -> Conso
         select(EpisodicMemory)
         .where(
             EpisodicMemory.user_id == user_id,
-            EpisodicMemory.consolidated == False,
+            EpisodicMemory.consolidated.is_(False),
             EpisodicMemory.created_at < threshold,
         )
         .order_by(EpisodicMemory.session_id, EpisodicMemory.created_at)

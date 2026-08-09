@@ -12,14 +12,13 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import structlog
-from sqlalchemy import and_, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.finance.encryption import decrypt_decimal, encrypt_decimal
 from app.finance.models import (
     Account,
     Budget,
-    FinancialSnapshot,
     Subscription,
     Transaction,
 )
@@ -84,7 +83,7 @@ async def create_account(
 
 async def list_accounts(db: AsyncSession, *, user_id: uuid.UUID) -> list[Account]:
     result = await db.execute(
-        select(Account).where(Account.user_id == user_id, Account.is_active == True).order_by(Account.created_at)
+        select(Account).where(Account.user_id == user_id, Account.is_active.is_(True)).order_by(Account.created_at)
     )
     return list(result.scalars().all())
 
@@ -453,7 +452,7 @@ def subscription_amount(sub: Subscription) -> Decimal:
 async def list_subscriptions(db: AsyncSession, *, user_id: uuid.UUID) -> list[Subscription]:
     result = await db.execute(
         select(Subscription).where(
-            Subscription.user_id == user_id, Subscription.is_active == True
+            Subscription.user_id == user_id, Subscription.is_active.is_(True)
         ).order_by(Subscription.next_billing_date)
     )
     return list(result.scalars().all())
