@@ -66,6 +66,8 @@ export function describeSideEffect(type: string, data?: Record<string, any>): st
     case "goal_create": return `Created goal “${d.title ?? ""}”`;
     case "goal_update": return `Updated goal progress`;
     case "goal_delete": return `Deleted a goal`;
+    case "expense_create": return `Logged expense ₹${d.amount ?? ""}${d.category ? ` · ${d.category}` : ""}`;
+    case "expense_delete": return `Deleted an expense`;
     case "memory_update": return `Remembered a fact`;
     case "open_url": return `Opened ${d.label ?? d.url ?? "link"}`;
     case "open_urls": return d.data ? `Opened ${Array.isArray(d.data) ? d.data.length : 0} apps` : "Opened apps";

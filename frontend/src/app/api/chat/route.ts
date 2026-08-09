@@ -12,6 +12,7 @@ import { authOptions } from "@/lib/auth";
 import { getGoogleAccessToken } from "@/lib/googleToken";
 import { getTool } from "@/lib/studioTools";
 import { generateStudio } from "@/lib/studioGenerate";
+import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
@@ -40,6 +41,8 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **manage_goals**: create, update progress, delete goals — action='create' to set, 'update' to report progress, 'delete' to remove
 - **manage_reminders**: set, list, cancel reminders — action='set' to schedule, 'list' to see pending, 'cancel' to remove
 - **manage_calendar**: add events and get upcoming — action='add' to create event, 'get' to retrieve
+- **manage_expenses**: log spending or summarise it — action='create' to log (amount is GST-inclusive; pass gst_rate when known), 'summary' for this-month totals + GST paid
+- **calculate**: run a precise financial calc (GST, income tax, EMI, SIP, FD…) by slug + inputs — always use this instead of doing money arithmetic yourself
 - **communicate**: send WhatsApp/SMS/email, make calls, read emails — action='whatsapp'/'sms'/'email'/'call'/'read_emails'
 - **navigate**: directions, GPS location, nearby places — action='directions' for maps, 'location' for coords, 'nearby' for POIs
 - **generate**: images, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs — type='image'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
@@ -152,6 +155,34 @@ const geminiTools = [
             set_to: { type: "NUMBER", description: "Set progress to exact value (for update)" },
           },
           required: ["action"],
+        },
+      },
+      {
+        name: "manage_expenses",
+        description: "Unified expense tracker: log spending, or summarise it. action='create' to log an expense (the amount is what was paid, GST-inclusive), 'summary' for this-month totals, category breakdown and GST paid. Use when the user says things like 'log 1200 groceries', 'I spent 450 on lunch with 5% GST', or 'how much did I spend this month'.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["create", "summary"], description: "What to do" },
+            amount: { type: "NUMBER", description: "Amount paid (GST-inclusive), for create" },
+            category: { type: "STRING", enum: ["Food", "Groceries", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Travel", "Other"], description: "Expense category" },
+            note: { type: "STRING", description: "Short note, e.g. 'lunch with team'" },
+            gst_rate: { type: "NUMBER", enum: [0, 5, 12, 18, 28, 40], description: "GST % already included in the amount (0 if unknown/none)" },
+            spent_on: { type: "STRING", description: "Date YYYY-MM-DD (defaults to today; infer from 'yesterday' etc.)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "calculate",
+        description: "Run a precise financial calculation instead of estimating. Pick a calculator by slug and pass its inputs. Use for GST (gst-calculator: amount, rate, mode 0=add/1=remove), income tax (income-tax-calculator: grossIncome, regime 1=new/0=old, salaried 1/0, deductions), EMI (emi-calculator: principal, rate, years), SIP (sip-calculator: monthly, rate, years), FD, compound interest, and more. Always prefer this over doing the arithmetic yourself.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            slug: { type: "STRING", description: "Calculator slug, e.g. 'gst-calculator', 'income-tax-calculator', 'emi-calculator', 'sip-calculator', 'fd-calculator', 'compound-interest-calculator'" },
+            inputs: { type: "OBJECT", description: "Input values keyed by the calculator's input ids, e.g. { amount: 5000, rate: 18, mode: 0 }" },
+          },
+          required: ["slug", "inputs"],
         },
       },
       {
@@ -735,6 +766,7 @@ interface RunContext {
   docs: Array<{ id: string; title: string; content: string; chunk_count: number }>;
   notes: Array<{ id: string; title: string; content: string }>;
   goals: any[];
+  expenses: Array<{ id?: string; amount: number; category?: string; note?: string; gst_rate?: number | null; spent_on?: string }>;
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
   tier: Tier;
@@ -856,6 +888,51 @@ async function runTool(
           data: { id: input.id, delta: input.delta, set_to: input.set_to },
         },
       };
+    }
+
+    case "manage_expenses": {
+      const action = input.action ?? "summary";
+      if (action === "create") {
+        const amount = Number(input.amount);
+        if (!amount || amount <= 0) return { result: "I need a positive amount to log an expense." };
+        const rate = Number(input.gst_rate) || 0;
+        const expense = {
+          amount,
+          category: input.category ?? "Other",
+          note: input.note,
+          gst_rate: rate > 0 ? rate : undefined,
+          spent_on: input.spent_on,
+        };
+        const gstNote = rate > 0 ? ` (incl. ${rate}% GST ≈ ₹${Math.round(gstBreakup(amount, rate, "remove").gst)})` : "";
+        return {
+          result: JSON.stringify({ success: true, logged: `₹${amount} · ${expense.category}${gstNote}` }),
+          sideEffect: { type: "expense_create", data: expense },
+        };
+      }
+      // summary — this calendar month
+      const month = new Date().toISOString().slice(0, 7);
+      const rows = (ctx.expenses ?? []).filter((e) => (e.spent_on ?? "").startsWith(month));
+      if (rows.length === 0) return { result: `No expenses logged for ${month} yet.` };
+      const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
+      const gst = rows.reduce((s, e) => s + (e.gst_rate ? gstBreakup(Number(e.amount || 0), Number(e.gst_rate), "remove").gst : 0), 0);
+      const byCat = new Map<string, number>();
+      for (const e of rows) byCat.set(e.category ?? "Other", (byCat.get(e.category ?? "Other") ?? 0) + Number(e.amount || 0));
+      const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1])
+        .map(([c, a]) => `- ${c}: ₹${Math.round(a)}`).join("\n");
+      return {
+        result: `This month (${month}): ₹${Math.round(total)} across ${rows.length} expense(s)${gst > 0 ? `, incl. ₹${Math.round(gst)} GST` : ""}.\n${cats}`,
+      };
+    }
+
+    case "calculate": {
+      const calc = FORMULAS[input.slug as string];
+      if (!calc) return { result: `No calculator named "${input.slug}". Try gst-calculator, income-tax-calculator, emi-calculator, sip-calculator, fd-calculator.` };
+      try {
+        const out = calc((input.inputs ?? {}) as Record<string, number>);
+        return { result: JSON.stringify({ slug: input.slug, values: out.values, note: out.note }) };
+      } catch (e: any) {
+        return { result: `Calculation failed: ${e?.message ?? "bad inputs"}.` };
+      }
     }
 
     case "manage_reminders": {
@@ -1565,6 +1642,7 @@ interface ChatRequest {
   docs?: Array<{ id: string; title: string; content: string; chunk_count: number }>;
   goals?: any[];
   notes?: Array<{ id: string; title: string; content: string }>;
+  expenses?: Array<{ id?: string; amount: number; category?: string; note?: string; gst_rate?: number | null; spent_on?: string }>;
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
   deviceInfo?: Record<string, unknown>;
@@ -1829,7 +1907,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json()) as ChatRequest;
   const {
     message, history = [], memory = {}, userName,
-    tasks = [], docs = [], goals = [], notes = [], location, deviceInfo,
+    tasks = [], docs = [], goals = [], notes = [], expenses = [], location, deviceInfo,
     agentName, agentId, agentPersona, mode,
   } = body;
 
@@ -1931,6 +2009,15 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Recent notes** (use search_notes for content):\n${noteTitles}`;
   }
 
+  if (expenses.length > 0) {
+    const m = new Date().toISOString().slice(0, 7);
+    const mrows = expenses.filter((e) => (e.spent_on ?? "").startsWith(m));
+    if (mrows.length > 0) {
+      const spent = mrows.reduce((s, e) => s + Number(e.amount || 0), 0);
+      systemInstruction += `\n\n**Spending**: ₹${Math.round(spent)} across ${mrows.length} expense(s) this month. Use manage_expenses (summary) for the category/GST breakdown, and manage_expenses (create) to log new spend.`;
+    }
+  }
+
   if (docs.length > 0) {
     const docList = docs.map((d) => `- ${d.title} (${d.chunk_count} chunks)`).join("\n");
     systemInstruction += `\n\n**Knowledge base** (${docs.length} docs — use search_knowledge):\n${docList}`;
@@ -1949,7 +2036,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, accessToken, location, tier: effectiveTier, email };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, accessToken, location, tier: effectiveTier, email };
 
   const stream = new ReadableStream({
     async start(controller) {
