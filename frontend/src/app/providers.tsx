@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { ConsentDialog } from "@/components/layout/ConsentDialog";
 import { CaptureProvider } from "@/components/capture/CaptureContext";
+import { PermissionProvider } from "@/components/permission/PermissionProvider";
 import { IngestBridge } from "@/components/tasks/IngestBridge";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
@@ -49,14 +50,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <CaptureProvider>
-          {children}
-          <ConsentDialog />
-          <LocationBridge />
-          <IngestBridge />
-          <DeviceLogBridge />
-          <SystemsOnline />
-        </CaptureProvider>
+        <PermissionProvider>
+          <CaptureProvider>
+            {children}
+            <ConsentDialog />
+            <LocationBridge />
+            <IngestBridge />
+            <DeviceLogBridge />
+            <SystemsOnline />
+          </CaptureProvider>
+        </PermissionProvider>
       </QueryClientProvider>
     </SessionProvider>
   );

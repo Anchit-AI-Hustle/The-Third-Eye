@@ -7,6 +7,7 @@ import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, Fi
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { useCapability } from "@/components/permission/PermissionProvider";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentActions } from "@/hooks/useAgentActions";
@@ -55,6 +56,7 @@ export function VoiceOverlay() {
   const { docs } = useLocalKnowledge();
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
+  const requestCapability = useCapability();
   const tts = useTTS(agent.voicePreference);
   const {
     pendingActions,
@@ -144,12 +146,13 @@ export function VoiceOverlay() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [response, liveBubble]);
 
-  function toggleMic() {
+  async function toggleMic() {
     if (micOn) {
       stt.disable();
       setMicOn(false);
       setLiveBubble(null);
     } else {
+      if (!(await requestCapability("microphone"))) return;
       stt.enable();
       setMicOn(true);
     }
