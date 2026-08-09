@@ -74,13 +74,19 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
-  const trapRef = useFocusTrap(open);
+  const authed = status === "authenticated";
+  // Gate the trap on auth: a hidden `open` on a public page would otherwise lock
+  // body scroll via useFocusTrap even though the palette renders nothing.
+  const trapRef = useFocusTrap(open && authed);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
+  const authedRef = useRef(authed);
+  useEffect(() => { authedRef.current = authed; }, [authed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (!authedRef.current) return; // no palette on public pages
         e.preventDefault();
         setOpen((o) => !o);
       } else if (e.key === "Escape") {
