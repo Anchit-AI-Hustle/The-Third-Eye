@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { onMediaChange } from "@/hooks/useReducedMotion";
+
 // The "third eye": a layered WebGL scene built from four depth planes — an
 // outer particle nebula, three counter-rotating iris rings, a faceted core,
 // and a bloom sprite. The layers sit at genuinely different Z positions and
@@ -262,7 +264,7 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
         // while the page is open is usually reacting to this canvas. Handled
         // here instead of by re-running the effect, which would tear down and
         // rebuild the WebGL context for a preference change.
-        const onMotionChange = (e: MediaQueryListEvent) => {
+        const offMotionChange = onMediaChange(motionQuery, (e) => {
           reduce = e.matches;
           if (reduce) {
             cancelAnimationFrame(raf);
@@ -271,13 +273,12 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           } else if (running() && !raf) {
             loop();
           }
-        };
-        motionQuery.addEventListener("change", onMotionChange);
+        });
 
         cleanup = () => {
           cancelAnimationFrame(raf);
           io.disconnect();
-          motionQuery.removeEventListener("change", onMotionChange);
+          offMotionChange();
           window.removeEventListener("pointermove", onMove);
           window.removeEventListener("resize", onResize);
           document.removeEventListener("visibilitychange", onVis);
