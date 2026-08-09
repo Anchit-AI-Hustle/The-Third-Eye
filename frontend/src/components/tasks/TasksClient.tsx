@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TaskWorkspace, TeamMember } from "@/hooks/useLocalTasks";
 import {
@@ -176,6 +176,15 @@ export function TasksClient() {
 
   function openNew() { setEditTask(null); setShowModal(true); }
   function openEdit(t: LocalTask) { setEditTask(t); setShowModal(true); }
+
+  // Command palette "New task": opens the composer via a same-page event, or a
+  // pending flag that survives navigation to /tasks.
+  useEffect(() => {
+    const open = () => { try { sessionStorage.removeItem("te:compose"); } catch { /* ignore */ } openNew(); };
+    if (typeof window !== "undefined" && sessionStorage.getItem("te:compose") === "task") open();
+    window.addEventListener("te:new-task", open);
+    return () => window.removeEventListener("te:new-task", open);
+  }, []);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v);

@@ -9,6 +9,7 @@ import { PermissionProvider } from "@/components/permission/PermissionProvider";
 import { IngestBridge } from "@/components/tasks/IngestBridge";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
+import { CommandPalette } from "@/components/command/CommandPalette";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
 
 function LocationBridge() {
@@ -60,6 +61,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <IngestBridge />
             <DeviceLogBridge />
             <SystemsOnline />
+            <CommandPalette />
           </CaptureProvider>
         </PermissionProvider>
       </QueryClientProvider>
