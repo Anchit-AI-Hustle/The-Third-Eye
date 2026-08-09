@@ -428,7 +428,11 @@ body {
 
 /* ── HoloFrame: instrument-panel bracket frames ──────────── */
 .holo-frame {
+  /* `--frame-size` is the resting length, overridden per size variant by the
+     component's inline style. The hover state adds `--frame-extend` to it
+     rather than substituting a fixed length, so every variant extends. */
   --frame-size: 18px;
+  --frame-extend: 8px;
   --frame-weight: 1.5px;
   --frame-color: rgba(var(--accent-rgb), 0.45);
   position: relative;
@@ -458,7 +462,8 @@ body {
 /* Brackets extend on hover — the frame "locks on" to what you point at. */
 .holo-frame:hover > .holo-frame-corner,
 .holo-frame:focus-within > .holo-frame-corner {
-  --frame-size: 26px;
+  width: calc(var(--frame-size) + var(--frame-extend));
+  height: calc(var(--frame-size) + var(--frame-extend));
   --frame-color: rgba(var(--accent-rgb), 0.85);
 }
 
@@ -515,6 +520,8 @@ body {
   .card-3d::after { opacity: 0 !important; }
   .depth-1, .depth-2, .depth-3 { transform: none !important; }
   .depth-field { transform: none !important; }
+  /* Hold the brackets at their resting length instead of pinning every
+     variant to the md value, which shrank the lg frame. */
   .holo-frame:hover > .holo-frame-corner,
-  .holo-frame:focus-within > .holo-frame-corner { --frame-size: 18px; }
+  .holo-frame:focus-within > .holo-frame-corner { --frame-extend: 0px; }
 }
