@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useLocalTasks } from "./useLocalTasks";
 import { useLocalGoals } from "./useLocalGoals";
 import { useLocalNotes } from "./useLocalNotes";
+import { useLocalExpenses } from "./useLocalExpenses";
 import { isAgentKilled, logAgentAction, describeSideEffect } from "@/lib/agentControl";
 
 // A side-effect emitted by the /api/chat agent loop when it runs a write tool.
@@ -31,6 +32,7 @@ export function useAgentActions() {
   const { create: createTask, update: updateTask, remove: removeTask } = useLocalTasks();
   const { add: addGoal, adjust: adjustGoal, remove: removeGoal } = useLocalGoals();
   const { create: createNote, remove: removeNote } = useLocalNotes();
+  const { add: addExpense, remove: removeExpense } = useLocalExpenses();
 
   // Returns the list of undoable actions applied (created items), so the caller
   // can offer a short-lived "Undo" — the agent's writes are no longer one-way.
@@ -98,6 +100,21 @@ export function useAgentActions() {
           case "goal_delete":
             if (d.id) removeGoal(d.id);
             break;
+          case "expense_create":
+            if (typeof d.amount === "number" && d.amount > 0) {
+              const ex = await addExpense({
+                amount: d.amount,
+                category: d.category ?? "Other",
+                note: d.note,
+                gst_rate: typeof d.gst_rate === "number" ? d.gst_rate : undefined,
+                spent_on: d.spent_on,
+              });
+              if (ex?.id) undoables.push({ label: `expense ₹${d.amount}`, undo: () => removeExpense(ex.id) });
+            }
+            break;
+          case "expense_delete":
+            if (d.id) removeExpense(d.id);
+            break;
           case "open_url":
             if (d.url) window.open(d.url, "_blank");
             break;
@@ -119,6 +136,6 @@ export function useAgentActions() {
       }
       return undoables;
     },
-    [createTask, updateTask, removeTask, createNote, removeNote, addGoal, adjustGoal, removeGoal],
+    [createTask, updateTask, removeTask, createNote, removeNote, addGoal, adjustGoal, removeGoal, addExpense, removeExpense],
   );
 }

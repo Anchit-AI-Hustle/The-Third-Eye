@@ -33,7 +33,7 @@ const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 const money = (n: number) => `₹${inr.format(Math.round(n))}`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const GST_RATES = [0, 5, 12, 18, 28] as const;
+const GST_RATES = [0, 5, 12, 18, 28, 40] as const;
 // GST already sits inside the logged (tax-inclusive) amount, so back it out.
 const gstOf = (e: Expense) => (e.gst_rate ? gstBreakup(e.amount, e.gst_rate, "remove").gst : 0);
 
@@ -127,7 +127,7 @@ export function FinanceClient() {
     const amt = Number(amount);
     if (!amt || amt <= 0) return;
     if (editingId) {
-      await update(editingId, { amount: amt, category, note: note.trim() || undefined, gst_rate: gstRate > 0 ? gstRate : undefined, spent_on: date });
+      await update(editingId, { amount: amt, category, note: note.trim() || undefined, gst_rate: gstRate > 0 ? gstRate : null, spent_on: date });
     } else {
       const ex = await add({ amount: amt, category, note, gst_rate: gstRate, spent_on: date });
       if (ex?.id) tagItem(ex.id, modeId); // tag new expenses with the active mode

@@ -14,6 +14,7 @@ import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
+import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
@@ -149,6 +150,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { docs } = useLocalKnowledge();
   const { notes } = useLocalNotes();
   const { goals } = useLocalGoals();
+  const { expenses } = useLocalExpenses();
   const applyActions = useAgentActions();
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
   // Links the assistant asked to open but the browser blocked (iOS blocks
@@ -425,6 +427,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           docs: readyDocs,
           goals,
           notes: notes.map((n) => ({ id: n.id, title: n.title, content: n.content })),
+          expenses: expenses.map((e) => ({ id: e.id, amount: e.amount, category: e.category, gst_rate: e.gst_rate, spent_on: e.spent_on })),
           accessToken: (session as any)?.accessToken ?? undefined,
           location: typeof window !== "undefined" && (window as any).__teLocation
             ? (window as any).__teLocation

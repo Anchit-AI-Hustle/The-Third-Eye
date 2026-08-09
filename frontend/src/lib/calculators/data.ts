@@ -1392,6 +1392,7 @@ The new regime is the default. It has wider slabs, a ₹75,000 standard deductio
           { value: 12, label: '12%' },
           { value: 18, label: '18%' },
           { value: 28, label: '28%' },
+          { value: 40, label: '40% (luxury / de-merit)' },
         ],
       },
       {
@@ -1409,7 +1410,7 @@ The new regime is the default. It has wider slabs, a ₹75,000 standard deductio
       { id: 'cgst', label: 'CGST (intra-state)', kind: 'currency' },
       { id: 'sgst', label: 'SGST (intra-state)', kind: 'currency' },
     ],
-    intro: `GST in India is charged at one of five rates — 0%, 5%, 12%, 18% or 28% — depending on the good or service. This calculator does the two things you actually need: add GST to a pre-tax price to get the amount you'll charge or pay, or strip GST out of a tax-inclusive price to see the base and the tax hidden inside it.
+    intro: `GST in India is charged at one of a handful of rates — 0%, 5%, 12%, 18%, 28% or the 40% de-merit slab — depending on the good or service. This calculator does the two things you actually need: add GST to a pre-tax price to get the amount you'll charge or pay, or strip GST out of a tax-inclusive price to see the base and the tax hidden inside it.
 
 Within a single state the tax splits equally into CGST (central) and SGST (state); across states it's a single IGST of the same total. The split is only a matter of which government gets which half — the amount you pay is identical either way.`,
     howItWorks: [
@@ -1428,7 +1429,7 @@ Within a single state the tax splits equally into CGST (central) and SGST (state
       },
       {
         q: 'Which GST rate applies to my product?',
-        a: 'It depends on the HSN/SAC classification. Broadly: essentials and many food items are 0% or 5%, standard goods and most services are 18%, and luxury or "sin" goods (cars, tobacco, aerated drinks) are 28%. Check the official CBIC rate finder for the exact rate on a specific item.',
+        a: 'It depends on the HSN/SAC classification. Broadly: essentials and many food items are 0% or 5%, standard goods and most services are 18%, and luxury or "sin" goods (high-end cars, tobacco, aerated drinks) sit in the top 40% de-merit slab. The 12% and 28% rates still apply to some items transitionally. Check the official CBIC rate finder for the exact rate on a specific item.',
       },
       {
         q: 'Is this an official GST tool?',

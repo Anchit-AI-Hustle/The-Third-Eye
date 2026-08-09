@@ -9,7 +9,7 @@ export interface Expense {
   amount: number;       // GST-inclusive — what you actually paid
   category: string;
   note?: string;
-  gst_rate?: number;    // % of GST baked into `amount` (0/5/12/18/28); undefined = untracked
+  gst_rate?: number | null;    // % of GST baked into `amount` (0/5/12/18/28/40); null/undefined = untracked
   spent_on: string;   // YYYY-MM-DD
   created_at: string;
 }
