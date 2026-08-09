@@ -2056,7 +2056,15 @@ export async function POST(req: NextRequest) {
           send("done", { stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
           if (email && out.text) void rememberExchange(email, message, out.text).catch(() => {});
         } catch {
-          send("error", { message: err instanceof Error ? err.message : String(err) });
+          // Both the primary model and every configured fallback failed. Don't
+          // dump the raw provider JSON at the user — detect the common case
+          // (quota/rate-limit) and explain it in plain language.
+          const raw = err instanceof Error ? err.message : String(err);
+          const quota = /quota|rate.?limit|RESOURCE_EXHAUSTED|\b429\b|exceeded|insufficient_quota/i.test(raw);
+          const message = quota
+            ? "I've hit the AI usage limit for the moment — the primary model's free-tier quota is exhausted and no fallback provider is configured. It resets shortly, so try again in about a minute. To fail over instantly, add a second provider key (e.g. GROQ_API_KEY or CEREBRAS_API_KEY — both free) to the deployment."
+            : "The AI provider is unavailable right now. Please try again in a moment.";
+          send("error", { message });
         }
         controller.close();
       }
