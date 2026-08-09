@@ -1567,6 +1567,7 @@ interface ChatRequest {
   notes?: Array<{ id: string; title: string; content: string }>;
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
+  deviceInfo?: Record<string, unknown>;
   agentName?: string;
   agentId?: string;
   agentPersona?: string;
@@ -1828,7 +1829,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json()) as ChatRequest;
   const {
     message, history = [], memory = {}, userName,
-    tasks = [], docs = [], goals = [], notes = [], location,
+    tasks = [], docs = [], goals = [], notes = [], location, deviceInfo,
     agentName, agentId, agentPersona, mode,
   } = body;
 
@@ -1890,6 +1891,9 @@ export async function POST(req: NextRequest) {
   if (modeContext) systemInstruction += `\n\n## Operating mode\n${modeContext}`;
   if (userName) systemInstruction += `\n\nUser's name: ${userName}.`;
   if (email) systemInstruction += ` Email: ${email}.`;
+  if (deviceInfo && Object.keys(deviceInfo).length) {
+    systemInstruction += `\n\n## Device context\nCurrent device/system info for the operator, gathered client-side via standard web APIs (storage quota, memory, CPU, battery, network, screen, platform):\n${JSON.stringify(deviceInfo)}\nAnswer questions about their storage/memory/battery/network/screen/platform directly and specifically from this data — including "how much storage/space is left". Never reply that you cannot access device information when it is provided here. If a particular field is absent, say that one value isn't available rather than refusing wholesale.`;
+  }
 
   const memoryEntries = Object.entries(memory);
   if (memoryEntries.length > 0) {
