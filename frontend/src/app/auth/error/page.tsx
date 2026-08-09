@@ -4,39 +4,72 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 
-const errorMessages: Record<string, string> = {
-  Configuration: "Server configuration error. Please contact the administrator.",
-  AccessDenied: "Access was denied. You may not have permission to sign in.",
-  Verification: "Token verification failed. Please try again.",
-  Default: "An authentication error occurred.",
+// NextAuth redirects here with ?error=<code>. Map each code to something the
+// operator can act on, and always surface the raw code — a generic "an error
+// occurred" hides whether the problem is a redirect-URI mismatch, a consent
+// screen still in Testing mode, or missing server env.
+const ERRORS: Record<string, { title: string; detail: string }> = {
+  Configuration: {
+    title: "Server isn't configured for sign-in",
+    detail:
+      "The Google credentials or NextAuth secret are missing on the server. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET and NEXTAUTH_URL in the deployment environment.",
+  },
+  AccessDenied: {
+    title: "Google blocked the sign-in",
+    detail:
+      "Either you dismissed the consent screen, or the OAuth consent screen is still in “Testing” and your account isn’t on the test-users list. Publish the app to production, or add the account as a test user in Google Cloud Console.",
+  },
+  OAuthSignin: {
+    title: "Couldn’t start the Google sign-in",
+    detail:
+      "Usually the client ID/secret is wrong, or the app’s authorized origin doesn’t match. Check the OAuth client in Google Cloud Console.",
+  },
+  OAuthCallback: {
+    title: "Google rejected the callback",
+    detail:
+      "This is almost always a redirect-URI mismatch. Add exactly “<this-origin>/api/auth/callback/google” to Authorized redirect URIs on the OAuth client, and make sure NEXTAUTH_URL matches this origin.",
+  },
+  OAuthAccountNotLinked: {
+    title: "That email is linked to a different sign-in method",
+    detail: "Use the provider you originally signed in with for this email.",
+  },
+  Verification: {
+    title: "This sign-in link has expired",
+    detail: "Request a fresh link and try again.",
+  },
+  Default: {
+    title: "Authentication error",
+    detail: "Something went wrong signing you in. Try again, and if it persists check the server logs.",
+  },
 };
 
 function AuthErrorContent() {
-  const params = useSearchParams();
-  const error = params.get("error");
+  const code = useSearchParams().get("error") || "Default";
+  const e = ERRORS[code] ?? ERRORS.Default;
   return (
-    <p className="text-text-secondary text-sm mb-8">
-      {error ? errorMessages[error] ?? errorMessages.Default : errorMessages.Default}
-    </p>
+    <>
+      <h1 className="font-display text-xl font-semibold text-text-primary mb-2">{e.title}</h1>
+      <p className="text-text-secondary text-sm mb-6 leading-relaxed">{e.detail}</p>
+      {code !== "Default" && (
+        <p className="text-[11px] font-mono text-text-muted mb-8">error code: {code}</p>
+      )}
+      <Link
+        href="/auth/signin"
+        className="inline-flex items-center gap-2 bg-accent-blue hover:bg-accent-blue/80 text-white rounded-input px-4 py-2 text-sm font-medium transition-colors duration-150"
+      >
+        Try again
+      </Link>
+    </>
   );
 }
 
 export default function AuthErrorPage() {
   return (
-    <div className="min-h-screen bg-background-base flex items-center justify-center">
+    <div className="min-h-screen bg-background-base flex items-center justify-center p-4">
       <div className="w-full max-w-sm text-center">
-        <h1 className="font-display text-xl font-semibold text-text-primary mb-2">
-          Sign In Error
-        </h1>
-        <Suspense fallback={<p className="text-text-secondary text-sm mb-8">{errorMessages.Default}</p>}>
+        <Suspense fallback={<p className="text-text-secondary text-sm">Loading…</p>}>
           <AuthErrorContent />
         </Suspense>
-        <Link
-          href="/auth/signin"
-          className="inline-flex items-center gap-2 bg-accent-blue hover:bg-accent-blue/80 text-white rounded-input px-4 py-2 text-sm font-medium transition-colors duration-150"
-        >
-          Try again
-        </Link>
       </div>
     </div>
   );
