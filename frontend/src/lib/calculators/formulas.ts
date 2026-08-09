@@ -72,6 +72,77 @@ function amortise(principal: number, annualRate: number, emi: number, extraMonth
   return { impossible: false, totalInterest, months, yearly, balance: Math.max(balance, 0) };
 }
 
+// ─── India income tax (FY 2025-26 / AY 2026-27) ────────────────────────────
+// Statutory public data — no external API. Exported so other calculators can
+// show honest after-tax figures.
+export interface IncomeTaxResult {
+  taxable: number;
+  baseTax: number;      // slab tax before rebate
+  rebate: number;       // Section 87A
+  incomeTax: number;    // after rebate + marginal relief, before surcharge/cess
+  surcharge: number;
+  cess: number;         // 4% health & education cess
+  totalTax: number;
+  stdDeduction: number;
+  surchargeRate: number;
+}
+
+type Slab = [upTo: number, rate: number];
+const NEW_SLABS: Slab[] = [
+  [400000, 0], [800000, 0.05], [1200000, 0.10], [1600000, 0.15],
+  [2000000, 0.20], [2400000, 0.25], [Infinity, 0.30],
+];
+const OLD_SLABS: Slab[] = [
+  [250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30],
+];
+
+function slabTax(amount: number, slabs: Slab[]): number {
+  let tax = 0, lower = 0;
+  for (const [upTo, rate] of slabs) {
+    if (amount <= lower) break;
+    tax += (Math.min(amount, upTo) - lower) * rate;
+    lower = upTo;
+  }
+  return tax;
+}
+
+export function indiaIncomeTax(
+  grossIncome: number,
+  opts: { regime?: "new" | "old"; salaried?: boolean; deductions?: number } = {},
+): IncomeTaxResult {
+  const isNew = opts.regime !== "old";
+  const income = Math.max(safe(grossIncome), 0);
+  const stdDeduction = opts.salaried === false ? 0 : isNew ? 75000 : 50000;
+  const other = isNew ? 0 : Math.max(safe(opts.deductions ?? 0), 0);
+  const taxable = Math.max(income - stdDeduction - other, 0);
+
+  const baseTax = slabTax(taxable, isNew ? NEW_SLABS : OLD_SLABS);
+
+  // Section 87A: full rebate up to ₹12L taxable (new) / ₹5L (old).
+  const rebateCap = isNew ? 1200000 : 500000;
+  const rebate = taxable <= rebateCap ? baseTax : 0;
+  let incomeTax = baseTax - rebate;
+
+  // Marginal relief just above the new-regime rebate ceiling: tax can't exceed
+  // the income earned above ₹12L.
+  if (isNew && taxable > rebateCap) {
+    incomeTax = Math.min(incomeTax, taxable - rebateCap);
+  }
+
+  const surchargeRate =
+    taxable > 50000000 ? (isNew ? 0.25 : 0.37) :
+    taxable > 20000000 ? 0.25 :
+    taxable > 10000000 ? 0.15 :
+    taxable > 5000000 ? 0.10 : 0;
+  const surcharge = incomeTax * surchargeRate;
+  const cess = (incomeTax + surcharge) * 0.04;
+
+  return {
+    taxable, baseTax, rebate, incomeTax, surcharge, cess,
+    totalTax: incomeTax + surcharge + cess, stdDeduction, surchargeRate,
+  };
+}
+
 export const FORMULAS: Record<string, FormulaFn> = {
   // ─────────────────────────────────────────────────────── INVESTING ──
   sip({ monthly, rate, years }) {
@@ -707,6 +778,38 @@ export const FORMULAS: Record<string, FormulaFn> = {
     return {
       values: { apy: apyPct, nominal: rate, gain },
       note: `A nominal ${rate}% compounded ${label} yields an effective ${apyPct.toFixed(2)}% a year — compounding adds ${gain.toFixed(2)} points.`,
+    };
+  },
+
+  incomeTax({ grossIncome, regime, salaried, deductions }) {
+    const isNew = regime !== 0; // default (1) = new regime
+    const t = indiaIncomeTax(grossIncome, {
+      regime: isNew ? "new" : "old",
+      salaried: salaried !== 0,
+      deductions,
+    });
+    const income = Math.max(safe(grossIncome), 0);
+    const takeHome = income - t.totalTax;
+    const effectiveRate = income > 0 ? (t.totalTax / income) * 100 : 0;
+    const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
+    return {
+      values: {
+        totalTax: Math.round(t.totalTax),
+        takeHome: Math.round(takeHome),
+        effectiveRate: safe(effectiveRate),
+        incomeTax: Math.round(t.incomeTax),
+        surcharge: Math.round(t.surcharge),
+        cess: Math.round(t.cess),
+        taxable: Math.round(t.taxable),
+      },
+      donut: [
+        { label: "Take-home", value: Math.max(Math.round(takeHome), 0) },
+        { label: "Total tax", value: Math.round(t.totalTax) },
+      ],
+      note: t.rebate > 0 && t.incomeTax === 0
+        ? `Taxable income ${inr(t.taxable)} is fully covered by the Section 87A rebate under the ${isNew ? "new" : "old"} regime — zero tax. FY 2025-26 (AY 2026-27).`
+        : `${isNew ? "New" : "Old"} regime · FY 2025-26 (AY 2026-27) · ${salaried !== 0 ? `${inr(t.stdDeduction)} standard deduction` : "no standard deduction"}${t.surchargeRate ? ` · ${Math.round(t.surchargeRate * 100)}% surcharge` : ""} · 4% cess.`,
     };
   },
 };

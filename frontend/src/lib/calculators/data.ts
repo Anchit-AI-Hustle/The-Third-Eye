@@ -1281,6 +1281,73 @@ The statutory formula is fixed: 15 days' wages for every completed year, worked 
   },
 
   {
+    slug: 'income-tax-calculator',
+    category: 'Income',
+    h1: 'Income Tax Calculator (FY 2025-26)',
+    metaTitle: 'Income Tax Calculator FY 2025-26 — New vs Old Regime',
+    metaDescription:
+      'Work out your income tax for FY 2025-26 (AY 2026-27) under the new and old regimes — with standard deduction, Section 87A rebate, surcharge and 4% cess, and your take-home pay.',
+    keywords: ['income tax calculator', 'income tax calculator 2025-26', 'new regime tax calculator', 'old vs new regime', 'take home salary calculator', 'tax calculator india'],
+    formula: 'incomeTax',
+    chart: 'donut',
+    offerTags: ['savings', 'insurance'],
+    inputs: [
+      { id: 'grossIncome', label: 'Gross annual income', type: 'currency', default: 1200000, min: 0, max: 100000000, step: 50000 },
+      {
+        id: 'regime', label: 'Tax regime', type: 'select', default: 1,
+        options: [
+          { value: 1, label: 'New regime (default)' },
+          { value: 0, label: 'Old regime' },
+        ],
+      },
+      {
+        id: 'salaried', label: 'Salaried or pensioner?', type: 'select', default: 1,
+        options: [
+          { value: 1, label: 'Yes — apply standard deduction' },
+          { value: 0, label: 'No' },
+        ],
+      },
+      { id: 'deductions', label: 'Deductions (old regime only: 80C, 80D, HRA…)', type: 'currency', default: 0, min: 0, max: 5000000, step: 10000 },
+    ],
+    outputs: [
+      { id: 'totalTax', label: 'Total tax payable', kind: 'currency', hero: true },
+      { id: 'takeHome', label: 'Take-home (after tax)', kind: 'currency', accent: true },
+      { id: 'effectiveRate', label: 'Effective tax rate', kind: 'percent' },
+      { id: 'incomeTax', label: 'Income tax (after 87A rebate)', kind: 'currency' },
+      { id: 'surcharge', label: 'Surcharge', kind: 'currency' },
+      { id: 'cess', label: 'Health & education cess (4%)', kind: 'currency' },
+      { id: 'taxable', label: 'Taxable income', kind: 'currency' },
+    ],
+    intro: `This works out your income tax for FY 2025-26 (assessment year 2026-27) under both the new and old regimes, so you can see which one leaves you with more.
+
+The new regime is the default. It has wider slabs, a ₹75,000 standard deduction for salaried people, and a full Section 87A rebate up to ₹12 lakh of taxable income — so a salaried person earning up to about ₹12.75 lakh pays no tax. The old regime keeps the higher deductions (80C, 80D, HRA) but narrower slabs and a rebate only up to ₹5 lakh.`,
+    howItWorks: [
+      'Your gross income minus the standard deduction (and, in the old regime, your other deductions) gives taxable income.',
+      'Tax is charged slab by slab, then the Section 87A rebate zeroes it out if taxable income is within the limit (₹12L new / ₹5L old), with marginal relief just above the new-regime limit.',
+      'Surcharge applies above ₹50 lakh, and a 4% health & education cess is added on top of tax plus surcharge.',
+    ],
+    faqs: [
+      {
+        q: 'Which regime should I pick?',
+        a: 'Run both. If your deductions (80C, 80D, HRA, home-loan interest) are large, the old regime can still win. If they are modest, the new regime — with its wider slabs, ₹75,000 standard deduction and rebate up to ₹12 lakh — usually leaves more in hand. This calculator shows the tax for whichever you select.',
+      },
+      {
+        q: 'Is income up to ₹12 lakh really tax-free now?',
+        a: 'Under the new regime for FY 2025-26, the Section 87A rebate covers tax on taxable income up to ₹12 lakh. For a salaried person the ₹75,000 standard deduction pushes the break-even gross to roughly ₹12.75 lakh. Above that, marginal relief prevents a small pay rise from creating a disproportionate tax jump.',
+      },
+      {
+        q: 'Does this include surcharge and cess?',
+        a: 'Yes. A 4% health & education cess is always added. Surcharge kicks in above ₹50 lakh of taxable income (10/15/25%, capped at 25% in the new regime). These are included in the total shown.',
+      },
+      {
+        q: 'Is this official tax advice?',
+        a: 'No — it is an estimate using the published FY 2025-26 slabs and rules, and it does not model every special case (capital-gains rates, business income nuances, complex surcharge marginal relief). Confirm against the Income Tax Department utility before filing.',
+      },
+    ],
+    related: ['freelance-rate-calculator', 'nps-calculator', 'gratuity-calculator', 'sip-calculator'],
+  },
+
+  {
     slug: 'apy-calculator',
     category: 'Savings',
     h1: 'Effective Interest Rate (APY) Calculator',
