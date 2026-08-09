@@ -5,7 +5,7 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 import { dataInsert, dataDelete } from "@/lib/dataClient";
-import { getConsent } from "@/lib/consent";
+import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { matchSystemsCommand } from "@/lib/systems";
 import { logAgentAction } from "@/lib/agentControl";
 
@@ -244,8 +244,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   }, [acquireWake]);
 
   // Auto-start as soon as the app is opened — only when signed in, the browser
-  // supports it, and the user has granted microphone consent. Re-checks when
-  // consent is granted via the startup dialog (consent.ts dispatches "te:consent").
+  // supports it, and the user has granted the microphone for *every time*.
+  // Silent background listening without a gesture is only appropriate under an
+  // explicit standing grant; "ask each time" must not auto-open the mic. Re-checks
+  // when the policy changes (PermissionsCard / gate dispatch "te:perm-policy").
   useEffect(() => {
     if (status !== "authenticated") {
       autoStartedRef.current = false;
@@ -255,13 +257,13 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     const tryAuto = () => {
       if (autoStartedRef.current || activeRef.current) return;
       if (!supported) return;
-      if (getConsent("microphone") !== "granted") return;
+      if (getPolicy("microphone") !== "always") return;
       autoStartedRef.current = true;
       start();
     };
     tryAuto();
-    window.addEventListener("te:consent", tryAuto);
-    return () => window.removeEventListener("te:consent", tryAuto);
+    window.addEventListener(PERM_POLICY_EVENT, tryAuto);
+    return () => window.removeEventListener(PERM_POLICY_EVENT, tryAuto);
   }, [status, supported, start, stop]);
 
   // Periodic extraction while listening.

@@ -6,6 +6,7 @@ import {
   Radio, Trash2, Sun, Undo2, RefreshCw, Link2, AlertTriangle, Zap,
 } from "lucide-react";
 import { ConvType, useCapture } from "./CaptureContext";
+import { useCapability } from "@/components/permission/PermissionProvider";
 
 const TYPE_META: Record<ConvType, { label: string; color: string }> = {
   meeting:    { label: "Meeting",    color: "#4F8EF7" },
@@ -24,6 +25,12 @@ export function CaptureClient() {
     start, extract, addTask, undoAutoAdd, endSession, deleteSession,
   } = useCapture();
   const [filter, setFilter] = useState<ConvType | "all">("all");
+  const requestCapability = useCapability();
+
+  async function startListening() {
+    if (!(await requestCapability("microphone"))) return;
+    start();
+  }
 
   const shownSessions = filter === "all" ? sessions : sessions.filter((s) => s.type === filter);
 
@@ -38,7 +45,7 @@ export function CaptureClient() {
           {!supported ? (
             <p className="text-sm text-accent-red">Live transcription needs the Web Speech API — try Chrome or Edge.</p>
           ) : !listening ? (
-            <button onClick={start} className="flex items-center gap-2 px-4 py-2.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-sm font-semibold hover:brightness-110">
+            <button onClick={startListening} className="flex items-center gap-2 px-4 py-2.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-sm font-semibold hover:brightness-110">
               <Mic size={16} /> Start listening
             </button>
           ) : (

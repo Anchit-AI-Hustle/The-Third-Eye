@@ -19,6 +19,8 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { useWakeWord } from "@/hooks/useWakeWord";
+import { useCapability } from "@/components/permission/PermissionProvider";
+import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
 
@@ -225,13 +227,24 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // Wake word: passive listening for the agent's name. Only runs while the mic
   // is OFF, so it never fights the main recognizer for the microphone; saying
   // "JARVIS" (or the active agent's name) flips into hands-free call mode.
-  const onWake = useCallback(() => {
+  const requestCapability = useCapability();
+  // Passive wake-word listening = continuous mic access, so gate it on the
+  // explicit "every time" mic grant; the mic buttons ask through the gate otherwise.
+  const [micAlways, setMicAlways] = useState(false);
+  useEffect(() => {
+    const read = () => setMicAlways(getPolicy("microphone") === "always");
+    read();
+    window.addEventListener(PERM_POLICY_EVENT, read);
+    return () => window.removeEventListener(PERM_POLICY_EVENT, read);
+  }, []);
+  const onWake = useCallback(async () => {
     if (isStreamingRef.current) return;
+    if (!(await requestCapability("microphone"))) return;
     setVoiceMode("call");
     stt.enable();
     setMicOn(true);
-  }, [stt]);
-  useWakeWord({ agentName: agent?.name ?? "JARVIS", enabled: wakeEnabled && !micOn, onWake, cooldownMs: 2000 });
+  }, [stt, requestCapability]);
+  useWakeWord({ agentName: agent?.name ?? "JARVIS", enabled: wakeEnabled && micAlways && !micOn, onWake, cooldownMs: 2000 });
 
   // Track TTS state in a ref so callbacks can see it
   useEffect(() => {
@@ -342,10 +355,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }
   }, []);
 
-  // Auto-start mic and greet on mount
+  // Auto-start mic and greet on mount. Only auto-open the mic under a standing
+  // "every time" grant; otherwise the user starts it with the mic button (which
+  // asks through the permission gate).
   const greetedRef = useRef(false);
   useEffect(() => {
-    if (stt.supported) {
+    if (stt.supported && getPolicy("microphone") === "always") {
       stt.enable();
       setMicOn(true);
     }
@@ -619,15 +634,21 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setPendingActions((prev) => prev.map((a) => a.id === id ? { ...a, status: "canceled" } : a));
   }, []);
 
-  function toggleMic() {
+  async function toggleMic() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
-    else { stt.enable(); setMicOn(true); }
+    else {
+      if (!(await requestCapability("microphone"))) return;
+      stt.enable(); setMicOn(true);
+    }
   }
 
   // Dictation: mic on in "dictate" mode — speech fills the composer, no auto-send.
-  function toggleDictate() {
+  async function toggleDictate() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
-    else { setVoiceMode("dictate"); stt.enable(); setMicOn(true); }
+    else {
+      if (!(await requestCapability("microphone"))) return;
+      setVoiceMode("dictate"); stt.enable(); setMicOn(true);
+    }
   }
 
   // ── Composer reply mode (Option B) ──────────────────────────────────────────

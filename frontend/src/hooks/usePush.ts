@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { getPolicy } from "@/lib/consent";
 
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
@@ -28,6 +29,9 @@ export function usePush() {
       try {
         if (Notification.permission === "denied") return;
         if (Notification.permission === "default") {
+          // Don't prompt on load unless the user opted in for every time; the
+          // OS notification prompt is a one-shot we shouldn't spend otherwise.
+          if (getPolicy("notifications") !== "always") return;
           const p = await Notification.requestPermission();
           if (p !== "granted") return;
         }
