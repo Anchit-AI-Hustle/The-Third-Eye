@@ -66,6 +66,29 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           display: "block",
         });
 
+        // Teardown is assembled as each resource appears rather than written
+        // once at the end of setup. Anything that throws part-way through —
+        // no IntersectionObserver on older Safari, a driver fault while
+        // building the scene — lands in the .catch() below with the context
+        // and some listeners already live. With cleanup still the initial
+        // no-op at that point, React would drop the canvas without releasing
+        // the context, and a few client-side navigations would exhaust the
+        // browser's context quota.
+        const teardown: Array<() => void> = [
+          () => {
+            renderer.dispose();
+            renderer.forceContextLoss();
+            if (renderer.domElement.parentNode === mount) {
+              mount.removeChild(renderer.domElement);
+            }
+          },
+        ];
+        // Reverse order, so each resource is released before whatever it was
+        // built on top of.
+        cleanup = () => {
+          while (teardown.length) teardown.pop()?.();
+        };
+
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(52, w() / h(), 0.1, 200);
         camera.position.z = 7.4;
@@ -77,6 +100,9 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           disposables.push(x);
           return x;
         };
+        // Closes over the array, so it disposes whatever was tracked before a
+        // throw, not just a fully-built scene.
+        teardown.push(() => disposables.forEach((d) => d.dispose()));
 
         // Parent group carries the shared parallax; each layer rotates within it.
         const root = new THREE.Group();
@@ -185,6 +211,7 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           target.y = (e.clientY / window.innerHeight - 0.5) * 0.55;
         };
         window.addEventListener("pointermove", onMove, { passive: true });
+        teardown.push(() => window.removeEventListener("pointermove", onMove));
 
         const onResize = () => {
           camera.aspect = w() / h();
@@ -192,9 +219,11 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           renderer.setSize(w(), h());
         };
         window.addEventListener("resize", onResize);
+        teardown.push(() => window.removeEventListener("resize", onResize));
 
         // ── Run only when actually on screen and visible ──────────
         let raf = 0;
+        teardown.push(() => cancelAnimationFrame(raf));
         let onScreen = true;
         let visible = document.visibilityState !== "hidden";
         // `reduce` belongs in this guard, not just in the initial branch:
@@ -212,12 +241,14 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           { threshold: 0 },
         );
         io.observe(mount);
+        teardown.push(() => io.disconnect());
 
         const onVis = () => {
           visible = document.visibilityState !== "hidden";
           if (running() && !raf) loop();
         };
         document.addEventListener("visibilitychange", onVis);
+        teardown.push(() => document.removeEventListener("visibilitychange", onVis));
 
         const clock = new THREE.Clock();
         const draw = (t: number) => {
@@ -274,23 +305,14 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
             loop();
           }
         });
-
-        cleanup = () => {
-          cancelAnimationFrame(raf);
-          io.disconnect();
-          offMotionChange();
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("resize", onResize);
-          document.removeEventListener("visibilitychange", onVis);
-          disposables.forEach((d) => d.dispose());
-          renderer.dispose();
-          renderer.forceContextLoss();
-          if (renderer.domElement.parentNode === mount) {
-            mount.removeChild(renderer.domElement);
-          }
-        };
+        teardown.push(offMotionChange);
       })
       .catch(() => {
+        // Release whatever setup got built before the throw. The component
+        // stays mounted showing the fallback, so waiting for React to unmount
+        // would hold a dead WebGL context open for the life of the page.
+        cleanup();
+        cleanup = () => {};
         setFailed(true);
         fallbackRef.current?.();
       });
