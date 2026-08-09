@@ -3,7 +3,6 @@ Batched embedder for document chunks.
 Uses text-embedding-3-small (1536d) with batches of up to 100 chunks per API call.
 """
 
-import asyncio
 from typing import Iterable
 
 import structlog
