@@ -1,5 +1,8 @@
 import type { Config } from "tailwindcss";
 
+// Canonical palette. `globals.css :root` mirrors these exact values as
+// `--color-*` custom properties so the Tailwind layer and the CSS-variable
+// layer can never drift apart again — change a colour here and there.
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -26,8 +29,8 @@ const config: Config = {
           muted:     "#6B7394",
         },
         accent: {
-          blue:   "#00D4FF",   // Electric Cyan — primary brand
-          violet: "#7C5CEF",
+          blue:   "#4FC3F7",   // Arc Blue — primary brand
+          violet: "#7B5CF0",
           red:    "#EF4444",
         },
         success: "#10B981",
@@ -46,12 +49,18 @@ const config: Config = {
         input: "6px",
         badge: "3px",
       },
-      transitionTimingFunction: { jarvis: "cubic-bezier(0, 0, 0.2, 1)" },
-      transitionDuration: { interaction: "150ms", page: "250ms" },
+      transitionTimingFunction: {
+        jarvis: "cubic-bezier(0, 0, 0.2, 1)",
+        // Depth moves settle rather than stop dead — used by the 3D primitives.
+        depth:  "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+      transitionDuration: { interaction: "150ms", page: "250ms", depth: "420ms" },
       boxShadow: {
-        card:     "0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,212,255,0.04)",
-        elevated: "0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.06)",
-        cyan:     "0 0 20px rgba(0,212,255,0.15), 0 0 60px rgba(0,212,255,0.05)",
+        card:     "0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(79,195,247,0.04)",
+        elevated: "0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,195,247,0.06)",
+        cyan:     "0 0 20px rgba(79,195,247,0.15), 0 0 60px rgba(79,195,247,0.05)",
+        // Lift used when a Card3D is under the pointer.
+        lift:     "0 24px 60px -20px rgba(0,0,0,0.85), 0 0 40px rgba(79,195,247,0.10)",
       },
       backdropBlur: { modal: "16px" },
       animation: {

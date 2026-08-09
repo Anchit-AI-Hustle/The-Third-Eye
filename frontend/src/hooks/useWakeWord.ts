@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
+import { useWakeLock } from "./useWakeLock";
+
 type Listener = (trigger: string, transcript: string) => void;
+
+// If the recognizer emits no event for this long while it is supposed to be
+// listening, treat it as silently dead and force a restart. Chrome cuts
+// SpeechRecognition after ~60s of silence and on network blips, and does not
+// always fire onend — so the "relaunch on onend" path alone is not enough.
+const WATCHDOG_MS = 10_000;
 
 export interface WakeWordOptions {
   agentName: string;          // "JARVIS" / "FRIDAY" / "E.D.I.T.H." / "ULTRON" / custom
@@ -49,6 +57,9 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
   const lastFireRef = useRef(0);
   const triggersRef = useRef<string[]>([]);
   const onWakeRef = useRef(onWake);
+  const lastEventRef = useRef(0);
+  const launchRef = useRef<() => void>(() => {});
+  const wakeLock = useWakeLock();
 
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
   useEffect(() => {
@@ -67,7 +78,8 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
     try { recRef.current?.abort(); } catch { /* noop */ }
     recRef.current = null;
     setListening(false);
-  }, []);
+    wakeLock.release();
+  }, [wakeLock]);
 
   const start = useCallback(() => {
     if (!supported || activeRef.current) return;
@@ -76,6 +88,10 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
 
     activeRef.current = true;
     setListening(true);
+    lastEventRef.current = Date.now();
+    // Keep the screen awake: a slept/locked screen is what suspends
+    // SpeechRecognition, so this is what lets a phone on a desk keep listening.
+    wakeLock.acquire();
 
     const launchInstance = () => {
       if (!activeRef.current) return;
@@ -86,7 +102,10 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
       rec.maxAlternatives = 1;
       rec.lang = "";
 
+      rec.onstart = () => { lastEventRef.current = Date.now(); };
+
       rec.onresult = (event: any) => {
+        lastEventRef.current = Date.now();
         let chunk = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           chunk += event.results[i][0].transcript;
@@ -113,8 +132,27 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
       try { rec.start(); } catch { setTimeout(launchInstance, 500); }
     };
 
+    launchRef.current = launchInstance;
     launchInstance();
-  }, [supported, cooldownMs, stop]);
+  }, [supported, cooldownMs, stop, wakeLock]);
+
+  // Force a fresh recognizer when the current one has gone silently dead.
+  const forceRestart = useCallback(() => {
+    if (!activeRef.current) return;
+    const old = recRef.current;
+    recRef.current = null;
+    // Detach handlers BEFORE aborting: abort() fires onend, and the old
+    // onend would schedule its own relaunch that races the fresh instance.
+    if (old) {
+      old.onresult = null;
+      old.onerror = null;
+      old.onend = null;
+      old.onstart = null;
+      try { old.abort(); } catch { /* noop */ }
+    }
+    lastEventRef.current = Date.now();
+    launchRef.current();
+  }, []);
 
   useEffect(() => {
     if (enabled && supported) {
@@ -123,6 +161,27 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
     }
     stop();
   }, [enabled, supported, start, stop]);
+
+  // Recovery: browsers suspend recognition when the tab is hidden and often
+  // never fire onend, so re-arm on return to visibility and poll a watchdog.
+  useEffect(() => {
+    if (!enabled || !supported) return;
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") forceRestart();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    const watchdog = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastEventRef.current > WATCHDOG_MS) forceRestart();
+    }, WATCHDOG_MS / 2);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(watchdog);
+    };
+  }, [enabled, supported, forceRestart]);
 
   return { listening, supported };
 }

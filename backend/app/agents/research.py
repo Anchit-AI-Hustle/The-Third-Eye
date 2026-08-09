@@ -1,6 +1,10 @@
 """
 Research Agent — web search via Serper API.
-Falls back to a graceful "search unavailable" response if SERPER_API_KEY is unset.
+
+Without SERPER_API_KEY, falls back to Google Search grounding (Gemini's
+built-in google_search tool), which needs no extra key beyond
+GOOGLE_AI_API_KEY. Only if that is disabled too does it report
+"search unavailable".
 """
 
 import os
@@ -10,7 +14,10 @@ import httpx
 import structlog
 
 from app.agents.base import AgentContext, AgentResult, AgentTask, BaseAgent
+from app.config import get_settings
 from app.router.model_router import TaskType, model_router
+
+settings = get_settings()
 
 log = structlog.get_logger()
 
@@ -36,6 +43,8 @@ class ResearchAgent(BaseAgent):
     async def run(self, task: AgentTask, context: AgentContext) -> AgentResult:
         api_key = os.getenv("SERPER_API_KEY")
         if not api_key:
+            if settings.enable_google_grounding:
+                return await self._run_grounded(task, context)
             return AgentResult(
                 task_id=task.id,
                 agent_name=self.name,
@@ -91,6 +100,58 @@ class ResearchAgent(BaseAgent):
                 "search_performed": True,
                 "result_count": len(hits),
                 "sources": sources,
+                "model_used": log_entry.model_used,
+                "latency_ms": log_entry.latency_ms,
+            },
+        )
+
+    async def _run_grounded(self, task: AgentTask, context: AgentContext) -> AgentResult:
+        """
+        Answer via Gemini's google_search tool. Gemini runs the searches and
+        reports which sources it used, so sources come from grounding metadata
+        rather than a separate search call.
+        """
+        try:
+            answer, log_entry = await model_router.complete(
+                task_type=TaskType.GROUNDED_SEARCH,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Answer the user's question using Google Search. Be concise "
+                            "and factual, and state plainly if the search results do not "
+                            "settle the question."
+                        ),
+                    },
+                    {"role": "user", "content": task.content},
+                ],
+                user_id=str(task.user_id),
+                privacy_mode=context.privacy_mode,
+            )
+        except Exception as e:
+            log.error("research_grounded_failed", error=str(e))
+            return AgentResult(
+                task_id=task.id,
+                agent_name=self.name,
+                content="",
+                success=False,
+                error=f"Grounded search failed: {e}",
+            )
+
+        # privacy_mode routes to the local model, and the ungrounded fallback
+        # has no citations either — so absence of citations is expected, not an
+        # error. Report it so callers can tell a grounded answer from a guess.
+        return AgentResult(
+            task_id=task.id,
+            agent_name=self.name,
+            content=answer,
+            success=True,
+            metadata={
+                "search_performed": bool(log_entry.citations),
+                "search_provider": "google_grounding",
+                "result_count": len(log_entry.citations),
+                "sources": log_entry.citations,
+                "search_queries": log_entry.search_queries,
                 "model_used": log_entry.model_used,
                 "latency_ms": log_entry.latency_ms,
             },

@@ -330,10 +330,34 @@ All Level 3+ actions write to immutable `audit_log` table (no DELETE allowed).
 
 | Task Type | Default | Fallback | Never Use |
 |-----------|---------|----------|-----------|
-| Simple chat | Gemini 1.5 Flash | GPT-4o-mini | Pro/Opus |
-| Document summarization | Gemini 1.5 Flash | Claude Haiku | — |
-| Complex reasoning | Gemini 1.5 Pro | GPT-4o | — |
+| Simple chat | Gemini 2.5 Flash | GPT-4o-mini | Pro/Opus |
+| Document summarization | Gemini 2.5 Flash | Claude Haiku | — |
+| Complex reasoning | Gemini 2.5 Pro | GPT-4o | — |
 | Code generation | GPT-4o-mini | Gemini Flash | — |
-| Embeddings | text-embedding-3-small | Gemini embedding | — |
-| Financial analysis | Gemini 1.5 Pro | GPT-4o | Gemini Flash |
+| Embeddings | text-embedding-3-small | gemini-embedding-001 | — |
+| Financial analysis | Gemini 2.5 Pro | GPT-4o | Gemini Flash |
 | Local/offline | Ollama (llama3) | None | Cloud |
+| Grounded search | Gemini + `google_search` tool | Gemini 2.5 Flash (ungrounded) | — |
+
+The Gemini tiers were on 1.5 until Google shut those ids down (1.5 flash/pro on
+2025-09-29, `text-embedding-004` on 2026-01-14); calls to them now error, so the
+table tracks live model ids.
+
+### Grounded search (Google AI agent capability)
+
+`TaskType.GROUNDED_SEARCH` dispatches to `Provider.GOOGLE_GROUNDED`, which calls
+Gemini through the `google-genai` SDK with its built-in `google_search` tool.
+Gemini decides whether to search, issues the queries itself, and returns
+grounding metadata; the router turns that into `RouterLogEntry.citations` and
+`.search_queries`. This reuses `GOOGLE_AI_API_KEY` — no search key, GCP project,
+or service account is involved.
+
+`ResearchAgent` prefers Serper when `SERPER_API_KEY` is set and uses this route
+otherwise, so web research works with only the default Google key configured.
+Because the fallback and privacy mode are both ungrounded, an empty `citations`
+list is the signal that an answer was *not* grounded.
+
+We chose the Gemini `google_search` tool over Vertex AI Agent Builder: Agent
+Builder would add a GCP project, service-account credentials, enabled APIs, and
+a provisioned datastore to deploy, while this reuses a key the app already
+requires and fits the existing provider-dispatch pattern.

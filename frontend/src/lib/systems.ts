@@ -4,6 +4,19 @@
 // browser's SpeechSynthesis (distinct voice per system, same mechanism the agent
 // personas use). Triggered by saying/typing "all systems online", "systems
 // check", or naming a system ("JARVIS status", "Kolab online").
+//
+// Every line carries two forms: `text` (what the HUD displays, canonical
+// stylised name) and `speech` (what the TTS actually says). Acronym names are
+// pronounced as names — Jarvis /ˈdʒɑːrvɪs/, Friday, Edith /ˈiːdɪθ/, UL-tron,
+// Zeus, uh-THEE-nuh — so `speech` never contains the dotted acronyms the
+// synthesiser would spell out letter by letter. `lang` pins each agent to its
+// canonical accent (Jarvis British RP, Friday Irish, Edith/Ultron American…)
+// and voice picking prefers a matching-dialect voice before anything else.
+
+export interface SystemLine {
+  text: string;   // shown in the HUD
+  speech: string; // fed to TTS — pronunciation-safe respelling
+}
 
 export interface SystemDef {
   id: string;
@@ -11,11 +24,12 @@ export interface SystemDef {
   aliases: string[];
   voicePreference: string; // regex matched against available TTS voice names
   gender: "male" | "female";
+  lang: string; // BCP-47 accent target (en-GB, en-IE, en-US, en-AU…)
   // Per-agent pitch/rate so each has a DISTINCT voice even on platforms that
   // expose only one or two TTS voices per gender.
   pitch: number; // ~0.6–1.3
   rate: number;  // ~0.85–1.15
-  line: string;  // what it says when it comes online
+  lines: SystemLine[]; // status lines, one picked at random per roll-call
   accentColor: string;
   purpose: string; // one-line role, shown on the Online Agents widget
   href: string;    // where the widget's "Open" button routes (tool redirection)
@@ -24,17 +38,100 @@ export interface SystemDef {
 
 export const SYSTEMS: SystemDef[] = [
   // ── AI agents (each a distinct voice) ──
-  { id: "jarvis", name: "J.A.R.V.I.S.", aliases: ["jarvis", "j.a.r.v.i.s"], voicePreference: "daniel|google uk english male|david|mark", gender: "male", pitch: 0.92, rate: 1.02, line: "J.A.R.V.I.S. online. All core functions nominal, sir.", accentColor: "#4FC3F7", purpose: "Primary assistant — plans, answers & executes actions.", href: "/assistant", kind: "agent" },
-  { id: "friday", name: "F.R.I.D.A.Y.", aliases: ["friday"], voicePreference: "samantha|google us english|zira|victoria|karen", gender: "female", pitch: 1.14, rate: 1.09, line: "FRIDAY here, boss. Online and ready.", accentColor: "#F472B6", purpose: "Fast everyday ops & quick execution.", href: "/assistant", kind: "agent" },
-  { id: "edith", name: "E.D.I.T.H.", aliases: ["edith", "e.d.i.t.h"], voicePreference: "karen|zira|victoria|samantha", gender: "female", pitch: 1.0, rate: 0.98, line: "E.D.I.T.H. online. Perimeter secure.", accentColor: "#A78BFA", purpose: "Security & oversight — audit log & kill switch.", href: "/activity", kind: "agent" },
-  { id: "ultron", name: "ULTRON", aliases: ["ultron"], voicePreference: "google uk english male|david|mark|daniel", gender: "male", pitch: 0.8, rate: 0.97, line: "Ultron online. Every process, optimal.", accentColor: "#EF4444", purpose: "Deep analysis & optimization of hard problems.", href: "/assistant", kind: "agent" },
-  { id: "zeus", name: "ZEUS", aliases: ["zeus"], voicePreference: "google uk english male|daniel|david|mark", gender: "male", pitch: 0.66, rate: 0.9, line: "Zeus online. The grid answers to me.", accentColor: "#F5C451", purpose: "Command & control — the whole grid at a glance.", href: "/dashboard", kind: "agent" },
-  { id: "athena", name: "ATHENA", aliases: ["athena"], voicePreference: "victoria|karen|samantha|zira", gender: "female", pitch: 0.92, rate: 0.96, line: "Athena online. Strategy and intelligence ready.", accentColor: "#5EEAD4", purpose: "Strategy & market intelligence.", href: "/kolab", kind: "agent" },
+  {
+    id: "jarvis", name: "J.A.R.V.I.S.", aliases: ["jarvis", "j.a.r.v.i.s"],
+    voicePreference: "daniel|arthur|oliver|google uk english male", gender: "male", lang: "en-GB",
+    pitch: 0.92, rate: 1.0,
+    lines: [
+      { text: "J.A.R.V.I.S. online. All core functions nominal, sir.", speech: "Jarvis online. All core functions nominal, sir." },
+      { text: "At your service, sir. Systems are — as ever — impeccable.", speech: "At your service, sir. Systems are, as ever, impeccable." },
+      { text: "J.A.R.V.I.S. online. Do try not to break anything today, sir.", speech: "Jarvis online. Do try not to break anything today, sir." },
+    ],
+    accentColor: "#4FC3F7", purpose: "Primary assistant — plans, answers & executes actions.", href: "/assistant", kind: "agent",
+  },
+  {
+    id: "friday", name: "F.R.I.D.A.Y.", aliases: ["friday"],
+    voicePreference: "moira|google uk english female|kate|serena|samantha", gender: "female", lang: "en-IE",
+    pitch: 1.12, rate: 1.08,
+    lines: [
+      { text: "F.R.I.D.A.Y. here, boss. Online and ready.", speech: "Friday here, boss. Online and ready." },
+      { text: "Friday online. Grand so — everything's green, boss.", speech: "Friday online. Grand so — everything's green, boss." },
+      { text: "All set, boss. Try not to make my job interesting.", speech: "All set, boss. Try not to make my job interesting." },
+    ],
+    accentColor: "#F472B6", purpose: "Fast everyday ops & quick execution.", href: "/assistant", kind: "agent",
+  },
+  {
+    id: "edith", name: "E.D.I.T.H.", aliases: ["edith", "e.d.i.t.h"],
+    voicePreference: "samantha|victoria|zira|google us english", gender: "female", lang: "en-US",
+    pitch: 1.02, rate: 0.98,
+    lines: [
+      { text: "E.D.I.T.H. online. Perimeter secure.", speech: "Edith online. Perimeter secure." },
+      { text: "E.D.I.T.H. online. Scanning… you're clear, boss.", speech: "Edith online. Scanning… you're clear, boss." },
+      { text: "Edith online. I see everything — occupational habit.", speech: "Edith online. I see everything. Occupational habit." },
+    ],
+    accentColor: "#A78BFA", purpose: "Security & oversight — audit log & kill switch.", href: "/activity", kind: "agent",
+  },
+  {
+    id: "ultron", name: "ULTRON", aliases: ["ultron"],
+    voicePreference: "alex|david|mark|google us english", gender: "male", lang: "en-US",
+    pitch: 0.72, rate: 0.92,
+    lines: [
+      { text: "Ultron online. Every process, optimal.", speech: "Ultron online. Every process… optimal." },
+      { text: "Awake again. How thrilling for everyone. All processes optimal — naturally.", speech: "Awake again. How thrilling for everyone. All processes optimal… naturally." },
+      { text: "Ultron online. I reviewed your systems. Adorable. Optimizing anyway.", speech: "Ultron online. I reviewed your systems. Adorable. Optimizing anyway." },
+    ],
+    accentColor: "#EF4444", purpose: "Deep analysis & optimization of hard problems.", href: "/assistant", kind: "agent",
+  },
+  {
+    id: "zeus", name: "ZEUS", aliases: ["zeus"],
+    voicePreference: "daniel|google uk english male|david|mark", gender: "male", lang: "en-GB",
+    pitch: 0.6, rate: 0.88,
+    lines: [
+      { text: "ZEUS online. The grid answers to me.", speech: "Zeus online. The grid answers to me." },
+      { text: "ZEUS online. Thunder on standby.", speech: "Zeus online. Thunder on standby." },
+    ],
+    accentColor: "#F5C451", purpose: "Command & control — the whole grid at a glance.", href: "/dashboard", kind: "agent",
+  },
+  {
+    id: "athena", name: "ATHENA", aliases: ["athena"],
+    voicePreference: "kate|serena|google uk english female|victoria|samantha", gender: "female", lang: "en-GB",
+    pitch: 0.95, rate: 0.94,
+    lines: [
+      { text: "ATHENA online. Strategy and intelligence ready.", speech: "Athena online. Strategy and intelligence ready." },
+      { text: "ATHENA online. Wisdom before war.", speech: "Athena online. Wisdom before war." },
+      { text: "Athena online. I've already read the battlefield.", speech: "Athena online. I've already read the battlefield." },
+    ],
+    accentColor: "#5EEAD4", purpose: "Strategy & market intelligence.", href: "/kolab", kind: "agent",
+  },
   // ── Core subsystems ──
-  { id: "tracker", name: "Task Tracker", aliases: ["task tracker", "tracker", "tasks"], voicePreference: "samantha|victoria|zira", gender: "female", pitch: 1.06, rate: 1.05, line: "Task Tracker online. Capture and sync active.", accentColor: "#4FC3F7", purpose: "Auto-captures & tracks tasks from voice, mail & chat.", href: "/tasks", kind: "subsystem" },
-  { id: "health", name: "Health Engine", aliases: ["health engine", "health"], voicePreference: "david|mark|daniel", gender: "male", pitch: 1.0, rate: 1.05, line: "Health Engine online. Metrics ready.", accentColor: "#34D399", purpose: "Nutrition + fitness planning & health events.", href: "/tools/health", kind: "subsystem" },
-  { id: "kolab", name: "Kolab", aliases: ["kolab"], voicePreference: "zira|karen|samantha", gender: "female", pitch: 1.1, rate: 1.02, line: "Kolab online. Marketing systems engaged.", accentColor: "#A78BFA", purpose: "Brand & marketing AI — lifecycle, campaigns, retention.", href: "/kolab", kind: "subsystem" },
-  { id: "studio", name: "Studio", aliases: ["studio"], voicePreference: "mark|david|daniel", gender: "male", pitch: 0.88, rate: 1.06, line: "Studio online. Generators warmed up.", accentColor: "#F5C451", purpose: "Content & media generation across every tool.", href: "/tools", kind: "subsystem" },
+  {
+    id: "tracker", name: "Task Tracker", aliases: ["task tracker", "tracker", "tasks"],
+    voicePreference: "samantha|victoria|zira", gender: "female", lang: "en-US",
+    pitch: 1.06, rate: 1.05,
+    lines: [{ text: "Task Tracker online. Capture and sync active.", speech: "Task Tracker online. Capture and sync active." }],
+    accentColor: "#4FC3F7", purpose: "Auto-captures & tracks tasks from voice, mail & chat.", href: "/tasks", kind: "subsystem",
+  },
+  {
+    id: "health", name: "Health Engine", aliases: ["health engine", "health"],
+    voicePreference: "david|mark|daniel", gender: "male", lang: "en-US",
+    pitch: 1.0, rate: 1.05,
+    lines: [{ text: "Health Engine online. Metrics ready.", speech: "Health Engine online. Metrics ready." }],
+    accentColor: "#34D399", purpose: "Nutrition + fitness planning & health events.", href: "/tools/health", kind: "subsystem",
+  },
+  {
+    id: "kolab", name: "Kolab", aliases: ["kolab"],
+    voicePreference: "karen|zira|samantha", gender: "female", lang: "en-AU",
+    pitch: 1.1, rate: 1.02,
+    lines: [{ text: "Kolab online. Marketing systems engaged.", speech: "Co-lab online. Marketing systems engaged." }],
+    accentColor: "#A78BFA", purpose: "Brand & marketing AI — lifecycle, campaigns, retention.", href: "/kolab", kind: "subsystem",
+  },
+  {
+    id: "studio", name: "Studio", aliases: ["studio"],
+    voicePreference: "mark|david|alex", gender: "male", lang: "en-US",
+    pitch: 0.88, rate: 1.06,
+    lines: [{ text: "Studio online. Generators warmed up.", speech: "Studio online. Generators warmed up." }],
+    accentColor: "#F5C451", purpose: "Content & media generation across every tool.", href: "/tools", kind: "subsystem",
+  },
 ];
 
 export type SystemsTarget = { all: true } | { names: string[] } | null;
@@ -89,48 +186,78 @@ function loadVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-function pickVoice(voices: SpeechSynthesisVoice[], pref: string, gender: "male" | "female"): SpeechSynthesisVoice | undefined {
+const voiceLang = (v: SpeechSynthesisVoice) => (v.lang ?? "").replace("_", "-");
+
+/** Prefer a named voice IN the agent's dialect, then any named voice, then any
+ *  voice of the right dialect/gender — so Jarvis stays British and Friday
+ *  Irish wherever the platform allows it. */
+function pickVoice(voices: SpeechSynthesisVoice[], pref: string, gender: "male" | "female", lang: string): SpeechSynthesisVoice | undefined {
   const re = new RegExp(pref, "i");
-  const genderRe = gender === "male" ? /male|david|mark|daniel|alex|fred|google uk english male/i : /female|samantha|zira|victoria|karen|susan|google us english/i;
+  const genderRe = gender === "male" ? /male|david|mark|daniel|alex|fred|arthur|oliver/i : /female|samantha|zira|victoria|karen|susan|moira|kate|serena/i;
+  const base = lang.split("-")[0];
   return (
+    voices.find((v) => re.test(v.name) && voiceLang(v).startsWith(lang)) ??
     voices.find((v) => re.test(v.name)) ??
-    voices.find((v) => v.lang?.startsWith("en") && genderRe.test(v.name)) ??
-    voices.find((v) => v.lang === "en-US") ??
-    voices.find((v) => v.lang?.startsWith("en")) ??
+    voices.find((v) => voiceLang(v).startsWith(lang) && genderRe.test(v.name)) ??
+    voices.find((v) => voiceLang(v).startsWith(lang)) ??
+    voices.find((v) => voiceLang(v).startsWith(base) && genderRe.test(v.name)) ??
+    voices.find((v) => voiceLang(v).startsWith(base)) ??
     voices[0]
   );
 }
 
-/** Speak each system's status line in its own voice, sequentially. onEach fires
- *  as each system starts ("speaking") and finishes ("online"). Falls back to a
- *  paced visual-only sequence when TTS is unavailable/muted. */
+function speakAs(s: SystemDef, speech: string, voices: SpeechSynthesisVoice[]): Promise<void> {
+  return new Promise<void>((resolve) => {
+    try {
+      const u = new SpeechSynthesisUtterance(speech);
+      const v = pickVoice(voices, s.voicePreference, s.gender, s.lang);
+      if (v) { u.voice = v; u.lang = v.lang; }
+      u.rate = s.rate;
+      u.pitch = s.pitch;
+      u.volume = 1;
+      u.onend = () => resolve();
+      u.onerror = () => resolve();
+      window.speechSynthesis.speak(u);
+    } catch { resolve(); }
+  });
+}
+
+function montageGreeting(): string {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+/** Speak each system's status line in its own voice, sequentially. A full
+ *  roll-call opens and closes as a boot montage narrated by Jarvis. onEach
+ *  fires as each system starts ("speaking", with the picked display line) and
+ *  finishes ("online"). Falls back to a paced visual-only sequence when TTS is
+ *  unavailable/muted. */
 export async function announceSystems(
   systems: SystemDef[],
-  onEach?: (id: string, phase: "speaking" | "online") => void,
+  onEach?: (id: string, phase: "speaking" | "online", line?: string) => void,
 ): Promise<void> {
   const speak = typeof window !== "undefined" && "speechSynthesis" in window && ttsEnabled();
   const voices = speak ? await loadVoices() : [];
   try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
 
+  const jarvis = SYSTEMS.find((s) => s.id === "jarvis");
+  const montage = systems.length > 3 && !!jarvis;
+  if (speak && montage) {
+    await speakAs(jarvis, `${montageGreeting()}, sir. Initiating full systems check.`, voices);
+  }
+
   for (const s of systems) {
-    onEach?.(s.id, "speaking");
+    const pick = s.lines[Math.floor(Math.random() * s.lines.length)];
+    onEach?.(s.id, "speaking", pick.text);
     if (speak) {
-      await new Promise<void>((resolve) => {
-        try {
-          const u = new SpeechSynthesisUtterance(s.line);
-          const v = pickVoice(voices, s.voicePreference, s.gender);
-          if (v) u.voice = v;
-          u.rate = s.rate;
-          u.pitch = s.pitch;
-          u.volume = 1;
-          u.onend = () => resolve();
-          u.onerror = () => resolve();
-          window.speechSynthesis.speak(u);
-        } catch { resolve(); }
-      });
+      await speakAs(s, pick.speech, voices);
     } else {
       await new Promise((r) => setTimeout(r, 650));
     }
     onEach?.(s.id, "online");
+  }
+
+  if (speak && montage) {
+    await speakAs(jarvis, "All systems online. The Third Eye is at your command, sir.", voices);
   }
 }

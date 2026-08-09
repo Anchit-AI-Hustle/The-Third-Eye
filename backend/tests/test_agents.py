@@ -311,3 +311,97 @@ async def test_executive_answers_directly_without_research_signal(fresh_registry
     assert result.success is True
     assert result.delegated_to is None
     assert not research.run_called
+
+
+# ─── Research agent: Google Search grounding fallback ─────────────────────────
+
+
+@pytest.fixture
+def research_agent():
+    from app.agents.research import ResearchAgent
+    return ResearchAgent()
+
+
+def _grounded_log(citations, queries=("who won",)):
+    from app.router.model_router import RouterLogEntry
+    return RouterLogEntry(
+        task_type="grounded_search", model_used="gemini-2.5-flash",
+        provider="google_grounded", prompt_tokens=10, completion_tokens=5,
+        latency_ms=42, estimated_cost_usd=0.0001, attempts=1,
+        citations=list(citations), search_queries=list(queries),
+    )
+
+
+async def test_research_uses_google_grounding_when_serper_missing(
+    research_agent, context, monkeypatch
+):
+    """Without SERPER_API_KEY the agent must still answer, via grounding."""
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    sources = [{"title": "A", "url": "https://a.example/1", "domain": "a.example"}]
+
+    with patch(
+        "app.agents.research.model_router.complete",
+        new=AsyncMock(return_value=("Grounded answer.", _grounded_log(sources))),
+    ) as mock_complete:
+        result = await research_agent.run(
+            AgentTask(task_type="web_search", content="who won?"), context
+        )
+
+    assert result.success is True
+    assert result.content == "Grounded answer."
+    assert result.metadata["search_provider"] == "google_grounding"
+    assert result.metadata["search_performed"] is True
+    assert result.metadata["sources"] == sources
+    assert result.metadata["search_queries"] == ["who won"]
+    # Must use the grounded route, not plain summarization.
+    from app.router.model_router import TaskType
+    assert mock_complete.await_args.kwargs["task_type"] == TaskType.GROUNDED_SEARCH
+
+
+async def test_research_reports_ungrounded_answer_as_not_searched(
+    research_agent, context, monkeypatch
+):
+    """No citations (ungrounded fallback / privacy mode) must not claim a search."""
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    with patch(
+        "app.agents.research.model_router.complete",
+        new=AsyncMock(return_value=("Best guess.", _grounded_log([], queries=[]))),
+    ):
+        result = await research_agent.run(
+            AgentTask(task_type="web_search", content="who won?"), context
+        )
+
+    assert result.success is True
+    assert result.metadata["search_performed"] is False
+    assert result.metadata["sources"] == []
+
+
+async def test_research_falls_back_to_message_when_grounding_disabled(
+    research_agent, context, monkeypatch
+):
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr("app.agents.research.settings.enable_google_grounding", False)
+
+    result = await research_agent.run(
+        AgentTask(task_type="web_search", content="who won?"), context
+    )
+
+    assert result.success is True
+    assert "unavailable" in result.content.lower()
+    assert result.metadata["reason"] == "no_api_key"
+
+
+async def test_research_grounding_failure_surfaces_error(
+    research_agent, context, monkeypatch
+):
+    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    with patch(
+        "app.agents.research.model_router.complete",
+        new=AsyncMock(side_effect=RuntimeError("all providers exhausted")),
+    ):
+        result = await research_agent.run(
+            AgentTask(task_type="web_search", content="who won?"), context
+        )
+
+    assert result.success is False
+    assert "all providers exhausted" in (result.error or "")
