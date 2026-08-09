@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useWakeWord } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
+import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentActions } from "@/hooks/useAgentActions";
@@ -127,18 +128,29 @@ export function VoiceOverlay() {
   // App-wide wake word: passively listen for the agent's name while the mic is
   // off (so it never fights the main recognizer). Saying "JARVIS" opens the
   // panel and starts listening — true hands-free entry.
-  const onWake = useCallback(() => {
+  const onWake = useCallback(async () => {
     if (isStreamingRef.current) return;
+    if (!(await requestCapability("microphone"))) return;
     setExpanded(true);
     stt.enable();
     setMicOn(true);
-  }, [stt]);
+  }, [stt, requestCapability]);
+  // Passive wake-word listening is continuous microphone access, so it only runs
+  // when the user granted the mic for every time. Otherwise the user drives it
+  // via the mic button, which asks through the gate.
+  const [micAlways, setMicAlways] = useState(false);
+  useEffect(() => {
+    const read = () => setMicAlways(getPolicy("microphone") === "always");
+    read();
+    window.addEventListener(PERM_POLICY_EVENT, read);
+    return () => window.removeEventListener(PERM_POLICY_EVENT, read);
+  }, []);
   // !tts.speaking matters even though micOn is normally true after a wake:
   // a typed question with the mic off still gets a spoken reply, and the wake
   // recognizer would otherwise hear the agent say its own name and self-trigger.
   useWakeWord({
     agentName: agent.name,
-    enabled: wakeEnabled && !micOn && !tts.speaking,
+    enabled: wakeEnabled && micAlways && !micOn && !tts.speaking,
     onWake,
     cooldownMs: 2000,
   });

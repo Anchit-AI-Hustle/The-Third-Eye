@@ -9,7 +9,7 @@ import { PermissionProvider } from "@/components/permission/PermissionProvider";
 import { IngestBridge } from "@/components/tasks/IngestBridge";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
-import { getConsent, getCurrentLocation } from "@/lib/consent";
+import { getPolicy, getCurrentLocation } from "@/lib/consent";
 
 function LocationBridge() {
   // When location consent is granted (either by an earlier session or just
@@ -20,7 +20,9 @@ function LocationBridge() {
     let stop = false;
     async function tick() {
       if (stop) return;
-      if (getConsent("location") === "granted") {
+      // Background location polling only runs under a standing "every time"
+      // grant; "ask each time" must not silently read location in the background.
+      if (getPolicy("location") === "always") {
         const loc = await getCurrentLocation();
         if (loc && typeof window !== "undefined") {
           (window as any).__teLocation = loc;

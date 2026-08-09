@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Mic, Camera, Monitor, MapPin, Bell, ShieldCheck } from "lucide-react";
 import {
   PermissionCapability, getPolicy, setPolicy,
 } from "@/lib/consent";
+import { ensureCapability, registerPermissionUI } from "@/lib/permissionGate";
 
 // Central permission gate. A feature that needs a device capability calls
 //   const ok = await requestCapability("camera");
@@ -50,11 +51,12 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     resolverRef.current = null;
   }, [pending]);
 
-  const requestCapability = useCallback((cap: PermissionCapability): Promise<boolean> => {
-    // Already allowed for every time — proceed without re-asking.
+  // Shows the sheet and resolves with the user's choice. Registered globally so
+  // non-React callers reach it via ensureCapability().
+  const openSheet = useCallback((cap: PermissionCapability): Promise<boolean> => {
     if (getPolicy(cap) === "always") return Promise.resolve(true);
-    // Queue the choice. If another prompt is already open, deny the new one
-    // rather than clobbering the in-flight resolver.
+    // If another prompt is already open, deny the new one rather than
+    // clobbering the in-flight resolver.
     if (resolverRef.current) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
@@ -62,11 +64,13 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     });
   }, []);
 
+  useEffect(() => registerPermissionUI(openSheet), [openSheet]);
+
   const meta = pending ? CAP_META[pending] : null;
   const Icon = meta?.icon ?? ShieldCheck;
 
   return (
-    <Ctx.Provider value={{ requestCapability }}>
+    <Ctx.Provider value={{ requestCapability: ensureCapability }}>
       {children}
       {pending && meta && (
         <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
