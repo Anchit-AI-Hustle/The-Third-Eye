@@ -11,6 +11,7 @@ import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
+import { getDeviceInfo } from "@/lib/deviceInfo";
 
 function LocationBridge() {
   // When location consent is granted (either by an earlier session or just
@@ -37,6 +38,24 @@ function LocationBridge() {
   return null;
 }
 
+function DeviceInfoBridge() {
+  // Stash device/system facts (storage, memory, battery, network, screen) on
+  // window so chat requests can include them — the assistant answers device
+  // questions from real data instead of refusing. Refresh every minute.
+  useEffect(() => {
+    let stop = false;
+    async function tick() {
+      if (stop) return;
+      const d = await getDeviceInfo();
+      if (!stop && typeof window !== "undefined") (window as any).__teDevice = d;
+    }
+    tick();
+    const t = setInterval(tick, 60_000);
+    return () => { stop = true; clearInterval(t); };
+  }, []);
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -58,6 +77,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             {children}
             <ConsentDialog />
             <LocationBridge />
+            <DeviceInfoBridge />
             <IngestBridge />
             <DeviceLogBridge />
             <SystemsOnline />

@@ -429,6 +429,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           location: typeof window !== "undefined" && (window as any).__teLocation
             ? (window as any).__teLocation
             : undefined,
+          deviceInfo: typeof window !== "undefined" ? (window as any).__teDevice : undefined,
           agentName: agent?.name,
           agentId: agent?.id,
           agentPersona: agent?.personality,

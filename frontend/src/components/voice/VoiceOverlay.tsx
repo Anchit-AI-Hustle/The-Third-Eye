@@ -234,6 +234,7 @@ export function VoiceOverlay() {
             agentId: agent.id,
             agentPersona: agent.personality,
             mode: modeId,
+            deviceInfo: typeof window !== "undefined" ? (window as any).__teDevice : undefined,
             tasks: allTasks,
             docs: readyDocs,
             attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
