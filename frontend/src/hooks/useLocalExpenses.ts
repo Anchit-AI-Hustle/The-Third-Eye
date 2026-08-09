@@ -6,9 +6,10 @@ import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export interface Expense {
   id: string;
-  amount: number;
+  amount: number;       // GST-inclusive — what you actually paid
   category: string;
   note?: string;
+  gst_rate?: number;    // % of GST baked into `amount` (0/5/12/18/28); undefined = untracked
   spent_on: string;   // YYYY-MM-DD
   created_at: string;
 }
@@ -45,12 +46,13 @@ export function useLocalExpenses() {
     return () => { cancelled = true; };
   }, [userId]);
 
-  const add = useCallback(async (data: { amount: number; category: string; note?: string; spent_on?: string }) => {
+  const add = useCallback(async (data: { amount: number; category: string; note?: string; gst_rate?: number; spent_on?: string }) => {
     const e: Expense = {
       id: crypto.randomUUID(),
       amount: data.amount,
       category: data.category || "Other",
       note: data.note?.trim() || undefined,
+      gst_rate: data.gst_rate && data.gst_rate > 0 ? data.gst_rate : undefined,
       spent_on: data.spent_on || new Date().toISOString().slice(0, 10),
       created_at: new Date().toISOString(),
     };

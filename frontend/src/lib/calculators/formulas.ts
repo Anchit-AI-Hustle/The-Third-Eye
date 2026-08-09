@@ -19,6 +19,30 @@ import type { FormulaFn } from "./types";
 const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), hi);
 const safe = (n: number) => (Number.isFinite(n) ? n : 0);
 
+/**
+ * Split an amount into base + GST at a given rate.
+ *   mode "add"    — `amount` is pre-tax; GST is added on top.
+ *   mode "remove" — `amount` is tax-inclusive (what you actually paid); the GST
+ *                   component is backed out of it. This is the case for a logged
+ *                   expense, where the sticker price already includes GST.
+ * Intra-state GST splits evenly into CGST + SGST; inter-state it's a single IGST
+ * of the same total — both are surfaced so the caller can show whichever applies.
+ */
+export function gstBreakup(amount: number, ratePct: number, mode: "add" | "remove" = "add") {
+  const amt = Math.max(safe(amount), 0);
+  const rate = Math.max(safe(ratePct), 0) / 100;
+  const base = mode === "add" ? amt : amt / (1 + rate);
+  const gst = mode === "add" ? amt * rate : amt - base;
+  return {
+    base: safe(base),
+    gst: safe(gst),
+    total: safe(base + gst),
+    cgst: safe(gst / 2),
+    sgst: safe(gst / 2),
+    igst: safe(gst),
+  };
+}
+
 /** Future value of a series of end-of-month payments, paid at the start of each month. */
 function annuityFV(payment: number, monthlyRate: number, months: number): number {
   if (months <= 0) return 0;
@@ -833,6 +857,28 @@ export const FORMULAS: Record<string, FormulaFn> = {
       note: t.rebate > 0 && t.incomeTax === 0
         ? `Taxable income ${inr(t.taxable)} is fully covered by the Section 87A rebate under the ${isNew ? "new" : "old"} regime — zero tax. FY 2025-26 (AY 2026-27).`
         : `${isNew ? "New" : "Old"} regime · FY 2025-26 (AY 2026-27) · ${salaried !== 0 ? `${inr(t.stdDeduction)} standard deduction` : "no standard deduction"}${t.surchargeRate ? ` · ${Math.round(t.surchargeRate * 100)}% surcharge` : ""} · 4% cess.`,
+    };
+  },
+
+  gst({ amount, rate, mode }) {
+    const adding = mode !== 1; // default (0) = add GST on top; 1 = extract from an inclusive price
+    const b = gstBreakup(amount, rate, adding ? "add" : "remove");
+    const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+    return {
+      values: {
+        base: Math.round(b.base),
+        gst: Math.round(b.gst),
+        total: Math.round(b.total),
+        cgst: Math.round(b.cgst),
+        sgst: Math.round(b.sgst),
+      },
+      donut: [
+        { label: "Base amount", value: Math.max(Math.round(b.base), 0) },
+        { label: "GST", value: Math.max(Math.round(b.gst), 0) },
+      ],
+      note: adding
+        ? `${inr(b.base)} + ${rate}% GST = ${inr(b.total)}. Intra-state that's CGST ${inr(b.cgst)} + SGST ${inr(b.sgst)}; inter-state it's IGST ${inr(b.igst)}.`
+        : `${inr(b.total)} already includes ${rate}% GST — so the pre-tax price is ${inr(b.base)} and the tax component is ${inr(b.gst)}.`,
     };
   },
 };

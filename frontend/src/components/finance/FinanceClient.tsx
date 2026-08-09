@@ -6,6 +6,7 @@ import {
   Clapperboard, Plane, Wallet, Mic, Sparkles, Trash2, Plus, Loader2, Pencil,
 } from "lucide-react";
 import { useLocalExpenses, type Expense } from "@/hooks/useLocalExpenses";
+import { gstBreakup } from "@/lib/calculators/formulas";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
@@ -32,6 +33,10 @@ const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 const money = (n: number) => `₹${inr.format(Math.round(n))}`;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+const GST_RATES = [0, 5, 12, 18, 28] as const;
+// GST already sits inside the logged (tax-inclusive) amount, so back it out.
+const gstOf = (e: Expense) => (e.gst_rate ? gstBreakup(e.amount, e.gst_rate, "remove").gst : 0);
+
 export function FinanceClient() {
   const { expenses, ready, add, update, remove } = useLocalExpenses();
   const { modeId } = useMode();
@@ -50,6 +55,7 @@ export function FinanceClient() {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<Category>("Food");
   const [note, setNote] = useState("");
+  const [gstRate, setGstRate] = useState<number>(0);
   const [date, setDate] = useState(todayISO());
   const [listening, setListening] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,12 +66,13 @@ export function FinanceClient() {
     setAmount(String(e.amount));
     setCategory((CATEGORIES as readonly string[]).includes(e.category) ? (e.category as Category) : "Other");
     setNote(e.note ?? "");
+    setGstRate(e.gst_rate ?? 0);
     setDate(e.spent_on);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function resetForm() {
-    setEditingId(null); setNl(""); setAmount(""); setNote(""); setDate(todayISO());
+    setEditingId(null); setNl(""); setAmount(""); setNote(""); setGstRate(0); setDate(todayISO());
   }
 
   const month = todayISO().slice(0, 7);
@@ -76,8 +83,9 @@ export function FinanceClient() {
     const byCat = new Map<string, number>();
     for (const e of thisMonth) byCat.set(e.category, (byCat.get(e.category) ?? 0) + e.amount);
     const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
+    const gst = thisMonth.reduce((s, e) => s + gstOf(e), 0);
     const dayOfMonth = new Date().getDate();
-    return { total, today, count: thisMonth.length, avg: total / Math.max(1, dayOfMonth), cats };
+    return { total, today, count: thisMonth.length, avg: total / Math.max(1, dayOfMonth), cats, gst };
   }, [scopedExpenses, month]);
 
   async function parseNL() {
@@ -119,9 +127,9 @@ export function FinanceClient() {
     const amt = Number(amount);
     if (!amt || amt <= 0) return;
     if (editingId) {
-      await update(editingId, { amount: amt, category, note: note.trim() || undefined, spent_on: date });
+      await update(editingId, { amount: amt, category, note: note.trim() || undefined, gst_rate: gstRate > 0 ? gstRate : undefined, spent_on: date });
     } else {
-      const ex = await add({ amount: amt, category, note, spent_on: date });
+      const ex = await add({ amount: amt, category, note, gst_rate: gstRate, spent_on: date });
       if (ex?.id) tagItem(ex.id, modeId); // tag new expenses with the active mode
     }
     resetForm();
@@ -216,6 +224,26 @@ export function FinanceClient() {
           })}
         </div>
 
+        {/* GST included in this amount */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="hud-label text-text-muted mr-1">GST incl.</span>
+          {GST_RATES.map((r) => {
+            const on = gstRate === r;
+            return (
+              <button key={r} onClick={() => setGstRate(r)}
+                className={`px-2.5 py-1.5 rounded-full border text-xs transition-colors ${on ? "border-[#34D399] bg-[#34D399]/15 text-[#34D399]" : "border-border-default text-text-muted hover:text-text-primary"}`}
+              >
+                {r === 0 ? "None" : `${r}%`}
+              </button>
+            );
+          })}
+          {gstRate > 0 && Number(amount) > 0 && (
+            <span className="text-xs text-text-muted font-mono ml-auto">
+              incl. {money(gstBreakup(Number(amount), gstRate, "remove").gst)} GST
+            </span>
+          )}
+        </div>
+
         <button
           onClick={submit}
           disabled={!Number(amount)}
@@ -227,7 +255,14 @@ export function FinanceClient() {
 
       {/* Category breakdown */}
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
-        <div className="hud-label text-text-muted mb-3">This month by category</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="hud-label text-text-muted">This month by category</div>
+          {stats.gst > 0 && (
+            <div className="text-xs font-mono text-[#34D399]" title="Total GST paid this month (backed out of tax-inclusive amounts)">
+              GST paid · {money(stats.gst)}
+            </div>
+          )}
+        </div>
         {stats.cats.length === 0 ? (
           <p className="text-sm text-text-muted py-4 text-center">No expenses yet this month. Add your first above.</p>
         ) : (
@@ -294,7 +329,10 @@ function Row({ e, editing, onEdit, onDelete }: { e: Expense; editing?: boolean; 
       </span>
       <button onClick={onEdit} className="flex-1 min-w-0 text-left" title="Edit">
         <div className="text-sm text-text-primary truncate">{e.note || e.category}</div>
-        <div className="text-[11px] text-text-muted font-mono">{e.category} · {e.spent_on}</div>
+        <div className="text-[11px] text-text-muted font-mono">
+          {e.category} · {e.spent_on}
+          {e.gst_rate ? <span className="text-[#34D399]"> · {e.gst_rate}% GST {money(gstOf(e))}</span> : null}
+        </div>
       </button>
       <span className="text-sm text-text-primary tabular-nums flex-none">{money(e.amount)}</span>
       <button onClick={onEdit} title="Edit" className="text-text-muted hover:text-[#4FC3F7] p-1 flex-none">

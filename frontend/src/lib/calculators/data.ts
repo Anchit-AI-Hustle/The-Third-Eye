@@ -1372,6 +1372,73 @@ The new regime is the default. It has wider slabs, a ₹75,000 standard deductio
   },
 
   {
+    slug: 'gst-calculator',
+    category: 'Income',
+    h1: 'GST Calculator',
+    metaTitle: 'GST Calculator — Add or Remove GST (CGST + SGST / IGST)',
+    metaDescription:
+      'Free GST calculator for India. Add GST to a price or extract it from a GST-inclusive amount at 5%, 12%, 18% or 28% — with the CGST + SGST split and the inter-state IGST figure.',
+    keywords: ['gst calculator', 'gst calculator india', 'add gst', 'remove gst', 'reverse gst calculator', 'cgst sgst calculator', 'gst inclusive calculator'],
+    formula: 'gst',
+    chart: 'donut',
+    offerTags: ['savings'],
+    inputs: [
+      { id: 'amount', label: 'Amount', type: 'currency', default: 10000, min: 0, max: 100000000, step: 100 },
+      {
+        id: 'rate', label: 'GST rate', type: 'select', default: 18,
+        options: [
+          { value: 0, label: '0% (exempt / nil-rated)' },
+          { value: 5, label: '5%' },
+          { value: 12, label: '12%' },
+          { value: 18, label: '18%' },
+          { value: 28, label: '28%' },
+        ],
+      },
+      {
+        id: 'mode', label: 'Direction', type: 'select', default: 0,
+        options: [
+          { value: 0, label: 'Add GST (amount is pre-tax)' },
+          { value: 1, label: 'Remove GST (amount already includes it)' },
+        ],
+      },
+    ],
+    outputs: [
+      { id: 'total', label: 'Total (incl. GST)', kind: 'currency', hero: true },
+      { id: 'base', label: 'Base amount', kind: 'currency' },
+      { id: 'gst', label: 'GST', kind: 'currency', accent: true },
+      { id: 'cgst', label: 'CGST (intra-state)', kind: 'currency' },
+      { id: 'sgst', label: 'SGST (intra-state)', kind: 'currency' },
+    ],
+    intro: `GST in India is charged at one of five rates — 0%, 5%, 12%, 18% or 28% — depending on the good or service. This calculator does the two things you actually need: add GST to a pre-tax price to get the amount you'll charge or pay, or strip GST out of a tax-inclusive price to see the base and the tax hidden inside it.
+
+Within a single state the tax splits equally into CGST (central) and SGST (state); across states it's a single IGST of the same total. The split is only a matter of which government gets which half — the amount you pay is identical either way.`,
+    howItWorks: [
+      'Adding GST: tax = amount × rate, and the total is amount + tax. A ₹10,000 item at 18% becomes ₹11,800.',
+      'Removing GST: the sticker price already includes tax, so the base is price ÷ (1 + rate), and the GST is what\'s left over. ₹11,800 at 18% backs out to ₹10,000 base + ₹1,800 GST.',
+      'The GST figure is then halved into CGST + SGST for an intra-state sale; for an inter-state sale the same total is charged once as IGST.',
+    ],
+    faqs: [
+      {
+        q: 'What\'s the difference between CGST, SGST and IGST?',
+        a: 'They\'re the same tax collected differently. On a sale within one state, GST is split into CGST (goes to the centre) and SGST (goes to the state) — each half the total rate. On a sale between states, the whole amount is charged once as IGST. You pay the same total; only the routing differs.',
+      },
+      {
+        q: 'How do I remove GST from a total?',
+        a: 'Divide the inclusive amount by (1 + rate). At 18%, divide by 1.18 to get the base price; the difference is the GST. Switch this calculator to "Remove GST" and it does exactly that.',
+      },
+      {
+        q: 'Which GST rate applies to my product?',
+        a: 'It depends on the HSN/SAC classification. Broadly: essentials and many food items are 0% or 5%, standard goods and most services are 18%, and luxury or "sin" goods (cars, tobacco, aerated drinks) are 28%. Check the official CBIC rate finder for the exact rate on a specific item.',
+      },
+      {
+        q: 'Is this an official GST tool?',
+        a: 'No — it\'s a plain arithmetic calculator using the rate you pick. It doesn\'t look up HSN codes, cess on luxury goods, or input-tax-credit rules. Use it to check a figure, not to file a return.',
+      },
+    ],
+    related: ['income-tax-calculator', 'freelance-rate-calculator', 'roi-calculator', 'net-worth-calculator'],
+  },
+
+  {
     slug: 'apy-calculator',
     category: 'Savings',
     h1: 'Effective Interest Rate (APY) Calculator',
