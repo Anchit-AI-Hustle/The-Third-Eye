@@ -229,7 +229,7 @@ export function MusicStudio() {
       setBrief(d.brief ?? null);
       setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
-      if (d.fellBackToInstrumental) setNote("The vocal model wasn't available, so this is an instrumental version (lyrics shown below).");
+      if (d.fellBackToInstrumental) setNote(`Couldn't generate sung vocals${d.vocalError ? ` — ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
       if (d.loop) setNote(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
       // Free HuggingFace fallback returns audio synchronously (no job to poll).
       if (d.done && d.audioUrl) { onAudioReady(d.audioUrl); return; }
