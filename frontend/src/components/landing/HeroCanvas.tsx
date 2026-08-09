@@ -34,7 +34,8 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
       .then((THREE) => {
         if (disposed || !mount) return;
 
-        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+        let reduce = motionQuery.matches;
         const w = () => mount.clientWidth || window.innerWidth;
         const h = () => mount.clientHeight || 560;
 
@@ -251,16 +252,32 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           draw(clock.getElapsedTime());
         };
 
-        if (reduce) {
-          // One composed frame at a flattering point in the cycle, then idle.
-          draw(2.1);
-        } else {
-          loop();
-        }
+        // One composed frame at a flattering point in the cycle, then idle.
+        const drawStatic = () => draw(2.1);
+
+        if (reduce) drawStatic();
+        else loop();
+
+        // Tracked live rather than read once: someone turning reduced motion on
+        // while the page is open is usually reacting to this canvas. Handled
+        // here instead of by re-running the effect, which would tear down and
+        // rebuild the WebGL context for a preference change.
+        const onMotionChange = (e: MediaQueryListEvent) => {
+          reduce = e.matches;
+          if (reduce) {
+            cancelAnimationFrame(raf);
+            raf = 0;
+            drawStatic();
+          } else if (running() && !raf) {
+            loop();
+          }
+        };
+        motionQuery.addEventListener("change", onMotionChange);
 
         cleanup = () => {
           cancelAnimationFrame(raf);
           io.disconnect();
+          motionQuery.removeEventListener("change", onMotionChange);
           window.removeEventListener("pointermove", onMove);
           window.removeEventListener("resize", onResize);
           document.removeEventListener("visibilitychange", onVis);

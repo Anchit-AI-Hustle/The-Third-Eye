@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+
 export type RevealProps = {
   children: React.ReactNode;
   /** Distance in px each item travels on the way in. */
@@ -30,17 +32,27 @@ export function Reveal({
   className,
 }: RevealProps) {
   const root = useRef<HTMLDivElement>(null);
+  // Read reactively rather than once at mount: someone switching reduced
+  // motion on mid-page is usually doing it *because* something is moving, so
+  // the setting has to take effect on the animation already running. Both
+  // effects below key off this, and their cleanups (un-arm, ctx.revert) strip
+  // GSAP's inline opacity/transform/blur back off — otherwise unrevealed items
+  // keep those styles, outrank the reduced-motion CSS, and still animate in.
+  const reduced = useReducedMotion();
 
   useLayoutEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!reduced) root.current?.setAttribute("data-reveal-armed", "true");
-  }, []);
+    if (reduced) {
+      root.current?.removeAttribute("data-reveal-armed");
+      return;
+    }
+    root.current?.setAttribute("data-reveal-armed", "true");
+  }, [reduced]);
 
   useEffect(() => {
     const el = root.current;
     if (!el) return;
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (reduced) return;
 
     let ctx: { revert: () => void } | undefined;
     let cancelled = false;
@@ -119,7 +131,7 @@ export function Reveal({
       cancelled = true;
       ctx?.revert();
     };
-  }, [distance, stagger, immediate]);
+  }, [distance, stagger, immediate, reduced]);
 
   return (
     <div ref={root} className={className}>
