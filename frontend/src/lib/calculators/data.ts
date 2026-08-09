@@ -653,10 +653,22 @@ The usual advice, "keep six months of expenses", is too blunt. A government empl
         ],
       },
       { id: 'inflation', label: 'Inflation (for real return)', type: 'percent', default: 6, min: 0, max: 20, step: 0.5 },
+      {
+        id: 'taxSlab', label: 'Your income-tax slab', type: 'select', default: 30,
+        options: [
+          { value: 0, label: 'No tax (0%)' },
+          { value: 5, label: '5%' },
+          { value: 20, label: '20%' },
+          { value: 30, label: '30%' },
+        ],
+      },
     ],
     outputs: [
-      { id: 'maturity', label: 'Maturity amount', kind: 'currency', hero: true },
-      { id: 'interest', label: 'Interest earned', kind: 'currency', accent: true },
+      { id: 'maturity', label: 'Maturity (before tax)', kind: 'currency', hero: true },
+      { id: 'afterTaxMaturity', label: 'Maturity after tax', kind: 'currency', accent: true },
+      { id: 'interest', label: 'Interest (before tax)', kind: 'currency' },
+      { id: 'afterTaxInterest', label: 'Interest after tax', kind: 'currency' },
+      { id: 'taxOnInterest', label: 'Tax on interest (incl. cess)', kind: 'currency' },
       { id: 'realValue', label: 'Worth in today\'s money', kind: 'currency' },
     ],
     intro: `A fixed deposit does one thing well: it returns your money with a known amount of interest on a known date. No surprises. For an emergency fund or money you need in two years, that certainty is worth more than a higher expected return.
@@ -822,11 +834,23 @@ Reality: most freelancers bill 50–65% of their time. The rest is pitching, inv
       { id: 'monthly', label: 'Monthly deposit', type: 'currency', default: 5000, min: 500, max: 100000, step: 500 },
       { id: 'rate', label: 'Interest rate (per year)', type: 'percent', default: 7, min: 1, max: 12, step: 0.1 },
       { id: 'years', label: 'Tenure', type: 'years', default: 5, min: 1, max: 20, step: 1 },
+      {
+        id: 'taxSlab', label: 'Your income-tax slab', type: 'select', default: 30,
+        options: [
+          { value: 0, label: 'No tax (0%)' },
+          { value: 5, label: '5%' },
+          { value: 20, label: '20%' },
+          { value: 30, label: '30%' },
+        ],
+      },
     ],
     outputs: [
-      { id: 'maturity', label: 'Maturity value', kind: 'currency', hero: true },
+      { id: 'maturity', label: 'Maturity (before tax)', kind: 'currency', hero: true },
+      { id: 'afterTaxMaturity', label: 'Maturity after tax', kind: 'currency', accent: true },
       { id: 'invested', label: 'You deposited', kind: 'currency' },
-      { id: 'interest', label: 'Interest earned', kind: 'currency', accent: true },
+      { id: 'interest', label: 'Interest (before tax)', kind: 'currency' },
+      { id: 'afterTaxInterest', label: 'Interest after tax', kind: 'currency' },
+      { id: 'taxOnInterest', label: 'Tax on interest (incl. cess)', kind: 'currency' },
     ],
     intro: `A recurring deposit is a fixed deposit you build one month at a time: the same amount leaves your account every month for a set tenure, each instalment earning interest until maturity. It suits money you can spare monthly but want protected from market swings.
 

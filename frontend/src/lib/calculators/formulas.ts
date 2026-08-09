@@ -451,20 +451,33 @@ export const FORMULAS: Record<string, FormulaFn> = {
   },
 
   // ─────────────────────────────────────────────────────── SAVINGS ──
-  fd({ principal, rate, years, frequency, inflation }) {
+  fd({ principal, rate, years, frequency, inflation, taxSlab }) {
     const n = Number(frequency) || 4;
     const maturity = principal * Math.pow(1 + rate / 100 / n, n * years);
+    const interest = maturity - principal;
     const realValue = maturity / Math.pow(1 + inflation / 100, years);
+    // FD interest is taxed at your income slab (banks deduct TDS); add 4% cess.
+    const effRate = clamp(safe(taxSlab), 0, 30) / 100 * 1.04;
+    const taxOnInterest = interest * effRate;
+    const afterTaxInterest = interest - taxOnInterest;
+    const afterTaxMaturity = principal + afterTaxInterest;
+    const afterTaxRealValue = afterTaxMaturity / Math.pow(1 + inflation / 100, years);
 
     return {
-      values: { maturity, interest: maturity - principal, realValue },
+      values: {
+        maturity, interest, realValue,
+        afterTaxMaturity, afterTaxInterest, taxOnInterest, afterTaxRealValue,
+      },
       donut: [
         { label: 'Your deposit', value: principal },
-        { label: 'Interest earned', value: maturity - principal },
+        { label: 'Interest (after tax)', value: Math.max(afterTaxInterest, 0) },
+        { label: 'Tax on interest', value: Math.max(taxOnInterest, 0) },
       ],
       note:
         rate <= inflation
-          ? 'At this rate the deposit loses purchasing power — inflation is running at or above your interest rate.'
+          ? 'At this rate the deposit loses purchasing power — inflation is running at or above your interest rate, and tax makes the real return worse.'
+          : effRate > 0
+          ? `After ${Math.round(effRate * 100)}% tax (incl. 4% cess) on the interest, you keep about ${Math.round(afterTaxMaturity).toLocaleString("en-IN")}.`
           : '',
     };
   },
@@ -554,23 +567,33 @@ export const FORMULAS: Record<string, FormulaFn> = {
   },
 
   // ═══════════════════════════════════════════════ NEW CALCULATORS ══
-  rd({ monthly, rate, years }) {
+  rd({ monthly, rate, years, taxSlab }) {
     const months = years * 12;
     // RD compounds quarterly in India; convert to an effective monthly rate.
     const effMonthly = Math.pow(1 + rate / 100 / 4, 4 / 12) - 1;
     const maturity = annuityFV(monthly, effMonthly, months);
     const invested = monthly * months;
+    const interest = maturity - invested;
+    // RD interest is taxed at your income slab (TDS applies); add 4% cess.
+    const effRate = clamp(safe(taxSlab), 0, 30) / 100 * 1.04;
+    const taxOnInterest = interest * effRate;
+    const afterTaxInterest = interest - taxOnInterest;
+    const afterTaxMaturity = invested + afterTaxInterest;
     const series = [];
     for (let y = 0; y <= years; y++) {
       series.push({ x: `Y${y}`, a: monthly * y * 12, b: annuityFV(monthly, effMonthly, y * 12) });
     }
     return {
-      values: { maturity, invested, interest: maturity - invested },
+      values: { maturity, invested, interest, afterTaxMaturity, afterTaxInterest, taxOnInterest },
       series,
       donut: [
         { label: "You deposited", value: invested },
-        { label: "Interest earned", value: maturity - invested },
+        { label: "Interest (after tax)", value: Math.max(afterTaxInterest, 0) },
+        { label: "Tax on interest", value: Math.max(taxOnInterest, 0) },
       ],
+      note: effRate > 0
+        ? `After ${Math.round(effRate * 100)}% tax (incl. 4% cess) on the interest, you keep about ${Math.round(afterTaxMaturity).toLocaleString("en-IN")}.`
+        : '',
     };
   },
 
