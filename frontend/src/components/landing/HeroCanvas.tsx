@@ -194,7 +194,12 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
         let raf = 0;
         let onScreen = true;
         let visible = document.visibilityState !== "hidden";
-        const running = () => onScreen && visible && !disposed;
+        // `reduce` belongs in this guard, not just in the initial branch:
+        // IntersectionObserver always delivers an entry on observe(), so
+        // without it the static single-frame path would immediately be
+        // restarted into a continuous loop for exactly the users who asked
+        // for no animation.
+        const running = () => !reduce && onScreen && visible && !disposed;
 
         const io = new IntersectionObserver(
           ([entry]) => {

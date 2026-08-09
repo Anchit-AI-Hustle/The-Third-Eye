@@ -69,11 +69,21 @@ export function Reveal({
             return;
           }
 
-          // Group items by their offset row so a grid reveals row-by-row
-          // instead of every card firing at once.
+          // Group items by their row so a grid reveals row-by-row instead of
+          // every card firing at once.
+          //
+          // Position has to be document-relative. `offsetTop` is measured
+          // from each element's own offsetParent, and a single <Reveal> wraps
+          // several sections whose items sit inside different positioned
+          // ancestors (.card-3d and .holo-frame are both `position:
+          // relative`). Those values are not comparable: items from unrelated
+          // sections report near-identical offsets, collapse into one row,
+          // and inherit a trigger from whichever element happens to be first
+          // — revealing later sections long before they are scrolled to.
+          const scrollY = window.scrollY;
           const rows = new Map<number, HTMLElement[]>();
           items.forEach((item) => {
-            const top = Math.round(item.offsetTop / 24) * 24;
+            const top = Math.round((item.getBoundingClientRect().top + scrollY) / 24) * 24;
             const row = rows.get(top) ?? [];
             row.push(item);
             rows.set(top, row);
