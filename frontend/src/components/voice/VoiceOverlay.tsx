@@ -10,6 +10,7 @@ import { useWakeWord } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
+import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useAgentActions } from "@/hooks/useAgentActions";
 import { useAgentConfirm, classifyVoiceConfirm, type PendingAction } from "@/hooks/useAgentConfirm";
@@ -57,6 +58,7 @@ export function VoiceOverlay() {
   const pendingRef = useRef<PendingAction[]>([]);
 
   const { allTasks } = useLocalTasks();
+  const { expenses } = useLocalExpenses();
   const applyActions = useAgentActions();
   const { docs } = useLocalKnowledge();
   const { active: agent } = useAgentProfile();
@@ -237,6 +239,7 @@ export function VoiceOverlay() {
             deviceInfo: typeof window !== "undefined" ? (window as any).__teDevice : undefined,
             tasks: allTasks,
             docs: readyDocs,
+            expenses: expenses.map((e) => ({ id: e.id, amount: e.amount, category: e.category, gst_rate: e.gst_rate, spent_on: e.spent_on })),
             attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
           }),
           signal: abortRef.current.signal,
@@ -300,7 +303,7 @@ export function VoiceOverlay() {
         setIsStreaming(false);
       }
     },
-    [input, session, allTasks, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn]
+    [input, session, allTasks, expenses, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);

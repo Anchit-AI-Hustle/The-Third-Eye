@@ -13,6 +13,7 @@ import { getGoogleAccessToken } from "@/lib/googleToken";
 import { getTool } from "@/lib/studioTools";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
+import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
@@ -925,7 +926,12 @@ async function runTool(
     }
 
     case "calculate": {
-      const calc = FORMULAS[input.slug as string];
+      // The model passes public slugs (gst-calculator); FORMULAS is keyed by the
+      // calculator's formula name (gst). Resolve slug→formula, and also accept a
+      // bare formula name so either form works.
+      const slug = String(input.slug ?? "");
+      const key = calculatorsBySlug[slug]?.formula ?? slug;
+      const calc = FORMULAS[key];
       if (!calc) return { result: `No calculator named "${input.slug}". Try gst-calculator, income-tax-calculator, emi-calculator, sip-calculator, fd-calculator.` };
       try {
         const out = calc((input.inputs ?? {}) as Record<string, number>);
