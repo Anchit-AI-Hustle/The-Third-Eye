@@ -62,6 +62,15 @@ export function Reveal({
             duration: 0.75,
             ease: "power3.out",
             stagger,
+            // Animating `y` writes an inline `transform`, which outranks the
+            // stylesheet rule. On a Card3D that rule is the tilt itself
+            // — transform: perspective() rotateX(var(--rx))… — so the inline
+            // value left behind at the end of the tween would freeze every
+            // revealed card flat: the pointer handler keeps updating --rx/--ry
+            // and nothing moves. Handing transform back to the stylesheet on
+            // completion keeps the reveal and the tilt from fighting over the
+            // same property.
+            clearProps: "transform",
           };
 
           if (immediate) {
