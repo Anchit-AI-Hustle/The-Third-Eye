@@ -56,14 +56,22 @@ export function Reveal({
 
     let ctx: { revert: () => void } | undefined;
     let cancelled = false;
+    let teardownResize = () => {};
 
     Promise.all([import("gsap"), import("gsap/ScrollTrigger")])
       .then(([{ gsap }, { ScrollTrigger }]) => {
         if (cancelled) return;
         gsap.registerPlugin(ScrollTrigger);
 
-        ctx = gsap.context(() => {
-          const items = gsap.utils.toArray<HTMLElement>("[data-reveal]");
+        const build = () =>
+          gsap.context(() => {
+          // Only items still waiting their turn. Row membership is decided by
+          // measured position, so it has to be recomputed when the layout
+          // reflows — but re-arming an item that already played would fade it
+          // out and back in under the user mid-resize.
+          const items = gsap.utils
+            .toArray<HTMLElement>("[data-reveal]")
+            .filter((item) => !item.hasAttribute("data-revealed"));
           if (!items.length) return;
 
           const from = { opacity: 0, y: distance, filter: "blur(6px)" };
@@ -85,8 +93,15 @@ export function Reveal({
             clearProps: "transform",
           };
 
+          const markRevealed = (row: HTMLElement[]) => () =>
+            row.forEach((item) => item.setAttribute("data-revealed", "true"));
+
           if (immediate) {
-            gsap.fromTo(items, from, { ...to, delay: 0.1 });
+            gsap.fromTo(items, from, {
+              ...to,
+              delay: 0.1,
+              onComplete: markRevealed(items),
+            });
             return;
           }
 
@@ -113,6 +128,7 @@ export function Reveal({
           rows.forEach((row) => {
             gsap.fromTo(row, from, {
               ...to,
+              onComplete: markRevealed(row),
               scrollTrigger: {
                 trigger: row[0],
                 start: "top 88%",
@@ -121,6 +137,30 @@ export function Reveal({
             });
           });
         }, el);
+
+        ctx = build();
+
+        // ScrollTrigger refreshes its own start/end offsets on resize, but the
+        // grouping above is ours and was decided from one set of measurements.
+        // Crossing the sm/lg grid breakpoints — a phone rotating, a desktop
+        // window dragged narrower — turns one three-card row into three
+        // stacked rows that still share the first card's trigger, so the lower
+        // two reveal while far below the fold. Rebuilding re-measures; the
+        // data-revealed filter keeps it from replaying anything already seen.
+        let resizeTimer = 0;
+        const onResize = () => {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(() => {
+            if (cancelled) return;
+            ctx?.revert();
+            ctx = build();
+          }, 200);
+        };
+        window.addEventListener("resize", onResize);
+        teardownResize = () => {
+          window.clearTimeout(resizeTimer);
+          window.removeEventListener("resize", onResize);
+        };
       })
       .catch(() => {
         // GSAP never arrived — un-arm so the content is not left invisible.
@@ -129,6 +169,7 @@ export function Reveal({
 
     return () => {
       cancelled = true;
+      teardownResize();
       ctx?.revert();
     };
   }, [distance, stagger, immediate, reduced]);

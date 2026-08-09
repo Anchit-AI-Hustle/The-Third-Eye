@@ -506,7 +506,11 @@ body {
    the GSAP chunk fails to load. The <Reveal> component arms its own subtree
    in a layout effect — before paint — which is what actually hides the
    items, so there is no flash of fully-styled content either way. */
-[data-reveal-armed="true"] [data-reveal] { opacity: 0; }
+/* `:not([data-revealed])` keeps an item visible once its tween has played.
+   Reveal rebuilds its timelines on resize, and the revert step strips the
+   inline opacity GSAP left behind — without this exemption, everything
+   already on screen would blink back out each time the window is resized. */
+[data-reveal-armed="true"] [data-reveal]:not([data-revealed]) { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   [data-reveal-armed="true"] [data-reveal] { opacity: 1; transform: none; }
 }
