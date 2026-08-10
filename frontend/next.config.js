@@ -2,14 +2,13 @@
 
 // Baseline security headers, applied to every route. The CSP is sent in
 // Report-Only mode first so it can be validated against real traffic without
-// breaking the app (external portfolio scripts/styles, Google, Supabase,
-// Stripe, etc.); flip it to an enforcing `Content-Security-Policy` header once
-// the violation reports are clean.
+// breaking the app (Google, Supabase, Stripe, etc.); flip it to an enforcing
+// `Content-Security-Policy` header once the violation reports are clean.
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  // Next.js needs inline/eval; the portfolio assets + Stripe load externally.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://anchit-tandon.com https://js.stripe.com https://*.vercel-scripts.com",
-  "style-src 'self' 'unsafe-inline' https://anchit-tandon.com https://fonts.googleapis.com",
+  // Next.js needs inline/eval; Stripe loads externally.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.vercel-scripts.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https: wss:",
