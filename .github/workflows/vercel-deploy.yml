@@ -1,0 +1,48 @@
+name: Trigger Vercel production deploy
+
+# Guardrail against a stalled Vercel Git integration. Vercel normally deploys
+# `main` automatically, but if that connection silently pauses/disconnects,
+# merges keep landing while the live site freezes on an old build. This pings a
+# Vercel Deploy Hook on every push to `main` so production always rebuilds from
+# the latest commit — independent of the Git integration.
+#
+# Setup (one-time):
+#   1. Vercel → the-third-eye project → Settings → Git → Deploy Hooks.
+#   2. Create a hook targeting the `main` branch; copy its URL.
+#   3. GitHub → repo Settings → Secrets and variables → Actions → add
+#      VERCEL_DEPLOY_HOOK = that URL.
+#
+# If the secret is absent, the job SKIPS with a notice (clean success) rather
+# than failing red. A duplicate deploy (this hook + the native integration when
+# it is healthy) is harmless — Vercel dedupes/queues builds.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Vercel Deploy Hook
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice::VERCEL_DEPLOY_HOOK not set — skipping. Add it in repo Settings → Secrets to enable auto-deploy fallback."
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if curl -fsS -X POST "$HOOK" -o /dev/null; then
+              echo "Vercel production deploy triggered (attempt $attempt)."
+              exit 0
+            fi
+            echo "Deploy hook call failed (attempt $attempt); retrying in $((attempt * 5))s…"
+            sleep $((attempt * 5))
+          done
+          echo "::error::Vercel deploy hook failed after 3 attempts."
+          exit 1
