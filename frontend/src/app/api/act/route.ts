@@ -14,12 +14,13 @@ export async function POST(req: NextRequest) {
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
   // Sign-in only grants basic scopes; the confirmed send needs the token from
-  // the "Connect Google" flow (gmail.send). Prefer it, fall back to session.
-  let accessToken = (session as any).accessToken as string | undefined;
+  // the opt-in "Connect Google" flow (gmail.send). The scope-less session token
+  // only 403s, so use the connected token alone.
+  let accessToken: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
     if (connected?.accessToken) accessToken = connected.accessToken;
-  } catch { /* fall back to session token */ }
+  } catch { /* not connected — reported below */ }
 
   const { tool, args } = (await req.json().catch(() => ({}))) as { tool?: string; args?: any };
   if (!tool || !isSensitive(tool)) return json({ error: "Unknown or non-confirmable action" }, 400);
@@ -32,16 +33,19 @@ export async function POST(req: NextRequest) {
 
   switch (tool) {
     case "send_email": {
-      if (!accessToken) return json({ ok: false, result: "Gmail not connected — connect your Google account (with Gmail send access) from Profile Setup." });
-      const ok = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
-      return json({ ok, result: ok ? `Email sent to ${args?.to}.` : "Gmail rejected the send." });
+      if (!accessToken) return json({ ok: false, result: "Gmail isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Gmail send access) to enable this. Basic sign-in alone does not grant mail access." });
+      const sent = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
+      if (sent.ok) return json({ ok: true, result: `Email sent to ${args?.to}.` });
+      if (sent.status === 401 || sent.status === 403)
+        return json({ ok: false, result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access)." });
+      return json({ ok: false, result: "Gmail rejected the send." });
     }
     default:
       return json({ error: "Unsupported action" }, 400);
   }
 }
 
-async function sendGmail(accessToken: string, to: string, subject: string, body: string): Promise<boolean> {
+async function sendGmail(accessToken: string, to: string, subject: string, body: string): Promise<{ ok: boolean; status?: number }> {
   const raw = [`To: ${to}`, `Subject: ${subject}`, "Content-Type: text/plain; charset=utf-8", "", body].join("\r\n");
   const encoded = Buffer.from(raw).toString("base64url");
   try {
@@ -50,9 +54,9 @@ async function sendGmail(accessToken: string, to: string, subject: string, body:
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: encoded }),
     });
-    return res.ok;
+    return { ok: res.ok, status: res.status };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
