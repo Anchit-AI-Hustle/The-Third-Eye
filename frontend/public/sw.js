@@ -10,7 +10,7 @@
 // payloads, or JS/CSS build chunks — those always go straight to the network.
 //
 // Bump CACHE_VERSION on any change here so `activate` purges every older cache.
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE = `thirdeye-${CACHE_VERSION}`;
 
 // Only immutable, non-versioned assets belong in the precache.
