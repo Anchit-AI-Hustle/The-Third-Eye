@@ -680,7 +680,7 @@ async function getWeather(location: string): Promise<string> {
 }
 
 async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7, maxResults = 10): Promise<string> {
-  if (!accessToken) return "Google Calendar not connected. Connect your Google account (with Calendar access) from Profile Setup to enable this.";
+  if (!accessToken) return "Google Calendar isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Calendar access) to enable this.";
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + daysAhead * 86400000).toISOString();
   try {
@@ -691,7 +691,7 @@ async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (res.status === 401 || res.status === 403) {
-      return "Calendar access denied. Please sign out and sign back in, then grant calendar permissions when prompted.";
+      return "Calendar access was revoked or expired. Re-authorize from Settings → Connections → \"Reconnect / update permissions\".";
     }
     if (!res.ok) return `Could not fetch calendar (${res.status}).`;
     const data = await res.json();
@@ -709,14 +709,14 @@ async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7,
 }
 
 async function readEmails(accessToken: string | undefined, query = "is:unread", maxResults = 5): Promise<string> {
-  if (!accessToken) return "Gmail not connected. Connect your Google account (with Gmail access) from Profile Setup to enable this.";
+  if (!accessToken) return "Gmail isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Gmail access) to enable this. Basic sign-in alone does not grant mail access.";
   try {
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(maxResults) })}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (listRes.status === 401 || listRes.status === 403) {
-      return "Gmail access denied. Please sign out and sign back in, then grant Gmail permissions when prompted.";
+      return "Gmail access was revoked or expired. Re-authorize from Settings → Connections → \"Reconnect / update permissions\".";
     }
     if (!listRes.ok) return "Could not access Gmail.";
     const listData = await listRes.json();
@@ -739,7 +739,7 @@ async function readEmails(accessToken: string | undefined, query = "is:unread", 
 }
 
 async function sendEmail(accessToken: string | undefined, to: string, subject: string, body: string): Promise<string> {
-  if (!accessToken) return "Gmail not connected. Connect your Google account (with Gmail access) from Profile Setup to enable this.";
+  if (!accessToken) return "Gmail isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Gmail access) to enable this. Basic sign-in alone does not grant mail access.";
   try {
     const message = [`To: ${to}`, `Subject: ${subject}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\r\n");
     const encoded = Buffer.from(message).toString("base64url");
@@ -748,7 +748,7 @@ async function sendEmail(accessToken: string | undefined, to: string, subject: s
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: encoded }),
     });
-    if (res.status === 401 || res.status === 403) return "Email sending failed — Gmail send permission missing. Re-connect your Google account (grant Gmail send access) from Profile Setup.";
+    if (res.status === 401 || res.status === 403) return "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access).";
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       return `Failed to send: ${err.error?.message ?? res.statusText}`;
@@ -1927,9 +1927,11 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? undefined;
   // Sign-in only grants basic scopes, so the session token can't touch
-  // Gmail/Calendar. Prefer the token minted from the "Connect Google" flow
-  // (which carries gmail.send + calendar scopes); fall back to the session.
-  let accessToken = (session as any)?.accessToken as string | undefined;
+  // Gmail/Calendar — using it just yields a 403 with misleading "sign back in"
+  // guidance. Only the token minted from the opt-in "Connect Google" flow
+  // (Settings → Connections) carries the gmail/calendar scopes, so use that
+  // alone; absent it the Google tools report "not connected" accurately.
+  let accessToken: string | undefined;
 
   // /api/chat isn't covered by the middleware matcher, so guard here: no session
   // means no metering context and would burn Gemini quota / bypass limits.
@@ -1941,7 +1943,7 @@ export async function POST(req: NextRequest) {
   try {
     const connected = await getGoogleAccessToken(email);
     if (connected?.accessToken) accessToken = connected.accessToken;
-  } catch { /* fall back to session token */ }
+  } catch { /* not connected — Google tools will say so */ }
 
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
