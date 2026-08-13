@@ -1,9 +1,9 @@
 name: Deploy to Vercel
 
 # Vercel's Git integration is not reliable enough to be the only thing standing
-# between `main` and production. It has now silently dropped pushes twice: once
-# for 11 days / 87 commits, and again for PRs #189–#191, which merged green and
-# never reached the live site.
+# between `main` and production. It went quiet for 11 days / 87 commits once,
+# and then dropped four consecutive pushes (#189, #190, #191, #192) that all
+# merged green and never reached the live site.
 #
 # So this workflow does two jobs the integration cannot do for itself:
 #   1. Trigger a production deploy for every push to main.
@@ -16,11 +16,15 @@ name: Deploy to Vercel
 #
 # Setup — ONE of these repo secrets is required
 # (GitHub → Settings → Secrets and variables → Actions):
-#   VERCEL_DEPLOY_HOOK — Vercel → the-third-eye → Settings → Git → Deploy Hooks,
-#                        create a hook targeting `main`, paste the URL. Simplest.
-#   VERCEL_TOKEN       — https://vercel.com/account/tokens. Deploys the exact
-#                        commit rather than "whatever main points at now", so
-#                        prefer this if you have a choice.
+#   VERCEL_TOKEN       — preferred. `vercel deploy --prod` uploads the commit we
+#                        just checked out, so the Git integration is bypassed
+#                        entirely rather than being asked to try again. Create
+#                        one with `vercel login && vercel tokens create ci`, or
+#                        at https://vercel.com/account/tokens.
+#   VERCEL_DEPLOY_HOOK — fallback. Vercel → the-third-eye → Settings → Git →
+#                        Deploy Hooks, targeting `main`. Note this still asks
+#                        the same Git integration to do the work, and deploys
+#                        whatever `main` points at when it fires.
 #
 # Pushes that touch supabase/migrations/** are DEFERRED to supabase-deploy.yml,
 # whose deploy is gated behind `needs: migrate` (migrate → deploy). Deploying
@@ -44,10 +48,10 @@ permissions:
 
 env:
   SITE: https://the-third-eye.anchit-tandon.com
-  # Not credentials — these identify the project the token acts on.
+  # Not credentials — these tell the CLI which project the token acts on, so it
+  # never has to prompt for a link.
+  VERCEL_ORG_ID: team_yC0I2xlKsitxFcfizef9EDQl
   VERCEL_PROJECT_ID: prj_hnFIhmX5J4j4kC9AJLLQTRJVdEoy
-  VERCEL_TEAM_ID: team_yC0I2xlKsitxFcfizef9EDQl
-  VERCEL_REPO_ID: "1246244825"
 
 jobs:
   deploy:
@@ -105,20 +109,20 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${TOKEN:-}" ]; then
-            # Deploys this exact commit, so the verify step below cannot be
-            # satisfied by an unrelated build that happened to land first.
-            echo "Creating a deployment for $SHA via the Vercel API…"
-            payload=$(jq -nc \
-              --arg project "$VERCEL_PROJECT_ID" \
-              --arg sha "$SHA" \
-              --arg repoId "$VERCEL_REPO_ID" \
-              '{name:"the-third-eye", project:$project, target:"production",
-                gitSource:{type:"github", repoId:($repoId|tonumber), ref:"main", sha:$sha}}')
-            curl -fsS -X POST \
-              "https://api.vercel.com/v13/deployments?teamId=$VERCEL_TEAM_ID&forceNew=1" \
-              -H "Authorization: Bearer $TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$payload" | jq -r '"Deployment \(.id) → \(.url)"'
+            # Uploads the working tree we just checked out and builds it on
+            # Vercel, so the Git integration is not involved at any point — it
+            # is the thing that keeps dropping pushes. Building server-side
+            # (rather than `vercel build` + --prebuilt) keeps the project's Root
+            # Directory and environment variables applied exactly as they are
+            # for a normal deploy.
+            #
+            # --build-env carries the sha into the bundle: system variables like
+            # VERCEL_GIT_COMMIT_SHA are only set for Git-integration builds, so
+            # without this the verify step below would have nothing to match.
+            npm install --global vercel@latest
+            vercel deploy --prod --yes \
+              --token "$TOKEN" \
+              --build-env "NEXT_PUBLIC_BUILD_SHA=$SHA"
           elif [ -n "${HOOK:-}" ]; then
             echo "Pinging the Vercel deploy hook…"
             for attempt in 1 2 3; do

@@ -35,7 +35,11 @@ export async function GET(_req: NextRequest) {
     providers.openai > 0 || providers.anthropic || providers.gemini ||
     providers.grok || providers.groq || providers.cerebras || providers.ollama;
 
-  const commit = clean(env.VERCEL_GIT_COMMIT_SHA);
+  // VERCEL_GIT_COMMIT_SHA is a system env var, so it is only populated when the
+  // Git integration built the deployment. CLI deploys pass the sha in as a
+  // build env var instead — written out in full here because Next.js inlines
+  // NEXT_PUBLIC_* by literal text match, not through the `env` alias above.
+  const commit = clean(env.VERCEL_GIT_COMMIT_SHA) || clean(process.env.NEXT_PUBLIC_BUILD_SHA);
 
   return new Response(JSON.stringify({
     ok: llm_available,
