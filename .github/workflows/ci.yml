@@ -38,7 +38,8 @@ jobs:
         env:
           ENVIRONMENT: test
           SECRET_KEY: test-secret-key-with-at-least-32-chars
-          FINANCIAL_ENCRYPTION_KEY: test-financial-key-with-32-characters
+          # Must be a real Fernet key or app.finance.encryption raises on use.
+          FINANCIAL_ENCRYPTION_KEY: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
           # Quoted: the trailing colon makes this a mapping key to the YAML
           # parser otherwise, which fails the whole workflow before any job runs.
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"

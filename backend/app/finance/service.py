@@ -25,6 +25,10 @@ from app.finance.models import (
 
 log = structlog.get_logger()
 
+# How far back detect_and_persist_subscriptions looks. Three charges is the
+# minimum a cadence can be inferred from, so this must span two annual cycles.
+SCAN_WINDOW_DAYS = 760
+
 
 # ─── Category detection (rule-based) ──────────────────────────────────────────
 
@@ -177,9 +181,8 @@ def _interval_consistency(dates: list[datetime]) -> float:
     intervals = [i for i in intervals if i > 0]
     if len(intervals) < 2:
         return 1.0
+    # Every interval here is > 0, so the mean cannot be zero.
     mean = statistics.mean(intervals)
-    if mean == 0:
-        return 1.0
     stdev = statistics.stdev(intervals)
     return stdev / mean
 
@@ -206,9 +209,8 @@ def detect_recurring_groups(transactions: list[Transaction]) -> list[_Group]:
         amounts = [a for a in amounts if a > 0]
         if len(amounts) < 2:
             continue
+        # Amounts are filtered to > 0 above, so the mean cannot be zero.
         mean_amt = statistics.mean(amounts)
-        if mean_amt == 0:
-            continue
         amt_cv = statistics.stdev(amounts) / mean_amt if len(amounts) > 1 else 0
         if amt_cv > 0.15:  # amount varies too much
             continue
@@ -222,7 +224,11 @@ async def detect_and_persist_subscriptions(
     db: AsyncSession, *, user_id: uuid.UUID
 ) -> list[Subscription]:
     """Scan recent transactions and persist detected recurring subscriptions."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=180)
+    # Wide enough to hold the three charges the detector needs at an annual
+    # cadence. At the previous 180 days the "annual" branch below could never be
+    # reached, so yearly subscriptions — the ones people most often forget — were
+    # the only kind that could never be found.
+    cutoff = datetime.now(timezone.utc) - timedelta(days=SCAN_WINDOW_DAYS)
     result = await db.execute(
         select(Transaction).where(
             Transaction.user_id == user_id,

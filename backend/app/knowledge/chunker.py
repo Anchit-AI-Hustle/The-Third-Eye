@@ -3,6 +3,7 @@ Token-based chunker — 512 token chunks with 50 token overlap.
 Prefers paragraph and sentence boundaries; falls back to hard token cuts.
 """
 
+import functools
 import re
 from dataclasses import dataclass
 
@@ -12,7 +13,13 @@ CHUNK_SIZE_TOKENS = 512
 CHUNK_OVERLAP_TOKENS = 50
 ENCODING_NAME = "cl100k_base"  # matches text-embedding-3-small
 
-_encoding = tiktoken.get_encoding(ENCODING_NAME)
+
+@functools.lru_cache(maxsize=1)
+def _get_encoding() -> "tiktoken.Encoding":
+    # Resolved on first use, not at import: tiktoken downloads the encoding on a
+    # cache miss, and doing that at import time makes this module — and anything
+    # that transitively imports it — unimportable without network access.
+    return tiktoken.get_encoding(ENCODING_NAME)
 
 
 @dataclass(frozen=True)
@@ -23,7 +30,7 @@ class Chunk:
 
 
 def count_tokens(text: str) -> int:
-    return len(_encoding.encode(text))
+    return len(_get_encoding().encode(text))
 
 
 def chunk_text(
@@ -111,7 +118,7 @@ def _split_oversized(text: str, chunk_size: int, overlap: int) -> list[str]:
 
 
 def _hard_token_split(text: str, chunk_size: int, overlap: int) -> list[str]:
-    tokens = _encoding.encode(text)
+    tokens = _get_encoding().encode(text)
     if not tokens:
         return []
 
@@ -121,7 +128,7 @@ def _hard_token_split(text: str, chunk_size: int, overlap: int) -> list[str]:
         chunk_tokens = tokens[start : start + chunk_size]
         if not chunk_tokens:
             break
-        pieces.append(_encoding.decode(chunk_tokens))
+        pieces.append(_get_encoding().decode(chunk_tokens))
         if start + chunk_size >= len(tokens):
             break
     return pieces
@@ -133,12 +140,12 @@ def _carry_overlap(buffer: list[str], overlap_tokens: int) -> tuple[list[str], i
         return [], 0
 
     joined = "\n\n".join(buffer)
-    tokens = _encoding.encode(joined)
+    tokens = _get_encoding().encode(joined)
     if len(tokens) <= overlap_tokens:
         return [joined], len(tokens)
 
     tail_tokens = tokens[-overlap_tokens:]
-    tail_text = _encoding.decode(tail_tokens)
+    tail_text = _get_encoding().decode(tail_tokens)
     return [tail_text], overlap_tokens
 
 
