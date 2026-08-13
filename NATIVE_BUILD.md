@@ -31,9 +31,36 @@ npm run cap:android         # syncs + opens Android Studio → Build ▸ Generat
 - **Icons/splash**: drop a 1024×1024 icon and splash into `resources/` and run
   `npx @capacitor/assets generate` to produce every size.
 
+## Permissions
+
+`AndroidManifest.xml` and `Info.plist` declare the grants the web layer needs.
+Capacitor's WebView maps the web APIs onto them, so no bridge code is required:
+
+| Web call | Android | iOS |
+| --- | --- | --- |
+| `getUserMedia` (wake word, day recorder) | `RECORD_AUDIO` | `NSMicrophoneUsageDescription` |
+| `Notification.requestPermission()` | `POST_NOTIFICATIONS` | n/a — see below |
+| `geolocation` | `ACCESS_*_LOCATION` | `NSLocationWhenInUseUsageDescription` |
+
+Without these the calls fail silently inside the app while still working in a
+browser tab, which is the confusing failure mode they exist to prevent.
+
 ## Push notifications
 
-Web push (VAPID) already works in the PWA and Android Chrome. For native push,
-wire `@capacitor/push-notifications` to register the device token and store it
-alongside the web subscription — the cron dispatcher already fans out to stored
-subscriptions.
+Web push (VAPID) works in the PWA, in Android Chrome, and — now that
+`POST_NOTIFICATIONS` is declared — inside the Android app. `usePush` handles
+registration and the cron dispatcher already fans out to stored subscriptions.
+
+**iOS is the exception.** WKWebView does not implement the Web Push API, so the
+web subscription never registers inside the iOS app. That one needs
+`@capacitor/push-notifications` (installed, currently unused), an APNs key, and a
+`token` column on `push_subscriptions` to store device tokens next to web ones.
+
+## Known gap: background microphone
+
+`UIBackgroundModes: audio` lets iOS keep an audio session alive when the app
+leaves the foreground. Android needs more than a permission: a foreground
+service typed `microphone`, started when capture begins and stopped with it.
+`FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE` are declared for it, but
+the service class is not written yet — so on Android, capture still stops when
+the app is backgrounded, exactly as it does in a browser tab.

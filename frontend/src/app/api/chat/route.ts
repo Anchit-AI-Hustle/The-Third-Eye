@@ -7,6 +7,8 @@ import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
 import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
+import { loadMemory, saveMemory } from "@/lib/memoryStore";
+import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getGoogleAccessToken } from "@/lib/googleToken";
@@ -1054,17 +1056,13 @@ async function runTool(
         return { result: formatProactiveSuggestion(input.context ?? "", input.suggestion ?? "", input.urgency ?? "low") };
       }
       if (action === "habits") {
-        return { result: getHabits(input.min_confidence ?? 0.5) };
+        return { result: getHabits(input.min_confidence ?? 0.5, ctx.memoryStore) };
       }
       if (action === "record") {
-        const result = learnPattern(input.kind ?? "", input.value ?? "", input.confidence ?? 0.8);
-        return {
-          result,
-          sideEffect: { type: "memory_update", data: { key: `pattern:${input.kind}`, value: input.value } },
-        };
+        return { result: learnPattern(input.kind ?? "", input.value ?? "", input.confidence ?? 0.8, ctx.memoryStore) };
       }
       // insights
-      return { result: getInsights(input.category ?? "all") };
+      return { result: getInsights(input.category ?? "all", ctx.memoryStore) };
     }
 
     // ─── INDIVIDUAL TOOLS (unique functionality) ──────────────────────────
@@ -1672,32 +1670,6 @@ const MODE_CONTEXT: Record<string, string> = {
 
 // ─── Autonomous Intelligence Tool Implementations ────────────────────────────
 
-function getInsights(category: string): string {
-  const lines: string[] = [];
-  if (category === "all" || category === "habits") {
-    lines.push("### Detected Habits\n- No habits detected yet. Keep using the app and I'll learn your patterns over time.");
-  }
-  if (category === "all" || category === "patterns") {
-    lines.push("### Patterns\n- I'm still learning your patterns. Every interaction teaches me something new.");
-  }
-  if (category === "all" || category === "preferences") {
-    lines.push("### Preferences\n- No preferences recorded yet. Tell me what you like and I'll remember.");
-  }
-  if (category === "all" || category === "activity") {
-    lines.push("### Activity\n- I'll track your most-used features and suggest optimizations as patterns emerge.");
-  }
-  return lines.join("\n\n");
-}
-
-function getHabits(minConfidence: number): string {
-  return `### Your Habits\n\nI'm still in the early learning phase. Here's what I know so far:\n\n- **Interaction frequency**: I'll detect daily routines, work patterns, and preferred activity times as you use the app more.\n- **Confidence threshold**: Currently set to ${Math.round(minConfidence * 100)}% — I only report habits I'm confident about.\n\n*Keep interacting and I'll build a detailed habit profile over the coming days.*`;
-}
-
-function learnPattern(kind: string, value: string, confidence: number): string {
-  if (!kind || !value) return "I need both a pattern category (kind) and a value to record.";
-  return `### Pattern Noted\n\n- **Category**: ${kind}\n- **Value**: ${value}\n- **Confidence**: ${Math.round(confidence * 100)}%\n\nI'll use this to personalize your experience. This pattern has been noted but not yet persisted to the database — backend integration is pending.`;
-}
-
 function scheduleAutomation(name: string, trigger: string, action: string, schedule: string): string {
   if (!name || !trigger || !action) return "I need a name, trigger, and action to set up an automation.";
   return `### Automation Registered\n\n- **Name**: ${name}\n- **Trigger**: ${trigger}\n- **Action**: ${action}\n- **Schedule**: ${schedule}\n\nThis automation has been registered but not yet scheduled — backend scheduler integration is pending.`;
@@ -1912,7 +1884,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as ChatRequest;
   const {
-    message, history = [], memory = {}, userName,
+    message, history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], location, deviceInfo,
     agentName, agentId, agentPersona, mode,
   } = body;
@@ -1980,6 +1952,12 @@ export async function POST(req: NextRequest) {
   if (deviceInfo && Object.keys(deviceInfo).length) {
     systemInstruction += `\n\n## Device context\nCurrent device/system info for the operator, gathered client-side via standard web APIs (storage quota, memory, CPU, battery, network, screen, platform):\n${JSON.stringify(deviceInfo)}\nAnswer questions about their storage/memory/battery/network/screen/platform directly and specifically from this data — including "how much storage/space is left". Never reply that you cannot access device information when it is provided here. If a particular field is absent, say that one value isn't available rather than refusing wholesale.`;
   }
+
+  // Durable memory lives server-side; the request body carries the client's
+  // localStorage mirror, which is newer for keys set earlier this session but
+  // absent entirely on a fresh device. Server first, client overrides.
+  const storedMemory = await loadMemory(email);
+  const memory = { ...storedMemory, ...clientMemory };
 
   const memoryEntries = Object.entries(memory);
   if (memoryEntries.length > 0) {
@@ -2116,6 +2094,7 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
+          await saveMemory(email, memory, memoryStore);
           send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
           // Best-effort, non-blocking: don't hold the stream open (which keeps the
           // client's composer locked) while the embedding + insert run.
@@ -2148,6 +2127,7 @@ export async function POST(req: NextRequest) {
             maxTokens: 1200,
           });
           send("text", { text: out.text });
+          await saveMemory(email, memory, memoryStore);
           send("done", { stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
           if (email && out.text) void rememberExchange(email, message, out.text).catch(() => {});
         } catch {

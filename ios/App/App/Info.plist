@@ -24,6 +24,20 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>JARVIS listens for your wake word and transcribes your day so it can recall what happened. Recording only runs while you have it switched on.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>JARVIS uses the camera when you ask it to look at something.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>JARVIS uses your location to answer questions about where you are and what is nearby.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>JARVIS converts what you say into text so it can respond to spoken requests.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -66,10 +66,10 @@ jobs:
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
-          if [ -n "$HOOK" ]; then
-            echo "Triggering Vercel deploy hook…"
-            curl -sS -X POST "$HOOK" && echo "Deploy triggered."
-          else
-            echo "No VERCEL_DEPLOY_HOOK secret set — skipping."
-            echo "Vercel's Git integration already auto-deploys main (git.deploymentEnabled), so this is only a fallback."
+          if [ -z "$HOOK" ]; then
+            echo "::error::VERCEL_DEPLOY_HOOK is not set, so this migration-gated deploy cannot promote the app."
+            echo "::error::Add the Deploy Hook URL as the VERCEL_DEPLOY_HOOK repo secret."
+            exit 1
           fi
+          echo "Triggering Vercel deploy hook…"
+          curl -fsS -X POST "$HOOK" -o /dev/null && echo "Deploy triggered."

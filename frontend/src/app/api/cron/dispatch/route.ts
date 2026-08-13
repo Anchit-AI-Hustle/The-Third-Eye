@@ -3,6 +3,7 @@ import { getAdminSupabase } from "@/lib/serverSupabase";
 import { decrypt } from "@/lib/crypto";
 import { accessTokenFromRefresh, sendGmail } from "@/lib/google";
 import { sendPush } from "@/lib/push";
+import { leadRecommendation } from "@/lib/digest";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -112,7 +113,15 @@ async function runDigest(sb: Sb) {
     const html = digestHtml(tasks ?? [], goals ?? [], today);
     const token = await accessTokenFor(sb, cache, email);
     const ok = token ? await sendGmail(token, email, `🗓️ Your JARVIS daily briefing — ${today}`, html) : false;
-    await sendPush(email, "Daily briefing ready", `${(tasks ?? []).length} open tasks today`, "/dashboard");
+    // The push is what actually reaches them, so lead with the recommendation
+    // rather than a count they'd have to open the app to act on.
+    const lead = leadRecommendation(tasks ?? [], goals ?? [], today);
+    await sendPush(
+      email,
+      "Daily briefing ready",
+      lead ? lead.text : `${(tasks ?? []).length} open tasks today`,
+      "/dashboard",
+    );
     await logNotification(sb, email, "daily_digest", today, "email", ok ? "sent" : "failed");
     if (ok) sent++;
   }
@@ -121,15 +130,20 @@ async function runDigest(sb: Sb) {
 
 function digestHtml(tasks: any[], goals: any[], date: string): string {
   const overdue = tasks.filter((t) => t.due_date && t.due_date < date);
+  const lead = leadRecommendation(tasks, goals, date);
   const taskRows = tasks.length
     ? tasks.map((t) => `<li><b>[${t.priority}]</b> ${escapeHtml(t.title)}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status}</li>`).join("")
     : "<li>No open tasks — clear runway.</li>";
   const goalRows = goals.length
     ? `<h3>Goals</h3><ul>${goals.map((g) => `<li>${escapeHtml(g.title)}: ${g.current}/${g.target} ${g.unit ?? ""}</li>`).join("")}</ul>`
     : "";
+  const leadBlock = lead
+    ? `<p style="margin:16px 0;padding:14px 16px;background:#f3f6fa;border-left:3px solid #4FC3F7;border-radius:4px;font-size:15px">${lead.html}</p>`
+    : "";
   return `<div style="font-family:system-ui,sans-serif;max-width:560px">
     <h2>Good morning. Here's your day.</h2>
     <p style="color:#666">${overdue.length ? `<b>${overdue.length} overdue</b> · ` : ""}${tasks.length} open task(s)</p>
+    ${leadBlock}
     <h3>Tasks</h3><ul>${taskRows}</ul>${goalRows}
     <p style="color:#888;font-size:12px">— JARVIS · reply in the app to act on any of these</p>
   </div>`;
