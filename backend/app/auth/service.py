@@ -2,8 +2,8 @@ import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,21 +12,34 @@ from app.auth.schemas import NextAuthSessionPayload
 from app.config import get_settings
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 _TOKEN_EXPIRY_HOURS = 24
+
+# bcrypt hashes at most 72 bytes. Older releases truncated silently; 5.x raises
+# instead, so we truncate explicitly and identically on both sides — otherwise a
+# long password would hash fine and then fail to verify.
+_BCRYPT_MAX_BYTES = 72
 
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def _password_bytes(plain: str) -> bytes:
+    return plain.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+
+
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(_password_bytes(plain), hashed.encode("utf-8"))
+    except ValueError:
+        # Malformed or non-bcrypt hash in the row — treat as a failed login
+        # rather than a 500.
+        return False
 
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(_password_bytes(plain), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(user_id: uuid.UUID) -> tuple[str, datetime]:
