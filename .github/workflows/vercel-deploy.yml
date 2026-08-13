@@ -1,33 +1,53 @@
-name: Trigger Vercel production deploy
+name: Deploy to Vercel
 
-# Guardrail against a stalled Vercel Git integration. Vercel normally deploys
-# `main` automatically, but if that connection silently pauses/disconnects,
-# merges keep landing while the live site freezes on an old build. This pings a
-# Vercel Deploy Hook on every push to `main` so production always rebuilds from
-# the latest commit — independent of the Git integration.
+# Vercel's Git integration is not reliable enough to be the only thing standing
+# between `main` and production. It has now silently dropped pushes twice: once
+# for 11 days / 87 commits, and again for PRs #189–#191, which merged green and
+# never reached the live site.
 #
-# Setup (one-time):
-#   1. Vercel → the-third-eye project → Settings → Git → Deploy Hooks.
-#   2. Create a hook targeting the `main` branch; copy its URL.
-#   3. GitHub → repo Settings → Secrets and variables → Actions → add
-#      VERCEL_DEPLOY_HOOK = that URL.
+# So this workflow does two jobs the integration cannot do for itself:
+#   1. Trigger a production deploy for every push to main.
+#   2. VERIFY it — poll the live site's /api/health until it reports the commit
+#      we just pushed. A deploy that was "triggered" but never landed is a
+#      failure here, not a green check.
 #
-# If the secret is absent, the job SKIPS with a notice (clean success) rather
-# than failing red. A duplicate deploy (this hook + the native integration when
-# it is healthy) is harmless — Vercel dedupes/queues builds.
+# It also runs on a schedule, so if the integration stalls between pushes the
+# alarm goes off within half an hour instead of being noticed by eye weeks later.
+#
+# Setup — ONE of these repo secrets is required
+# (GitHub → Settings → Secrets and variables → Actions):
+#   VERCEL_DEPLOY_HOOK — Vercel → the-third-eye → Settings → Git → Deploy Hooks,
+#                        create a hook targeting `main`, paste the URL. Simplest.
+#   VERCEL_TOKEN       — https://vercel.com/account/tokens. Deploys the exact
+#                        commit rather than "whatever main points at now", so
+#                        prefer this if you have a choice.
 #
 # Pushes that touch supabase/migrations/** are DEFERRED to supabase-deploy.yml,
-# whose Vercel deploy is gated behind `needs: migrate` (migrate → deploy).
-# Firing the hook here for those pushes would promote app code before its schema
-# is applied, so we skip and let the migration-gated workflow own the deploy.
+# whose deploy is gated behind `needs: migrate` (migrate → deploy). Deploying
+# here would promote app code before its schema is applied.
 
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "*/30 * * * *"
   workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      migration_gated:
+        description: Set by supabase-deploy.yml, which owns migration pushes — suppresses the defer guard so the deploy is not handed back to a workflow that is already waiting on it.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+env:
+  SITE: https://the-third-eye.anchit-tandon.com
+  # Not credentials — these identify the project the token acts on.
+  VERCEL_PROJECT_ID: prj_hnFIhmX5J4j4kC9AJLLQTRJVdEoy
+  VERCEL_TEAM_ID: team_yC0I2xlKsitxFcfizef9EDQl
+  VERCEL_REPO_ID: "1246244825"
 
 jobs:
   deploy:
@@ -37,14 +57,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve the commit that should be live
+        id: target
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Defer migration pushes to supabase-deploy.yml
         id: guard
+        if: github.event_name == 'push' && !inputs.migration_gated
         env:
           BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
+          AFTER: ${{ steps.target.outputs.sha }}
         run: |
-          # A migration-gated deploy (migrate → deploy) owns any push that
-          # changes supabase/migrations/**. Firing the hook here would race it.
           if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
             range="${BEFORE}..${AFTER}"
           else
@@ -57,26 +80,78 @@ jobs:
             echo "defer=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Ping Vercel Deploy Hook
-        if: steps.guard.outputs.defer == 'false'
+      - name: Check what is already live
+        id: live
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""')
+          echo "Live commit:   ${live:-<none reported>}"
+          echo "Target commit: $SHA"
+          if [ "$live" = "$SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Production is already serving $SHA — nothing to deploy."
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger a production deploy
+        id: trigger
+        if: steps.guard.outputs.defer != 'true' && steps.live.outputs.current == 'false'
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SHA: ${{ steps.target.outputs.sha }}
         run: |
-          if [ -z "$HOOK" ]; then
-            echo "::error::VERCEL_DEPLOY_HOOK is not set, so this workflow cannot deploy anything."
-            echo "::error::Create a Deploy Hook (Vercel → project → Settings → Git → Deploy Hooks) and add the URL as the VERCEL_DEPLOY_HOOK repo secret."
-            # Deliberately fails. This job is the guardrail for a stalled Vercel
-            # Git integration; skipping green let production sit 87 commits
-            # behind for 11 days while every run reported success.
+          set -euo pipefail
+          if [ -n "${TOKEN:-}" ]; then
+            # Deploys this exact commit, so the verify step below cannot be
+            # satisfied by an unrelated build that happened to land first.
+            echo "Creating a deployment for $SHA via the Vercel API…"
+            payload=$(jq -nc \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg sha "$SHA" \
+              --arg repoId "$VERCEL_REPO_ID" \
+              '{name:"the-third-eye", project:$project, target:"production",
+                gitSource:{type:"github", repoId:($repoId|tonumber), ref:"main", sha:$sha}}')
+            curl -fsS -X POST \
+              "https://api.vercel.com/v13/deployments?teamId=$VERCEL_TEAM_ID&forceNew=1" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload" | jq -r '"Deployment \(.id) → \(.url)"'
+          elif [ -n "${HOOK:-}" ]; then
+            echo "Pinging the Vercel deploy hook…"
+            for attempt in 1 2 3; do
+              if curl -fsS -X POST "$HOOK" -o /dev/null; then
+                echo "Deploy triggered (attempt $attempt)."
+                break
+              fi
+              [ "$attempt" = 3 ] && { echo "::error::Deploy hook failed after 3 attempts."; exit 1; }
+              sleep $((attempt * 5))
+            done
+          else
+            echo "::error::Neither VERCEL_TOKEN nor VERCEL_DEPLOY_HOOK is set, so production cannot be deployed from CI."
+            echo "::error::Add one of them under Settings → Secrets and variables → Actions. See the header of this workflow file."
             exit 1
           fi
-          for attempt in 1 2 3; do
-            if curl -fsS -X POST "$HOOK" -o /dev/null; then
-              echo "Vercel production deploy triggered (attempt $attempt)."
+
+      - name: Verify the commit actually went live
+        if: steps.trigger.outcome == 'success'
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          # A triggered deploy is not a finished deploy. Poll until the running
+          # build reports our commit; 15 minutes is well past a normal build.
+          deadline=$(( $(date +%s) + 900 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            sleep 20
+            live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' || echo "")
+            if [ "$live" = "$SHA" ]; then
+              echo "::notice::Production is serving $SHA."
               exit 0
             fi
-            echo "Deploy hook call failed (attempt $attempt); retrying in $((attempt * 5))s…"
-            sleep $((attempt * 5))
+            echo "…still serving ${live:-<none reported>}"
           done
-          echo "::error::Vercel deploy hook failed after 3 attempts."
+          echo "::error::15 minutes after triggering, production is still not serving $SHA."
+          echo "::error::Check https://vercel.com/anchit-ai-hustle/the-third-eye for a failed or queued build."
           exit 1
