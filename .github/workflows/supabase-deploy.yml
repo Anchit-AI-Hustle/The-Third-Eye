@@ -2,12 +2,13 @@ name: Deploy Supabase migrations
 
 # Applies database migrations to the linked Supabase project whenever a
 # migration file lands on main — the CLI step you'd otherwise run by hand.
-# Also (optionally) pings a Vercel deploy hook so the site rebuilds in lock-step.
+# Then hands off to vercel-deploy.yml so the site rebuilds in lock-step, after
+# the schema it depends on is already applied.
 #
-# Optional setup — add these in GitHub → Settings → Secrets and variables → Actions:
+# Setup — add these in GitHub → Settings → Secrets and variables → Actions:
 #   SUPABASE_ACCESS_TOKEN  — https://supabase.com/dashboard/account/tokens
 #   SUPABASE_DB_PASSWORD   — your project's database password
-#   VERCEL_DEPLOY_HOOK     — (optional) a Deploy Hook URL from Vercel → Settings → Git → Deploy Hooks
+#   (the deploy half needs VERCEL_TOKEN or VERCEL_DEPLOY_HOOK — see vercel-deploy.yml)
 #
 # If the Supabase secrets are absent, the workflow SKIPS the migration (a clean
 # success with a notice) instead of failing — so a push never shows a red
@@ -58,18 +59,11 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         run: supabase db push
 
+  # Schema first, then the app — and vercel-deploy.yml owns the "did it actually
+  # go live?" check, so a migration-gated promotion is verified like any other.
   deploy:
     needs: migrate
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Vercel deploy hook (optional)
-        env:
-          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
-        run: |
-          if [ -z "$HOOK" ]; then
-            echo "::error::VERCEL_DEPLOY_HOOK is not set, so this migration-gated deploy cannot promote the app."
-            echo "::error::Add the Deploy Hook URL as the VERCEL_DEPLOY_HOOK repo secret."
-            exit 1
-          fi
-          echo "Triggering Vercel deploy hook…"
-          curl -fsS -X POST "$HOOK" -o /dev/null && echo "Deploy triggered."
+    uses: ./.github/workflows/vercel-deploy.yml
+    with:
+      migration_gated: true
+    secrets: inherit
