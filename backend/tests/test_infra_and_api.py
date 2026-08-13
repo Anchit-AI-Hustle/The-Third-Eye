@@ -707,27 +707,27 @@ async def test_health_reports_degraded_when_redis_is_unreachable(client: AsyncCl
 
 
 def test_engine_kwargs_omit_pool_sizing_for_sqlite():
-    from app.database import build_engine_kwargs
+    import app.database as database
 
-    kwargs = build_engine_kwargs("sqlite+aiosqlite:///:memory:", "test")
+    kwargs = database.build_engine_kwargs("sqlite+aiosqlite:///:memory:", "test")
     assert "pool_size" not in kwargs
     assert "max_overflow" not in kwargs
     assert kwargs["pool_pre_ping"] is True
 
 
 def test_engine_kwargs_add_pool_sizing_for_a_server_database():
-    from app.database import build_engine_kwargs
+    import app.database as database
 
-    kwargs = build_engine_kwargs("postgresql+asyncpg://u:p@h/db", "test")
+    kwargs = database.build_engine_kwargs("postgresql+asyncpg://u:p@h/db", "test")
     assert kwargs["pool_size"] == 10
     assert kwargs["max_overflow"] == 20
 
 
 def test_engine_echo_follows_the_environment():
-    from app.database import build_engine_kwargs
+    import app.database as database
 
-    assert build_engine_kwargs("sqlite://", "development")["echo"] is True
-    assert build_engine_kwargs("sqlite://", "production")["echo"] is False
+    assert database.build_engine_kwargs("sqlite://", "development")["echo"] is True
+    assert database.build_engine_kwargs("sqlite://", "production")["echo"] is False
 
 
 @pytest.mark.asyncio

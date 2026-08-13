@@ -24,7 +24,7 @@ class _CharEncoding:
 
 @pytest.fixture(autouse=True)
 def char_tokens(monkeypatch):
-    monkeypatch.setattr(chunker, "_get_encoding", lambda: _CharEncoding())
+    monkeypatch.setattr(chunker, "_get_encoding", _CharEncoding)
 
 
 # ─── count_tokens ────────────────────────────────────────────────────────────

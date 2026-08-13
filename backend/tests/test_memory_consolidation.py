@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import AuditLog, User
+import app.memory.consolidation as consolidation
 from app.memory.consolidation import (
     CONSOLIDATION_THRESHOLD_DAYS,
     MIN_GROUP_SIZE,
@@ -279,8 +280,6 @@ async def test_run_consolidation_processes_every_user_with_work(monkeypatch, tes
 
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    import app.memory.consolidation as consolidation
-
     maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
     @asynccontextmanager
@@ -311,8 +310,6 @@ async def test_run_consolidation_is_a_no_op_when_nothing_is_due(monkeypatch, tes
 
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    import app.memory.consolidation as consolidation
-
     maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
     @asynccontextmanager
@@ -333,7 +330,6 @@ async def test_run_consolidation_is_a_no_op_when_nothing_is_due(monkeypatch, tes
 async def test_find_users_with_consolidation_work_selects_only_stale_unconsolidated(
     db: AsyncSession, test_user_for_consolidation: User
 ):
-    import app.memory.consolidation as consolidation
     from app.memory.models import EpisodicMemory
 
     user_id = test_user_for_consolidation.id
@@ -355,8 +351,6 @@ async def test_find_users_with_consolidation_work_selects_only_stale_unconsolida
 
 @pytest.mark.asyncio
 async def test_summarize_returns_nothing_when_the_model_fails(monkeypatch):
-    import app.memory.consolidation as consolidation
-
     async def boom(**kwargs):
         raise RuntimeError("model unavailable")
 
@@ -373,8 +367,6 @@ async def test_summarize_returns_nothing_when_the_model_fails(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_summarize_filters_and_caps_the_facts_it_keeps(monkeypatch):
-    import app.memory.consolidation as consolidation
-
     lines = ["- short", "- " + "x" * 600] + [f"- Fact number {i} about the user." for i in range(30)]
 
     async def fake_complete(**kwargs):
@@ -396,8 +388,6 @@ async def test_summarize_filters_and_caps_the_facts_it_keeps(monkeypatch):
 
 
 def test_schedule_consolidation_job_registers_a_nightly_cron():
-    from app.memory.consolidation import run_consolidation, schedule_consolidation_job
-
     captured = {}
 
     class FakeScheduler:
@@ -405,9 +395,9 @@ def test_schedule_consolidation_job_registers_a_nightly_cron():
             captured["func"] = func
             captured.update(kwargs)
 
-    schedule_consolidation_job(FakeScheduler())
+    consolidation.schedule_consolidation_job(FakeScheduler())
 
-    assert captured["func"] is run_consolidation
+    assert captured["func"] is consolidation.run_consolidation
     assert captured["trigger"] == "cron"
     assert (captured["hour"], captured["minute"]) == (3, 0)
     assert captured["id"] == "memory_consolidation"
