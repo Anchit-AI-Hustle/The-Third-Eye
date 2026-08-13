@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useLocalTasks } from "./useLocalTasks";
 import { useLocalGoals } from "./useLocalGoals";
 import { useLocalNotes } from "./useLocalNotes";
 import { useLocalExpenses } from "./useLocalExpenses";
 import { isAgentKilled, logAgentAction, describeSideEffect } from "@/lib/agentControl";
+import { isInternalLink } from "@/lib/appLinks";
 
 // A side-effect emitted by the /api/chat agent loop when it runs a write tool.
 export interface AgentSideEffect {
@@ -33,6 +35,17 @@ export function useAgentActions() {
   const { add: addGoal, adjust: adjustGoal, remove: removeGoal } = useLocalGoals();
   const { create: createNote, remove: removeNote } = useLocalNotes();
   const { add: addExpense, remove: removeExpense } = useLocalExpenses();
+  const router = useRouter();
+
+  // Routes inside this app navigate in place; anything on the web opens in its
+  // own tab so the user does not lose the conversation they are having.
+  const openResolved = useCallback(
+    (url: string) => {
+      if (isInternalLink(url)) router.push(url);
+      else window.open(url, "_blank");
+    },
+    [router],
+  );
 
   // Returns the list of undoable actions applied (created items), so the caller
   // can offer a short-lived "Undo" — the agent's writes are no longer one-way.
@@ -116,14 +129,17 @@ export function useAgentActions() {
             if (d.id) removeExpense(d.id);
             break;
           case "open_url":
-            if (d.url) window.open(d.url, "_blank");
+            // A route inside this app is navigated to in place. Opening it in a
+            // new tab would spawn a second copy of the app, losing the session
+            // view and the assistant panel the user is talking to.
+            if (d.url) openResolved(d.url);
             break;
           case "open_urls":
             // Multiple URLs from protocol activation — each item is { type, data: { url, label } }
             if (Array.isArray(d.data)) {
               for (const item of d.data) {
                 const url = item?.data?.url ?? item?.url;
-                if (url) window.open(url, "_blank");
+                if (url) openResolved(url);
               }
             }
             break;
@@ -136,6 +152,6 @@ export function useAgentActions() {
       }
       return undoables;
     },
-    [createTask, updateTask, removeTask, createNote, removeNote, addGoal, adjustGoal, removeGoal, addExpense, removeExpense],
+    [createTask, updateTask, removeTask, createNote, removeNote, addGoal, adjustGoal, removeGoal, addExpense, removeExpense, openResolved],
   );
 }
