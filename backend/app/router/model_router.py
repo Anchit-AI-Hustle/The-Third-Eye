@@ -5,7 +5,7 @@ Routing rules are defined in ARCHITECTURE.md and enforced here.
 
 import asyncio
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 import structlog
