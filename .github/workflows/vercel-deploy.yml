@@ -6,13 +6,17 @@ name: Deploy to Vercel
 # merged green and never reached the live site.
 #
 # So this workflow does two jobs the integration cannot do for itself:
-#   1. Trigger a production deploy for every push to main.
-#   2. VERIFY it — poll the live site's /api/health until it reports the commit
-#      we just pushed. A deploy that was "triggered" but never landed is a
-#      failure here, not a green check.
+#   1. VERIFY every push — poll the live site's /api/health until it reports the
+#      commit that was just pushed. This always runs. Whoever performed the
+#      deploy, a build that never landed is a failure here, not a green check.
+#   2. Perform the deploy itself, if it has been given a credential to do so.
+#      Without one it skips with a notice and leaves the work to the Git
+#      integration — a missing secret is not itself worth a red check; a live
+#      site that has fallen behind main is.
 #
 # It also runs on a schedule, so if the integration stalls between pushes the
 # alarm goes off within half an hour instead of being noticed by eye weeks later.
+# Scheduled runs check once rather than polling — nothing is in flight to wait for.
 #
 # Setup — ONE of these repo secrets is required
 # (GitHub → Settings → Secrets and variables → Actions):
@@ -134,28 +138,38 @@ jobs:
               sleep $((attempt * 5))
             done
           else
-            echo "::error::Neither VERCEL_TOKEN nor VERCEL_DEPLOY_HOOK is set, so production cannot be deployed from CI."
-            echo "::error::Add one of them under Settings → Secrets and variables → Actions. See the header of this workflow file."
-            exit 1
+            # Not an error. Without a credential this workflow simply has no
+            # deploy to run, and saying so is not worth a red check — the check
+            # below still fails if production is genuinely behind, which is the
+            # condition actually worth waking someone for.
+            echo "::notice::No VERCEL_TOKEN or VERCEL_DEPLOY_HOOK, so CI cannot deploy — waiting on the Vercel Git integration instead."
+            echo "::notice::Add VERCEL_TOKEN (Settings → Secrets and variables → Actions) to have CI deploy directly. See this file's header."
           fi
 
       - name: Verify the commit actually went live
-        if: steps.trigger.outcome == 'success'
+        if: steps.guard.outputs.defer != 'true' && steps.live.outputs.current == 'false'
         env:
           SHA: ${{ steps.target.outputs.sha }}
         run: |
-          # A triggered deploy is not a finished deploy. Poll until the running
-          # build reports our commit; 15 minutes is well past a normal build.
-          deadline=$(( $(date +%s) + 900 ))
-          while [ "$(date +%s)" -lt "$deadline" ]; do
-            sleep 20
+          # A triggered deploy is not a finished deploy, and an untriggered one
+          # is the Vercel Git integration's job — either way the only thing that
+          # settles it is the live site reporting our commit. On a schedule
+          # there is nothing in flight to wait for, so check once and be done.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            deadline=$(date +%s)
+          else
+            deadline=$(( $(date +%s) + 900 ))
+          fi
+          while :; do
             live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' || echo "")
             if [ "$live" = "$SHA" ]; then
               echo "::notice::Production is serving $SHA."
               exit 0
             fi
+            [ "$(date +%s)" -ge "$deadline" ] && break
             echo "…still serving ${live:-<none reported>}"
+            sleep 20
           done
-          echo "::error::15 minutes after triggering, production is still not serving $SHA."
-          echo "::error::Check https://vercel.com/anchit-ai-hustle/the-third-eye for a failed or queued build."
+          echo "::error::Production is serving ${live:-<no commit reported>}, not $SHA."
+          echo "::error::main is ahead of the live site. Check https://vercel.com/anchit-ai-hustle/the-third-eye for a failed, queued, or never-created build."
           exit 1
