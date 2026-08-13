@@ -12,7 +12,7 @@ import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getGoogleAccessToken } from "@/lib/googleToken";
-import { getTool } from "@/lib/studioTools";
+import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { scheduleAutomation } from "@/lib/automations";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
@@ -466,11 +466,14 @@ const geminiTools = [
       },
       {
         name: "create_asset",
-        description: "Generate any marketing/creative/business asset via Studio: landing pages, mailers, lifecycle plans, creative content, blogs, ad copy, pitch decks, social calendars, reports, SOPs, JDs, PRDs, OKRs, proposals, meeting minutes.",
+        description: `Generate anything Studio can build, without the user opening Studio: ${STUDIO_TOOLS.map((t) => `${t.id} (${t.label})`).join(", ")}.`,
         parameters: {
           type: "OBJECT",
           properties: {
-            kind: { type: "STRING", enum: ["landing", "mailer", "lifecycle", "creative", "blog", "adcopy", "pitch", "social", "outreach", "naming", "campaign", "report", "sop", "jd", "prd", "okr", "proposal", "meeting"], description: "Asset type" },
+            // Derived from the Studio registry rather than hand-listed. The
+            // hand-written version had drifted to 18 of 28 tools, so ten of
+            // them could be opened but never run.
+            kind: { type: "STRING", enum: STUDIO_TOOLS.map((t) => t.id), description: "Asset type" },
             title: { type: "STRING", description: "Short name/subject for the asset" },
             brief: { type: "STRING", description: "The full brief with all details" },
           },
