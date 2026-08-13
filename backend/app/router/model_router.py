@@ -5,13 +5,12 @@ Routing rules are defined in ARCHITECTURE.md and enforced here.
 
 import asyncio
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 import structlog
 from tenacity import (
     AsyncRetrying,
-    RetryError,
     stop_after_attempt,
     wait_exponential,
 )
@@ -201,12 +200,15 @@ class ModelRouter:
                     cost=log_entry.estimated_cost_usd,
                 )
                 return response_text, log_entry
-            except RetryError:
+            except Exception:
+                # _call_with_retry runs AsyncRetrying with reraise=True, so once
+                # its attempts are spent it raises the provider's own exception,
+                # never RetryError. Catching RetryError here meant the primary's
+                # failure propagated straight out and the fallback was never
+                # tried — the failover this loop exists for never ran.
                 log.warning("model_router_failover", from_model=model.model_id, to_model=fallback.model_id)
                 if model == fallback:
                     raise
-
-        raise RuntimeError("All model providers exhausted")
 
     async def _call_with_retry(
         self,
@@ -248,8 +250,6 @@ class ModelRouter:
                     search_queries=extra.get("search_queries", []),
                 )
                 return response_text, entry
-
-        raise RuntimeError("Unreachable")
 
     async def _dispatch(
         self, model: ModelConfig, messages: list[dict]

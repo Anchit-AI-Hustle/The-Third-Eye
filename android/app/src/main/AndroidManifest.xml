@@ -38,4 +38,26 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Wake word + day recorder. RECORD_AUDIO is the capture grant itself;
+         MODIFY_AUDIO_SETTINGS lets the recorder configure the input route. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Android 13+ requires this at runtime before any notification is shown,
+         including the ones the cron dispatcher pushes. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Keeping the mic alive once the app leaves the foreground requires a
+         foreground service typed as microphone (Android 14+ enforces the type).
+         The service itself is not implemented yet — see NATIVE_BUILD.md. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!-- The web layer already takes a wake lock so the screen cannot sleep out
+         from under SpeechRecognition; this is its native counterpart. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 </manifest>

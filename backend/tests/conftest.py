@@ -8,7 +8,9 @@
 import os
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-with-at-least-32-chars")
-os.environ.setdefault("FINANCIAL_ENCRYPTION_KEY", "test-financial-key-with-32-characters")
+# Must be a real Fernet key (32 url-safe base64 bytes) or app.finance.encryption
+# raises on first use. Fixed value so tests are deterministic; not a secret.
+os.environ["FINANCIAL_ENCRYPTION_KEY"] = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("NEXTAUTH_SECRET", "test-nextauth-secret-with-32-chars")
@@ -64,6 +66,26 @@ from sqlalchemy.pool import StaticPool
 from app.auth.models import User
 from app.database import Base, get_db
 from app.main import app
+
+# No router mounts the finance models, so importing them here is what registers
+# them on Base.metadata and gets their tables built by create_all. Imported as a
+# bare name: `import app.finance.models` would rebind `app` from the FastAPI
+# instance above to the package, breaking every client fixture.
+from app.finance import models as finance_models
+
+# Referenced so the import cannot be mistaken for dead weight and removed —
+# dropping it silently costs every finance table in the test database.
+FINANCE_TABLES = frozenset(
+    m.__tablename__
+    for m in (
+        finance_models.Account,
+        finance_models.Transaction,
+        finance_models.Budget,
+        finance_models.Subscription,
+        finance_models.FinancialSnapshot,
+    )
+)
+assert FINANCE_TABLES <= set(Base.metadata.tables)
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 

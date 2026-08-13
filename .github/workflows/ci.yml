@@ -38,8 +38,11 @@ jobs:
         env:
           ENVIRONMENT: test
           SECRET_KEY: test-secret-key-with-at-least-32-chars
-          FINANCIAL_ENCRYPTION_KEY: test-financial-key-with-32-characters
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
-          REDIS_URL: redis://localhost:6379/0
+          # Must be a real Fernet key or app.finance.encryption raises on use.
+          FINANCIAL_ENCRYPTION_KEY: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+          # Quoted: the trailing colon makes this a mapping key to the YAML
+          # parser otherwise, which fails the whole workflow before any job runs.
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          REDIS_URL: "redis://localhost:6379/0"
           NEXTAUTH_SECRET: test-nextauth-secret-with-32-chars
           GOOGLE_AI_API_KEY: test-google-ai-key

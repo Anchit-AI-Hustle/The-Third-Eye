@@ -63,8 +63,12 @@ jobs:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "::notice::VERCEL_DEPLOY_HOOK not set — skipping. Add it in repo Settings → Secrets to enable auto-deploy fallback."
-            exit 0
+            echo "::error::VERCEL_DEPLOY_HOOK is not set, so this workflow cannot deploy anything."
+            echo "::error::Create a Deploy Hook (Vercel → project → Settings → Git → Deploy Hooks) and add the URL as the VERCEL_DEPLOY_HOOK repo secret."
+            # Deliberately fails. This job is the guardrail for a stalled Vercel
+            # Git integration; skipping green let production sit 87 commits
+            # behind for 11 days while every run reported success.
+            exit 1
           fi
           for attempt in 1 2 3; do
             if curl -fsS -X POST "$HOOK" -o /dev/null; then
