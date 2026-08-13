@@ -13,6 +13,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getGoogleAccessToken } from "@/lib/googleToken";
 import { getTool } from "@/lib/studioTools";
+import { scheduleAutomation } from "@/lib/automations";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
@@ -298,9 +299,9 @@ const geminiTools = [
           properties: {
             action: { type: "STRING", enum: ["schedule", "check"], description: "What to do" },
             name: { type: "STRING", description: "Automation name (for schedule)" },
-            trigger: { type: "STRING", description: "When to trigger: 'morning', 'evening', 'overdue', 'weekly', 'custom' (for schedule)" },
+            trigger: { type: "STRING", description: "Time of day to run (for schedule): 'morning' (08:00 UTC) or 'evening' (19:00 UTC). Omit to start one full interval from now." },
             automation_action: { type: "STRING", description: "What action to take (for schedule)" },
-            schedule: { type: "STRING", description: "Cron-like schedule or 'daily', 'weekly', 'on_event' (for schedule)" },
+            schedule: { type: "STRING", enum: ["daily", "weekly", "monthly"], description: "How often it repeats (for schedule). Only these three run — there is no event-driven scheduler." },
             check_type: { type: "STRING", enum: ["overdue_tasks", "deadlines", "calendar", "habits", "all"], description: "What to check (for check, default: all)" },
           },
           required: ["action"],
@@ -1048,7 +1049,7 @@ async function runTool(
     case "automate": {
       const action = input.action ?? "check";
       if (action === "schedule") {
-        return { result: scheduleAutomation(input.name ?? "", input.trigger ?? "", input.automation_action ?? "", input.schedule ?? "daily") };
+        return { result: await scheduleAutomation(ctx, input) };
       }
       // check
       return { result: await autonomousCheck(input.check_type ?? "all", ctx) };
@@ -1673,11 +1674,6 @@ const MODE_CONTEXT: Record<string, string> = {
 };
 
 // ─── Autonomous Intelligence Tool Implementations ────────────────────────────
-
-function scheduleAutomation(name: string, trigger: string, action: string, schedule: string): string {
-  if (!name || !trigger || !action) return "I need a name, trigger, and action to set up an automation.";
-  return `### Automation Registered\n\n- **Name**: ${name}\n- **Trigger**: ${trigger}\n- **Action**: ${action}\n- **Schedule**: ${schedule}\n\nThis automation has been registered but not yet scheduled — backend scheduler integration is pending.`;
-}
 
 async function autonomousCheck(checkType: string, ctx: RunContext): Promise<string> {
   const results: string[] = [];
