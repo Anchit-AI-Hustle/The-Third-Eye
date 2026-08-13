@@ -125,9 +125,9 @@ def _hard_token_split(text: str, chunk_size: int, overlap: int) -> list[str]:
     step = max(1, chunk_size - overlap)
     pieces = []
     for start in range(0, len(tokens), step):
+        # step is at least 1 and start stays below len(tokens), so the slice
+        # always holds at least one token.
         chunk_tokens = tokens[start : start + chunk_size]
-        if not chunk_tokens:
-            break
         pieces.append(_get_encoding().decode(chunk_tokens))
         if start + chunk_size >= len(tokens):
             break

@@ -525,3 +525,237 @@ async def test_knowledge_list_returns_only_ready_documents(client: AsyncClient, 
         response = await client.get("/api/v1/knowledge/", headers=auth_headers(test_user))
 
     assert [d["title"] for d in response.json()] == ["Ready"]
+
+
+# ─── password hashing ────────────────────────────────────────────────────────
+
+
+def test_password_hash_is_salted_and_verifiable():
+    from app.auth.service import hash_password, verify_password
+
+    hashed = hash_password("correct horse battery staple")
+    assert hashed.startswith("$2b$")
+    assert verify_password("correct horse battery staple", hashed)
+    assert not verify_password("wrong", hashed)
+
+
+def test_password_hash_differs_per_call():
+    from app.auth.service import hash_password
+
+    assert hash_password("same") != hash_password("same")
+
+
+def test_password_longer_than_the_bcrypt_limit_still_round_trips():
+    from app.auth.service import hash_password, verify_password
+
+    long_password = "a" * 200
+    assert verify_password(long_password, hash_password(long_password))
+
+
+def test_password_truncation_is_applied_identically_on_both_sides():
+    from app.auth.service import hash_password, verify_password
+
+    # bcrypt only reads the first 72 bytes, so these are the same secret to it.
+    assert verify_password("b" * 72, hash_password("b" * 200))
+
+
+def test_multibyte_password_that_straddles_the_byte_limit_round_trips():
+    from app.auth.service import hash_password, verify_password
+
+    accented = "é" * 50  # 100 bytes, cut mid-character at 72
+    assert verify_password(accented, hash_password(accented))
+
+
+def test_verify_password_returns_false_for_a_malformed_stored_hash():
+    from app.auth.service import verify_password
+
+    assert verify_password("anything", "not-a-bcrypt-hash") is False
+
+
+# ─── health ──────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_health_reports_healthy_when_both_services_answer(client: AsyncClient, monkeypatch):
+    import app.api.health as health
+
+    async def db_ok():
+        return True
+
+    class FakeRedis:
+        async def ping(self):
+            return True
+
+        async def aclose(self):
+            return None
+
+    class RedisModule:
+        @staticmethod
+        def from_url(url):
+            return FakeRedis()
+
+    monkeypatch.setattr(health, "check_db_connection", db_ok)
+    monkeypatch.setattr(health, "aioredis", RedisModule)
+
+    response = await client.get("/health")
+    body = response.json()
+    assert body["status"] == "healthy"
+    assert body["services"]["redis"] == "ok"
+    assert body["services"]["postgres"] == "ok"
+
+
+# ─── tasks API remainder ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_filters_by_status(client: AsyncClient, test_user, db):
+    from app.tasks.models import Task
+
+    db.add(Task(user_id=test_user.id, title="Open", status="todo", priority="low"))
+    db.add(Task(user_id=test_user.id, title="Closed", status="done", priority="low"))
+    await db.flush()
+
+    with as_user(test_user):
+        response = await client.get(
+            "/api/v1/tasks?status=done", headers=auth_headers(test_user)
+        )
+
+    assert [t["title"] for t in response.json()] == ["Closed"]
+
+
+@pytest.mark.asyncio
+async def test_update_task_404s_when_absent(client: AsyncClient, test_user):
+    with as_user(test_user):
+        response = await client.patch(
+            f"/api/v1/tasks/{uuid.uuid4()}",
+            json={"status": "done"},
+            headers=auth_headers(test_user),
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_task_404s_when_absent(client: AsyncClient, test_user):
+    with as_user(test_user):
+        response = await client.delete(
+            f"/api/v1/tasks/{uuid.uuid4()}", headers=auth_headers(test_user)
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_projects_returns_the_callers_own(client: AsyncClient, test_user, db):
+    from app.tasks.models import Project
+
+    db.add(Project(user_id=test_user.id, name="Mine"))
+    db.add(Project(user_id=uuid.uuid4(), name="Theirs"))
+    await db.flush()
+
+    with as_user(test_user):
+        response = await client.get("/api/v1/projects", headers=auth_headers(test_user))
+
+    assert [p["name"] for p in response.json()] == ["Mine"]
+
+
+# ─── documents: nameless upload ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_an_upload_whose_filename_is_empty(db, test_user):
+    # FastAPI's own validation catches a missing filename before the handler in
+    # a real request, so the guard is exercised by calling the handler directly.
+    from fastapi import BackgroundTasks, HTTPException
+
+    import app.api.documents as documents
+
+    class NamelessUpload:
+        filename = ""
+
+    with pytest.raises(HTTPException) as excinfo:
+        await documents.upload_document(
+            background_tasks=BackgroundTasks(),
+            current_user=test_user,
+            db=db,
+            file=NamelessUpload(),
+        )
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == "No filename provided"
+
+
+@pytest.mark.asyncio
+async def test_health_reports_degraded_when_redis_is_unreachable(client: AsyncClient, monkeypatch):
+    import app.api.health as health
+
+    async def db_ok():
+        return True
+
+    class RefusingRedis:
+        @staticmethod
+        def from_url(url):
+            raise OSError("connection refused")
+
+    monkeypatch.setattr(health, "check_db_connection", db_ok)
+    monkeypatch.setattr(health, "aioredis", RefusingRedis)
+
+    body = (await client.get("/health")).json()
+    assert body["status"] == "degraded"
+    assert body["services"]["redis"] == "error"
+    assert body["services"]["postgres"] == "ok"
+
+
+# ─── engine options ──────────────────────────────────────────────────────────
+
+
+def test_engine_kwargs_omit_pool_sizing_for_sqlite():
+    from app.database import build_engine_kwargs
+
+    kwargs = build_engine_kwargs("sqlite+aiosqlite:///:memory:", "test")
+    assert "pool_size" not in kwargs
+    assert "max_overflow" not in kwargs
+    assert kwargs["pool_pre_ping"] is True
+
+
+def test_engine_kwargs_add_pool_sizing_for_a_server_database():
+    from app.database import build_engine_kwargs
+
+    kwargs = build_engine_kwargs("postgresql+asyncpg://u:p@h/db", "test")
+    assert kwargs["pool_size"] == 10
+    assert kwargs["max_overflow"] == 20
+
+
+def test_engine_echo_follows_the_environment():
+    from app.database import build_engine_kwargs
+
+    assert build_engine_kwargs("sqlite://", "development")["echo"] is True
+    assert build_engine_kwargs("sqlite://", "production")["echo"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_task_returns_the_callers_own_task(client: AsyncClient, test_user, db):
+    from app.tasks.models import Task
+
+    task = Task(user_id=test_user.id, title="Findable", status="todo", priority="low")
+    db.add(task)
+    await db.flush()
+    await db.refresh(task)
+
+    with as_user(test_user):
+        response = await client.get(f"/api/v1/tasks/{task.id}", headers=auth_headers(test_user))
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Findable"
+
+
+@pytest.mark.asyncio
+async def test_get_task_404s_for_someone_elses(client: AsyncClient, test_user, db):
+    from app.tasks.models import Task
+
+    task = Task(user_id=uuid.uuid4(), title="Theirs", status="todo", priority="low")
+    db.add(task)
+    await db.flush()
+    await db.refresh(task)
+
+    with as_user(test_user):
+        response = await client.get(f"/api/v1/tasks/{task.id}", headers=auth_headers(test_user))
+
+    assert response.status_code == 404
