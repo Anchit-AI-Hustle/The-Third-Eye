@@ -2,7 +2,6 @@
 
 import uuid
 from contextlib import asynccontextmanager
-from types import SimpleNamespace
 
 import pytest
 
@@ -408,7 +407,9 @@ def test_research_synthesis_prompt_numbers_each_hit():
     )
     assert "Query: who won?" in prompt
     assert "[1] A" in prompt
-    assert "https://a.test" in prompt
+    # Exact-line match rather than a substring test: CodeQL reads `url in text`
+    # as URL sanitization, and this is stricter anyway.
+    assert any(line.strip() == "https://a.test" for line in prompt.splitlines())
 
 
 # ─── ExecutiveAgent classification ───────────────────────────────────────────
