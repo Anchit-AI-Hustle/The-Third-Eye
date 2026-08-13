@@ -6,6 +6,10 @@
 // custom scheme URLs (youtube://), which silently fail when the app is absent.
 //
 // Used by the assistant's `open_app` tool so "open YouTube" actually opens it.
+// Routes inside this app resolve first, so "open my tasks" goes to /tasks
+// rather than out to the web.
+
+import { APPS as APP_REGISTRY } from "@/lib/apps/registry";
 
 export interface ResolvedLink { url: string; label: string }
 
@@ -204,6 +208,44 @@ const APPS: AppEntry[] = [
 
 const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
+// The user's own apps, derived from the App Hub registry so there is one place
+// to add an app rather than two that drift. Without these, "open my tasks"
+// matched nothing and fell through to a Google search — the assistant sent you
+// out of the product to look for a feature the product already has.
+const INTERNAL: AppEntry[] = APP_REGISTRY
+  .filter((a) => a.kind === "internal")
+  .map((a) => {
+    const label = norm(a.label);
+    const id = norm(a.id.replace(/-/g, " "));
+    return {
+      label: a.label,
+      aliases: Array.from(new Set([label, id, `my ${label}`, `${label} page`])),
+      home: a.href,
+    };
+  });
+
+/**
+ * Whole-word alias match.
+ *
+ * This used to be `target.includes(alias)`, which matched any substring: "ola"
+ * sits inside "k(ola)b" so asking for Kolab opened a cab service, and "udio"
+ * sits inside "st(udio)" so the Music Studio opened a rival music generator.
+ */
+function aliasMatches(target: string, alias: string): boolean {
+  if (target === alias) return true;
+  const words = target.split(" ");
+  const aliasWords = alias.split(" ");
+  for (let i = 0; i + aliasWords.length <= words.length; i++) {
+    if (aliasWords.every((w, j) => words[i + j] === w)) return true;
+  }
+  return false;
+}
+
+/** True when the resolved link is a route inside this app rather than the web. */
+export function isInternalLink(url: string): boolean {
+  return url.startsWith("/");
+}
+
 /**
  * Resolve a target ("YouTube", "youtube.com", "https://…") + optional query
  * into a URL to open. Always returns something sensible — an unrecognised
@@ -219,11 +261,13 @@ export function resolveAppLink(targetRaw: string, query?: string): ResolvedLink 
   const t = norm(raw);
 
   // Known app/site by alias (longest alias match wins for specificity).
+  // The user's own apps are searched first: when a name is ambiguous, the thing
+  // they already have inside the product should win over a website.
   let best: AppEntry | null = null;
   let bestLen = 0;
-  for (const app of APPS) {
+  for (const app of [...INTERNAL, ...APPS]) {
     for (const a of app.aliases) {
-      if ((t === a || t.includes(a)) && a.length > bestLen) { best = app; bestLen = a.length; }
+      if (aliasMatches(t, a) && a.length > bestLen) { best = app; bestLen = a.length; }
     }
   }
   if (best) {
