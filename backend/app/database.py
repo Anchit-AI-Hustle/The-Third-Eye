@@ -10,22 +10,22 @@ from app.config import get_settings
 
 settings = get_settings()
 
-engine_kwargs = {
-    "echo": settings.environment == "development",
-    "pool_pre_ping": True,
-}
+def build_engine_kwargs(database_url: str, environment: str) -> dict:
+    """Engine options for a DSN. SQLite takes no pool sizing — its aiosqlite
+    driver rejects those arguments — so they apply to server databases only."""
+    kwargs = {
+        "echo": environment == "development",
+        "pool_pre_ping": True,
+    }
+    if not database_url.startswith("sqlite"):
+        kwargs["pool_size"] = 10
+        kwargs["max_overflow"] = 20
+    return kwargs
 
-if not settings.database_url.startswith("sqlite"):
-    engine_kwargs.update(
-        {
-            "pool_size": 10,
-            "max_overflow": 20,
-        }
-    )
 
 engine = create_async_engine(
     settings.database_url,
-    **engine_kwargs,
+    **build_engine_kwargs(settings.database_url, settings.environment),
 )
 
 AsyncSessionLocal = async_sessionmaker(

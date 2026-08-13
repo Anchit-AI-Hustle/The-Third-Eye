@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import AuditLog, User
+import app.memory.consolidation as consolidation
 from app.memory.consolidation import (
     CONSOLIDATION_THRESHOLD_DAYS,
     MIN_GROUP_SIZE,
@@ -268,3 +269,136 @@ async def test_consolidation_does_not_reprocess_consolidated_memories(
     # Should not count the already-consolidated record as processed
     assert stats.episodic_processed == 0
     assert stats.semantic_created == 0
+
+
+# ─── run_consolidation, scheduling, and LLM failure paths ────────────────────
+
+
+@pytest.mark.asyncio
+async def test_run_consolidation_processes_every_user_with_work(monkeypatch, test_engine):
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def session():
+        async with maker() as s:
+            yield s
+
+    monkeypatch.setattr(consolidation, "AsyncSessionLocal", session)
+
+    users = [uuid.uuid4(), uuid.uuid4()]
+
+    async def fake_find(db):
+        return users
+
+    async def fake_consolidate(db, *, user_id):
+        return consolidation.ConsolidationStats(user_id=user_id)
+
+    monkeypatch.setattr(consolidation, "_find_users_with_consolidation_work", fake_find)
+    monkeypatch.setattr(consolidation, "consolidate_for_user", fake_consolidate)
+
+    stats = await consolidation.run_consolidation()
+    assert [s.user_id for s in stats] == users
+
+
+@pytest.mark.asyncio
+async def test_run_consolidation_is_a_no_op_when_nothing_is_due(monkeypatch, test_engine):
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def session():
+        async with maker() as s:
+            yield s
+
+    monkeypatch.setattr(consolidation, "AsyncSessionLocal", session)
+
+    async def none(db):
+        return []
+
+    monkeypatch.setattr(consolidation, "_find_users_with_consolidation_work", none)
+    assert await consolidation.run_consolidation() == []
+
+
+@pytest.mark.asyncio
+async def test_find_users_with_consolidation_work_selects_only_stale_unconsolidated(
+    db: AsyncSession, test_user_for_consolidation: User
+):
+    from app.memory.models import EpisodicMemory
+
+    user_id = test_user_for_consolidation.id
+    old = datetime.now(timezone.utc) - timedelta(days=CONSOLIDATION_THRESHOLD_DAYS + 5)
+
+    db.add(EpisodicMemory(user_id=user_id, role="user", content="stale", created_at=old))
+    db.add(
+        EpisodicMemory(
+            user_id=user_id, role="user", content="already done",
+            created_at=old, consolidated=True,
+        )
+    )
+    db.add(EpisodicMemory(user_id=user_id, role="user", content="fresh"))
+    await db.flush()
+
+    found = await consolidation._find_users_with_consolidation_work(db)
+    assert found == [user_id]
+
+
+@pytest.mark.asyncio
+async def test_summarize_returns_nothing_when_the_model_fails(monkeypatch):
+    async def boom(**kwargs):
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(consolidation.model_router, "complete", boom)
+
+    from app.memory.models import EpisodicMemory
+
+    facts = await consolidation._summarize_session(
+        user_id=uuid.uuid4(),
+        memories=[EpisodicMemory(user_id=uuid.uuid4(), role="user", content="hello")],
+    )
+    assert facts == []
+
+
+@pytest.mark.asyncio
+async def test_summarize_filters_and_caps_the_facts_it_keeps(monkeypatch):
+    lines = ["- short", "- " + "x" * 600] + [f"- Fact number {i} about the user." for i in range(30)]
+
+    async def fake_complete(**kwargs):
+        return "\n".join(lines), None
+
+    monkeypatch.setattr(consolidation.model_router, "complete", fake_complete)
+
+    from app.memory.models import EpisodicMemory
+
+    facts = await consolidation._summarize_session(
+        user_id=uuid.uuid4(),
+        memories=[EpisodicMemory(user_id=uuid.uuid4(), role="user", content="hello")],
+    )
+    # The 20-line safety cap is applied before the length filter, so the two
+    # unusable lines consume cap slots and 18 facts survive rather than 20.
+    assert len(facts) == 18
+    assert all(10 <= len(f.content) <= 500 for f in facts)
+    assert all(f.source.startswith("consolidation:") for f in facts)
+
+
+def test_schedule_consolidation_job_registers_a_nightly_cron():
+    captured = {}
+
+    class FakeScheduler:
+        def add_job(self, func, **kwargs):
+            captured["func"] = func
+            captured.update(kwargs)
+
+    consolidation.schedule_consolidation_job(FakeScheduler())
+
+    assert captured["func"] is consolidation.run_consolidation
+    assert captured["trigger"] == "cron"
+    assert (captured["hour"], captured["minute"]) == (3, 0)
+    assert captured["id"] == "memory_consolidation"
+    assert captured["replace_existing"] is True

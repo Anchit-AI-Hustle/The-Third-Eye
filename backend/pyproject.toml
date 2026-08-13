@@ -90,7 +90,14 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=100"
+
+[tool.coverage.run]
+# Starlette runs parts of a request in an anyio worker thread, and SQLAlchemy's
+# async layer runs in greenlets. Coverage's default tracer follows neither, so
+# without this every route body looked far less covered than it was — one
+# middleware file read 48% while its lines were demonstrably executing.
+concurrency = ["thread", "greenlet"]
 
 [tool.ruff]
 line-length = 100
