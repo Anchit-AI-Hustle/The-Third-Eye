@@ -71,7 +71,21 @@ from app.main import app
 # them on Base.metadata and gets their tables built by create_all. Imported as a
 # bare name: `import app.finance.models` would rebind `app` from the FastAPI
 # instance above to the package, breaking every client fixture.
-from app.finance import models as _finance_models  # noqa: F401
+from app.finance import models as finance_models
+
+# Referenced so the import cannot be mistaken for dead weight and removed —
+# dropping it silently costs every finance table in the test database.
+FINANCE_TABLES = frozenset(
+    m.__tablename__
+    for m in (
+        finance_models.Account,
+        finance_models.Transaction,
+        finance_models.Budget,
+        finance_models.Subscription,
+        finance_models.FinancialSnapshot,
+    )
+)
+assert FINANCE_TABLES <= set(Base.metadata.tables)
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
