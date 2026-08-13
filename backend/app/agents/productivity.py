@@ -15,7 +15,15 @@ from app.tasks.models import Task
 log = structlog.get_logger()
 
 CREATE_TASK_PATTERNS = [
-    re.compile(r"(?:create|add|make|new)\s+(?:a\s+)?(?:task|todo|to-do|reminder)(?:\s+(?:to|for|called|named|:)\s+)?(.+)", re.IGNORECASE),
+    # The separator is either a colon, which may sit flush against the noun
+    # ("add todo: buy milk"), or a word, which needs spaces on both sides. An
+    # earlier single alternation required whitespace before the colon too, so
+    # "add todo: buy milk" produced a task literally titled ": buy milk".
+    re.compile(
+        r"(?:create|add|make|new)\s+(?:a\s+)?(?:task|todo|to-do|reminder)"
+        r"(?:\s*:\s*|\s+(?:to|for|called|named)\s+)?(.+)",
+        re.IGNORECASE,
+    ),
     re.compile(r"(?:remind\s+me\s+to)\s+(.+)", re.IGNORECASE),
 ]
 
