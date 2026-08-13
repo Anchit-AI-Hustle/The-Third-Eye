@@ -12,15 +12,31 @@ type Listener = (trigger: string, transcript: string) => void;
 // always fire onend — so the "relaunch on onend" path alone is not enough.
 const WATCHDOG_MS = 10_000;
 
+// Backgrounded fallback. SpeechRecognition is suspended by the browser whenever
+// the tab is hidden and does not resume on its own, so while hidden we listen
+// through the microphone directly: fixed-length chunks, gated by loudness, and
+// transcribed only when they contain speech.
+const BG_CHUNK_MS = 6_000;
+// Peak amplitude below this is treated as silence and never sent for
+// transcription. Matches the day recorder's threshold.
+const BG_SILENCE_PEAK = 0.012;
+
+const DEFAULT_TRIGGERS = ["hi", "hey", "ok", "hello"];
+
 export interface WakeWordOptions {
   agentName: string;          // "JARVIS" / "FRIDAY" / "E.D.I.T.H." / "ULTRON" / custom
   enabled: boolean;
   onWake: Listener;
   extraTriggers?: string[];   // ["hi", "hey", "ok"]
   cooldownMs?: number;        // time between fires
+  /**
+   * Keep listening while the tab is hidden by transcribing microphone chunks
+   * server-side. Costs a transcription call per chunk that contains speech, so
+   * it is opt-in. Without it, hiding the tab stops wake-word detection until
+   * the tab is visible again — which is the browser's behaviour, not a bug.
+   */
+  backgroundListening?: boolean;
 }
-
-const DEFAULT_TRIGGERS = ["hi", "hey", "ok", "hello"];
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -49,9 +65,17 @@ function matchTrigger(text: string, triggers: string[]): string | null {
   return null;
 }
 
-export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldownMs = 1500 }: WakeWordOptions) {
+export function useWakeWord({
+  agentName,
+  enabled,
+  onWake,
+  extraTriggers,
+  cooldownMs = 1500,
+  backgroundListening = true,
+}: WakeWordOptions) {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
+  const [hearingInBackground, setHearingInBackground] = useState(false);
   const activeRef = useRef(false);
   const recRef = useRef<any>(null);
   const lastFireRef = useRef(0);
@@ -60,6 +84,18 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
   const lastEventRef = useRef(0);
   const launchRef = useRef<() => void>(() => {});
   const wakeLock = useWakeLock();
+
+  // Held for as long as the wake word is enabled. An open capture stream is
+  // what keeps the tab off the browser's aggressively-throttled background
+  // path, and it is also what the hidden-tab fallback records from.
+  const streamRef = useRef<MediaStream | null>(null);
+  const bgRecorderRef = useRef<MediaRecorder | null>(null);
+  const bgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bgActiveRef = useRef(false);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const peakRef = useRef(0);
+  const rafRef = useRef(0);
 
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
   useEffect(() => {
@@ -73,13 +109,99 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
     setSupported(!!SR);
   }, []);
 
+  const fire = useCallback((trigger: string, text: string) => {
+    const now = Date.now();
+    if (now - lastFireRef.current < cooldownMs) return;
+    lastFireRef.current = now;
+    onWakeRef.current(trigger, text.trim());
+  }, [cooldownMs]);
+
+  // ─── Hidden-tab listening ──────────────────────────────────────────────────
+
+  const stopBackground = useCallback(() => {
+    bgActiveRef.current = false;
+    setHearingInBackground(false);
+    if (bgTimerRef.current) { clearTimeout(bgTimerRef.current); bgTimerRef.current = null; }
+    try {
+      if (bgRecorderRef.current && bgRecorderRef.current.state !== "inactive") {
+        bgRecorderRef.current.stop();
+      }
+    } catch { /* already torn down */ }
+    bgRecorderRef.current = null;
+  }, []);
+
+  const recordBackgroundChunk = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream || !bgActiveRef.current || typeof MediaRecorder === "undefined") return;
+
+    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+      .find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    } catch {
+      return;
+    }
+    bgRecorderRef.current = rec;
+
+    const parts: Blob[] = [];
+    peakRef.current = 0;
+    rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
+
+    rec.onstop = async () => {
+      const loudEnough = peakRef.current >= BG_SILENCE_PEAK;
+      const blob = new Blob(parts, { type: mime || "audio/webm" });
+
+      // Queue the next chunk before awaiting the network so listening is
+      // continuous rather than gated on transcription latency.
+      if (bgActiveRef.current) recordBackgroundChunk();
+
+      if (!loudEnough || blob.size < 2000) return;
+      try {
+        const fd = new FormData();
+        fd.append("audio", blob, "chunk.webm");
+        const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        const text: string = typeof data?.text === "string" ? data.text : "";
+        if (!text) return;
+        const trig = matchTrigger(text, triggersRef.current);
+        if (trig) fire(trig, text);
+      } catch { /* a dropped chunk must not stop the loop */ }
+    };
+
+    try {
+      rec.start();
+      bgTimerRef.current = setTimeout(() => {
+        if (rec.state !== "inactive") rec.stop();
+      }, BG_CHUNK_MS);
+    } catch { /* next visibility change will retry */ }
+  }, [fire]);
+
+  const startBackground = useCallback(() => {
+    if (!backgroundListening || bgActiveRef.current || !streamRef.current) return;
+    bgActiveRef.current = true;
+    setHearingInBackground(true);
+    recordBackgroundChunk();
+  }, [backgroundListening, recordBackgroundChunk]);
+
+  // ─── SpeechRecognition (used while the tab is visible) ─────────────────────
+
   const stop = useCallback(() => {
     activeRef.current = false;
+    stopBackground();
     try { recRef.current?.abort(); } catch { /* noop */ }
     recRef.current = null;
+
+    cancelAnimationFrame(rafRef.current);
+    analyserRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
     setListening(false);
     wakeLock.release();
-  }, [wakeLock]);
+  }, [stopBackground, wakeLock]);
 
   const start = useCallback(() => {
     if (!supported || activeRef.current) return;
@@ -111,11 +233,7 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
           chunk += event.results[i][0].transcript;
         }
         const trig = matchTrigger(chunk, triggersRef.current);
-        if (!trig) return;
-        const now = Date.now();
-        if (now - lastFireRef.current < cooldownMs) return;
-        lastFireRef.current = now;
-        onWakeRef.current(trig, chunk.trim());
+        if (trig) fire(trig, chunk);
       };
 
       rec.onerror = (e: any) => {
@@ -134,7 +252,7 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
 
     launchRef.current = launchInstance;
     launchInstance();
-  }, [supported, cooldownMs, stop, wakeLock]);
+  }, [supported, fire, stop, wakeLock]);
 
   // Force a fresh recognizer when the current one has gone silently dead.
   const forceRestart = useCallback(() => {
@@ -162,26 +280,85 @@ export function useWakeWord({ agentName, enabled, onWake, extraTriggers, cooldow
     stop();
   }, [enabled, supported, start, stop]);
 
-  // Recovery: browsers suspend recognition when the tab is hidden and often
-  // never fire onend, so re-arm on return to visibility and poll a watchdog.
+  // Acquire the microphone once, for the whole time the wake word is enabled.
+  // Two reasons: a tab holding a live capture stream is exempted from the
+  // harshest background throttling, and the hidden-tab fallback needs a stream
+  // that is already open — asking for one while hidden is refused.
+  useEffect(() => {
+    if (!enabled || !supported || typeof navigator === "undefined") return;
+    let cancelled = false;
+
+    navigator.mediaDevices?.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    }).then((stream) => {
+      if (cancelled) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      streamRef.current = stream;
+
+      // Track loudness so the hidden-tab path can skip silent chunks instead of
+      // paying for a transcription of a quiet room.
+      try {
+        const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+        const ctx = new AC();
+        audioCtxRef.current = ctx;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        analyserRef.current = analyser;
+
+        const buf = new Uint8Array(analyser.fftSize);
+        const measure = () => {
+          const an = analyserRef.current;
+          if (!an) return;
+          an.getByteTimeDomainData(buf);
+          let peak = 0;
+          for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs((buf[i] - 128) / 128));
+          peakRef.current = Math.max(peakRef.current, peak);
+          rafRef.current = requestAnimationFrame(measure);
+        };
+        rafRef.current = requestAnimationFrame(measure);
+      } catch { /* loudness gating is an optimisation, not a requirement */ }
+
+      // Already hidden when permission resolved — start the fallback now.
+      if (document.visibilityState === "hidden") startBackground();
+    }).catch(() => { /* denied: the visible-tab recognizer still works */ });
+
+    return () => { cancelled = true; };
+  }, [enabled, supported, startBackground]);
+
+  // Recovery and handover. The recognizer is suspended while hidden, so hand
+  // over to microphone chunks on hide and back to the recognizer on show.
   useEffect(() => {
     if (!enabled || !supported) return;
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") forceRestart();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        stopBackground();
+        forceRestart();
+      } else {
+        startBackground();
+      }
     };
-    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisibility);
 
     const watchdog = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
+      // Deliberately runs while hidden too. It used to return early when the
+      // tab was not visible, which meant a recognizer that died in the
+      // background was never revived and listening simply stopped.
+      if (document.visibilityState !== "visible") {
+        if (backgroundListening && !bgActiveRef.current) startBackground();
+        return;
+      }
       if (Date.now() - lastEventRef.current > WATCHDOG_MS) forceRestart();
     }, WATCHDOG_MS / 2);
 
     return () => {
-      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onVisibility);
       clearInterval(watchdog);
     };
-  }, [enabled, supported, forceRestart]);
+  }, [enabled, supported, forceRestart, startBackground, stopBackground, backgroundListening]);
 
-  return { listening, supported };
+  return { listening, supported, hearingInBackground };
 }
