@@ -2150,10 +2150,19 @@ export async function POST(req: NextRequest) {
           // dump the raw provider JSON at the user — detect the common case
           // (quota/rate-limit) and explain it in plain language.
           const raw = err instanceof Error ? err.message : String(err);
-          const quota = /quota|rate.?limit|RESOURCE_EXHAUSTED|\b429\b|exceeded|insufficient_quota/i.test(raw);
-          const message = quota
-            ? "I've hit the AI usage limit for the moment — the primary model's free-tier quota is exhausted and no fallback provider is configured. It resets shortly, so try again in about a minute. To fail over instantly, add a second provider key (e.g. GROQ_API_KEY or CEREBRAS_API_KEY — both free) to the deployment."
-            : "The AI provider is unavailable right now. Please try again in a moment.";
+          // Two failures that look alike and are not: a rate limit clears on its
+          // own in about a minute, an empty balance never does. Telling someone
+          // to "try again shortly" when the account is out of credit sends them
+          // to wait for something that will not happen.
+          const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
+          const outOfCredit = /credit balance|insufficient_quota|billing|payment/i.test(raw);
+          const message = outOfCredit && rateLimited
+            ? "Every AI provider I'm configured with is unavailable: at least one account is out of credit, and the rest are rate-limited. The rate limits clear in about a minute; the credit one needs topping up. Adding another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) would give me somewhere to fail over."
+            : outOfCredit
+              ? "The AI account I'm using is out of credit, so I can't answer until it's topped up or another provider key is added to the deployment."
+              : rateLimited
+                ? "I've hit the usage limit on every provider I'm configured with. These reset quickly — try again in about a minute, or add another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) so I can fail over instantly."
+                : "The AI provider is unavailable right now. Please try again in a moment.";
           send("error", { message });
         }
         controller.close();
