@@ -9,11 +9,11 @@ import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { getGoogleAccessToken } from "@/lib/googleToken";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { scheduleAutomation } from "@/lib/automations";
+import { identify } from "@/lib/serverIdentity";
+import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
@@ -1896,11 +1896,12 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
   }
 
-  // Identity and OAuth token come from the server session — never the request
-  // body — so a caller can't read/write another user's Cortex memory, reminders,
-  // or usage by supplying someone else's email (service-role bypasses RLS).
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? undefined;
+  // Identity comes from the server session or a scoped gateway token — never
+  // the request body — so a caller can't read/write another user's Cortex
+  // memory, reminders, or usage by supplying someone else's email
+  // (service-role bypasses RLS).
+  const identity = await identify(req.headers, "chat");
+  const email = identity.email;
   // Sign-in only grants basic scopes, so the session token can't touch
   // Gmail/Calendar — using it just yields a 403 with misleading "sign back in"
   // guidance. Only the token minted from the opt-in "Connect Google" flow
@@ -1912,6 +1913,17 @@ export async function POST(req: NextRequest) {
   // means no metering context and would burn Gemini quota / bypass limits.
   if (!email) {
     return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401 });
+  }
+
+  // The kill switch is enforced here rather than where side effects are applied,
+  // because that code runs in the browser — a headless client would sail past a
+  // switch the user believes is holding the agent still.
+  if (await isAgentKilled(email)) {
+    await logAgentAction(email, { type: "chat", label: "Message refused — agent stopped", outcome: "blocked" }, identity.source);
+    return new Response(
+      JSON.stringify({ error: "The agent is stopped. Turn it back on in Settings to continue.", killed: true }),
+      { status: 423 },
+    );
   }
 
   // Use the connected Google token (gmail/calendar scopes) when available.
