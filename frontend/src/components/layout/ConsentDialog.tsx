@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Mic, Camera, MapPin, Bell, X } from "lucide-react";
 import { ConsentKey, ConsentState } from "@/lib/consent";
 import { useConsentBundle } from "@/hooks/useConsent";
+
+// Pages a non-user reads before deciding to become one — legal documents and the
+// sign-in flow. Asking for the microphone over a privacy policy is both a poor
+// first impression and an obstacle to anyone reviewing the document, including
+// Google's OAuth reviewers, who open these URLs directly.
+const NO_PROMPT_PATHS = ["/privacy_policy", "/terms_of_service", "/auth"];
 
 interface ConsentItem {
   key: ConsentKey;
@@ -21,6 +28,8 @@ const ITEMS: ConsentItem[] = [
 
 export function ConsentDialog() {
   const { bundleAsked, requestAll } = useConsentBundle();
+  const pathname = usePathname();
+  const suppressed = NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p));
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<Partial<Record<ConsentKey, ConsentState>>>({});
   const [busy, setBusy] = useState(false);
@@ -32,11 +41,11 @@ export function ConsentDialog() {
   });
 
   useEffect(() => {
-    if (!bundleAsked) {
+    if (!bundleAsked && !suppressed) {
       const t = setTimeout(() => setOpen(true), 600);
       return () => clearTimeout(t);
     }
-  }, [bundleAsked]);
+  }, [bundleAsked, suppressed]);
 
   if (!open) return null;
 
