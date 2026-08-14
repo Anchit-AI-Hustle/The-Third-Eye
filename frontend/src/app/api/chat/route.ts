@@ -2163,6 +2163,12 @@ export async function POST(req: NextRequest) {
               : rateLimited
                 ? "I've hit the usage limit on every provider I'm configured with. These reset quickly — try again in about a minute, or add another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) so I can fail over instantly."
                 : "The AI provider is unavailable right now. Please try again in a moment.";
+          // A streaming response has already sent its 200 headers by now, so
+          // this failure is invisible to anything watching status codes. Log it
+          // so it reaches the runtime logs and gets grouped as an error there —
+          // otherwise every chat can fail while monitoring reports a clean 100%.
+          // The provider error only: the user's message is not logged.
+          console.error("chat: all providers failed:", raw);
           send("error", { message });
         }
         controller.close();
