@@ -10,7 +10,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         # jsdom 30 (via vitest) requires node ^22.22.2 || ^24.15.0 || >=26 —
         # on node 20 its bundled undici calls webidl.util.markAsUncloneable,
         # which does not exist, and every test file fails to collect.
