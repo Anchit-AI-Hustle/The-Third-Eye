@@ -127,6 +127,7 @@ jobs:
             vercel deploy --prod --yes \
               --token "$TOKEN" \
               --build-env "NEXT_PUBLIC_BUILD_SHA=$SHA"
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
           elif [ -n "${HOOK:-}" ]; then
             echo "Pinging the Vercel deploy hook…"
             for attempt in 1 2 3; do
@@ -137,6 +138,7 @@ jobs:
               [ "$attempt" = 3 ] && { echo "::error::Deploy hook failed after 3 attempts."; exit 1; }
               sleep $((attempt * 5))
             done
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
           else
             # Not an error. Without a credential this workflow simply has no
             # deploy to run, and saying so is not worth a red check — the check
@@ -144,6 +146,7 @@ jobs:
             # condition actually worth waking someone for.
             echo "::notice::No VERCEL_TOKEN or VERCEL_DEPLOY_HOOK, so CI cannot deploy — waiting on the Vercel Git integration instead."
             echo "::notice::Add VERCEL_TOKEN (Settings → Secrets and variables → Actions) to have CI deploy directly. See this file's header."
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify the commit actually went live
@@ -153,12 +156,20 @@ jobs:
         run: |
           # A triggered deploy is not a finished deploy, and an untriggered one
           # is the Vercel Git integration's job — either way the only thing that
-          # settles it is the live site reporting our commit. On a schedule
-          # there is nothing in flight to wait for, so check once and be done.
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            deadline=$(date +%s)
-          else
+          # settles it is the live site reporting our commit.
+          #
+          # How long to wait depends on whether WE started a build, not on what
+          # event this is. Deciding by event type meant a scheduled run that
+          # fired the hook then checked once, immediately, and failed while the
+          # build it had just started was still running.
+          # A push can also have a build in flight that we did not start — the
+          # Git integration's — so that waits too. Only a scheduled run with no
+          # deploy of our own has nothing to wait for, and one look is enough
+          # there to say whether the live site is behind.
+          if [ "${{ steps.trigger.outputs.deployed }}" = "true" ] || [ "${{ github.event_name }}" != "schedule" ]; then
             deadline=$(( $(date +%s) + 900 ))
+          else
+            deadline=$(date +%s)
           fi
           while :; do
             live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' || echo "")
