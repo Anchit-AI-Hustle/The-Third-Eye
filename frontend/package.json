@@ -23,7 +23,7 @@
     "@radix-ui/react-tooltip": "^1.2.16",
     "@supabase/supabase-js": "^2.112.3",
     "@tanstack/react-query": "^5.40.0",
-    "@tanstack/react-query-devtools": "^5.40.0",
+    "@tanstack/react-query-devtools": "^5.101.4",
     "@testing-library/dom": "^10.4.1",
     "axios": "^1.19.0",
     "class-variance-authority": "^0.7.0",
