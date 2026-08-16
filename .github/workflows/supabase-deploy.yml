@@ -46,7 +46,7 @@ jobs:
             echo "::notice::Supabase secrets not set — skipping automated migration. Add SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD to enable it. Apply migrations manually with 'supabase db push' until then."
           fi
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         if: steps.check.outputs.ready == 'true'
         with:
           version: latest
