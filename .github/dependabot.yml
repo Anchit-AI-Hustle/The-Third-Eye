@@ -4,6 +4,15 @@ updates:
     directory: "/frontend"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript 7 is the native rewrite: no `main`, and an exports map of
+      # "." → lib/version.cjs. Next 14 detects TypeScript by resolving the file
+      # typescript/lib/typescript.js, which that package does not contain, so
+      # `next lint` fails with "TypeScript ... not installed" even though the
+      # install succeeded. Bumping to it broke main. Lift this once Next
+      # supports TS 7 — minor and patch updates within 5.x still come through.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule: { interval: "weekly" }
