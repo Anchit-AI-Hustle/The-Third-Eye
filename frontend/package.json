@@ -42,7 +42,7 @@
     "rehype-highlight": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "stripe": "^22.5.0",
-    "supabase": "^2.109.1",
+    "supabase": "^2.114.0",
     "tailwind-merge": "^3.6.0",
     "three": "^0.185.1",
     "web-push": "^3.6.7"
