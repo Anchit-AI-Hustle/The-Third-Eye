@@ -5,22 +5,23 @@ updates:
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
     ignore:
-      # TypeScript 7 is the native rewrite: no `main`, and an exports map of
-      # "." → lib/version.cjs. Next 14 detects TypeScript by resolving the file
-      # typescript/lib/typescript.js, which that package does not contain, so
-      # `next lint` fails with "TypeScript ... not installed" even though the
-      # install succeeded. Bumping to it broke main. Lift this once Next
-      # supports TS 7 — minor and patch updates within 5.x still come through.
-      - dependency-name: "typescript"
+      # Every major bump that merged unattended tonight broke main:
+      #   typescript 7  — Next resolves typescript/lib/typescript.js, which the
+      #                   native rewrite does not ship, so lint reports it as
+      #                   uninstalled.
+      #   vitest 4      — two .tsx files stopped parsing, so ten tests quietly
+      #                   stopped being collected rather than failing.
+      #   next 16 + react 19 + tailwind 4 — cannot even install
+      #                   (@types/react-dom@18 vs @types/react@19), and Vercel
+      #                   builds with --legacy-peer-deps, so they would have
+      #                   reached production without CI validating anything.
+      #
+      # A major version is a migration, not an upgrade. They are still wanted —
+      # just as deliberate work with someone watching, rather than as a PR that
+      # merges at midnight. Minor and patch updates continue to flow normally.
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      # Vitest 4 was proposed as a single jump from 2.x. It fails to parse the
-      # two .tsx test files (so their tests silently stop being collected) and
-      # drops cancelAnimationFrame from the environment, breaking the wake-word
-      # suite. Migrating is real work — updating the react plugin and reworking
-      # the rAF stubs — and worth doing deliberately rather than arriving as an
-      # automated bump. Minor and patch updates within 2.x still come through.
-      - dependency-name: "vitest"
-        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule: { interval: "weekly" }
