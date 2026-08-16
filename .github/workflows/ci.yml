@@ -9,7 +9,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         # jsdom 30 (via vitest) requires node ^22.22.2 || ^24.15.0 || >=26 —
         # on node 20 its bundled undici calls webidl.util.markAsUncloneable,
@@ -29,8 +29,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install -e ".[dev]"
       - run: ruff check app
