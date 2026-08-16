@@ -13,6 +13,14 @@ updates:
       # supports TS 7 — minor and patch updates within 5.x still come through.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # Vitest 4 was proposed as a single jump from 2.x. It fails to parse the
+      # two .tsx test files (so their tests silently stop being collected) and
+      # drops cancelAnimationFrame from the environment, breaking the wake-word
+      # suite. Migrating is real work — updating the react plugin and reworking
+      # the rAF stubs — and worth doing deliberately rather than arriving as an
+      # automated bump. Minor and patch updates within 2.x still come through.
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule: { interval: "weekly" }
