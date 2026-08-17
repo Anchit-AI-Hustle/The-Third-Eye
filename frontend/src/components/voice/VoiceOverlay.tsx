@@ -338,7 +338,12 @@ export function VoiceOverlay() {
   return (
     <div className={cn(
       "fixed z-50 transition-all duration-300",
-      "bottom-20 right-3 lg:bottom-5 lg:right-5",
+      // BottomNav is `fixed bottom-0` with `safe-bottom`, so it stands
+      // 4rem + env(safe-area-inset-bottom) tall. A flat bottom-20 (80px) put
+      // this inside that band on any notched phone — overlapping the nav, and
+      // sharing z-50 with it, so taps near the lower edge were ambiguous.
+      "bottom-[calc(5rem_+_env(safe-area-inset-bottom))] right-3",
+      "lg:bottom-5 lg:right-5",
       expanded ? "w-[340px] sm:w-[380px]" : "w-auto"
     )}>
       {/* ── Collapsed bubble ── */}
