@@ -63,9 +63,23 @@ jobs:
             echo "::notice::LLM_API_KEY is not set, so the Strix scan was skipped. Add it under Settings → Secrets and variables → Actions to enable it."
           fi
 
+      - name: Set up Python
+        if: steps.creds.outputs.ready == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Install Strix
         if: steps.creds.outputs.ready == 'true'
-        run: curl -sSL https://strix.ai/install | bash
+        # Pinned to a specific PyPI release rather than `curl | bash`-ing
+        # strix.ai's installer: an unpinned script fetched over HTTPS and piped
+        # straight into bash has no version pin or checksum, so a compromised
+        # install host (or an unnoticed upstream change) runs arbitrary code on
+        # a runner that holds LLM_API_KEY. Bump STRIX_VERSION deliberately to
+        # pick up new releases.
+        env:
+          STRIX_VERSION: "1.5.3"
+        run: python -m pip install "strix-agent==$STRIX_VERSION"
 
       - name: Scan
         if: steps.creds.outputs.ready == 'true'
