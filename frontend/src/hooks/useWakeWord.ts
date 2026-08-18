@@ -48,12 +48,21 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// An initialised name normalises to spaced letters ("E.D.I.T.H." → "e d i t h"),
+// but the recognizer transcribes it as one word. Both forms have to be triggers
+// or such an agent only ever answers to "hey".
+function compact(s: string): string {
+  return normalize(s).replace(/ /g, "");
+}
+
 function buildTriggerSet(agentName: string, extras: string[]): string[] {
   const triggers = new Set<string>();
   const a = normalize(agentName);
   if (a) {
     triggers.add(a);
     a.split(" ").forEach((p) => { if (p.length >= 2) triggers.add(p); });
+    const joined = compact(a);
+    if (joined.length >= 3) triggers.add(joined);
   }
   extras.forEach((e) => { const n = normalize(e); if (n) triggers.add(n); });
   return Array.from(triggers).sort((x, y) => y.length - x.length);
@@ -73,6 +82,23 @@ function matchTrigger(text: string, triggers: string[]): string | null {
 
 // Politeness the user says around the name, which is not part of the command.
 const FILLERS = ["hi", "hey", "ok", "okay", "hello", "yo", "please", "can you", "could you"];
+
+/**
+ * Whether the agent was woken by its own name rather than by a bare greeting.
+ *
+ * "hey" / "ok" / "hi" wake the agent by design, but they are also words people
+ * say to each other. Acting on whatever follows one of those would post
+ * overheard conversation — "hey, what time is it", "ok let's go home" — as an
+ * authenticated chat turn. Only the name is specific enough to treat the rest
+ * of the sentence as a command meant for the agent.
+ */
+export function isNameTrigger(trigger: string, agentName: string): boolean {
+  const t = normalize(trigger);
+  const a = normalize(agentName);
+  if (!t || !a) return false;
+  if (t === a || a.split(" ").includes(t)) return true;
+  return compact(t) === compact(a);
+}
 
 /**
  * What the user actually asked, from the utterance that woke the agent.
@@ -121,6 +147,7 @@ export function useWakeWord({
   const recRef = useRef<any>(null);
   const lastFireRef = useRef(0);
   const triggersRef = useRef<string[]>([]);
+  const agentNameRef = useRef(agentName);
   const onWakeRef = useRef(onWake);
   const lastEventRef = useRef(0);
   const launchRef = useRef<() => void>(() => {});
@@ -144,6 +171,7 @@ export function useWakeWord({
 
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
   useEffect(() => {
+    agentNameRef.current = agentName;
     triggersRef.current = buildTriggerSet(agentName, extraTriggers ?? DEFAULT_TRIGGERS);
   }, [agentName, extraTriggers]);
 
@@ -288,9 +316,11 @@ export function useWakeWord({
         const trig = matchTrigger(chunk, triggersRef.current);
         if (!trig) return;
 
-        // Just the name — wake now. Any delay here is the user staring at a
-        // panel that has not opened, which is the thing they notice.
-        if (!stripWakeTrigger(chunk, trig)) {
+        // Nothing to wait for: either just the name, or a greeting trigger
+        // whose remaining words are not treated as a command anyway. Waking now
+        // matters — a delay here is the user staring at a panel that has not
+        // opened, which is the thing they notice.
+        if (!isNameTrigger(trig, agentNameRef.current) || !stripWakeTrigger(chunk, trig)) {
           clearSettle();
           fire(trig, chunk);
           return;

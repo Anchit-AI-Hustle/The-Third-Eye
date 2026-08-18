@@ -254,6 +254,14 @@ describe("hearing the whole command", () => {
     expect(onWake).toHaveBeenCalledTimes(1);
   });
 
+  it("does not hold a greeting, whose words are not treated as a command", () => {
+    // "hey, can you pass the salt" must open the panel at once rather than
+    // pausing to collect a sentence nobody is going to act on.
+    const { onWake } = mount();
+    act(() => FakeRecognition.latest.sayInterim("hey can you pass the salt"));
+    expect(onWake).toHaveBeenCalledWith("hey", "hey can you pass the salt");
+  });
+
   it("drops a held utterance when listening is turned off", () => {
     const view = renderHook(
       ({ enabled }) => useWakeWord({ agentName: "JARVIS", enabled, onWake: onWakeSpy }),

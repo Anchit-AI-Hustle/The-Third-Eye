@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
-import { useWakeWord, stripWakeTrigger } from "@/hooks/useWakeWord";
+import { useWakeWord, stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
@@ -140,7 +140,14 @@ export function VoiceOverlay() {
     // "Hey JARVIS, what's the weather" carries its command in the same breath.
     // Answer it instead of opening a mic and making them say it again; wake
     // listening resumes by itself once the reply has been spoken.
-    const command = stripWakeTrigger(transcript, trigger);
+    //
+    // Only when the agent was named, though. A bare "hey" or "ok" also wakes it,
+    // and sending whatever followed one of those would post overheard
+    // conversation as a chat turn. Those open the panel and listen, so the user
+    // sees it happen and speaks the command deliberately.
+    const command = isNameTrigger(trigger, agent.name)
+      ? stripWakeTrigger(transcript, trigger)
+      : "";
     if (command) {
       handsFreeRef.current = true;
       sendRef.current(command);

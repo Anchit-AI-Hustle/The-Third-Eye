@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { stripWakeTrigger } from "@/hooks/useWakeWord";
+import { stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
 
 // Waking on "hey JARVIS, what's the weather" used to open a mic and throw the
 // question away, so the user had to say it twice. The command has to survive
@@ -41,12 +41,30 @@ describe("hearing only the name", () => {
   });
 });
 
-describe("triggers that are not the agent's name", () => {
-  it("carries the command through a bare 'hey'", () => {
-    expect(stripWakeTrigger("hey what time is it", "hey")).toBe("what time is it");
+// Greetings wake the agent, but they are also words people say to each other.
+// Acting on what follows one would post overheard conversation as an
+// authenticated chat turn, so only the agent's own name qualifies a sentence as
+// a command. A greeting still wakes it — it opens the panel and listens, where
+// the user can see it happen.
+
+describe("telling the name from a greeting", () => {
+  it.each([
+    ["jarvis", "JARVIS"],
+    ["friday", "FRIDAY"],
+    ["edith", "E.D.I.T.H."],
+  ])("recognises %s as the agent's own name", (trigger, agentName) => {
+    expect(isNameTrigger(trigger, agentName)).toBe(true);
   });
 
-  it("still returns nothing for a bare greeting", () => {
-    expect(stripWakeTrigger("hey", "hey")).toBe("");
+  it.each(["hey", "hi", "ok", "hello"])("does not treat %s as the name", (trigger) => {
+    expect(isNameTrigger(trigger, "JARVIS")).toBe(false);
+  });
+
+  it("matches one word of a multi-word name", () => {
+    expect(isNameTrigger("edith", "EDITH Prime")).toBe(true);
+  });
+
+  it("is false when there is no agent name to compare against", () => {
+    expect(isNameTrigger("jarvis", "")).toBe(false);
   });
 });
