@@ -20,8 +20,31 @@ describe("keeping the command that came with the name", () => {
     expect(stripWakeTrigger("hey e d i t h summarise my inbox", "e d i t h")).toBe("summarise my inbox");
   });
 
-  it("drops everything the user said before the name", () => {
+  it("tolerates the noise people start a sentence with", () => {
     expect(stripWakeTrigger("um so hey jarvis call my mother", "jarvis")).toBe("call my mother");
+  });
+});
+
+// Some agent names are ordinary words — FRIDAY is a shipped persona and a
+// weekday. Someone addressing the agent leads with its name; a name buried in a
+// sentence about something else is not an instruction, and acting on the rest
+// of that sentence would post overheard speech to chat.
+
+describe("the name has to be what the sentence opens with", () => {
+  it.each([
+    ["next friday can you send the invoice", "friday"],
+    ["let's do it on friday and tell the team", "friday"],
+    ["I told jarvis to book the table", "jarvis"],
+  ])("refuses to take a command out of %s", (said, trigger) => {
+    expect(stripWakeTrigger(said, trigger)).toBe("");
+  });
+
+  it("still takes one when the agent is addressed directly", () => {
+    expect(stripWakeTrigger("friday send the invoice", "friday")).toBe("send the invoice");
+  });
+
+  it("still takes one after a greeting", () => {
+    expect(stripWakeTrigger("hey friday send the invoice", "friday")).toBe("send the invoice");
   });
 });
 

@@ -87,6 +87,15 @@ export function matchTrigger(text: string, triggers: string[]): string | null {
 // Politeness the user says around the name, which is not part of the command.
 const FILLERS = ["hi", "hey", "ok", "okay", "hello", "yo", "please", "can you", "could you"];
 
+// The only words that may come before the name in something addressed to the
+// agent: a greeting, or the noise people start a sentence with. Anything else
+// means the name appeared inside a sentence about something else — "next
+// FRIDAY, can you send the invoice" is a shipped persona's name used as a
+// weekday, and acting on the remainder would post overheard speech to chat.
+const LEAD_IN = new Set([
+  "um", "uh", "er", "erm", "so", "well", "hi", "hey", "ok", "okay", "hello", "yo",
+]);
+
 /**
  * Whether the agent was woken by its own name rather than by a bare greeting.
  *
@@ -109,14 +118,22 @@ export function isNameTrigger(trigger: string, agentName: string): boolean {
  *
  * "Hey JARVIS, what's the weather" carries its command in the same breath as
  * the name. Waking and then listening from scratch throws that away and makes
- * the user say it twice. Returns "" when they only said the name, which is the
+ * the user say it twice. Returns "" when they only said the name, or when the
+ * name turned up inside a sentence that was not addressed to the agent — the
  * signal to open up and listen rather than to answer something.
  */
 export function stripWakeTrigger(transcript: string, trigger: string): string {
   let rest = normalize(transcript);
   const trig = normalize(trigger);
   const at = trig ? rest.indexOf(trig) : -1;
-  if (at >= 0) rest = rest.slice(at + trig.length).trim();
+  if (at >= 0) {
+    // Someone addressing the agent leads with its name, give or take a greeting.
+    // Substantive words in front of it mean the sentence is about something
+    // else and its remainder is not a command.
+    const before = rest.slice(0, at).trim();
+    if (before && before.split(" ").some((w) => !LEAD_IN.has(w))) return "";
+    rest = rest.slice(at + trig.length).trim();
+  }
 
   // Drop leading filler words, and any other trigger word sitting next to the
   // name ("hey jarvis" matches on "jarvis" and leaves "hey" behind when the
