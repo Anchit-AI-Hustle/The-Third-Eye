@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X } from "lucide-react";
@@ -194,6 +194,25 @@ function TagPicker({ values, onChange, options, placeholder, max = 6 }: {
         </div>
       )}
     </div>
+  );
+}
+
+// An icon button with a fast CSS hover label, rather than the browser's own
+// `title` tooltip — used for the per-field AI toolbar, where four
+// similar-looking icons in a row need to be told apart at a glance.
+function IconBtn({ label, onClick, disabled, danger, children }: {
+  label: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: ReactNode;
+}) {
+  return (
+    <span className="relative inline-flex group/icon">
+      <button type="button" onClick={onClick} disabled={disabled}
+        className={`p-1 rounded transition-colors disabled:opacity-40 ${danger ? "text-text-muted hover:text-accent-red" : "text-text-muted hover:text-[#34D399]"}`}>
+        {children}
+      </button>
+      <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded border border-border-default bg-background-base px-1.5 py-0.5 text-[10px] font-mono text-text-secondary opacity-0 shadow-lg transition-opacity group-hover/icon:opacity-100">
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -475,22 +494,25 @@ export function MusicStudio() {
 
   // Per-field AI toolbar: Suggest / Enhance / New / Clear — every field carries
   // all four, whatever its underlying type (text, number, or a tag list).
+  // Labelled on hover: a native `title` has a slow, inconsistent delay and gets
+  // lost against four identical-looking icons in a row, so each gets its own
+  // fast CSS tooltip instead — and a larger tap target, since four icons at
+  // size 12 with a 4px gap were hard to aim at on a real screen.
   const AiBar = ({ name }: { name: keyof Fields }) => (
-    <span className="inline-flex items-center gap-1 ml-2 align-middle">
+    <span className="inline-flex items-center gap-1.5 ml-2 align-middle">
       {(["suggest", "enhance", "new"] as const).map((a) => {
         const Icon = a === "suggest" ? Wand2 : a === "enhance" ? Zap : RefreshCw;
         const on = busyField === `${String(name)}:${a}`;
+        const label = a === "suggest" ? "Suggest" : a === "enhance" ? "Enhance" : "New";
         return (
-          <button key={a} type="button" onClick={() => aiField(name, a)} disabled={!!busyField} title={a[0].toUpperCase() + a.slice(1)}
-            className="text-text-muted hover:text-[#34D399] disabled:opacity-40 transition-colors">
-            {on ? <Loader2 size={12} className="animate-spin" /> : <Icon size={12} />}
-          </button>
+          <IconBtn key={a} label={label} onClick={() => aiField(name, a)} disabled={!!busyField}>
+            {on ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
+          </IconBtn>
         );
       })}
-      <button type="button" onClick={() => clearField(name)} disabled={!!busyField} title="Clear"
-        className="text-text-muted hover:text-accent-red disabled:opacity-40 transition-colors">
-        <Trash2 size={12} />
-      </button>
+      <IconBtn label="Clear" onClick={() => clearField(name)} disabled={!!busyField} danger>
+        <Trash2 size={13} />
+      </IconBtn>
     </span>
   );
 
@@ -542,7 +564,11 @@ export function MusicStudio() {
           )}
         </div>
       ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-5">
+      /* The form was capped at 400px while the output panel — empty until
+         something is generated — ate the rest of the page. Wider form,
+         narrower minimum for the output side so the page stops looking
+         half-unused before the first generation. */
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(420px,640px)_minmax(320px,1fr)] gap-5">
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-3.5 self-start">
         <div>
           <label className={lbl}>Music prompt <span className="text-accent-red">*</span> <AiBar name="description" /></label>
