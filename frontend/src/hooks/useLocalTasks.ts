@@ -41,6 +41,17 @@ function ls<T>(key: string): T[] {
 }
 function lsSet(key: string, v: unknown) { localStorage.setItem(key, JSON.stringify(v)); }
 
+/**
+ * Fill in `completed_at` from a status change, unless the caller set it itself
+ * (the edit form does). Moving a task back out of Done clears the date rather
+ * than leaving a finish date on unfinished work.
+ */
+export function withCompletionStamp(patch: Partial<LocalTask>): Partial<LocalTask> {
+  if (!patch.status || patch.completed_at !== undefined) return patch;
+  if (patch.status === "done") return { ...patch, completed_at: new Date().toISOString().slice(0, 10) };
+  return { ...patch, completed_at: "" };
+}
+
 export function useLocalTasks(statusFilter?: TaskStatus) {
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
@@ -93,12 +104,17 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
   }, []);
 
   const update = useCallback(async (id: string, data: Partial<LocalTask>) => {
+    // The completion date has to be stamped wherever a task is finished — the
+    // Kanban drag, the row buttons and the assistant all only sent `status`, so
+    // the tracker's Completed column stayed empty and the dashboard's
+    // "completed today" count sat at zero however much work got done.
+    const patch = withCompletionStamp(data);
     setTasks((prev) => {
-      const next = prev.map((t) => t.id === id ? { ...t, ...data } : t);
+      const next = prev.map((t) => t.id === id ? { ...t, ...patch } : t);
       if (!remote.current) lsSet(TASK_KEY, next);
       return next;
     });
-    if (remote.current) await dataUpdate("tasks", id, data);
+    if (remote.current) await dataUpdate("tasks", id, patch);
   }, []);
 
   const remove = useCallback(async (id: string) => {

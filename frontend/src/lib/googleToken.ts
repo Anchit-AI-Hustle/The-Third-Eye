@@ -46,6 +46,53 @@ export async function getGoogleAccessToken(
   return { accessToken: json.access_token, scope: (data as { scope?: string } | null)?.scope };
 }
 
+/**
+ * Withdraw this user's Google grant: tell Google to revoke the refresh token,
+ * then drop the stored row. Deleting our row alone leaves the grant live in the
+ * user's Google account, so someone who deletes their account (or disconnects)
+ * would still see us listed under "Third-party apps with account access".
+ *
+ * Revoking a refresh token invalidates every access token derived from it, so
+ * one call ends the grant. Returns what happened for each half; the row is
+ * cleared even if Google's endpoint is unreachable, because keeping a token we
+ * were asked to forget is worse than a grant we can no longer use — the user
+ * can then finish the job at myaccount.google.com/permissions.
+ */
+export async function revokeGoogleAccess(
+  email: string,
+): Promise<{ revoked: boolean; cleared: boolean; hadToken: boolean }> {
+  const sb = getAdminSupabase();
+  if (!sb) return { revoked: false, cleared: false, hadToken: false };
+
+  const { data } = await sb
+    .from("google_tokens")
+    .select("refresh_token_enc")
+    .eq("user_id", email)
+    .maybeSingle();
+
+  const enc = (data as { refresh_token_enc?: string } | null)?.refresh_token_enc;
+  const refreshToken = enc ? decrypt(enc) : null;
+
+  let revoked = false;
+  if (refreshToken) {
+    try {
+      const res = await fetch("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: refreshToken }),
+      });
+      // Google answers 400 invalid_token for a grant the user already removed
+      // from their side. That is the desired end state, not a failure.
+      revoked = res.ok || res.status === 400;
+    } catch {
+      revoked = false;
+    }
+  }
+
+  const { error } = await sb.from("google_tokens").delete().eq("user_id", email);
+  return { revoked, cleared: !error, hadToken: !!refreshToken };
+}
+
 /** Google scopes the ingestion features need — requested via the connect flow. */
 export const INGESTION_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",

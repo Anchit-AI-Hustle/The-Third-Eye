@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/serverSupabase";
+import { revokeGoogleAccess } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,12 @@ export async function POST(_req: NextRequest) {
     return Response.json({ ok: true, remote: false, deleted: [] });
   }
 
+  // Before the row is deleted, tell Google to drop the grant. Order matters:
+  // once google_tokens is cleared we no longer hold the refresh token, and the
+  // user would be left with a live "Third-party access" entry for an account
+  // that no longer exists.
+  const google = await revokeGoogleAccess(email);
+
   const deleted: string[] = [];
   const failed: string[] = [];
   for (const table of TABLES) {
@@ -50,5 +57,5 @@ export async function POST(_req: NextRequest) {
     (ok ? deleted : failed).push(table);
   }
 
-  return Response.json({ ok: true, remote: true, deleted, failed });
+  return Response.json({ ok: true, remote: true, deleted, failed, google });
 }
