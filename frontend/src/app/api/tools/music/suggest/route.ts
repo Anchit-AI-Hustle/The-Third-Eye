@@ -31,7 +31,13 @@ function fieldInstruction(field: string): string {
     case "instruments": return "Return 4-6 specific instruments, comma-separated.";
     case "artistInspiration": return "Return 1-2 reference artists, comma-separated.";
     case "vocalStyle": return "Return a single concise vocal-style descriptor.";
+    case "vocalLanguage": return "Return 1-2 languages the vocals should be sung/spoken in, comma-separated.";
+    case "vocalIntensity": return "Return a single whole number from 1 to 10 (1 = soft whisper, 10 = powerful belted performance) fitting the mood and energy.";
+    case "vocalEffects": return "Return 1-3 fitting vocal production effects, comma-separated (e.g. reverb, autotune, delay, choir layer, vocoder, distortion).";
     case "structure": return "Return a song structure as section names joined by ' → '.";
+    case "tempo": return "Return a single whole number: a fitting BPM between 60 and 200.";
+    case "energy": return "Return a single whole number from 1 to 10 for the track's overall energy.";
+    case "duration": return "Return a single number: a fitting length in seconds.";
     case "lyricsText": return "Write short, singable lyrics with [Verse]/[Chorus] tags.";
     default: return "Return one concise, fitting value for this field.";
   }

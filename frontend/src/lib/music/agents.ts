@@ -54,6 +54,8 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
     i.structure ? `Structure hint: ${i.structure}` : "",
     i.artistInspiration ? `Vibe reference: ${i.artistInspiration}` : "",
     i.vocals === false ? "Vocals: instrumental" : i.vocalStyle ? `Vocals: ${i.vocalStyle} (${i.vocalLanguage || "English"})` : "",
+    i.vocals !== false && i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 (1 = soft whisper, 10 = powerful performance)` : "",
+    i.vocals !== false && i.vocalEffects ? `Vocal effects: ${i.vocalEffects}` : "",
     "",
     "KNOWLEDGE BASE:",
     kb,
@@ -132,6 +134,7 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
     `Theme / brief: ${i.description || brief.culturalContext}`,
     `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM`,
     `Vocal style: ${brief.vocalStyle}`,
+    i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 — write shorter, sparser lines toward 1 (whispered/intimate) and bigger, more declamatory lines toward 10 (belted/anthemic).` : "",
     i.artistInspiration ? `Vibe reference (do NOT copy any existing lyrics): ${i.artistInspiration}` : "",
     `Structure to follow: ${structure}`,
   ].filter(Boolean).join("\n");
@@ -152,9 +155,22 @@ export function conductor(
 ): FinalPlan {
   const sing = !!lyrics.trim();
   // Tags line for vocal models (ACE-Step) — style + explicit vocal/instrumental.
+  // Intensity and effects are appended directly (not just folded into the
+  // Musicologist's brief) so they reach the model even when the LLM stages are
+  // unavailable and fall back to fallbackBrief/fallbackBeats.
+  const intensityWord = i.vocalIntensity != null
+    ? i.vocalIntensity <= 3 ? "soft, intimate delivery"
+    : i.vocalIntensity >= 8 ? "powerful, belted performance"
+    : "" // mid-range is already what brief.vocalStyle describes
+    : "";
+  const vocalTag = [
+    brief.vocalStyle, i.vocalLanguage || "English", "vocals",
+    intensityWord,
+    i.vocalEffects || "",
+  ].filter(Boolean).join(", ");
   const tags = [
     beats.styleTags,
-    sing ? `${brief.vocalStyle} ${i.vocalLanguage || "English"} vocals` : "instrumental, no vocals",
+    sing ? vocalTag : "instrumental, no vocals",
   ].filter(Boolean).join(", ").slice(0, 600);
   // The instrumental/model prompt is the beat-smith's prompt (already vocals-agnostic).
   const prompt = beats.modelPrompt.slice(0, 600);

@@ -16,6 +16,10 @@ export interface MusicInput {
   tempo?: number; duration?: number; vocals?: boolean; vocalStyle?: string; vocalLanguage?: string;
   lyricsMode?: "auto" | "manual" | "none"; lyricsText?: string; artistInspiration?: string;
   instruments?: string; energy?: number; structure?: string;
+  /** 1 (soft whisper) – 10 (powerful performance). */
+  vocalIntensity?: number;
+  /** Comma-separated, e.g. "reverb, autotune, choir layer". */
+  vocalEffects?: string;
 }
 
 /** A single genre's conventions in the knowledge base. */
