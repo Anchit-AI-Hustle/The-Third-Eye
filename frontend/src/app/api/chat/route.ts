@@ -1053,11 +1053,11 @@ async function initiateProtocol(protocol: string, context: string | undefined, c
 }
 
 function getHealthData(metric: string, period: string): string {
-  return `Health data for **${metric}** (${period}): No health service is connected yet. To enable real health tracking, connect Apple Health, Google Fit, or Strava from Settings → Integrations. I'll retrieve actual data once a service is linked.`;
+  return `Health data for **${metric}** (${period}): No health service is connected yet. Apple Health, Google Fit and Strava integration is planned but not built — see /capabilities for current status. I'll retrieve actual data once one is built and linked.`;
 }
 
 function controlDevice(action: string, device: string, value?: string): string {
-  return `Smart home control for **${device}** (${action}${value ? ` → ${value}` : ""}): No smart home service (Matter/HomeKit) is connected yet. To enable device control, connect your smart home hub from Settings → Integrations.`;
+  return `Smart home control for **${device}** (${action}${value ? ` → ${value}` : ""}): No smart home service (Matter/HomeKit) is connected yet. This is planned but not built — see /capabilities for current status.`;
 }
 
 function formatProactiveSuggestion(context: string, suggestion: string, urgency: string): string {
