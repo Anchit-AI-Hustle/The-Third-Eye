@@ -71,10 +71,6 @@ export default function PrivacyPolicyPage() {
                 <span className="font-mono text-xs">calendar.readonly</span> — to read your events
                 when you ask about your schedule
               </li>
-              <li>
-                <span className="font-mono text-xs">calendar.events</span> — to create or update
-                events when you ask
-              </li>
             </ul>
             <p className="mt-3">
               Message and event content is fetched when a request needs it and is used to answer

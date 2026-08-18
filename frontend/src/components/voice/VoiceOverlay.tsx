@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
-import { useWakeWord } from "@/hooks/useWakeWord";
+import { useWakeWord, stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
@@ -56,6 +56,9 @@ export function VoiceOverlay() {
   // Mirror of the pending sensitive actions so voice callbacks can read the
   // latest without being re-created on every state change.
   const pendingRef = useRef<PendingAction[]>([]);
+  // Whether the turn in flight arrived by voice, so replies that need an answer
+  // are spoken rather than left on screen for someone who isn't looking.
+  const handsFreeRef = useRef(false);
 
   const { allTasks } = useLocalTasks();
   const { expenses } = useLocalExpenses();
@@ -130,29 +133,60 @@ export function VoiceOverlay() {
   // App-wide wake word: passively listen for the agent's name while the mic is
   // off (so it never fights the main recognizer). Saying "JARVIS" opens the
   // panel and starts listening — true hands-free entry.
-  const onWake = useCallback(async () => {
+  const onWake = useCallback(async (trigger: string, transcript: string) => {
     if (isStreamingRef.current) return;
     if (!(await requestCapability("microphone"))) return;
     setExpanded(true);
+    // "Hey JARVIS, what's the weather" carries its command in the same breath.
+    // Answer it instead of opening a mic and making them say it again; wake
+    // listening resumes by itself once the reply has been spoken.
+    //
+    // Only when the agent was named, though. A bare "hey" or "ok" also wakes it,
+    // and sending whatever followed one of those would post overheard
+    // conversation as a chat turn. Those open the panel and listen, so the user
+    // sees it happen and speaks the command deliberately.
+    const command = isNameTrigger(trigger, agent.name)
+      ? stripWakeTrigger(transcript, trigger)
+      : "";
+    if (command) {
+      handsFreeRef.current = true;
+      sendRef.current(command);
+      return;
+    }
     stt.enable();
     setMicOn(true);
   }, [stt, requestCapability]);
-  // Passive wake-word listening is continuous microphone access, so it only runs
-  // when the user granted the mic for every time. Otherwise the user drives it
-  // via the mic button, which asks through the gate.
+
+  // Continuous listening needs the microphone, and the gate is the consent
+  // moment for it. This used to require the *persisted* "allow every time"
+  // policy, which nothing sets unless the user goes looking for it — so the
+  // wake toggle sat green while nothing was listening. Now any live grant
+  // counts: the persisted policy, or the user allowing it in this session.
   const [micAlways, setMicAlways] = useState(false);
+  const [micGranted, setMicGranted] = useState(false);
   useEffect(() => {
     const read = () => setMicAlways(getPolicy("microphone") === "always");
     read();
     window.addEventListener(PERM_POLICY_EVENT, read);
     return () => window.removeEventListener(PERM_POLICY_EVENT, read);
   }, []);
+  const micReady = micAlways || micGranted;
+
+  // Ask for the microphone the moment the user turns the wake word on, rather
+  // than silently doing nothing until they happen to use the mic button.
+  const toggleWake = useCallback(async () => {
+    if (wakeEnabled) { setWakeEnabled(false); return; }
+    if (!micReady && !(await requestCapability("microphone"))) return;
+    setMicGranted(true);
+    setWakeEnabled(true);
+  }, [wakeEnabled, micReady, requestCapability]);
+
   // !tts.speaking matters even though micOn is normally true after a wake:
   // a typed question with the mic off still gets a spoken reply, and the wake
   // recognizer would otherwise hear the agent say its own name and self-trigger.
-  useWakeWord({
+  const wake = useWakeWord({
     agentName: agent.name,
-    enabled: wakeEnabled && micAlways && !micOn && !tts.speaking,
+    enabled: wakeEnabled && micReady && !micOn && !tts.speaking,
     onWake,
     cooldownMs: 2000,
   });
@@ -183,6 +217,9 @@ export function VoiceOverlay() {
       setLiveBubble(null);
     } else {
       if (!(await requestCapability("microphone"))) return;
+      // Granting here also unblocks the wake word for the rest of the session,
+      // so the user does not have to authorise the same microphone twice.
+      setMicGranted(true);
       stt.enable();
       setMicOn(true);
     }
@@ -278,7 +315,10 @@ export function VoiceOverlay() {
                     summary: parsed.summary, status: "pending",
                     url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
                   });
-                  if (micOn) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
+                  // Hands-free covers both the open mic and a command that came
+                  // in on the wake word — otherwise the card appears silently
+                  // and the user is waiting on a reply that never comes.
+                  if (micOn || handsFreeRef.current) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
                 } else if (eventType === "error") {
                   setResponse(`Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
@@ -387,11 +427,21 @@ export function VoiceOverlay() {
               </div>
             </div>
             <div className="flex items-center gap-0.5">
-              <button onClick={() => setWakeEnabled((w) => !w)}
-                title={wakeEnabled ? `Wake word on — say "${agent.name}"` : "Wake word off"}
+              {/* Green means it is genuinely listening. Amber means the wake
+                  word is on but the mic is not granted, or this browser has no
+                  speech recognition — tap to fix rather than sit on a lie. */}
+              <button onClick={toggleWake}
+                title={
+                  wake.listening ? `Listening — say "${agent.name}"`
+                  : wakeEnabled && !wake.supported ? "This browser can't do wake words"
+                  : wakeEnabled ? "Wake word needs the microphone — tap to allow"
+                  : "Wake word off"
+                }
                 className={cn("p-1.5 rounded-input transition-colors",
-                  wakeEnabled ? "text-success" : "text-text-muted hover:text-text-secondary")}>
-                <Radio size={11} />
+                  wake.listening ? "text-success"
+                  : wakeEnabled ? "text-warning"
+                  : "text-text-muted hover:text-text-secondary")}>
+                <Radio size={11} className={wake.listening ? "animate-pulse" : undefined} />
               </button>
               <button onClick={tts.toggle} title={tts.enabled ? "Mute" : "Unmute"}
                 className={cn("p-1.5 rounded-input transition-colors",
@@ -523,12 +573,12 @@ export function VoiceOverlay() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handsFreeRef.current = false; sendMessage(); } }}
                 placeholder={micOn ? "Or type…" : `Ask ${agent.name}…`}
                 disabled={isStreaming}
                 className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-xs outline-none disabled:opacity-60 font-mono"
               />
-              <button onClick={() => sendMessage()} disabled={(!input.trim() && !attachedFiles.length) || isStreaming}
+              <button onClick={() => { handsFreeRef.current = false; sendMessage(); }} disabled={(!input.trim() && !attachedFiles.length) || isStreaming}
                 className={cn("p-0.5 rounded-input transition-colors",
                   (input.trim() || attachedFiles.length) && !isStreaming ? "text-[#4FC3F7] hover:bg-[#4FC3F7]/10" : "text-text-muted cursor-not-allowed")}>
                 <Send size={11} />

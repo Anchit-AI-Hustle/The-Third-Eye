@@ -29,6 +29,8 @@ Return ONLY a raw JSON object (no prose, no code fences) with EXACTLY these keys
  "vocals": boolean,
  "vocalStyle": string,
  "vocalLanguage": string,
+ "vocalIntensity": number (1-10; 1 = soft whisper, 10 = powerful performance),
+ "vocalEffects": string (comma-separated, 1-3 fitting effects e.g. "reverb, autotune"),
  "lyricsTheme": string (a short phrase)
 }`;
 
@@ -140,6 +142,10 @@ export async function POST(req: NextRequest) {
     vocals: typeof parsed.vocals === "boolean" ? parsed.vocals : true,
     vocalStyle: str(parsed.vocalStyle) || bf.vocalStyle,
     vocalLanguage: str(parsed.vocalLanguage) || "English",
+    // No genre-keyed default: an unearned effects list reads as arbitrary. The
+    // intensity default tracks the genre's typical energy instead.
+    vocalIntensity: Number(parsed.vocalIntensity) >= 1 && Number(parsed.vocalIntensity) <= 10 ? Math.round(parsed.vocalIntensity) : bf.energy,
+    vocalEffects: str(parsed.vocalEffects),
     lyricsTheme: str(parsed.lyricsTheme) || description.slice(0, 60),
   };
 
