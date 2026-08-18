@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
+import { stripWakeTrigger, isNameTrigger, matchTrigger, buildTriggerSet } from "@/hooks/useWakeWord";
 
 // Waking on "hey JARVIS, what's the weather" used to open a mic and throw the
 // question away, so the user had to say it twice. The command has to survive
@@ -46,6 +46,38 @@ describe("hearing only the name", () => {
 // authenticated chat turn, so only the agent's own name qualifies a sentence as
 // a command. A greeting still wakes it — it opens the panel and listens, where
 // the user can see it happen.
+
+// Matching the name inside a longer word is not a near-miss: the name is what
+// licenses treating the rest of the sentence as a command, so "Meredith can you
+// send the files" would have been posted as a chat turn.
+
+describe("matching the name on word boundaries", () => {
+  const edith = buildTriggerSet("E.D.I.T.H.");
+  const jarvis = buildTriggerSet("JARVIS");
+
+  it.each([
+    "meredith can you send the files",
+    "we should credit her for it",
+  ])("does not wake on %s", (heard) => {
+    expect(matchTrigger(heard, edith)).toBeNull();
+  });
+
+  it("still wakes on the name spoken as one word", () => {
+    expect(matchTrigger("edith what's on today", edith)).toBe("edith");
+  });
+
+  it("still wakes on the name spelled out", () => {
+    expect(matchTrigger("e d i t h what's on today", edith)).toBe("e d i t h");
+  });
+
+  it("wakes on the name at the end of a sentence", () => {
+    expect(matchTrigger("what time is it jarvis", jarvis)).toBe("jarvis");
+  });
+
+  it("wakes on the name mid-sentence", () => {
+    expect(matchTrigger("so jarvis what now", jarvis)).toBe("jarvis");
+  });
+});
 
 describe("telling the name from a greeting", () => {
   it.each([

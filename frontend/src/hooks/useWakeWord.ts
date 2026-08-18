@@ -55,7 +55,7 @@ function compact(s: string): string {
   return normalize(s).replace(/ /g, "");
 }
 
-function buildTriggerSet(agentName: string, extras: string[]): string[] {
+export function buildTriggerSet(agentName: string, extras: string[] = DEFAULT_TRIGGERS): string[] {
   const triggers = new Set<string>();
   const a = normalize(agentName);
   if (a) {
@@ -68,14 +68,18 @@ function buildTriggerSet(agentName: string, extras: string[]): string[] {
   return Array.from(triggers).sort((x, y) => y.length - x.length);
 }
 
-function matchTrigger(text: string, triggers: string[]): string | null {
+export function matchTrigger(text: string, triggers: string[]): string | null {
   const t = normalize(text);
   if (!t) return null;
   for (const trig of triggers) {
     if (t === trig) return trig;
     if (t.startsWith(trig + " ")) return trig;
     if (t.includes(" " + trig + " ")) return trig;
-    if (trig.length >= 4 && t.includes(trig)) return trig;
+    // The name at the end of a sentence ("what time is it, JARVIS"), which the
+    // rule above misses for want of a trailing space. Deliberately anchored to
+    // a word boundary: a plain substring test woke an agent called E.D.I.T.H.
+    // on "Meredith" and then treated the rest of that sentence as a command.
+    if (t.endsWith(" " + trig)) return trig;
   }
   return null;
 }
