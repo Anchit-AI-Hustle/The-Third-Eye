@@ -14,20 +14,92 @@ interface SavedTrack {
 }
 const proxied = (url: string) => `/api/tools/music/proxy?url=${encodeURIComponent(url)}`;
 
-const GENRES = ["Lo-fi", "Pop", "Cinematic", "Acoustic", "EDM", "Hip-hop", "Ambient", "Rock", "Classical", "Indie", "R&B", "Jazz", "Hardtechno", "Folk", "Afrobeats", "Synthwave"];
-const MOODS = ["Uplifting", "Chill", "Energetic", "Melancholic", "Dreamy", "Epic", "Romantic", "Playful", "Dark", "Nostalgic"];
-const VOCAL_STYLES = ["Smooth", "Powerful", "Soft/whispery", "Rap/spoken", "Choir", "Raspy"];
-const LANGUAGES = ["English", "Hindi", "Punjabi", "Spanish", "French", "Korean", "Japanese", "Arabic"];
-const VOCAL_EFFECTS = ["Reverb", "Autotune", "Delay/echo", "Distortion", "Harmonizer", "Choir layer", "Whisper layer", "Vocoder", "Chorus/doubling", "Telephone filter"];
-const STRUCTURES = ["Verse–Chorus–Verse–Chorus–Bridge–Chorus", "Intro–Verse–Chorus–Verse–Chorus–Bridge–Chorus–Outro", "Intro–Build–Drop–Breakdown–Drop–Outro", "AABA", "Intro–Theme–Solo–Theme–Outro"];
+// Broad, real-world option lists rather than a handful of defaults — every
+// field below is a starting point the user picks from, but TagPicker/ChipInput
+// both still accept anything typed that isn't on the list, so nothing is ever
+// actually restricted to these.
+const GENRES = [
+  "Pop", "Rock", "Hip-hop", "R&B", "Soul", "Funk", "Jazz", "Blues", "Classical", "Opera",
+  "Country", "Folk", "Bluegrass", "Americana", "Singer-songwriter", "Indie", "Alternative",
+  "Metal", "Punk", "Hardcore", "Emo", "Post-rock", "Shoegaze", "Grunge",
+  "EDM", "House", "Deep house", "Tech house", "Techno", "Hardtechno", "Trance", "Psytrance",
+  "Dubstep", "Drum & bass", "Jungle", "Garage/UK garage", "Grime", "Hardstyle", "Hyperpop",
+  "Trap", "Drill", "Boom bap", "Lo-fi", "Ambient", "Downtempo", "Chillout", "New age", "Vaporwave",
+  "Synthwave", "Cinematic", "Orchestral", "Video game/chiptune", "Industrial", "Experimental",
+  "Afrobeats", "Afrobeat", "Highlife", "Soukous", "Amapiano", "Reggae", "Dub", "Dancehall", "Soca",
+  "Latin", "Reggaeton", "Salsa", "Cumbia", "Bachata", "Bossa nova", "Samba", "Tango", "Flamenco",
+  "K-pop", "J-pop", "City pop", "Enka", "Bollywood", "Bhangra", "Qawwali", "Carnatic", "Hindustani classical",
+  "Gamelan", "Klezmer", "Celtic", "Fado", "Rai", "Gospel", "Christian/worship", "World", "Ska",
+  "Musical theatre", "Disco", "Swing", "Bebop",
+];
+const MOODS = [
+  "Uplifting", "Chill", "Energetic", "Melancholic", "Dreamy", "Epic", "Romantic", "Playful",
+  "Dark", "Nostalgic", "Aggressive", "Peaceful", "Mysterious", "Triumphant", "Hopeful",
+  "Anxious/tense", "Euphoric", "Sorrowful", "Sensual", "Whimsical", "Menacing", "Serene",
+  "Rebellious", "Bittersweet", "Majestic", "Intimate", "Haunting", "Groovy", "Ethereal",
+  "Gritty", "Tender", "Ominous", "Jubilant", "Wistful", "Fierce", "Cozy", "Carefree",
+  "Yearning", "Defiant", "Confident",
+];
+const VOCAL_STYLES = [
+  "Smooth", "Powerful", "Soft/whispery", "Breathy", "Rap/spoken", "Spoken word", "Choir",
+  "Raspy", "Gritty/rock", "Falsetto", "Belting", "Operatic", "Growl/scream", "Auto-tuned",
+  "Gospel/soulful", "Nasal", "Robotic/vocoder", "Yodel", "Throat singing", "Beatbox",
+  "Harmonized/multi-part", "Call-and-response", "Melodic rap", "Vibrato-heavy", "Deadpan/monotone",
+];
+const LANGUAGES = [
+  "English", "Hindi", "Punjabi", "Bengali", "Urdu", "Tamil", "Telugu", "Marathi", "Gujarati",
+  "Spanish", "Portuguese", "French", "German", "Italian", "Dutch", "Swedish", "Polish",
+  "Russian", "Ukrainian", "Greek", "Turkish", "Romanian", "Hungarian", "Czech",
+  "Korean", "Japanese", "Mandarin Chinese", "Cantonese", "Vietnamese", "Thai", "Indonesian", "Tagalog/Filipino",
+  "Arabic", "Hebrew", "Persian/Farsi", "Swahili", "Yoruba", "Zulu", "Amharic", "Wolof",
+  "Instrumental / no lyrics",
+];
+const VOCAL_EFFECTS = [
+  "Reverb", "Autotune", "Delay/echo", "Distortion", "Harmonizer", "Choir layer", "Whisper layer",
+  "Vocoder", "Chorus/doubling", "Telephone filter", "Pitch shift", "Formant shift", "Flanger",
+  "Phaser", "Bitcrush/lo-fi", "Radio filter", "Megaphone", "Underwater/muffled", "Stutter/glitch",
+  "Wide stereo double", "Gated reverb", "Tape saturation", "Layered ad-libs",
+];
+const STRUCTURES = [
+  "Verse–Chorus–Verse–Chorus–Bridge–Chorus",
+  "Intro–Verse–Chorus–Verse–Chorus–Bridge–Chorus–Outro",
+  "Intro–Verse–Pre-chorus–Chorus–Verse–Pre-chorus–Chorus–Bridge–Chorus–Outro",
+  "Intro–Build–Drop–Breakdown–Drop–Outro",
+  "Intro–Theme–Solo–Theme–Outro",
+  "AABA",
+  "12-bar blues",
+  "Through-composed (no repeats)",
+  "Call-and-response loop",
+  "Rondo (ABACA)",
+  "Theme and variations",
+];
+const INSTRUMENTS = [
+  "Acoustic guitar", "Electric guitar", "Bass guitar", "Upright bass", "Synth bass", "808 bass",
+  "Drum kit", "808/trap drums", "909 drum machine", "Hand percussion", "Cajon", "Tabla",
+  "Piano", "Electric piano/Rhodes", "Organ", "Synth lead", "Synth pad", "Analog synth", "Vocoder",
+  "Violin", "Viola", "Cello", "Double bass (orchestral)", "Strings section", "Harp",
+  "Trumpet", "Trombone", "Saxophone", "Clarinet", "Flute", "French horn", "Brass section",
+  "Sitar", "Tanpura", "Bansuri", "Erhu", "Koto", "Shamisen", "Oud", "Duduk", "Kalimba",
+  "Steel drums/pan", "Marimba", "Vibraphone", "Timpani", "Choir", "Handclaps", "Vinyl crackle",
+  "Field recordings", "TB-303 acid bass", "Sub bass", "Pads/atmosphere",
+];
+const ARTIST_INSPIRATION = [
+  "The Beatles", "Fleetwood Mac", "Daft Punk", "Radiohead", "Kendrick Lamar", "Beyoncé",
+  "Taylor Swift", "The Weeknd", "Billie Eilish", "Dua Lipa", "Drake", "Travis Scott",
+  "Charlotte de Witte", "Amelie Lens", "Fisher", "John Summit", "Martin Garrix", "Skrillex",
+  "Bon Iver", "José González", "Nujabes", "J Dilla", "Robert Glasper", "Miles Davis",
+  "Hans Zimmer", "Ludwig Göransson", "Brian Eno", "Jon Hopkins", "ODESZA", "Flume",
+  "Metallica", "Gojira", "Foo Fighters", "Arctic Monkeys", "Tame Impala", "Fela Kuti",
+  "Burna Boy", "Bad Bunny", "Rosalía", "BTS", "A.R. Rahman", "Nusrat Fateh Ali Khan",
+];
 
 type Phase = "idle" | "generating" | "queued" | "ready" | "error";
 type Fields = {
-  title: string; description: string; genres: string[]; subgenre: string; mood: string;
-  tempo: number; duration: number; vocals: boolean; vocalStyle: string; vocalLanguages: string[];
+  title: string; description: string; genres: string[]; subgenre: string; moods: string[];
+  tempo: number; duration: number; vocals: boolean; vocalStyles: string[]; vocalLanguages: string[];
   vocalIntensity: number; vocalEffects: string[];
-  lyricsMode: "auto" | "manual" | "none"; lyricsText: string; artistInspiration: string;
-  instruments: string; energy: number; structure: string; makeVideoUpfront: boolean;
+  lyricsMode: "auto" | "manual" | "none"; lyricsText: string; artistInspiration: string[];
+  instruments: string[]; energy: number; structure: string; makeVideoUpfront: boolean;
 };
 
 const MAX_DURATION = 18000;
@@ -37,10 +109,10 @@ const NUMBER_RANGES: Partial<Record<keyof Fields, [number, number]>> = {
 };
 // What each field resets to on Clear.
 const FIELD_DEFAULTS: Partial<Record<keyof Fields, Fields[keyof Fields]>> = {
-  title: "", description: "", genres: [], subgenre: "", mood: "",
-  tempo: 120, duration: 30, vocalStyle: VOCAL_STYLES[0], vocalLanguages: [],
-  vocalIntensity: 5, vocalEffects: [], lyricsText: "", artistInspiration: "",
-  instruments: "", energy: 6, structure: "",
+  title: "", description: "", genres: [], subgenre: "", moods: [],
+  tempo: 120, duration: 30, vocalStyles: [], vocalLanguages: [],
+  vocalIntensity: 5, vocalEffects: [], lyricsText: "", artistInspiration: [],
+  instruments: [], energy: 6, structure: "",
 };
 
 // What the Musicologist agent understood — surfaced back to the user.
@@ -147,10 +219,10 @@ function ChipInput({ value, onChange, options, placeholder }: {
 
 export function MusicStudio() {
   const [f, setF] = useState<Fields>({
-    title: "", description: "", genres: [GENRES[0]], subgenre: "", mood: MOODS[0],
-    tempo: 120, duration: 30, vocals: true, vocalStyle: VOCAL_STYLES[0], vocalLanguages: [LANGUAGES[0]],
+    title: "", description: "", genres: [GENRES[0]], subgenre: "", moods: [MOODS[0]],
+    tempo: 120, duration: 30, vocals: true, vocalStyles: [VOCAL_STYLES[0]], vocalLanguages: [LANGUAGES[0]],
     vocalIntensity: 5, vocalEffects: [],
-    lyricsMode: "auto", lyricsText: "", artistInspiration: "", instruments: "", energy: 6, structure: STRUCTURES[0],
+    lyricsMode: "auto", lyricsText: "", artistInspiration: [], instruments: [], energy: 6, structure: STRUCTURES[0],
     makeVideoUpfront: false,
   });
   const set = useCallback(<K extends keyof Fields>(k: K, v: Fields[K]) => setF((p) => ({ ...p, [k]: v })), []);
@@ -208,7 +280,7 @@ export function MusicStudio() {
       id: crypto.randomUUID(),
       title: cur.title || cur.description.slice(0, 60), description: cur.description,
       prompt: promptStr, lyrics: lyricsStr, audio_url: audio, created_at: new Date().toISOString(),
-      params: { genres: cur.genres, mood: cur.mood, tempo: cur.tempo, vocals: cur.vocals, duration: cur.duration },
+      params: { genres: cur.genres, moods: cur.moods, tempo: cur.tempo, vocals: cur.vocals, duration: cur.duration },
     };
     lsWrite([row, ...lsRead()]);                 // always persist locally
     dataInsert("music_tracks", row).catch(() => {}); // cloud best-effort
@@ -217,10 +289,10 @@ export function MusicStudio() {
       title: row.title || "Track",
       kind: "audio",
       inputs: [
-        { label: "Genres", value: cur.genres.join(", ") }, { label: "Mood", value: cur.mood },
+        { label: "Genres", value: cur.genres.join(", ") }, { label: "Moods", value: cur.moods.join(", ") },
         { label: "Tempo", value: `${cur.tempo} BPM` }, { label: "Structure", value: cur.structure },
-        { label: "Instruments", value: cur.instruments }, { label: "Artist vibe", value: cur.artistInspiration },
-        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyle} (${cur.vocalIntensity}/10)` : "instrumental" },
+        { label: "Instruments", value: cur.instruments.join(", ") }, { label: "Artist vibe", value: cur.artistInspiration.join(", ") },
+        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyles.join(", ")} (${cur.vocalIntensity}/10)` : "instrumental" },
         { label: "Vocal languages", value: cur.vocalLanguages.join(", ") },
         { label: "Vocal effects", value: cur.vocalEffects.join(", ") },
       ].filter((x) => x.value),
@@ -269,15 +341,15 @@ export function MusicStudio() {
         title: x.title || p.title,
         genres: x.genre ? [matchOption(x.genre, GENRES) || x.genre] : p.genres,
         subgenre: x.subgenre || p.subgenre,
-        mood: x.mood || p.mood,
+        moods: x.mood ? [matchOption(x.mood, MOODS) || x.mood] : p.moods,
         tempo: Number(x.tempo) >= 60 && Number(x.tempo) <= 200 ? Math.round(x.tempo) : p.tempo,
         energy: Number(x.energy) >= 1 && Number(x.energy) <= 10 ? Math.round(x.energy) : p.energy,
         duration: Number(x.duration) >= 10 && Number(x.duration) <= 120 ? Math.round(x.duration) : p.duration,
         structure: x.structure || p.structure,
-        instruments: x.instruments || p.instruments,
-        artistInspiration: x.artistInspiration || p.artistInspiration,
+        instruments: x.instruments ? String(x.instruments).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 8) : p.instruments,
+        artistInspiration: x.artistInspiration ? String(x.artistInspiration).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 4) : p.artistInspiration,
         vocals: typeof x.vocals === "boolean" ? x.vocals : p.vocals,
-        vocalStyle: matchOption(x.vocalStyle, VOCAL_STYLES) || p.vocalStyle,
+        vocalStyles: x.vocalStyle ? [matchOption(x.vocalStyle, VOCAL_STYLES) || x.vocalStyle] : p.vocalStyles,
         vocalLanguages: x.vocalLanguage ? [matchOption(x.vocalLanguage, LANGUAGES) || x.vocalLanguage] : p.vocalLanguages,
         vocalIntensity: Number(x.vocalIntensity) >= 1 && Number(x.vocalIntensity) <= 10 ? Math.round(x.vocalIntensity) : p.vocalIntensity,
         vocalEffects: x.vocalEffects ? String(x.vocalEffects).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 4) : p.vocalEffects,
@@ -310,7 +382,12 @@ export function MusicStudio() {
 
   async function aiField(name: keyof Fields, action: "suggest" | "enhance" | "new") {
     const key = String(name);
-    const apiField = key === "genres" ? "genre" : key === "vocalLanguages" ? "vocalLanguage" : key;
+    // The suggest endpoint's field vocabulary is singular; the plural state
+    // keys reuse those instructions and split the response back into a list.
+    const API_FIELD: Partial<Record<keyof Fields, string>> = {
+      genres: "genre", moods: "mood", vocalStyles: "vocalStyle", vocalLanguages: "vocalLanguage",
+    };
+    const apiField = API_FIELD[name] ?? key;
     setBusyField(`${key}:${action}`); setError(null);
     try {
       const current = f[name];
@@ -322,9 +399,9 @@ export function MusicStudio() {
           value: valueStr, action,
           previous: prevSug.current[key] ?? [],
           context: {
-            genre: f.genres.join(", "), subgenre: f.subgenre, mood: f.mood, tempo: f.tempo, energy: f.energy,
-            instruments: f.instruments, artistInspiration: f.artistInspiration,
-            vocals: f.vocals, vocalStyle: f.vocalStyle, description: f.description,
+            genre: f.genres.join(", "), subgenre: f.subgenre, mood: f.moods.join(", "), tempo: f.tempo, energy: f.energy,
+            instruments: f.instruments.join(", "), artistInspiration: f.artistInspiration.join(", "),
+            vocals: f.vocals, vocalStyle: f.vocalStyles.join(", "), description: f.description,
           },
         }),
       });
@@ -349,8 +426,12 @@ export function MusicStudio() {
       const payload = {
         ...f,
         genre: f.genres.join(", "),
+        mood: f.moods.join(", "),
+        vocalStyle: f.vocalStyles.join(", "),
         vocalLanguage: f.vocalLanguages.join(", "),
         vocalEffects: f.vocalEffects.join(", "),
+        instruments: f.instruments.join(", "),
+        artistInspiration: f.artistInspiration.join(", "),
       };
       const res = await fetch("/api/tools/music", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -473,23 +554,27 @@ export function MusicStudio() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className={lbl}>Track name <AiBar name="title" /></label><input value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="optional" className={field} /></div>
-          <div><label className={lbl}>Artist inspiration <AiBar name="artistInspiration" /></label><input value={f.artistInspiration} onChange={(e) => set("artistInspiration", e.target.value)} placeholder="e.g. Charlotte de Witte" className={field} /></div>
+        <div><label className={lbl}>Track name <AiBar name="title" /></label><input value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="optional" className={field} /></div>
+        <div>
+          <label className={lbl}>Artist inspiration <AiBar name="artistInspiration" /></label>
+          <TagPicker values={f.artistInspiration} onChange={(v) => set("artistInspiration", v)} options={ARTIST_INSPIRATION} placeholder="Search artists…" max={4} />
         </div>
 
         <div>
           <label className={lbl}>Genres <AiBar name="genres" /></label>
-          <TagPicker values={f.genres} onChange={(v) => set("genres", v)} options={GENRES} placeholder="Search genres…" max={3} />
+          <TagPicker values={f.genres} onChange={(v) => set("genres", v)} options={GENRES} placeholder="Search genres…" max={6} />
         </div>
         <div><label className={lbl}>Sub-genre <AiBar name="subgenre" /></label><input value={f.subgenre} onChange={(e) => set("subgenre", e.target.value)} placeholder="optional" className={field} /></div>
 
         <div>
-          <label className={lbl}>Mood <AiBar name="mood" /></label>
-          <ChipInput value={f.mood} onChange={(v) => set("mood", v)} options={MOODS} placeholder="e.g. Uplifting" />
+          <label className={lbl}>Moods <AiBar name="moods" /></label>
+          <TagPicker values={f.moods} onChange={(v) => set("moods", v)} options={MOODS} placeholder="Search moods…" max={5} />
         </div>
 
-        <div><label className={lbl}>Instruments <AiBar name="instruments" /></label><input value={f.instruments} onChange={(e) => set("instruments", e.target.value)} placeholder="e.g. analog synth, 909 drums, sub bass" className={field} /></div>
+        <div>
+          <label className={lbl}>Instruments <AiBar name="instruments" /></label>
+          <TagPicker values={f.instruments} onChange={(v) => set("instruments", v)} options={INSTRUMENTS} placeholder="Search instruments…" max={10} />
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div><label className={lbl}>Tempo (BPM): {f.tempo} <AiBar name="tempo" /></label><input type="range" min={60} max={200} value={f.tempo} onChange={(e) => set("tempo", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
@@ -526,12 +611,12 @@ export function MusicStudio() {
         {f.vocals && (
           <>
             <div>
-              <label className={lbl}>Vocal style <AiBar name="vocalStyle" /></label>
-              <select value={f.vocalStyle} onChange={(e) => set("vocalStyle", e.target.value)} className={field}>{VOCAL_STYLES.map((v) => <option key={v}>{v}</option>)}</select>
+              <label className={lbl}>Vocal style(s) <AiBar name="vocalStyles" /></label>
+              <TagPicker values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Search vocal styles…" max={4} />
             </div>
             <div>
               <label className={lbl}>Vocal language(s) <AiBar name="vocalLanguages" /></label>
-              <TagPicker values={f.vocalLanguages} onChange={(v) => set("vocalLanguages", v)} options={LANGUAGES} placeholder="Select languages…" max={3} />
+              <TagPicker values={f.vocalLanguages} onChange={(v) => set("vocalLanguages", v)} options={LANGUAGES} placeholder="Select languages…" max={5} />
             </div>
             <div>
               <label className={lbl}>Vocal intensity: {f.vocalIntensity}/10 <AiBar name="vocalIntensity" /></label>
@@ -542,7 +627,7 @@ export function MusicStudio() {
             </div>
             <div>
               <label className={lbl}>Vocal effects <AiBar name="vocalEffects" /></label>
-              <TagPicker values={f.vocalEffects} onChange={(v) => set("vocalEffects", v)} options={VOCAL_EFFECTS} placeholder="Select effects…" max={4} />
+              <TagPicker values={f.vocalEffects} onChange={(v) => set("vocalEffects", v)} options={VOCAL_EFFECTS} placeholder="Select effects…" max={6} />
             </div>
             <div>
               <label className={lbl}>Lyrics {f.lyricsMode === "manual" && <AiBar name="lyricsText" />}</label>
