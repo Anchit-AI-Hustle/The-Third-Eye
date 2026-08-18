@@ -23,6 +23,12 @@ const BG_SILENCE_PEAK = 0.012;
 
 const DEFAULT_TRIGGERS = ["hi", "hey", "ok", "hello"];
 
+// How long to wait for the recognizer to call an utterance final before waking
+// on the interim anyway. Only applies when the name arrived with a command
+// attached — long enough to catch the end of a sentence, short enough that the
+// panel does not feel slow.
+const SETTLE_MS = 1200;
+
 export interface WakeWordOptions {
   agentName: string;          // "JARVIS" / "FRIDAY" / "E.D.I.T.H." / "ULTRON" / custom
   enabled: boolean;
@@ -65,6 +71,41 @@ function matchTrigger(text: string, triggers: string[]): string | null {
   return null;
 }
 
+// Politeness the user says around the name, which is not part of the command.
+const FILLERS = ["hi", "hey", "ok", "okay", "hello", "yo", "please", "can you", "could you"];
+
+/**
+ * What the user actually asked, from the utterance that woke the agent.
+ *
+ * "Hey JARVIS, what's the weather" carries its command in the same breath as
+ * the name. Waking and then listening from scratch throws that away and makes
+ * the user say it twice. Returns "" when they only said the name, which is the
+ * signal to open up and listen rather than to answer something.
+ */
+export function stripWakeTrigger(transcript: string, trigger: string): string {
+  let rest = normalize(transcript);
+  const trig = normalize(trigger);
+  const at = trig ? rest.indexOf(trig) : -1;
+  if (at >= 0) rest = rest.slice(at + trig.length).trim();
+
+  // Drop leading filler words, and any other trigger word sitting next to the
+  // name ("hey jarvis" matches on "jarvis" and leaves "hey" behind when the
+  // recognizer reorders, "ok jarvis please ..." leaves "please").
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const f of FILLERS) {
+      if (rest === f) { rest = ""; changed = true; break; }
+      if (rest.startsWith(f + " ")) { rest = rest.slice(f.length + 1); changed = true; break; }
+    }
+  }
+
+  rest = rest.trim();
+  // A single stray word is far more likely to be a misheard fragment of the
+  // name than a command worth acting on.
+  return rest.split(" ").filter(Boolean).length >= 2 ? rest : "";
+}
+
 export function useWakeWord({
   agentName,
   enabled,
@@ -83,6 +124,10 @@ export function useWakeWord({
   const onWakeRef = useRef(onWake);
   const lastEventRef = useRef(0);
   const launchRef = useRef<() => void>(() => {});
+  // An utterance that named the agent AND carried a command, held until it is
+  // complete. See onresult.
+  const pendingRef = useRef<{ trigger: string; text: string } | null>(null);
+  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeLock = useWakeLock();
 
   // Held for as long as the wake word is enabled. An open capture stream is
@@ -107,6 +152,11 @@ export function useWakeWord({
       ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
       : null;
     setSupported(!!SR);
+  }, []);
+
+  const clearSettle = useCallback(() => {
+    if (settleRef.current) { clearTimeout(settleRef.current); settleRef.current = null; }
+    pendingRef.current = null;
   }, []);
 
   const fire = useCallback((trigger: string, text: string) => {
@@ -188,6 +238,7 @@ export function useWakeWord({
 
   const stop = useCallback(() => {
     activeRef.current = false;
+    clearSettle();
     stopBackground();
     try { recRef.current?.abort(); } catch { /* noop */ }
     recRef.current = null;
@@ -201,7 +252,7 @@ export function useWakeWord({
 
     setListening(false);
     wakeLock.release();
-  }, [stopBackground, wakeLock]);
+  }, [clearSettle, stopBackground, wakeLock]);
 
   const start = useCallback(() => {
     if (!supported || activeRef.current) return;
@@ -229,11 +280,40 @@ export function useWakeWord({
       rec.onresult = (event: any) => {
         lastEventRef.current = Date.now();
         let chunk = "";
+        let isFinal = false;
         for (let i = event.resultIndex; i < event.results.length; i++) {
           chunk += event.results[i][0].transcript;
+          if (event.results[i].isFinal) isFinal = true;
         }
         const trig = matchTrigger(chunk, triggersRef.current);
-        if (trig) fire(trig, chunk);
+        if (!trig) return;
+
+        // Just the name — wake now. Any delay here is the user staring at a
+        // panel that has not opened, which is the thing they notice.
+        if (!stripWakeTrigger(chunk, trig)) {
+          clearSettle();
+          fire(trig, chunk);
+          return;
+        }
+
+        // The name came with a command attached. Waking on this interim would
+        // hand over to the main recognizer mid-sentence and lose the rest of
+        // it, so hold until the recognizer calls the utterance final — or
+        // until they stop talking long enough that it will not.
+        pendingRef.current = { trigger: trig, text: chunk };
+        if (isFinal) {
+          clearSettle();
+          fire(trig, chunk);
+          pendingRef.current = null;
+          return;
+        }
+        if (settleRef.current) clearTimeout(settleRef.current);
+        settleRef.current = setTimeout(() => {
+          const p = pendingRef.current;
+          pendingRef.current = null;
+          settleRef.current = null;
+          if (p) fire(p.trigger, p.text);
+        }, SETTLE_MS);
       };
 
       rec.onerror = (e: any) => {
@@ -252,7 +332,7 @@ export function useWakeWord({
 
     launchRef.current = launchInstance;
     launchInstance();
-  }, [supported, fire, stop, wakeLock]);
+  }, [supported, fire, stop, clearSettle, wakeLock]);
 
   // Force a fresh recognizer when the current one has gone silently dead.
   const forceRestart = useCallback(() => {

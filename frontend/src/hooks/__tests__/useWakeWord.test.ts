@@ -41,7 +41,21 @@ class FakeRecognition {
 
   /** Deliver a final transcript the way the browser would. */
   say(text: string) {
-    this.onresult?.({ resultIndex: 0, results: [[{ transcript: text }]] });
+    this.emit(text, true);
+  }
+
+  /**
+   * Deliver an interim result — what the browser actually sends mid-sentence,
+   * and what the hook has to hold on rather than wake from halfway through a
+   * command.
+   */
+  sayInterim(text: string) {
+    this.emit(text, false);
+  }
+
+  private emit(text: string, isFinal: boolean) {
+    const result = Object.assign([{ transcript: text }], { isFinal });
+    this.onresult?.({ resultIndex: 0, results: [result] });
   }
 
   static get latest() {
@@ -97,9 +111,11 @@ function setVisibility(state: "visible" | "hidden") {
 }
 
 let getUserMedia: ReturnType<typeof vi.fn>;
+let onWakeSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  onWakeSpy = vi.fn();
   FakeRecognition.reset();
   FakeMediaRecorder.reset();
   track.stop.mockClear();
@@ -191,6 +207,62 @@ describe("wake word detection", () => {
     act(() => { vi.advanceTimersByTime(1500); });
     act(() => FakeRecognition.latest.say("jarvis"));
     expect(onWake).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ─── Commands spoken in the same breath as the name ──────────────────────────
+//
+// Waking on an interim result hands the microphone to the main recognizer
+// mid-sentence and loses the rest of the command, so an utterance that carries
+// one is held until it is complete. Bare "hey JARVIS" is not held — a delay
+// there is the user watching a panel that has not opened.
+
+describe("hearing the whole command", () => {
+  it("wakes immediately on the bare name, without waiting", () => {
+    const { onWake } = mount();
+    act(() => FakeRecognition.latest.sayInterim("hey jarvis"));
+    expect(onWake).toHaveBeenCalledWith("jarvis", "hey jarvis");
+  });
+
+  it("holds an interim that has a command attached", () => {
+    const { onWake } = mount();
+    act(() => FakeRecognition.latest.sayInterim("hey jarvis what's the"));
+    expect(onWake).not.toHaveBeenCalled();
+  });
+
+  it("wakes with the finished sentence, not the fragment", () => {
+    const { onWake } = mount();
+    act(() => FakeRecognition.latest.sayInterim("hey jarvis what's the"));
+    act(() => FakeRecognition.latest.say("hey jarvis what's the weather in Delhi"));
+    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(onWake).toHaveBeenCalledWith("jarvis", "hey jarvis what's the weather in Delhi");
+  });
+
+  it("gives up waiting rather than never waking at all", () => {
+    // The recognizer does not always call an utterance final.
+    const { onWake } = mount();
+    act(() => FakeRecognition.latest.sayInterim("hey jarvis open my tasks"));
+    act(() => { vi.advanceTimersByTime(1500); });
+    expect(onWake).toHaveBeenCalledWith("jarvis", "hey jarvis open my tasks");
+  });
+
+  it("does not wake twice when the final lands after the wait expired", () => {
+    const { onWake } = mount({ cooldownMs: 5000 });
+    act(() => FakeRecognition.latest.sayInterim("hey jarvis open my tasks"));
+    act(() => { vi.advanceTimersByTime(1500); });
+    act(() => FakeRecognition.latest.say("hey jarvis open my tasks"));
+    expect(onWake).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a held utterance when listening is turned off", () => {
+    const view = renderHook(
+      ({ enabled }) => useWakeWord({ agentName: "JARVIS", enabled, onWake: onWakeSpy }),
+      { initialProps: { enabled: true } },
+    );
+    act(() => FakeRecognition.latest.sayInterim("hey jarvis open my tasks"));
+    view.rerender({ enabled: false });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(onWakeSpy).not.toHaveBeenCalled();
   });
 });
 
