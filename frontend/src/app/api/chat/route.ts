@@ -12,6 +12,7 @@ import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getGoogleAccessToken } from "@/lib/googleToken";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { geminiTools } from "@/lib/tools/schemas";
+import { appInventory } from "@/lib/tools/inventory";
 import { callMcpTool, isMcpTool, mcpToolDeclarations } from "@/lib/mcp/client";
 import { scheduleAutomation } from "@/lib/automations";
 import { identify } from "@/lib/serverIdentity";
@@ -1467,7 +1468,9 @@ export async function POST(req: NextRequest) {
   const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
   // Build system instruction with full user context
-  let systemInstruction = SYSTEM_PROMPT;
+  // The assistant has to know what product it lives in before anything else,
+  // or it denies features this app ships and asks which website is meant.
+  let systemInstruction = `${SYSTEM_PROMPT}\n\n${appInventory()}`;
   // Selected agent persona actually shapes tone/address (not just a label).
   // All intelligence, tool-use, honesty and security rules above still apply.
   if (agentPersona) {
