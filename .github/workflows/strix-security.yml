@@ -1,0 +1,87 @@
+name: Strix security scan
+
+# Autonomous security review by Strix (https://github.com/usestrix/strix): an
+# agent that reads the code, attempts exploits in a sandbox, and reports only
+# what it could actually reproduce.
+#
+# Setup — add these in GitHub → Settings → Secrets and variables → Actions:
+#   LLM_API_KEY  — key for whichever model Strix should drive (required)
+#   STRIX_LLM    — model id, e.g. "openai/gpt-5.4" (optional, defaults below)
+#
+# Without LLM_API_KEY the scan SKIPS with a notice rather than failing, so
+# adding this file does not turn every pull request red before the secret
+# exists. Fork pull requests never receive secrets, so they skip too.
+#
+# Each run costs model tokens. Pull requests get a quick scan; the weekly run
+# and manual runs get a full one.
+
+on:
+  pull_request: {}
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to scan. A URL runs a live pentest against it — only do that against something you own and are happy to have probed. Defaults to this repository's code."
+        required: false
+        default: ""
+      scan_mode:
+        description: "quick or full"
+        required: false
+        default: "full"
+
+# Least privilege: reads the code, writes nothing back.
+permissions:
+  contents: read
+
+concurrency:
+  group: strix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    # An agentic pentest is slow. Cap it so a stuck run cannot burn an hour of
+    # runner time and an unbounded number of tokens.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Strix looks at history to understand what changed.
+          fetch-depth: 0
+
+      - name: Check for credentials
+        id: creds
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -n "$LLM_API_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::LLM_API_KEY is not set, so the Strix scan was skipped. Add it under Settings → Secrets and variables → Actions to enable it."
+          fi
+
+      - name: Install Strix
+        if: steps.creds.outputs.ready == 'true'
+        run: curl -sSL https://strix.ai/install | bash
+
+      - name: Scan
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          # A pull request gets the quick pass; scheduled and manual runs go deep.
+          MODE: ${{ github.event_name == 'pull_request' && 'quick' || inputs.scan_mode || 'full' }}
+          TARGET: ${{ inputs.target }}
+        run: strix -n -t "${TARGET:-./}" --scan-mode "$MODE"
+
+      - name: Keep the report
+        if: always() && steps.creds.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-report-${{ github.run_id }}
+          path: strix_runs/
+          if-no-files-found: ignore
+          retention-days: 30
