@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { INGESTION_SCOPES, originFromRequest } from "@/lib/googleToken";
+import { INGESTION_SCOPES, originFromRequest, revokeGoogleAccess } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -41,4 +41,19 @@ export async function GET(req: Request) {
     path: "/",
   });
   return res;
+}
+
+// Disconnect: revoke the grant at Google and drop the stored refresh token,
+// without deleting the account. Previously the only way to withdraw Gmail
+// access was to delete everything.
+export async function DELETE() {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email;
+  if (!email) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const result = await revokeGoogleAccess(email);
+  return NextResponse.json(
+    { ok: result.cleared, ...result },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

@@ -230,6 +230,7 @@ export function VoiceOverlay() {
             message: msg,
             history: historyRef.current,
             memory: memoryRef.current,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             userName: session?.user?.name?.split(" ")[0],
             userEmail: session?.user?.email,
             agentName: agent.name,

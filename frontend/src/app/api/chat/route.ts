@@ -13,6 +13,8 @@ import { getGoogleAccessToken } from "@/lib/googleToken";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
+import { resolveTask } from "@/lib/tools/taskMatch";
+import { todayBlock } from "@/lib/tools/today";
 import { callMcpTool, isMcpTool, mcpToolDeclarations } from "@/lib/mcp/client";
 import { scheduleAutomation } from "@/lib/automations";
 import { identify } from "@/lib/serverIdentity";
@@ -327,25 +329,32 @@ async function runTool(
         };
       }
       if (action === "update") {
+        const found = resolveTask(ctx.tasks, input);
+        if (!found.task) return { result: found.message };
         const patch: Record<string, any> = {};
-        if (input.title !== undefined) patch.title = input.title;
+        // With no id, the title was how the task was found — treat it as the
+        // match, not as a rename. With an id, it renames.
+        if (input.title !== undefined && input.id) patch.title = input.title;
         if (input.status !== undefined) patch.status = input.status;
         if (input.priority !== undefined) patch.priority = input.priority;
         if (input.due_date !== undefined) patch.due_date = input.due_date;
         if (input.agent !== undefined) patch.agent = input.agent;
-        const task = ctx.tasks.find((t) => t.id === input.id);
+        if (input.assignee !== undefined) patch.assignee = input.assignee;
+        if (input.description !== undefined) patch.description = input.description;
+        if (!Object.keys(patch).length) {
+          return { result: `Nothing to change on "${found.task.title}" — no new status, priority, due date, assignee or agent was given.` };
+        }
         return {
-          result: task
-            ? `Updated task "${task.title}": ${JSON.stringify(patch)}`
-            : `Task ${input.id} not found — update queued.`,
-          sideEffect: { type: "task_update", data: { id: input.id, patch } },
+          result: `Updated task "${found.task.title}": ${JSON.stringify(patch)}`,
+          sideEffect: { type: "task_update", data: { id: found.task.id, patch } },
         };
       }
       if (action === "delete") {
-        const task = ctx.tasks.find((t) => t.id === input.id);
+        const found = resolveTask(ctx.tasks, input);
+        if (!found.task) return { result: found.message };
         return {
-          result: task ? `Deleted task "${task.title}".` : `Task ${input.id} not found — delete queued.`,
-          sideEffect: { type: "task_delete", data: { id: input.id } },
+          result: `Deleted task "${found.task.title}".`,
+          sideEffect: { type: "task_delete", data: { id: found.task.id } },
         };
       }
       // search
@@ -1178,6 +1187,7 @@ interface ChatRequest {
   agentId?: string;
   agentPersona?: string;
   mode?: string;
+  timezone?: string;
 }
 
 // Mode-aware runtime (ported from the Mirror app): the operator's active mode
@@ -1405,7 +1415,7 @@ export async function POST(req: NextRequest) {
   const {
     message, history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], location, deviceInfo,
-    agentName, agentId, agentPersona, mode,
+    agentName, agentId, agentPersona, mode, timezone,
   } = body;
 
   if (!message?.trim()) {
@@ -1470,7 +1480,7 @@ export async function POST(req: NextRequest) {
   // Build system instruction with full user context
   // The assistant has to know what product it lives in before anything else,
   // or it denies features this app ships and asks which website is meant.
-  let systemInstruction = `${SYSTEM_PROMPT}\n\n${appInventory()}`;
+  let systemInstruction = `${SYSTEM_PROMPT}\n\n${appInventory()}\n\n${todayBlock(timezone)}`;
   // Selected agent persona actually shapes tone/address (not just a label).
   // All intelligence, tool-use, honesty and security rules above still apply.
   if (agentPersona) {

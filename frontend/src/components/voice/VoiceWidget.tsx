@@ -91,6 +91,7 @@ export function VoiceWidget() {
           message: text,
           history: historyRef.current.slice(-4).map((t) => ({ role: t.role === "assistant" ? "assistant" : "user", content: t.content })),
           memory: memoryRef.current,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           userName: session?.user?.name?.split(" ")[0],
           email: session?.user?.email ?? undefined,
           accessToken: (session as any)?.accessToken ?? undefined,

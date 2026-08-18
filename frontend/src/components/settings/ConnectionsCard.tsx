@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mail, Calendar, MessageSquare, Check, AlertCircle, Link2, RefreshCw } from "lucide-react";
+import { Mail, Calendar, MessageSquare, Check, AlertCircle, Link2, RefreshCw, Unlink } from "lucide-react";
 
 interface Status {
   connected: boolean;
@@ -22,7 +22,8 @@ function scopeLabels(scopes: string[]): string[] {
 
 export function ConnectionsCard() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [banner, setBanner] = useState<"connected" | "error" | null>(null);
+  const [banner, setBanner] = useState<"connected" | "error" | "disconnected" | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     // Reflect the result of the OAuth round-trip (?connect=google_connected|google_error).
@@ -40,6 +41,21 @@ export function ConnectionsCard() {
   const connected = !!status?.connected;
   const labels = scopeLabels(status?.scopes ?? []);
 
+  async function disconnect() {
+    if (!confirm("Disconnect Google? The assistant will lose access to your mail, calendar and chat, and the permission is revoked at Google.")) return;
+    setDisconnecting(true);
+    try {
+      const r = await fetch("/api/connect/google", { method: "DELETE" });
+      const j = await r.json().catch(() => null);
+      setBanner(j?.ok ? "disconnected" : "error");
+      if (j?.ok) setStatus({ connected: false, scopes: [] });
+    } catch {
+      setBanner("error");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
   return (
     <div className="holo-card rounded-card p-5 mt-5">
       <div className="flex items-center gap-2 mb-1">
@@ -54,6 +70,11 @@ export function ConnectionsCard() {
       {banner === "connected" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-success">
           <Check size={13} /> Google connected successfully.
+        </div>
+      )}
+      {banner === "disconnected" && (
+        <div className="flex items-center gap-2 mb-4 text-xs text-success">
+          <Check size={13} /> Disconnected. Access was revoked at Google and the stored token deleted.
         </div>
       )}
       {banner === "error" && (
@@ -84,15 +105,28 @@ export function ConnectionsCard() {
         )}
       </div>
 
-      <a
-        href="/api/connect/google"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
-      >
-        {connected ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
-      </a>
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href="/api/connect/google"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
+        >
+          {connected ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
+        </a>
+        {connected && (
+          <button
+            type="button"
+            onClick={disconnect}
+            disabled={disconnecting}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-accent-red/10 border border-accent-red/30 text-accent-red text-sm font-medium hover:bg-accent-red/20 transition-colors disabled:opacity-50"
+          >
+            <Unlink size={14} /> {disconnecting ? "Disconnecting…" : "Disconnect"}
+          </button>
+        )}
+      </div>
 
       <p className="text-text-muted text-[11px] font-mono mt-3 leading-relaxed">
         You&apos;ll be sent to Google to approve access. If the app isn&apos;t verified yet, you must be added as a Test User on its OAuth consent screen.
+        Disconnecting revokes the permission at Google and deletes the token stored here.
       </p>
     </div>
   );

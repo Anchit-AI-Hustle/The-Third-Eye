@@ -421,6 +421,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           message: msg,
           history: historyRef.current,
           memory: memoryRef.current,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           userName: userName ?? session?.user?.name?.split(" ")[0],
           email: session?.user?.email ?? undefined,
           tasks: allTasks,

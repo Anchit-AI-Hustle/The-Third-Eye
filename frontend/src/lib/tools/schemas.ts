@@ -17,13 +17,13 @@ export const geminiTools = [
       // ─── PLATFORM TOOLS (consolidated from 61 → 31) ───────────────────────
       {
         name: "manage_tasks",
-        description: "Unified task manager: create, update, search, delete tasks. action='create' to add a task, 'update' to modify status/priority/due_date, 'search' to list tasks, 'delete' to remove. All in one call.",
+        description: "Unified task manager: create, update, search, delete tasks. action='create' to add a task, 'update' to modify status/priority/due_date (use status='done' to complete one), 'search' to list tasks, 'delete' to remove. For update/delete, pass the id if you know it, otherwise pass the title the user said and it will be matched against the tracker. Never invent an id.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["create", "update", "search", "delete"], description: "What to do with the task" },
-            id: { type: "STRING", description: "Task ID (required for update/delete)" },
-            title: { type: "STRING", description: "Task title (required for create, optional for update)" },
+            id: { type: "STRING", description: "Task ID, if known from a previous search. Omit it rather than guessing — pass title instead." },
+            title: { type: "STRING", description: "Task title. On create, the new task's title. On update/delete without an id, the title to match against existing tasks; with an id, the new title to rename to." },
             priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Priority level" },
             status: { type: "STRING", enum: ["todo", "in_progress", "done", "cancelled"], description: "Task status (for update)" },
             assignee: { type: "STRING", description: "Person responsible" },
