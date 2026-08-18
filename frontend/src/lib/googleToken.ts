@@ -93,12 +93,19 @@ export async function revokeGoogleAccess(
   return { revoked, cleared: !error, hadToken: !!refreshToken };
 }
 
-/** Google scopes the ingestion features need — requested via the connect flow. */
+/**
+ * Google scopes the ingestion features need — requested via the connect flow.
+ *
+ * calendar.events was requested here but nothing ever calls the Calendar API
+ * to write: "add event" opens a calendar.google.com deep link instead, which
+ * needs no OAuth scope at all. An unused restricted scope is exactly what a
+ * verification reviewer flags, and there is nothing to demo it doing — so it
+ * is not requested.
+ */
 export const INGESTION_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.messages.readonly",
 ].join(" ");
