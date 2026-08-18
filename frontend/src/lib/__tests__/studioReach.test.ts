@@ -9,14 +9,16 @@ import { STUDIO_TOOLS, getTool } from "@/lib/studioTools";
 // app hub but never actually run by asking for them. These tests fail if the
 // enum is ever pinned to a literal list again.
 
-const routeSource = readFileSync(
-  path.resolve(__dirname, "../../app/api/chat/route.ts"),
+// The declarations moved out of the route into lib/tools/schemas.ts when the
+// route was split; this guard follows them rather than being deleted.
+const schemaSource = readFileSync(
+  path.resolve(__dirname, "../tools/schemas.ts"),
   "utf8",
 );
 
 describe("everything Studio can build, the assistant can ask for", () => {
   it("derives create_asset's kinds from the registry instead of a literal list", () => {
-    expect(routeSource).toContain("enum: STUDIO_TOOLS.map((t) => t.id)");
+    expect(schemaSource).toContain("enum: STUDIO_TOOLS.map((t) => t.id)");
   });
 
   it("resolves every advertised kind back to a real tool", () => {
