@@ -83,8 +83,12 @@ export function DashboardClient() {
     if (insights.length === 0) insights.push(`System ready. Ask ${agent.name} anything to get started.`);
   }
 
+  const isFirstRun = ready && allTasks.length === 0;
+
   return (
     <div className="space-y-5 animate-fade-in">
+
+      {isFirstRun && <StartHere agentName={agent.name} />}
 
       {/* ── Row 1: HUD Hero + Arc Reactor ────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -299,6 +303,62 @@ export function DashboardClient() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown once, before any of the HUD chrome, only while the account has no
+// tasks yet — the simplest available signal for "hasn't really started".
+// Plain language on purpose: "Mission Queue" and "Subsystem Matrix" read fine
+// once you know what this app is, but they don't explain it to someone who
+// doesn't yet.
+function StartHere({ agentName }: { agentName: string }) {
+  const steps = [
+    {
+      href: "/assistant",
+      icon: <MessageSquare size={16} />,
+      title: `Talk to ${agentName}`,
+      body: "Ask it anything in plain English — it can search the web, answer questions about your own documents, and create tasks, notes, and reminders for you.",
+    },
+    {
+      href: "/tasks",
+      icon: <CheckSquare size={16} />,
+      title: "Add your first task",
+      body: "Or just tell the assistant to add one — either way, it shows up here on the dashboard and in the Task Tracker.",
+    },
+    {
+      href: "/apps",
+      icon: <Target size={16} />,
+      title: "See what's built in",
+      body: "25 tools you can use right now — Music Studio, financial calculators, a knowledge base, and more.",
+    },
+  ];
+
+  return (
+    <div className="holo-card rounded-card p-5 sm:p-6 border-[#4FC3F7]/20">
+      <h2 className="font-display text-lg font-semibold text-text-primary">
+        Welcome — here&apos;s what this is
+      </h2>
+      <p className="text-text-secondary text-sm mt-1.5 max-w-2xl">
+        The Third Eye is a private AI assistant that keeps your tasks, notes, and knowledge in one
+        place and can act on them for you. Nothing below is real activity yet — pick one of these
+        to get started.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+        {steps.map((s) => (
+          <Link key={s.href} href={s.href}
+            className="group flex flex-col gap-2 rounded-input border border-border-default bg-background-elevated/40 p-4 hover:border-[#4FC3F7]/40 hover:bg-background-elevated transition-colors">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-none bg-[#4FC3F7]/10 text-[#4FC3F7]">
+              {s.icon}
+            </span>
+            <span className="text-sm font-medium text-text-primary flex items-center gap-1">
+              {s.title}
+              <ArrowRight size={12} className="text-text-muted group-hover:translate-x-0.5 group-hover:text-[#4FC3F7] transition-all" />
+            </span>
+            <span className="text-xs text-text-muted leading-relaxed">{s.body}</span>
+          </Link>
+        ))}
       </div>
     </div>
   );
