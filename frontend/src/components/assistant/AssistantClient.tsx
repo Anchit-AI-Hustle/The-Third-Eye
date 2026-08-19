@@ -955,8 +955,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </button>
           )}
         </div>
-        <p className="text-text-muted text-[11px] mt-2 text-center">
-          {micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
+        <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted")}>
+          {stt.permissionDenied
+            ? "Microphone blocked for this site — click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
+            : micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
             : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
             : "Enter to send · Shift+Enter for new line"}
