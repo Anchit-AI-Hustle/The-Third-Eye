@@ -49,7 +49,7 @@ Agent route uses `getServerSession(authOptions)`; `/job-agent/*` is added to the
 
 ## 4. Database entities + RLS
 
-Migration `frontend/supabase/migrations/20260720000000_job_agent.sql` (idempotent).
+Migration `supabase/migrations/20260720000000_job_agent.sql` (idempotent).
 User-owned tables (RLS owner policy on `auth.jwt()->>'email' = user_id`):
 `job_agent_profiles, career_preferences, candidate_documents, candidate_facts,
 saved_jobs, job_matches, resume_documents, cover_letters, answer_library,
