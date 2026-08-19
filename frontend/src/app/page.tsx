@@ -11,7 +11,7 @@ import { HoloFrame } from "@/components/hud/HoloFrame";
 export const metadata = {
   title: "The Third Eye — Your Personal AI Operating System",
   description:
-    "The Third Eye is a private, self-hosted personal AI operating system. One workspace where an AI assistant helps you capture tasks and notes, search your own knowledge, track goals and finances, and stay on top of reminders.",
+    "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you — capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
 };
 
 const FEATURES: Feature[] = [
