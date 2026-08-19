@@ -60,9 +60,17 @@ safely deleted.
 
 ## Known documentation drift (from AUDIT.md, not yet resolved)
 
-- F-02: 5 Supabase migration files sit in `frontend/supabase/migrations/`
-  instead of `supabase/migrations/`, so `supabase db push` never picks them
-  up — includes RLS hardening; live-DB state unconfirmed.
+- F-02: **fixed 2026-08-19.** The 5 Supabase migration files that sat in
+  `frontend/supabase/migrations/` (RLS hardening, `conversation_sources`,
+  the `tasks` ingestion columns, `music_tracks`, `job_agent`) are now in
+  `supabase/migrations/` where `supabase db push`/CI actually reads from.
+  This was the confirmed root cause of Gmail/Chat task-tracker ingestion
+  silently producing nothing in production: `saveExtractedTasks` writes
+  columns (`dedupe_hash`, `normalized_heading`, etc.) that only existed in
+  the stranded migration, so every ingest insert failed; Chat ingestion
+  additionally needs the `conversation_sources` table for its opt-in
+  picker, which never existed live either. Takes effect once this change
+  merges to `main` and the `supabase-deploy` workflow runs.
 - F-04: 2 high-severity Next.js CVEs; fix needs a Next 14→16 major bump
   (Dependabot ignores majors — F-10).
 - 8 loose `supabase-schema-*.sql` files at repo root are a third,
