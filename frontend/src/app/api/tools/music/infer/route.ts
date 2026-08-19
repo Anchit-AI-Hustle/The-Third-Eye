@@ -17,9 +17,9 @@ CRITICAL RULES:
 Return ONLY a raw JSON object (no prose, no code fences) with EXACTLY these keys:
 {
  "title": string (an evocative 2-5 word song title),
- "genre": string,
+ "genre": string (1-2 genres, comma-separated — if the request blends genres, e.g. "hard techno rap", name both),
  "subgenre": string (a specific sub-genre),
- "mood": string,
+ "mood": string (1-2 moods, comma-separated),
  "tempo": number (60-180),
  "energy": number (1-10),
  "duration": number (15-120 seconds),
@@ -27,41 +27,47 @@ Return ONLY a raw JSON object (no prose, no code fences) with EXACTLY these keys
  "instruments": string (comma-separated, 4-6 specific instruments),
  "artistInspiration": string (1-2 real reference artists, comma-separated),
  "vocals": boolean,
- "vocalStyle": string,
+ "vocalStyle": string (1-2 styles, comma-separated, e.g. "rap verses, powerful"),
  "vocalLanguage": string,
  "vocalIntensity": number (1-10; 1 = soft whisper, 10 = powerful performance),
  "vocalEffects": string (comma-separated, 1-3 fitting effects e.g. "reverb, autotune"),
  "lyricsTheme": string (a short phrase)
 }`;
 
-// Infer a genre from free text when the model doesn't return one — so the
+// Infer genre(s) from free text when the model doesn't return one — so the
 // deterministic fallback matches what the user actually asked for (never a
-// hardcoded default that then poisons the keyword match).
+// hardcoded default that then poisons the keyword match). Collects every
+// genre keyword present, not just the first: "hard techno rap" names two
+// genres, and returning only "Hard Techno" left the Hip-Hop half of the
+// request with nothing downstream ever reflecting it.
 function inferGenre(text: string): string {
   const g = text.toLowerCase();
   const has = (...k: string[]) => k.some((x) => g.includes(x));
-  if (has("psytrance", "psy trance", "psy-trance", "goa")) return "Psytrance";
-  if (has("hard techno", "hardtechno")) return "Hard Techno";
-  if (has("techno")) return "Techno";
-  if (has("trance")) return "Trance";
-  if (has("drum & bass", "drum and bass", "dnb", "d&b")) return "Drum & Bass";
-  if (has("dubstep", "riddim")) return "Dubstep";
-  if (has("house")) return "House";
-  if (has("edm", "electro", "rave")) return "EDM";
-  if (has("trap")) return "Trap";
-  if (has("hip-hop", "hip hop", "boom bap", "rap")) return "Hip-Hop";
-  if (has("metal")) return "Metal";
-  if (has("punk")) return "Punk";
-  if (has("rock")) return "Rock";
-  if (has("cinematic", "orchestral", "epic", "score", "soundtrack")) return "Cinematic";
-  if (has("pop")) return "Pop";
-  if (has("acoustic", "folk")) return "Folk";
-  if (has("indie")) return "Indie";
-  if (has("jazz")) return "Jazz";
-  if (has("classical")) return "Classical";
-  if (has("ambient", "downtempo", "chillout")) return "Ambient";
-  if (has("lo-fi", "lofi")) return "Lo-fi";
-  return "Electronic";
+  const found: string[] = [];
+  const add = (name: string) => { if (!found.includes(name)) found.push(name); };
+  if (has("psytrance", "psy trance", "psy-trance", "goa")) add("Psytrance");
+  if (has("hard techno", "hardtechno")) add("Hard Techno");
+  else if (has("techno")) add("Techno");
+  if (has("trance") && !has("psytrance", "psy trance")) add("Trance");
+  if (has("drum & bass", "drum and bass", "dnb", "d&b")) add("Drum & Bass");
+  if (has("dubstep", "riddim")) add("Dubstep");
+  if (has("house")) add("House");
+  if (has("edm", "electro", "rave")) add("EDM");
+  if (has("trap")) add("Trap");
+  if (has("hip-hop", "hip hop", "boom bap", "rap")) add("Hip-Hop");
+  if (has("metal")) add("Metal");
+  if (has("punk")) add("Punk");
+  if (has("rock")) add("Rock");
+  if (has("cinematic", "orchestral", "epic", "score", "soundtrack")) add("Cinematic");
+  if (has("pop")) add("Pop");
+  if (has("acoustic", "folk")) add("Folk");
+  if (has("indie")) add("Indie");
+  if (has("jazz")) add("Jazz");
+  if (has("classical")) add("Classical");
+  if (has("ambient", "downtempo", "chillout")) add("Ambient");
+  if (has("lo-fi", "lofi")) add("Lo-fi");
+  if (!found.length) return "Electronic";
+  return found.slice(0, 2).join(", ");
 }
 
 interface GenreDefaults {
