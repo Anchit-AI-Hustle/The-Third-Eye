@@ -1,71 +1,77 @@
-# JARVIS OS
+# The Third Eye
 
-An AI-powered, self-hosted personal operating system. Agent-orchestrated, memory-backed, production-grade.
+A personal AI operating system: one tool-calling assistant (four personas —
+**JARVIS / FRIDAY / E.D.I.T.H. / ULTRON**) backed by tasks, notes, goals,
+knowledge-base RAG, calendar/email, live voice capture, vision, and a Studio
+of generators (including Music Studio) — plus an "All apps" hub of 24
+self-built tools and 76 linked third-party apps.
 
-## Quick Start
+Live product: **Next.js 14 + Supabase**, deployed on Vercel. See
+[DEVELOPMENT.md](DEVELOPMENT.md) for the real, current architecture — start
+there, not `ARCHITECTURE.md` (see note below).
+
+> **Note on `backend/`:** this repo also contains a separately-developed
+> FastAPI + agents + RAG backend (`backend/`, described in
+> [ARCHITECTURE.md](ARCHITECTURE.md)). It is well-tested but **not deployed
+> anywhere** and the live frontend does not call it — the frontend talks
+> directly to Supabase and the AI providers instead. See
+> [AUDIT.md](AUDIT.md) (finding F-01) for the retire-vs-deploy decision that
+> is still open. Don't build against `backend/` expecting it to be live.
+
+## Quick Start (the live product)
 
 ```bash
-# 1. Clone and configure
-cp .env.example .env
-# Fill in .env — minimum required:
-#   POSTGRES_PASSWORD, REDIS_PASSWORD, SECRET_KEY, FINANCIAL_ENCRYPTION_KEY
-#   NEXTAUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_AI_API_KEY
-
-# 2. Start all services
-docker compose up -d
-
-# 3. Open the app
+cd frontend
+npm install
+cp ../.env.example .env.local   # fill in the keys DEVELOPMENT.md §13 lists
+npm run dev
 open http://localhost:3000
 ```
 
+Minimum env vars to get a working dev session: `GEMINI_API_KEY`,
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`,
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Full list and
+what each one gates: [DEVELOPMENT.md §13](DEVELOPMENT.md#13-build--deploy--ci).
+
 ## Prerequisites
 
-- Docker + Docker Compose v2
-- Google Cloud project with OAuth 2.0 credentials (for sign-in)
-- Google AI API key (Gemini) — free tier works for Phase 1
+- Node 22, npm
+- A Supabase project (Postgres + pgvector) — see `supabase/migrations/`
+- Google Cloud project with OAuth 2.0 credentials (sign-in)
+- A Gemini API key (free tier works) — the assistant loop's primary model
 
 ## Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for system diagram and ADRs.
+- [DEVELOPMENT.md](DEVELOPMENT.md) — how the live product is actually built. Start here.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — the original `backend/` design + ADRs (not deployed; see note above).
+- [AUDIT.md](AUDIT.md) — latest inventory and open findings.
 
-## Development
+## Optional: `backend/` (not required for the live app)
 
 ```bash
-# Backend only (local dev without Docker)
 cd backend
 pip install -e ".[dev]"
-cp ../.env.example .env  # fill in values
+cp ../.env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
-
-# Frontend only
-cd frontend
-npm install
-npm run dev
-
-# Run tests
-cd backend
 pytest --cov=app -v
 ```
 
-## Phase Status
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Foundation (Auth, AI Chat, Tasks, Memory) | ✅ Complete |
-| 2 | Agent Framework + Knowledge Base | ✅ Complete |
-| 3 | Financial Intelligence | 🔄 In progress |
-| 4 | Automation + Integrations | 🔲 Not started |
-| 5 | Voice, Reports, Advanced Agents | 🔲 Not started |
-
 ## Security
 
-- All secrets in environment variables only
-- Financial data AES-256 encrypted at rest
-- JWT sessions with 24h expiry + refresh rotation
-- TOTP MFA required for Level 4 (autonomous) actions
-- Append-only audit log for all Level 3+ actions
+- Secrets live in environment variables only; RLS enforced on every
+  Supabase table (`supabase/migrations/*_rls_hardening.sql`).
+- Server-derived identity on every data route — a request can't act as
+  another user (see `DEVELOPMENT.md` §4).
+- World-changing assistant tools (e.g. sending email) require an explicit
+  user confirmation before running.
+- An append-only, exportable agent activity log plus a global kill switch
+  (`/activity`).
+- CodeQL + Strix security scanning run in CI on every PR.
+- See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
 
 ## Disclaimer
 
-JARVIS OS is not a licensed financial advisor. The financial module provides analysis and visualization only.
+The Third Eye is a personal productivity assistant, not a licensed
+financial, medical, or legal advisor. Any billing, expense, or "financial"
+surfaces provide organization and visualization only.

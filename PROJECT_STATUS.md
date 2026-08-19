@@ -1,106 +1,75 @@
-# JARVIS OS — Project Status
+# The Third Eye — Project Status
 
-**Current Phase:** Phase 2 — Agent Framework + Knowledge Base
-**Status:** Implementation complete — awaiting exit criteria verification
+**Live product:** Next.js 14 + Supabase on Vercel (`frontend/`). See
+[DEVELOPMENT.md](DEVELOPMENT.md) for what's actually shipped and running.
 
----
-
-## Phase 1 (Foundation) — ✅ Complete
-
-All Phase 1 deliverables merged to `main` (commit `phase1_files`).
-
----
-
-## Phase 2 Completion Checklist
-
-| Deliverable | Status |
-|---|---|
-| Phase 2 ADRs appended to `ARCHITECTURE.md` | ✅ Done |
-| `app/agents/registry.py` — register, get, list_capable | ✅ Done |
-| `app/agents/orchestrator.py` — intent routing, delegation, depth=3 guard | ✅ Done |
-| `app/agents/research.py` — Serper API integration | ✅ Done |
-| `app/agents/knowledge.py` — RAG-backed document Q&A | ✅ Done |
-| `app/agents/productivity.py` — task creation + schedule awareness | ✅ Done |
-| Executive agent delegation to Research | ✅ Done |
-| `app/knowledge/ingestion.py` — PDF/DOCX/XLSX/CSV/TXT/MD parsers | ✅ Done |
-| `app/knowledge/chunker.py` — 512 token, 50 overlap, boundary-aware | ✅ Done |
-| `app/knowledge/embedder.py` — batched ≤100 chunks per call | ✅ Done |
-| `app/knowledge/retriever.py` — top-10, re-rank, top-5 | ✅ Done |
-| `app/knowledge/pipeline.py` — parse → chunk → embed → store | ✅ Done |
-| `app/memory/consolidation.py` — APScheduler nightly job | ✅ Done |
-| `app/api/documents.py` — upload/list/get/delete | ✅ Done |
-| `app/api/knowledge.py` — search/list | ✅ Done |
-| `chat.py` updated to dispatch via orchestrator | ✅ Done |
-| Frontend: `knowledge/page.tsx` + `KnowledgeClient.tsx` | ✅ Done |
-| Frontend: Assistant shows agent name + delegation + sources | ✅ Done |
-| Tests: `test_agents.py` (registry, delegation, circular guard) | ✅ Done |
-| Tests: `test_knowledge.py` (chunking, retrieval, latency) | ✅ Done |
-| Tests: `test_memory_consolidation.py` (semantic facts, pruning) | ✅ Done |
+This file used to track `backend/`'s internal phase checklist (Phase
+1–2 "complete", Phase 3 "in progress") as if it were the product roadmap.
+It wasn't accurate: `backend/` is a separately-developed FastAPI + agents +
+RAG service that is well-tested internally but **was never deployed**, and
+the live app doesn't call it (see [AUDIT.md](AUDIT.md), finding F-01, still
+open as of this writing). The sections below reflect actual state.
 
 ---
 
-## Phase 2 Exit Criteria
+## What's live today (`frontend/`)
 
-| Criterion | Status | Notes |
-|---|---|---|
-| PDF upload → semantic search returns relevant chunks | 🟡 Pending | Pipeline implemented; verify in running stack |
-| Executive delegates to Research, returns composed answer | ✅ Verified | `test_executive_delegates_to_research_and_composes` |
-| RAG retrieval p95 < 2s at 10k chunks | ✅ Verified | `test_retrieval_latency_10k_chunks_under_2s` |
-| Memory consolidation produces correct semantic facts | ✅ Verified | `test_consolidation_summarizes_old_session_into_semantic_facts` |
-| pytest --cov=app ≥ 80% | 🟡 Pending | Run against committed code |
-| `npm run build` zero TypeScript errors | 🟡 Pending | Run against committed code |
+- Tool-calling assistant (`/api/chat`) with ~25 tools, 4 personas, streaming
+  SSE, confirm-then-act on sensitive actions.
+- Tasks, notes, goals, knowledge-base RAG (pgvector), calendar/email
+  (opt-in Google connect), reminders, multi-agent reasoning.
+- Live Capture (continuous speech transcription → auto-created tasks) and
+  Vision (screen/webcam → Gemini multimodal).
+- Studio generators (Landing Page, HTML Mailer, Lifecycle OS, Creative
+  Studio, **Music Studio**) plus an App Hub of 24 self-built tools + 76
+  linked third-party apps.
+- Mode-aware runtime (Personal / Professional / Enterprise), billing
+  (Stripe checkout/portal/webhook), agent safety layer (kill switch +
+  append-only audit log at `/activity`).
+- MCP client (`lib/mcp/client.ts`) for external tool integration.
 
----
+Full detail: [DEVELOPMENT.md](DEVELOPMENT.md).
 
-## Architecture Decisions (Phase 2)
+## `backend/` status (not deployed)
 
-| ADR | Decision | Rationale |
-|---|---|---|
-| ADR-005 | In-process parse + async embed via Redis Streams | No third-party services, fast parse, decoupled embedding |
-| ADR-006 | 512-token chunks, 50-token overlap, boundary-aware | Token-aligned with text-embedding-3-small; preserves context across cuts |
-| ADR-007 | Singleton registry, explicit registration at import time | Avoids hardcoded dispatch; deterministic across workers |
-| ADR-008 | APScheduler (in-process) with PostgreSQL job store | Survives restarts; simpler than dedicated worker for nightly job |
+FastAPI + SQLAlchemy async agent framework, 100%-covered internally:
+agent registry/orchestrator with delegation, Research/Knowledge/Productivity
+agents, a document ingestion → chunk → embed → retrieve pipeline, nightly
+memory consolidation. All real, all tested — but it has no hosting target
+(no `fly.toml`/`railway.json`/`render.yaml`, no second Vercel project), and
+the one integration point in the frontend (`lib/api.ts`, `auth.ts`'s
+`BACKEND_URL` POST) is imported nowhere and fails silently. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for its design and ADRs.
 
----
+**Open decision (AUDIT.md F-01):** retire `backend/` (keep as reference or
+archive), or actually deploy and wire it in. Not decided — do not assume
+either direction when working in this repo.
 
-## Open Decisions
+## Recent security review (2026-08-19)
 
-1. **Background embedding worker** — Phase 2 currently runs the embedder inline via FastAPI `BackgroundTasks`. For ≥1MB documents or burst uploads, this should move to a dedicated Redis Streams consumer (Phase 3 if upload volume warrants).
-2. **TOTP MFA enrollment UI** — Backend `pyotp` is wired; frontend enrollment remains for Phase 5 (or when Level 4 actions land).
+Ran a GCP project security review (`jarvis-anchit`) via `gcloud`: IAM clean
+(single owner), no Compute/Storage/Cloud SQL/Cloud Run resources, Security
+Command Center Standard tier enabled (free), Recommender API enabled
+(free). Found two live Gemini API keys (`Gemini API Key`, `gemini-third-eye`)
+both scoped to `generativelanguage.googleapis.com` only, with neither an
+application restriction nor a way (via gcloud, Vercel CLI, or GitHub) to
+determine which one is actually set in Vercel's `GEMINI_API_KEY`/
+`GOOGLE_API_KEY` env var from this environment — that determination needs a
+one-time manual check in the Vercel dashboard before the unused key can be
+safely deleted.
 
----
+## Known documentation drift (from AUDIT.md, not yet resolved)
 
-## Known Issues
+- F-02: 5 Supabase migration files sit in `frontend/supabase/migrations/`
+  instead of `supabase/migrations/`, so `supabase db push` never picks them
+  up — includes RLS hardening; live-DB state unconfirmed.
+- F-04: 2 high-severity Next.js CVEs; fix needs a Next 14→16 major bump
+  (Dependabot ignores majors — F-10).
+- 8 loose `supabase-schema-*.sql` files at repo root are a third,
+  unreconciled schema path (superseded by `supabase/migrations/`).
 
-- Knowledge agent uses a fresh `AsyncSessionLocal()` inside its `run()` method rather than reusing the request's session. This is safe but slightly less efficient — consider threading the session through `AgentContext` in Phase 3.
-- The frontend Knowledge page polls every 2s while any document is processing; replace with WebSockets in Phase 4.
-- `productivity_agent._create_task` opens its own session; same caveat as above.
-
----
-
-## Phase 3 Entry Criteria
-
-Do not begin Phase 3 until ALL of the following are confirmed:
-
-- [ ] `docker compose up` starts all services with zero errors
-- [ ] Upload a PDF, observe `processing_status` transitions to `ready`
-- [ ] Semantic search returns relevant chunks with score > 0
-- [ ] Chat with "look up X" delegates to Research and shows sources
-- [ ] Chat with "what does my document say about Y" routes to Knowledge agent with citations
-- [ ] `pytest --cov=app` shows ≥ 80% coverage with all tests green
-- [ ] `npm run build` succeeds
-
----
-
-## Phase 3 Scope Preview
-
-- Financial encryption (Fernet AES-256) at rest
-- CSV bank export importer + categorization
-- Financial dashboard (net worth, cash flow, spending by category)
-- Subscription detection algorithm
-- Financial agent with mandatory regulatory disclaimer
-- Encryption at-rest verification tests
+Full findings table: [AUDIT.md](AUDIT.md).
 
 ---
 
-*Last updated: end of Phase 2 implementation*
+*Last updated: 2026-08-19.*

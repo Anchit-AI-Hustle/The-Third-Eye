@@ -1,5 +1,13 @@
 # JARVIS OS — Architecture Document (Phase 1)
 
+> **Status note (2026-08-19):** this document describes `backend/`'s design
+> — a FastAPI + agents + RAG service that is well-tested but **not deployed
+> anywhere**, and not called by the live product. For the actual live
+> architecture (Next.js + Supabase on Vercel), see
+> [DEVELOPMENT.md](DEVELOPMENT.md). See [AUDIT.md](AUDIT.md) finding F-01
+> for the open retire-vs-deploy decision on `backend/`. The ADRs below
+> remain an accurate record of `backend/`'s own internal design.
+
 ## System Overview
 
 JARVIS OS is a self-hosted, agent-orchestrated personal operating system. It provides a unified interface for scheduling, finance, knowledge, research, tasks, and automation through voice, text, and structured UI.
