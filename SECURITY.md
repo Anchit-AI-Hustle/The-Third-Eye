@@ -1,21 +1,32 @@
 # Security Policy
 
-## Supported Versions
+## Scope
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+The live product is `frontend/` (Next.js on Vercel + Supabase). `backend/`
+is a separate, undeployed FastAPI service (see
+[PROJECT_STATUS.md](PROJECT_STATUS.md)) — vulnerabilities there matter for
+code quality but have no production blast radius today.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## What's in place
+
+- CodeQL and a Strix security scan run in CI on every PR
+  (`.github/workflows/`).
+- RLS enforced on every Supabase table; all reads/writes go through one
+  server route that derives identity from the session, not the request
+  body (see `DEVELOPMENT.md` §4).
+- World-changing assistant tools (e.g. sending email) require explicit
+  user confirmation before running; an append-only audit log and a global
+  kill switch cover agent actions (`/activity`).
+- Dependabot for dependency updates (`.github/dependabot.yml` currently
+  ignores major-version bumps — tracked as a known gap in
+  [AUDIT.md](AUDIT.md), finding F-10).
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Open a private GitHub Security Advisory on this repository
+(**Security → Advisories → Report a vulnerability**) rather than a public
+issue. Include what you found, how to reproduce it, and its impact. This
+is a single-maintainer project — expect an initial response within a few
+days, not an SLA.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Do not include real secrets, tokens, or production data in a report.

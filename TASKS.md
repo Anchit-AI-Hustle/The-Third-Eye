@@ -1,6 +1,11 @@
-# JARVIS OS — Remaining Work by Phase
+# backend/ — Remaining Work by Phase
 
-## Phase 1 (current) — Remaining
+> This file tracks remaining work **inside `backend/`** (the separately
+> developed, undeployed FastAPI service — see [PROJECT_STATUS.md](PROJECT_STATUS.md)
+> and [AUDIT.md](AUDIT.md) F-01). It is not the live product's roadmap; the
+> live product is `frontend/`, documented in [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## Phase 1 — Remaining
 
 - [ ] Run `docker compose up` and fix any startup errors
 - [ ] Verify Google OAuth flow end-to-end

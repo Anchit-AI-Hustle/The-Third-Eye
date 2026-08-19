@@ -70,6 +70,13 @@ Key behaviours:
 Personas (`hooks/useAgentProfile.ts`) inject their persona into the system prompt and
 drive a matching TTS voice.
 
+**MCP client** (`lib/mcp/client.ts`): lets the assistant call tools it doesn't
+implement itself, via server-configured (never user-supplied) MCP servers
+over HTTP — `tools/list`/`tools/call` only, deliberately narrow to avoid
+SSRF via a user-controlled server URL. Tool schemas live separately in
+`lib/tools/schemas.ts` so the hand-written and MCP-discovered tool lists
+can merge into one function-calling declaration.
+
 ---
 
 ## 4. Data layer — RLS-safe by construction
@@ -123,17 +130,31 @@ provider.
 ## 7. Studio — per-mode generators
 
 `/tools` (hub) + `/tools/[tool]` + `/api/tools/generate` + `lib/studioGenerate.ts`.
-Four generators, all powered by the shared `llmCascade` (no new keys):
+Generators, all powered by the shared `llmCascade` (no new keys):
 
 - **Landing Page Engine** (Professional) → complete responsive HTML page.
 - **HTML Mailer Architect** (Professional) → email-client-safe table-based mailer.
 - **Lifecycle OS** (Enterprise) → stage-by-stage CRM lifecycle plan.
 - **Creative Studio** (Personal) → lyrics / Suno-Udio prompt / poem / captions.
+- **Music Studio** (Personal, `components/studio/MusicStudio.tsx` +
+  `/api/tools/music/infer`) → structured track-brief form (genre, mood,
+  instrumentation, etc.) with per-field AI autofill. Autofill matching
+  (`matchOption`/`matchOptions`) prefers the most specific option over the
+  first substring match, and splits a blended AI response into separate
+  chips for multi-select fields instead of collapsing to one.
 
 Each shares `StudioWorkbench` (form → generate → HTML iframe / Markdown preview, with
 Copy / Download / **Save to Knowledge** — the saved doc is mode-tagged). The same
 engine is exposed to the assistant as the `create_asset` tool, so "draft a Diwali
 mailer" works by voice/chat and saves to the Knowledge base.
+
+## 7a. App Hub
+
+`components/apps/AppHub.tsx` + `lib/apps/registry.ts` — a directory of 100
+apps for the active mode: 24 self-built tools (`selfBuilt: true`, run
+on-device, tagged to the device ID via `lib/deviceVault.ts`) mixed with 76
+third-party deep-links. An **All apps / My apps** tab filters down to just
+the self-built ones so they don't get buried in the third-party directory.
 
 ---
 
@@ -212,7 +233,8 @@ to Supabase.
 - **OAuth redirect URIs** to whitelist in Google Console:
   `…/api/auth/callback/google` (sign-in) and `…/api/connect/google/callback`
   (Gmail/Chat connect).
-- **CI:** CodeQL. `.github/workflows/supabase-deploy.yml` runs `supabase db push` on
+- **CI:** CodeQL + a Strix security scan (pinned install, not `curl | bash`) on every
+  PR. `.github/workflows/supabase-deploy.yml` runs `supabase db push` on
   migration changes (needs `SUPABASE_ACCESS_TOKEN` + `SUPABASE_DB_PASSWORD` secrets).
 
 ---
