@@ -22,7 +22,7 @@ const GENRES = [
   "Pop", "Rock", "Hip-hop", "R&B", "Soul", "Funk", "Jazz", "Blues", "Classical", "Opera",
   "Country", "Folk", "Bluegrass", "Americana", "Singer-songwriter", "Indie", "Alternative",
   "Metal", "Punk", "Hardcore", "Emo", "Post-rock", "Shoegaze", "Grunge",
-  "EDM", "House", "Deep house", "Tech house", "Techno", "Hardtechno", "Trance", "Psytrance",
+  "EDM", "House", "Deep house", "Tech house", "Techno", "Hard Techno", "Trance", "Psytrance",
   "Dubstep", "Drum & bass", "Jungle", "Garage/UK garage", "Grime", "Hardstyle", "Hyperpop",
   "Trap", "Drill", "Boom bap", "Lo-fi", "Ambient", "Downtempo", "Chillout", "New age", "Vaporwave",
   "Synthwave", "Cinematic", "Orchestral", "Video game/chiptune", "Industrial", "Experimental",
@@ -133,10 +133,35 @@ function fmtDuration(s: number): string {
 }
 
 // Match a free-text AI value to the closest option in a fixed list.
-function matchOption(val: string, opts: string[]): string | null {
+export function matchOption(val: string, opts: string[]): string | null {
   if (!val) return null;
   const v = val.toLowerCase();
-  return opts.find((o) => o.toLowerCase() === v) || opts.find((o) => v.includes(o.toLowerCase()) || o.toLowerCase().includes(v)) || null;
+  const exact = opts.find((o) => o.toLowerCase() === v);
+  if (exact) return exact;
+  // Longest match wins, not first-in-list: "Hard Techno" contains "Techno" as
+  // a substring, so a first-match search snapped a specific AI value down to
+  // the more generic option whenever the generic one happened to sort first.
+  const candidates = opts.filter((o) => v.includes(o.toLowerCase()) || o.toLowerCase().includes(v));
+  candidates.sort((a, b) => b.length - a.length);
+  return candidates[0] ?? null;
+}
+
+// Autofill/AI responses for a multi-select field arrive as one comma-separated
+// string ("Hard Techno, Hip-Hop"). Split, snap each piece to the closest known
+// option (keeping it verbatim if genuinely novel), dedupe, cap at `max` — so a
+// field that can hold several values actually receives several, instead of
+// the whole string being treated as one unmatched blob.
+export function matchOptions(val: string | undefined, opts: string[], max: number): string[] {
+  if (!val) return [];
+  const seen = new Set<string>();
+  for (const piece of val.split(",")) {
+    const t = piece.trim();
+    if (!t) continue;
+    const matched = matchOption(t, opts) || t;
+    seen.add(matched);
+    if (seen.size >= max) break;
+  }
+  return [...seen];
 }
 
 // Search-to-add chip picker — used for Genres, Vocal Effects, Vocal Language(s).
@@ -358,20 +383,20 @@ export function MusicStudio() {
       setF((p) => ({
         ...p,
         title: x.title || p.title,
-        genres: x.genre ? [matchOption(x.genre, GENRES) || x.genre] : p.genres,
+        genres: x.genre ? matchOptions(x.genre, GENRES, 6) : p.genres,
         subgenre: x.subgenre || p.subgenre,
-        moods: x.mood ? [matchOption(x.mood, MOODS) || x.mood] : p.moods,
+        moods: x.mood ? matchOptions(x.mood, MOODS, 5) : p.moods,
         tempo: Number(x.tempo) >= 60 && Number(x.tempo) <= 200 ? Math.round(x.tempo) : p.tempo,
         energy: Number(x.energy) >= 1 && Number(x.energy) <= 10 ? Math.round(x.energy) : p.energy,
         duration: Number(x.duration) >= 10 && Number(x.duration) <= 120 ? Math.round(x.duration) : p.duration,
         structure: x.structure || p.structure,
-        instruments: x.instruments ? String(x.instruments).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 8) : p.instruments,
+        instruments: x.instruments ? matchOptions(x.instruments, INSTRUMENTS, 10) : p.instruments,
         artistInspiration: x.artistInspiration ? String(x.artistInspiration).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 4) : p.artistInspiration,
         vocals: typeof x.vocals === "boolean" ? x.vocals : p.vocals,
-        vocalStyles: x.vocalStyle ? [matchOption(x.vocalStyle, VOCAL_STYLES) || x.vocalStyle] : p.vocalStyles,
-        vocalLanguages: x.vocalLanguage ? [matchOption(x.vocalLanguage, LANGUAGES) || x.vocalLanguage] : p.vocalLanguages,
+        vocalStyles: x.vocalStyle ? matchOptions(x.vocalStyle, VOCAL_STYLES, 4) : p.vocalStyles,
+        vocalLanguages: x.vocalLanguage ? matchOptions(x.vocalLanguage, LANGUAGES, 5) : p.vocalLanguages,
         vocalIntensity: Number(x.vocalIntensity) >= 1 && Number(x.vocalIntensity) <= 10 ? Math.round(x.vocalIntensity) : p.vocalIntensity,
-        vocalEffects: x.vocalEffects ? String(x.vocalEffects).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 4) : p.vocalEffects,
+        vocalEffects: x.vocalEffects ? matchOptions(x.vocalEffects, VOCAL_EFFECTS, 6) : p.vocalEffects,
       }));
     } catch { setError("Auto-fill network error."); }
     finally { setFilling(false); }
