@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/kolab-studio/db";
 import { supabaseServer } from "@/lib/kolab-studio/supabaseServer";
 import { orgCreateSchema } from "@/lib/kolab-studio/validation";
 import { ACTIVE_ORG_COOKIE } from "@/lib/kolab-studio/org";
-import { ok, fail, handleError, clientIp } from "@/lib/kolab-studio/http";
+import { fail, handleError, clientIp } from "@/lib/kolab-studio/http";
 import { audit } from "@/lib/kolab-studio/audit";
 
 export async function POST(req: Request) {
