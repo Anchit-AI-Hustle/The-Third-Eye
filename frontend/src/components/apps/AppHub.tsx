@@ -12,7 +12,7 @@ import {
   ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock, ArrowUpRight, HardDrive,
   CalendarRange, CalendarCheck, Webcam, Presentation, MonitorPlay,
   Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, BookOpenCheck,
-  Bot, Scissors, Sparkles, Code2,
+  Bot, Scissors, Sparkles, Code2, Calculator,
   type LucideIcon,
 } from "lucide-react";
 import { useMode } from "@/hooks/useMode";
@@ -28,10 +28,10 @@ const ICONS: Record<string, LucideIcon> = {
   Hash, Video, Contact, Wand2, TrendingUp, LayoutTemplate, Briefcase, Workflow,
   ListChecks, FileBarChart, BookOpen, ClipboardList, CalendarClock,
   CalendarRange, CalendarCheck, Webcam, Presentation, MonitorPlay,
-  Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, HardDrive, BookOpenCheck, Bot, Scissors, Sparkles, Code2,
+  Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, HardDrive, BookOpenCheck, Bot, Scissors, Sparkles, Code2, Calculator,
 };
 
-// "All apps" mixes 24 self-built tools in with 76 third-party deep-links, so
+// "All apps" mixes 25 self-built tools in with 76 third-party deep-links, so
 // the things you actually built here — Music Studio, Video Studio, Social
 // Media Studio and the rest — get buried in a directory of YouTube/Spotify/
 // WhatsApp shortcuts. "My Apps" filters down to just those: the ones with
