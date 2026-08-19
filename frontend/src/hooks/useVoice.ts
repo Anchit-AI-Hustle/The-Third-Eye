@@ -78,6 +78,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       });
       streamRef.current = stream;
       const ctx = new AudioContext();
+      // Chrome/Safari can hand back a context in "suspended" state — the await
+      // above breaks the direct user-gesture chain autoplay policy checks for.
+      // Suspended means getByteFrequencyData reads all zeros forever, so the
+      // level meter looks dead even though the mic itself is live.
+      if (ctx.state === "suspended") void ctx.resume();
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;

@@ -433,6 +433,9 @@ export function useWakeWord({
       try {
         const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
         const ctx = new AC();
+        // See useVoice.ts's identical fix: a context created after an awaited
+        // getUserMedia can start suspended, which reads as permanent silence.
+        if (ctx.state === "suspended") void ctx.resume();
         audioCtxRef.current = ctx;
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
