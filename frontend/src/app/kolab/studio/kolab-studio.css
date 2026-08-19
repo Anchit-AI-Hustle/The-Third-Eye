@@ -1,0 +1,106 @@
+/* Kolab Studio's design tokens, scoped under `.kolab-theme` instead of `:root` so they never
+   bleed into the rest of the app (ported from the standalone Kolab repo's app/globals.css,
+   which applied them to `body`/`html` directly — safe there since Kolab is a single-purpose
+   app, not safe here where Kolab is one feature among many). */
+.kolab-theme {
+  --kolab-base: #141210;
+  --kolab-surface: #1d1a17;
+  --kolab-surface2: #26221e;
+  --kolab-line: #332d27;
+  --kolab-ink: #f4efe8;
+  --kolab-muted: #9c9186;
+  --kolab-faint: #6f665c;
+  --kolab-lime: #c2f04a;
+  --kolab-clay: #e8604a;
+  --kolab-gold: #e8b84a;
+  --kolab-sky: #5bc8e8;
+  --kolab-violet: #b98cff;
+
+  background: var(--kolab-base);
+  color: var(--kolab-ink);
+  font-family: var(--font-kolab-inter), system-ui, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+  isolation: isolate;
+}
+.kolab-theme h1,
+.kolab-theme h2,
+.kolab-theme h3,
+.kolab-theme h4 {
+  font-family: var(--font-kolab-archivo), sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.kolab-theme ::selection {
+  background: var(--kolab-lime);
+  color: var(--kolab-base);
+}
+
+/* Ambient aurora background, ported. Respects reduced-motion. Absolutely positioned within
+   the (relatively positioned) .kolab-theme wrapper rather than fixed to the viewport, so it
+   never escapes the Kolab Studio subtree. */
+.kolab-theme {
+  position: relative;
+}
+.kolab-aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.kolab-aurora span {
+  position: absolute;
+  width: 46vw;
+  height: 46vw;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.28;
+  mix-blend-mode: screen;
+  animation: kolab-drift 22s ease-in-out infinite;
+}
+.kolab-aurora .a1 {
+  background: var(--kolab-lime);
+  top: -12vw;
+  left: -8vw;
+}
+.kolab-aurora .a2 {
+  background: var(--kolab-violet);
+  bottom: -14vw;
+  right: -6vw;
+  animation-delay: -7s;
+}
+.kolab-aurora .a3 {
+  background: var(--kolab-sky);
+  top: 30vh;
+  right: 20vw;
+  width: 34vw;
+  height: 34vw;
+  animation-delay: -13s;
+}
+@keyframes kolab-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(6vw, 4vh) scale(1.12);
+  }
+  66% {
+    transform: translate(-5vw, -3vh) scale(0.92);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kolab-theme * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* .kolab-theme content sits above the aurora layer. */
+.kolab-theme > :not(.kolab-aurora) {
+  position: relative;
+  z-index: 1;
+}

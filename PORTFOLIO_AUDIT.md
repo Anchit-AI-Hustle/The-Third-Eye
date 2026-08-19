@@ -59,7 +59,7 @@ Method: The-Third-Eye received the full deep audit (only repo readable in this s
 | Vahdam work tooling | vahdam-lifecycle-os, vahdam_dtc_data_engine, vahdam-superapp ×2, 2× marketing-automation, marketing_mailers__html_architect, Mailer, 2× data-analysis-mailer, vahdam-lp-assets, LandingPages-Improved | ★★★☆☆ | Highest real-world usage (day job). Canonical: vahdam-lifecycle-os + vahdam_dtc_data_engine + marketing_mailers__html_architect. Merge the 4 mailer/analysis repos into the architect; archive duplicates. |
 | Portfolio sites | Anchit-Work-Portfolio, anchit-portfolio-cyberpunk, ANCHIT-S-AI-HUSTLE | ★★★☆☆ | One portfolio. Anchit-Work-Portfolio (active) canonical; archive 2. |
 | The Passion Table | The-Passion-Table, The-Passion-Table-Idea-1 (archived) | ★★★☆☆ | Active this week. Deep audit scheduled Day 6. |
-| Kolab | Kolab | ★★★☆☆ | Active; also embedded inside The-Third-Eye (`api/kolab/*`) — decide: standalone product or Third-Eye feature. Not both. |
+| Kolab | Kolab | ★★★☆☆ | Decided: Third-Eye feature. The Kolab repo's full app (Studio, Storefront, Deals, Analytics, KYC, billing — not just the `api/kolab/*` marketing-copy generator) is now embedded natively at `/kolab/studio/*`, on its own dedicated Supabase project. Kolab repo itself is kept as the canonical upstream source, not a competing standalone product. |
 | Experiments | demo-repository, github-love-notes, vibe-coding-platform, mint-insights | ★☆☆☆☆ | Archive unless one is secretly alive. |
 
 ### Top 5 portfolio moves

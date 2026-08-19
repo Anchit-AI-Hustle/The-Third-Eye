@@ -14,6 +14,24 @@ const config: Config = {
     extend: {
       screens: { "3xl": "1920px" },
       colors: {
+        // Kolab Studio (embedded creator/brand marketplace feature, ported from the
+        // standalone Kolab repo) keeps its own dark/lime visual language rather than the
+        // Arc Blue theme above — namespaced so it can never collide with or drift the
+        // app's own palette. See frontend/src/app/kolab/studio/kolab-studio.css.
+        kolab: {
+          base:     "#141210",
+          surface:  "#1D1A17",
+          surface2: "#26221E",
+          line:     "#332D27",
+          ink:      "#F4EFE8",
+          muted:    "#9C9186",
+          faint:    "#6F665C",
+          lime:     "#C2F04A",
+          clay:     "#E8604A",
+          gold:     "#E8B84A",
+          sky:      "#5BC8E8",
+          violet:   "#B98CFF",
+        },
         background: {
           base:     "#050505",
           surface:  "#07111F",
@@ -40,6 +58,10 @@ const config: Config = {
         sans:    ["Inter", "system-ui", "sans-serif"],
         display: ["Geist", "Inter", "system-ui", "sans-serif"],
         mono:    ["Geist Mono", "ui-monospace", "monospace"],
+        // Kolab Studio's own display + label faces (Archivo / JetBrains Mono) — see
+        // kolab.colors above. Wired to next/font vars in app/kolab/studio/layout.tsx.
+        "kolab-display": ["var(--font-kolab-archivo)", "sans-serif"],
+        "kolab-mono": ["var(--font-kolab-jetbrains)", "ui-monospace", "monospace"],
       },
       fontSize: {
         base: ["14px", { lineHeight: "1.6" }],
@@ -48,6 +70,10 @@ const config: Config = {
         card:  "8px",
         input: "6px",
         badge: "3px",
+        // Kolab Studio's default card radius (its own tailwind config sets `rounded` = 14px;
+        // namespaced here since redefining the global `rounded` DEFAULT would affect every
+        // other page in the app).
+        "kolab-card": "14px",
       },
       transitionTimingFunction: {
         jarvis: "cubic-bezier(0, 0, 0.2, 1)",

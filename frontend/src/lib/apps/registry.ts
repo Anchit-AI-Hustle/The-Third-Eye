@@ -158,6 +158,7 @@ export const APPS: AppEntry[] = [
 
   // ── Work · Marketing ──
   { id: "kolab", label: "Kolab", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab", icon: "Workflow", selfBuilt: true, blurb: "Brand-adaptable Lifecycle OS & creator campaigns" },
+  { id: "kolab-studio", label: "Kolab Studio", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab/studio/home", icon: "Briefcase", blurb: "Full creator/brand product — calendar, storefront, deals, KYC & billing" },
   { id: "meta-ads", label: "Meta Ads", category: "Marketing", modes: [PR, E], kind: "external", href: "https://business.facebook.com/adsmanager", icon: "Megaphone" },
   { id: "google-ads", label: "Google Ads", category: "Marketing", modes: [PR, E], kind: "external", href: "https://ads.google.com", icon: "Megaphone" },
   { id: "mailchimp", label: "Mailchimp", category: "Marketing", modes: [PR], kind: "external", href: "https://mailchimp.com", icon: "Mail" },
