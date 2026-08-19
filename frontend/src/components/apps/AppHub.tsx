@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useMode } from "@/hooks/useMode";
-import { appsForMode, categoriesForMode, type AppEntry } from "@/lib/apps/registry";
+import { appsForMode, type AppEntry } from "@/lib/apps/registry";
 import { shortDeviceId } from "@/lib/deviceVault";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -31,13 +31,29 @@ const ICONS: Record<string, LucideIcon> = {
   Film, ShoppingBag, TrainFront, Palette, Megaphone, Kanban, Rocket, HardDrive, BookOpenCheck, Bot, Scissors, Sparkles, Code2,
 };
 
+// "All apps" mixes 24 self-built tools in with 76 third-party deep-links, so
+// the things you actually built here — Music Studio, Video Studio, Social
+// Media Studio and the rest — get buried in a directory of YouTube/Spotify/
+// WhatsApp shortcuts. "My Apps" filters down to just those: the ones with
+// selfBuilt: true, running on-device rather than opening somewhere else.
+const TABS = [
+  { id: "all", label: "All apps" },
+  { id: "mine", label: "My apps" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
+
 export function AppHub() {
   const { modeId } = useMode();
   const [device, setDevice] = useState("");
+  const [tab, setTab] = useState<Tab>("all");
   useEffect(() => setDevice(shortDeviceId()), []);
 
-  const apps = appsForMode(modeId);
-  const categories = categoriesForMode(modeId);
+  const allApps = appsForMode(modeId);
+  const selfBuiltCount = allApps.filter((a) => a.selfBuilt).length;
+  const linkedCount = allApps.filter((a) => a.kind === "external").length;
+
+  const apps = tab === "mine" ? allApps.filter((a) => a.selfBuilt) : allApps;
+  const categories = [...new Set(apps.map((a) => a.category))];
 
   return (
     <div className="space-y-6">
@@ -48,7 +64,16 @@ export function AppHub() {
           <span className="text-text-secondary">Self-built apps keep their data <strong className="text-text-primary">on this device</strong>, mapped to your device ID.</span>
           {device && <span className="text-text-muted font-mono ml-2">{device}</span>}
         </div>
-        <span className="text-[10px] font-mono text-text-muted flex-none">{apps.filter((a) => a.selfBuilt).length} self-built · {apps.filter((a) => a.kind === "external").length} linked</span>
+        <span className="text-[10px] font-mono text-text-muted flex-none">{selfBuiltCount} self-built · {linkedCount} linked</span>
+      </div>
+
+      <div className="flex items-center gap-1">
+        {TABS.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2 rounded-input text-sm font-medium transition-colors ${tab === t.id ? "bg-[#34D399]/15 text-[#34D399]" : "text-text-muted hover:text-text-secondary"}`}>
+            {t.label}{t.id === "mine" ? ` (${selfBuiltCount})` : ""}
+          </button>
+        ))}
       </div>
 
       {categories.map((cat) => {
@@ -67,6 +92,10 @@ export function AppHub() {
           </section>
         );
       })}
+
+      {tab === "mine" && categories.length === 0 && (
+        <p className="text-sm text-text-muted py-8 text-center">No self-built apps in this mode yet.</p>
+      )}
     </div>
   );
 }
