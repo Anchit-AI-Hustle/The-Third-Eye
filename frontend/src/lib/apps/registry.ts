@@ -62,6 +62,7 @@ export const APPS: AppEntry[] = [
   // ── Personal · Money & Payments ──
   { id: "finance", label: "Finance", category: "Money & Payments", modes: [P, PR, E], kind: "internal", href: "/finance", icon: "BarChart2", selfBuilt: true, blurb: "Track spend, on-device" },
   { id: "budget-studio", label: "Budget Planner", category: "Money & Payments", modes: [P], kind: "internal", href: "/tools/budget", icon: "Wallet", selfBuilt: true },
+  { id: "calculators", label: "Calculators", category: "Money & Payments", modes: [P, PR], kind: "internal", href: "/calculators", icon: "Calculator", selfBuilt: true, blurb: "SIP, EMI, retirement & 24 more — instant, on-device" },
   { id: "phonepe", label: "PhonePe", category: "Money & Payments", modes: [P], kind: "external", href: "https://www.phonepe.com", icon: "Smartphone" },
   { id: "gpay", label: "Google Pay", category: "Money & Payments", modes: [P], kind: "external", href: "https://pay.google.com", icon: "CreditCard" },
   { id: "paytm", label: "Paytm", category: "Money & Payments", modes: [P], kind: "external", href: "https://paytm.com", icon: "CreditCard" },

@@ -42,9 +42,9 @@ export function LandingHero() {
           </h1>
 
           <p data-reveal className="mt-6 text-base leading-relaxed text-text-secondary md:text-lg">
-            A private workspace where an AI assistant captures your tasks and notes, searches your
-            own knowledge, listens and transcribes in real time, and keeps you ahead of everything —
-            owned entirely by you.
+            Tasks buried in email and chat. Notes you'll never find again. Answers sitting in your
+            own documents that you still have to dig for yourself. The Third Eye pulls all of it
+            into one private workspace, and acts on it for you — not just another list to maintain.
           </p>
 
           <div data-reveal className="mt-9 flex items-center justify-center">
