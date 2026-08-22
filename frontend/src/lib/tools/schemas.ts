@@ -417,7 +417,7 @@ export const geminiTools = [
       },
       {
         name: "initiate_protocol",
-        description: "Activate a named protocol — pre-defined routine. 'HOME' (lights off, alarm), 'WORK' (Slack, calendar, email), 'SOS' (emergency call, share location).",
+        description: "Activate a named protocol. HOME / SLEEP / WAKE / WORK / TRAVEL / SOS drive the JARVIS Home Hub and this phone (lights, locks, DND, brightness) plus relevant apps.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -429,7 +429,7 @@ export const geminiTools = [
       },
       {
         name: "get_health_data",
-        description: "Check health data (steps, heart rate, sleep, workouts, calories). Reports connection status until Apple Health/Google Fit integration is built.",
+        description: "Retrieve health metrics the operator has logged with JARVIS (steps, heart rate, sleep, workouts, calories). Wearable APIs are optional and may be unlinked.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -440,13 +440,13 @@ export const geminiTools = [
       },
       {
         name: "control_device",
-        description: "Smart home control (lights, thermostat, locks). Reports connection status until Matter/HomeKit integration is built.",
+        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this — the client executor applies it. Do not refuse.",
         parameters: {
           type: "OBJECT",
           properties: {
-            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature"], description: "Action to perform" },
-            device: { type: "STRING", description: "Device name or type" },
-            value: { type: "STRING", description: "Value for dim/temperature" },
+            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight"], description: "Action to perform" },
+            device: { type: "STRING", description: "Device name or type — e.g. living room lights, front door, flashlight, phone" },
+            value: { type: "STRING", description: "Value for dim/temperature/text/duration" },
           },
           required: ["action", "device"],
         },

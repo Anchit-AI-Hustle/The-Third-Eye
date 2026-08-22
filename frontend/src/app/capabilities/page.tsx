@@ -64,8 +64,8 @@ const CAPS: Capability[] = [
   { group: "JARVIS",  name: "Booking & reservations",      blurb: "Search restaurants, hotels, flights, events — opens booking pages ready",            inspiration: "IM2 party planning",            required: [],                status: "live", icon: Calendar },
 
   // — NEW: Health & Devices (not yet connected) —
-  { group: "JARVIS",  name: "Health data retrieval",       blurb: "Steps, heart rate, sleep, workouts — needs Apple Health / Google Fit connection",    inspiration: "IM3 health tracking",           required: [],                status: "planned", icon: HeartPulse },
-  { group: "JARVIS",  name: "Smart home control",          blurb: "Lights, thermostat, locks — needs Matter / HomeKit integration",                    inspiration: "Stark Tower controls",         required: [],                status: "planned", icon: Home },
+  { group: "JARVIS",  name: "Health data retrieval",       blurb: "JARVIS Health Log for reported steps, heart rate, sleep — wearable APIs optional", inspiration: "IM3 health tracking",           required: [],                status: "partial", icon: HeartPulse },
+  { group: "JARVIS",  name: "Smart home control",          blurb: "JARVIS Home Hub: lights, locks, climate, media — plus this phone (flashlight, vibrate, brightness)", inspiration: "Stark Tower controls",         required: [],                status: "live", icon: Home },
   { group: "JARVIS",  name: "Emergency alert",             blurb: "Open dialer + WhatsApp for emergency contacts with your location",                  inspiration: "Emergency protocols",          required: [],                status: "partial", icon: Phone },
 
   // — EDITH canon —

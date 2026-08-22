@@ -71,6 +71,9 @@ export function describeSideEffect(type: string, data?: Record<string, any>): st
     case "memory_update": return `Remembered a fact`;
     case "open_url": return `Opened ${d.label ?? d.url ?? "link"}`;
     case "open_urls": return d.data ? `Opened ${Array.isArray(d.data) ? d.data.length : 0} apps` : "Opened apps";
+    case "device_action": return `Device: ${d.action ?? ""} ${d.device ?? ""}`.trim();
+    case "home_action": return `Home Hub: ${d.action ?? ""} ${d.device ?? ""}`.trim();
+    case "batch": return "Ran a protocol batch";
     default: return type;
   }
 }
