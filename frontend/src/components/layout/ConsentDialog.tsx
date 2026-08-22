@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Mic, Camera, MapPin, Bell, X } from "lucide-react";
-import { ConsentKey, ConsentState } from "@/lib/consent";
+import { ConsentKey, ConsentState, setPolicy, PermissionCapability } from "@/lib/consent";
 import { useConsentBundle } from "@/hooks/useConsent";
 
 // Pages a non-user reads before deciding to become one — legal documents and the
@@ -54,6 +54,14 @@ export function ConsentDialog() {
     const keys = (Object.entries(selected).filter(([, v]) => v).map(([k]) => k)) as ConsentKey[];
     const out = await requestAll(keys);
     setResults(out);
+    // This dialog promises "never asked again unless reset", but that promise
+    // is kept by the separate always/ask policy layer (getPolicy) that every
+    // feature — wake word, camera capture, location lookups — actually reads.
+    // Without this, granting here only marked our own optimistic consent
+    // state; wake word still sat waiting for a policy flag nothing ever set.
+    for (const key of keys) {
+      if (out[key] === "granted") setPolicy(key as PermissionCapability, "always");
+    }
     setTimeout(() => setOpen(false), 800);
   };
 
