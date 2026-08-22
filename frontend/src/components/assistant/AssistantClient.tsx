@@ -127,7 +127,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }, [checkpoints, session?.user?.email]);
   const [showCheckpoints, setShowCheckpoints] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined") setWakeEnabled(localStorage.getItem("jarvis_wakeword") === "1");
+    if (typeof window === "undefined") return;
+    // Restoring "on" from a previous session is only real if the persistent
+    // mic grant is still there too — e.g. a different browser/device, or the
+    // grant was revoked, would otherwise show the icon lit with the hook
+    // silently never listening (getPolicy, not the micAlways state, since
+    // that effect may not have committed yet on this same mount).
+    const wasOn = localStorage.getItem("jarvis_wakeword") === "1";
+    setWakeEnabled(wasOn && getPolicy("microphone") === "always");
   }, []);
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
@@ -935,8 +942,31 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </button>
           )}
           <button
-            onClick={() => setWakeEnabled((v) => { const n = !v; try { localStorage.setItem("jarvis_wakeword", n ? "1" : "0"); } catch { /* noop */ } return n; })}
-            title={wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free` : "Enable wake word (\"Hey JARVIS\")"}
+            onClick={async () => {
+              if (wakeEnabled) {
+                setWakeEnabled(false);
+                try { localStorage.setItem("jarvis_wakeword", "0"); } catch { /* noop */ }
+                return;
+              }
+              // useWakeWord only ever actually listens when micAlways is true — a
+              // separate, persistent grant from the ordinary once-off mic prompt.
+              // Toggling this on used to just flip localStorage, so the icon lit
+              // up blue while the hook silently never started: no error, no
+              // sound, nothing to explain why "hey JARVIS" did nothing. Route
+              // through the real capability request so "Allow every time" is
+              // actually asked for here, and don't claim success if it wasn't.
+              if (getPolicy("microphone") !== "always") {
+                await requestCapability("microphone");
+                if (getPolicy("microphone") !== "always") return;
+              }
+              setWakeEnabled(true);
+              try { localStorage.setItem("jarvis_wakeword", "1"); } catch { /* noop */ }
+            }}
+            title={
+              wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`
+                : micAlways ? "Enable wake word (\"Hey JARVIS\")"
+                : "Enable wake word — needs \"Allow every time\" on the microphone prompt"
+            }
             className={cn("flex-none p-1.5 rounded-input transition-colors",
               wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
             <Ear size={15} />
