@@ -72,6 +72,30 @@ function isQuotaError(status: number, body: string): boolean {
   return false;
 }
 
+// Per-provider cooldown: once a provider comes back quota-exhausted, skip it
+// on later calls in this warm instance instead of paying for another failed
+// round-trip (or, for a provider that hangs rather than fast-fails, another
+// full timeout) before falling through to the next one. Module-level state
+// only lives as long as the serverless instance stays warm — a cold start
+// clears it, which is fine, since the cooldown is an optimization, not a
+// correctness requirement.
+const COOLDOWN_MS = 60_000;
+const cooldownUntil = new Map<string, number>();
+
+function inCooldown(provider: string): boolean {
+  const until = cooldownUntil.get(provider);
+  return until !== undefined && Date.now() < until;
+}
+
+function startCooldown(provider: string): void {
+  cooldownUntil.set(provider, Date.now() + COOLDOWN_MS);
+}
+
+/** Test-only: clear cooldown state between test cases. */
+export function resetCooldowns(): void {
+  cooldownUntil.clear();
+}
+
 const MAX_TIMEOUT_MS = 120_000;
 
 function withTimeout(ms: number): { signal: AbortSignal; clear: () => void } {
@@ -248,42 +272,58 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     pref ? [pref] : ["openai", "anthropic", "gemini", "grok", "groq", "cerebras", "openrouter", "mistral", "ollama"];
 
   for (const provider of order) {
+    // A provider that just failed on quota grounds is certain to fail again
+    // within the cooldown window — skip the round-trip (or, worse, a full
+    // hang-and-timeout) entirely rather than pay for a call we already know
+    // the answer to.
+    if (provider !== "ollama" && inCooldown(provider)) {
+      attempts.push({ provider, model: "-", ok: false, reason: "skipped: cooling down after a recent quota error" });
+      continue;
+    }
     if (provider === "openai" && keys.openai.length > 0) {
       for (const key of keys.openai) {
         const res = await callOpenAI(key, "gpt-4o-mini", opts);
         attempts.push({ provider: "openai", model: "gpt-4o-mini", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
         if (res.ok) return { text: res.text, provider: "openai", model: "gpt-4o-mini", attempts };
-        if (res.ok === false && !res.quota) break; // non-quota error → try next provider, not next key
+        if (!res.quota) break; // non-quota error → try next provider, not next key
+        startCooldown("openai");
       }
     } else if (provider === "anthropic" && keys.anthropic) {
       const res = await callAnthropic(keys.anthropic, "claude-3-5-haiku-latest", opts);
       attempts.push({ provider: "anthropic", model: "claude-3-5-haiku", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "anthropic", model: "claude-3-5-haiku-latest", attempts };
+      if (res.quota) startCooldown("anthropic");
     } else if (provider === "gemini" && keys.gemini) {
       const res = await callGemini(keys.gemini, "gemini-2.5-flash", opts);
       attempts.push({ provider: "gemini", model: "gemini-2.5-flash", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "gemini", model: "gemini-2.5-flash", attempts };
+      if (res.quota) startCooldown("gemini");
     } else if (provider === "grok" && keys.grok) {
       const res = await callOpenAICompatible(GROK_BASE, keys.grok, "grok-2-latest", opts);
       attempts.push({ provider: "grok", model: "grok-2-latest", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "grok", model: "grok-2-latest", attempts };
+      if (res.quota) startCooldown("grok");
     } else if (provider === "groq" && keys.groq) {
       const res = await callOpenAICompatible(GROQ_BASE, keys.groq, "llama-3.3-70b-versatile", opts);
       attempts.push({ provider: "groq", model: "llama-3.3-70b-versatile", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "groq", model: "llama-3.3-70b-versatile", attempts };
+      if (res.quota) startCooldown("groq");
     } else if (provider === "cerebras" && keys.cerebras) {
       const res = await callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, "llama-3.3-70b", opts);
       attempts.push({ provider: "cerebras", model: "llama-3.3-70b", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "cerebras", model: "llama-3.3-70b", attempts };
+      if (res.quota) startCooldown("cerebras");
     } else if (provider === "openrouter" && keys.openrouter) {
       const model = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
       const res = await callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, model, opts);
       attempts.push({ provider: "openrouter", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "openrouter", model, attempts };
+      if (res.quota) startCooldown("openrouter");
     } else if (provider === "mistral" && keys.mistral) {
       const res = await callOpenAICompatible(MISTRAL_BASE, keys.mistral, "mistral-small-latest", opts);
       attempts.push({ provider: "mistral", model: "mistral-small-latest", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "mistral", model: "mistral-small-latest", attempts };
+      if (res.quota) startCooldown("mistral");
     } else if (provider === "ollama" && keys.ollama) {
       const res = await callOllama("llama3.1:8b", opts);
       attempts.push({ provider: "ollama", model: "llama3.1:8b", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
