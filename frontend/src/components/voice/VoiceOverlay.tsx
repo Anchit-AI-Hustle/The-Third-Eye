@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useWakeWord, stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
@@ -129,6 +129,14 @@ export function VoiceOverlay() {
       if (!isStreamingRef.current) sendRef.current(text);
     }, [handleVoiceConfirm]),
   });
+
+  // The mic button flips `micOn` optimistically before the browser's own
+  // getUserMedia/SpeechRecognition permission resolves. If that's actually
+  // denied, stop pretending to listen instead of sitting on "listening"
+  // forever with nothing captured and no explanation.
+  useEffect(() => {
+    if (stt.permissionDenied && micOn) setMicOn(false);
+  }, [stt.permissionDenied, micOn]);
 
   // App-wide wake word: passively listen for the agent's name while the mic is
   // off (so it never fights the main recognizer). Saying "JARVIS" opens the
@@ -526,11 +534,23 @@ export function VoiceOverlay() {
             {/* Empty state */}
             {!liveBubble && !response && !lastQuery && pendingActions.length === 0 && (
               <div className="flex flex-col items-center justify-center py-5 text-center">
-                <div className="arc-reactor mb-3" style={{ width: 36, height: 36 }}>
-                  <div className="arc-reactor-core" style={{ width: 10, height: 10 }} />
-                </div>
+                {stt.permissionDenied || (micOn && stt.recognitionIssue) ? (
+                  <AlertTriangle size={20} className="text-warning mb-2" />
+                ) : (
+                  <div className="arc-reactor mb-3" style={{ width: 36, height: 36 }}>
+                    <div className="arc-reactor-core" style={{ width: 10, height: 10 }} />
+                  </div>
+                )}
                 <p className="hud-label text-[#4FC3F7]/60 text-[9px]">
-                  {micOn ? "Listening — speak or type" : "Tap mic to start"}
+                  {stt.permissionDenied
+                    ? "Microphone blocked — allow it in your browser's address bar, then tap the mic again"
+                    : micOn && stt.recognitionIssue === "network"
+                    ? "Speech recognition can't reach its service — check your connection or try typing"
+                    : micOn && stt.recognitionIssue === "audio-capture"
+                    ? "No microphone detected — check your input device"
+                    : micOn
+                    ? "Listening — speak or type"
+                    : "Tap mic to start"}
                 </p>
               </div>
             )}
