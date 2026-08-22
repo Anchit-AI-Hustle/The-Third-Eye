@@ -242,7 +242,7 @@ No regressions found.
 | 7 | Every required env var documented + validated at boot | ✅ PASS for backend (`Settings` fields with no default raise a clear `ValidationError` at boot) — ⚠️ PARTIAL for frontend, which has no equivalent single boot-time validator (env vars are read ad hoc per route; a missing one degrades a feature rather than failing loudly) |
 | 8 | No committed secrets | ✅ PASS (pattern scan, not exhaustive — see Unknowns) |
 | 9 | Billing fully working (test) or safely disabled | ⚠️ UNVERIFIED — code is real and complete; live-vs-test key mode needs your confirmation |
-| 10 | Rollback procedure exists and tested | ❌ Not found — no rollback runbook anywhere in the repo |
+| 10 | Rollback procedure exists and tested | ⚠️ **Documented 2026-08-22** — manual procedure now in [DEVELOPMENT.md](DEVELOPMENT.md) §13 (Vercel promote/rollback for bad deploys, forward-only reversal migrations + point-in-time restore for bad schema changes, env var revert). Not yet exercised in a real drill — "tested" still open |
 
 ## 10. Unknowns — what I couldn't verify, and what I'd need
 
