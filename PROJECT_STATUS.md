@@ -41,9 +41,21 @@ the one integration point in the frontend (`lib/api.ts`, `auth.ts`'s
 `BACKEND_URL` POST) is imported nowhere and fails silently. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for its design and ADRs.
 
-**Open decision (AUDIT.md F-01):** retire `backend/` (keep as reference or
-archive), or actually deploy and wire it in. Not decided — do not assume
-either direction when working in this repo.
+**Decision (2026-08-22, AUDIT.md F-01):** deploy it — not yet started.
+Given the available GCP project (`jarvis-anchit`, currently zero
+Compute/SQL/Redis resources — see the security review below) and that this
+needs a persistent process (APScheduler's nightly job, a Redis Streams
+consumer — neither fits Vercel's serverless model or Cloud Run's scale-to-zero
+by default), the shape of the work is: Cloud SQL (Postgres, separate from
+Supabase's — sharing one DB risks Alembic and Supabase's own migration
+tooling colliding), Memorystore (Redis), and Cloud Run with a minimum
+instance count so scheduled jobs keep running. All of that is real, ongoing
+GCP spend (not free-tier — Cloud SQL and Memorystore both bill per hour
+regardless of traffic), so it needs an explicit go-ahead on cost before
+anything gets provisioned. Once live, it should stand alone (health check
+passing, OpenAPI loading) before any decision to actually cut the frontend
+over to it — that cutover is a second, separate, larger step (AUDIT.md §4.4
+option B), not part of this one.
 
 ## Recent security review (2026-08-19)
 
