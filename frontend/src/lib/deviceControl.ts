@@ -104,14 +104,18 @@ async function setTorch(on: boolean): Promise<DeviceExecResult> {
       const track = stream.getVideoTracks()[0];
       const caps = track.getCapabilities?.() as { torch?: boolean } | undefined;
       if (caps?.torch) {
-        await track.applyConstraints({ advanced: [{ torch: true }] } as MediaTrackConstraints);
+        // torch is a real, widely-supported (Chrome/Android) MediaTrackConstraint
+        // extension for camera flash control, but TypeScript's stock DOM types
+        // don't know about it — cast through unknown, as TS itself suggests,
+        // rather than a same-shape cast that it correctly rejects.
+        await track.applyConstraints({ advanced: [{ torch: true }] } as unknown as MediaTrackConstraints);
         torchTrack = track;
         return { ok: true, action: "flashlight_on", via: "web", applied: "Camera torch on" };
       }
       stream.getTracks().forEach((t) => t.stop());
     } else if (torchTrack) {
       try {
-        await torchTrack.applyConstraints({ advanced: [{ torch: false }] } as MediaTrackConstraints);
+        await torchTrack.applyConstraints({ advanced: [{ torch: false }] } as unknown as MediaTrackConstraints);
       } catch { /* ignore */ }
       torchTrack.stop();
       torchTrack = null;
