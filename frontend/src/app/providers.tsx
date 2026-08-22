@@ -9,6 +9,7 @@ import { PermissionProvider } from "@/components/permission/PermissionProvider";
 import { IngestBridge } from "@/components/tasks/IngestBridge";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
+import { DeviceHud } from "@/components/systems/DeviceHud";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
 import { getDeviceInfo } from "@/lib/deviceInfo";
@@ -81,6 +82,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <IngestBridge />
             <DeviceLogBridge />
             <SystemsOnline />
+            <DeviceHud />
             <CommandPalette />
           </CaptureProvider>
         </PermissionProvider>

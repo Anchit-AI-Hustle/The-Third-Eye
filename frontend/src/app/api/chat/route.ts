@@ -23,6 +23,7 @@ import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
 import { randomUUID } from "crypto";
+import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -72,8 +73,8 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **deep_research**: multi-step research with web search, synthesis, and citations
 - **play_music**: open Spotify/YouTube Music/Apple Music/JioSaavn with search ready
 - **initiate_protocol**: activate named routines (HOME, WORK, SOS, SLEEP, WAKE, TRAVEL)
-- **get_health_data**: check steps, heart rate, sleep, workouts
-- **control_device**: smart home control — lights, thermostat, locks
+- **get_health_data**: retrieve health metrics the operator has logged with JARVIS; wearables are optional
+- **control_device**: THIS phone/browser AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds). Always call it — never refuse.
 - **weekly_report**: comprehensive weekly summary of tasks, goals, calendar, health
 - **emergency_alert**: ONLY for genuine emergencies — dialer + WhatsApp contacts
 - **book_reservation**: search and open booking pages for restaurants, hotels, flights, events
@@ -686,14 +687,16 @@ async function runTool(
 
     case "initiate_protocol": {
       const { result, sideEffects } = await initiateProtocol(input.protocol ?? "", input.context, ctx);
-      return { result, sideEffect: sideEffects.length > 0 ? { type: "open_urls", data: sideEffects } : undefined };
+      return { result, sideEffect: sideEffects.length > 0 ? { type: "batch", data: sideEffects } : undefined };
     }
 
     case "get_health_data":
-      return { result: getHealthData(input.metric ?? "summary", input.period ?? "today") };
+      return { result: getHealthData(input.metric ?? "summary", input.period ?? "today", ctx) };
 
-    case "control_device":
-      return { result: controlDevice(input.action ?? "toggle", input.device ?? "", input.value) };
+    case "control_device": {
+      const plan = planDeviceControl(input.action ?? "toggle", input.device ?? "", input.value);
+      return { result: plan.result, sideEffect: plan.sideEffect };
+    }
 
     case "weekly_report":
       return { result: await weeklyReport(input.period ?? "this_week", input.focus, ctx) };
@@ -1020,12 +1023,12 @@ function resolveMusicLink(query: string, service: string, mood?: string): { url:
   return { url: svc.search(enc), label: svc.label };
 }
 
-async function initiateProtocol(protocol: string, context: string | undefined, ctx: RunContext): Promise<{ result: string; sideEffects: Array<{ type: string; data: any }> }> {
+async function initiateProtocol(protocol: string, context: string | undefined, _ctx: RunContext): Promise<{ result: string; sideEffects: Array<{ type: string; data: any }> }> {
   const protocolName = protocol.toUpperCase();
   const appsToOpen: Record<string, string[]> = {
     HOME: ["Google Home", "Nest"],
     WORK: ["Slack", "Google Calendar", "Gmail"],
-    SOS: [],  // handled specially
+    SOS: [],
     SLEEP: ["Clock"],
     WAKE: ["Google Calendar", "Gmail"],
     TRAVEL: ["Google Maps"],
@@ -1033,12 +1036,12 @@ async function initiateProtocol(protocol: string, context: string | undefined, c
   const apps = appsToOpen[protocolName] || [];
   const openLinks = apps.map(a => { const l = resolveAppLink(a); return `[${a}](${l.url})`; }).join(" · ");
   const descriptions: Record<string, string> = {
-    HOME: "Activating home mode — opening smart home controls.",
-    WORK: "Activating work mode — opening productivity apps.",
-    SOS: "Emergency protocol — I'll open the dialer and WhatsApp so you can call for help immediately.",
-    SLEEP: "Activating sleep mode — opening alarm settings.",
-    WAKE: "Good morning — opening your calendar and email.",
-    TRAVEL: "Activating travel mode — opening navigation.",
+    HOME: "Activating home mode — Home Hub lights off, doors locked, phone quiet.",
+    WORK: "Activating work mode — office lights on, DND, productivity apps.",
+    SOS: "Emergency protocol — flashlight, vibrate, notify, location, dialer.",
+    SLEEP: "Activating sleep mode — lights and TV off, doors locked, phone dim and silent.",
+    WAKE: "Good morning — lights up, DND off, calendar and email.",
+    TRAVEL: "Activating travel mode — lock up, lights off, location.",
   };
   const desc = descriptions[protocolName] || `Activating protocol ${protocolName}.`;
   const sideEffects: Array<{ type: string; data: any }> = [];
@@ -1049,15 +1052,25 @@ async function initiateProtocol(protocol: string, context: string | undefined, c
     const link = resolveAppLink(app);
     sideEffects.push({ type: "open_url", data: { url: link.url, label: link.label } });
   }
-  return { result: `${desc}\n${openLinks ? `\nOpening: ${openLinks}` : ""}\n\n_I've opened the relevant apps. Smart home device control requires a connected hub (Matter/HomeKit) — not yet available._`, sideEffects };
+  for (const act of protocolActions(protocolName)) {
+    const plan = planDeviceControl(act.action, act.device, act.value);
+    if (plan.sideEffect) sideEffects.push(plan.sideEffect);
+  }
+  const extra = context ? `\nContext: ${context}` : "";
+  return {
+    result: `${desc}${extra}\n${openLinks ? `\nOpening: ${openLinks}` : ""}\n\nHome Hub and device actions are queued on the operator’s device. Report only what the executor confirms.`,
+    sideEffects,
+  };
 }
 
-function getHealthData(metric: string, period: string): string {
-  return `Health data for **${metric}** (${period}): No health service is connected yet. Apple Health, Google Fit and Strava integration is planned but not built — see /capabilities for current status. I'll retrieve actual data once one is built and linked.`;
-}
-
-function controlDevice(action: string, device: string, value?: string): string {
-  return `Smart home control for **${device}** (${action}${value ? ` → ${value}` : ""}): No smart home service (Matter/HomeKit) is connected yet. This is planned but not built — see /capabilities for current status.`;
+function getHealthData(metric: string, period: string, ctx: RunContext): string {
+  const logs = Object.entries(ctx.memoryStore)
+    .filter(([k]) => k.startsWith("health:") || k === "health_log")
+    .map(([k, v]) => `${k.replace(/^health:/, "")}: ${v}`);
+  if (!logs.length) {
+    return `JARVIS Health Log for **${metric}** (${period}): nothing stored yet. Tell me a number (steps, sleep, heart rate, weight) and I will remember it. Wearable APIs (Apple Health / Google Fit) are not linked — I will not invent readings.`;
+  }
+  return `JARVIS Health Log for **${metric}** (${period}):\n${logs.join("\n")}\n\nWearable APIs are not linked; these are values you (or I) recorded.`;
 }
 
 function formatProactiveSuggestion(context: string, suggestion: string, urgency: string): string {
@@ -1628,7 +1641,13 @@ export async function POST(req: NextRequest) {
             );
 
             const toolResponseParts: Part[] = toolResults.map((tr, i) => {
-              if (tr.sideEffect) sideEffects.push(tr.sideEffect);
+              if (tr.sideEffect) {
+                if (tr.sideEffect.type === "batch" && Array.isArray(tr.sideEffect.data)) {
+                  sideEffects.push(...tr.sideEffect.data);
+                } else {
+                  sideEffects.push(tr.sideEffect);
+                }
+              }
               return {
                 functionResponse: {
                   name: functionCalls[i].name,
