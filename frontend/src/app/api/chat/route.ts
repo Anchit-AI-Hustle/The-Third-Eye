@@ -1690,8 +1690,16 @@ export async function POST(req: NextRequest) {
               .filter((m) => m.content),
             { role: "user" as const, content: message },
           ];
+          // This path is a plain text completion with no real function-calling —
+          // the primary system prompt still lists tool names ("call open_app",
+          // "call control_device") for the Gemini path above, and a model given
+          // that instruction with no actual tool API invents a fake call in prose
+          // (e.g. a "tool_code": "print(open_app(...))" block) and then claims
+          // the action succeeded. Override that explicitly rather than let a
+          // weaker fallback model hallucinate both the call and its result.
+          const fallbackSystemInstruction = `${systemInstruction}\n\n## Degraded mode — no tool access\nYour normal tool-calling connection is temporarily down. Every tool named above is UNAVAILABLE right now — ignore those instructions entirely.\n- Never output anything that looks like a function or tool call: no JSON, no "tool_code", no "Tool Call:" labels, no code blocks pretending to invoke a function.\n- Never claim to have opened an app, sent a message, made a call, controlled a device, or performed any other action. You cannot.\n- If the request needs an action, say plainly that live actions are temporarily unavailable and to try again shortly. Answer only the informational part of the question, if any.`;
           const out = await llmCascade({
-            system: systemInstruction,
+            system: fallbackSystemInstruction,
             messages: fbMessages,
             temperature: 0.6,
             maxTokens: 1200,
