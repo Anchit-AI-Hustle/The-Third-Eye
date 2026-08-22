@@ -19,6 +19,7 @@ from app.memory.models import (  # noqa: F401
 from app.tasks.models import Task, Project, Goal, Reminder, RecurringTask  # noqa: F401
 from app.knowledge.models import Document, DocumentChunk  # noqa: F401
 from app.config import get_settings
+from app.database import build_engine_kwargs
 
 settings_app = get_settings()
 
@@ -59,6 +60,9 @@ async def run_async_migrations() -> None:
     connectable = create_async_engine(
         settings_app.database_url,
         poolclass=pool.NullPool,
+        **{k: v for k, v in build_engine_kwargs(
+            settings_app.database_url, settings_app.environment, settings_app.db_schema
+        ).items() if k == "connect_args"},
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

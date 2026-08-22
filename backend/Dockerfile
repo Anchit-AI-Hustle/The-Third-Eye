@@ -17,5 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Run database migrations then start server
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+# Ensure the dedicated schema exists (no-op when DB_SCHEMA=public), run
+# migrations, then start the server. Cloud Run sets $PORT; default to 8000
+# for local/docker-compose use where it's unset.
+CMD ["sh", "-c", "python -m app.bootstrap_schema && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
