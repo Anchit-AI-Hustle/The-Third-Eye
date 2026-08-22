@@ -26,6 +26,10 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const [audioState, setAudioState] = useState<AudioState>("idle");
   const [supported, setSupported] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  // "network" / "audio-capture" mean recognition is running but never gets a
+  // result back — the mic looks "on" forever with nothing to show for it.
+  // "no-speech" is just silence between utterances and isn't surfaced.
+  const [recognitionIssue, setRecognitionIssue] = useState<string | null>(null);
   const [whisperAvailable, setWhisperAvailable] = useState<boolean | null>(null);
 
   const activeRef = useRef(false);
@@ -113,6 +117,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     if (!supported || activeRef.current) return;
     activeRef.current = true;
     setPermissionDenied(false);
+    setRecognitionIssue(null);
     lastEventRef.current = Date.now();
     // Mid-conversation the screen must not sleep, or the mic is suspended.
     wakeLock.acquire();
@@ -136,6 +141,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
       rec.onspeechstart = () => {
         lastEventRef.current = Date.now();
+        setRecognitionIssue(null);
         if (cbRef.current.shouldSuppress?.()) return;
         cbRef.current.onSpeechStart?.();
         setAudioState("speaking");
@@ -148,6 +154,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
       rec.onresult = (event: any) => {
         lastEventRef.current = Date.now();
+        setRecognitionIssue(null);
         if (cbRef.current.shouldSuppress?.()) return;
         let interim = "";
         let final = "";
@@ -173,6 +180,9 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
           setAudioState("idle");
           return;
         }
+        if (e.error === "network" || e.error === "audio-capture") {
+          setRecognitionIssue(e.error);
+        }
         setAudioState("waiting");
         // no-speech / network: let onend restart
       };
@@ -196,6 +206,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     recRef.current = null;
     stopMeter();
     setAudioState("idle");
+    setRecognitionIssue(null);
     wakeLock.release();
   }, [stopMeter, wakeLock]);
 
@@ -240,7 +251,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     };
   }, [supported, forceRestart]);
 
-  return { audioState, supported, permissionDenied, whisperAvailable, enable, disable };
+  return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, enable, disable };
 }
 
 // backward-compat alias
