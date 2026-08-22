@@ -17,6 +17,9 @@ on:
     - cron: "17 2 * * *" # 02:17 UTC daily — off the hour, avoids the top-of-hour crowd
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   trigger:
     runs-on: ubuntu-latest
