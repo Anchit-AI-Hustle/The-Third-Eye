@@ -236,6 +236,34 @@ to Supabase.
 - **CI:** CodeQL + a Strix security scan (pinned install, not `curl | bash`) on every
   PR. `.github/workflows/supabase-deploy.yml` runs `supabase db push` on
   migration changes (needs `SUPABASE_ACCESS_TOKEN` + `SUPABASE_DB_PASSWORD` secrets).
+- **Rollback.** No automated rollback pipeline exists — this is the manual procedure:
+  - **Bad app deploy (frontend code).** Vercel keeps every deployment. In the
+    Vercel dashboard → Deployments, find the last known-good one and use
+    "Promote to Production" — this repoints the production alias immediately,
+    with no rebuild and no git changes required. Equivalent via CLI:
+    `vercel rollback [deployment-url]`. This does not touch the database, so
+    it's always safe to do first while diagnosing.
+  - **Bad migration (schema change).** Migrations in `supabase/migrations/`
+    are forward-only by convention — there are no paired `down` scripts.
+    Write and commit a new migration that reverses the specific change (drop
+    the column/table/policy just added), rather than editing or deleting the
+    original file; `supabase_migrations.schema_migrations` tracks applied
+    versions by filename, and removing a file that already ran desyncs the
+    ledger from the live database (this exact class of drift is what
+    AUDIT.md F-02 and the `20260822040332_reconcile_duplicate_migration_history.sql`
+    migration had to clean up after). If the change is destructive (dropped
+    a column with data in it), restore from a Supabase point-in-time backup
+    instead — see the project's Database → Backups tab for available restore
+    points — then reapply migrations up to (not including) the bad one.
+  - **Bad env var / secret rotation.** Vercel → Settings → Environment
+    Variables keeps no built-in history; before changing a production value,
+    copy the current one somewhere safe first. A deploy always reads env vars
+    at build time, so reverting a value still needs a redeploy (or use
+    "Redeploy" on the last-good deployment after fixing the variable).
+  - **Verify after any rollback:** hit `/api/status` (`ai`, `supabase`,
+    `google_oauth`, and the per-provider `cascade` booleans should read
+    `true` for whatever's configured) and confirm sign-in + one chat message
+    round-trip in production before considering the incident closed.
 
 ---
 

@@ -1708,24 +1708,42 @@ export async function POST(req: NextRequest) {
           await saveMemory(email, memory, memoryStore);
           send("done", { stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
           if (email && out.text) void rememberExchange(email, message, out.text).catch(() => {});
-        } catch {
+        } catch (cascadeErr) {
           // Both the primary model and every configured fallback failed. Don't
           // dump the raw provider JSON at the user — detect the common case
           // (quota/rate-limit) and explain it in plain language.
-          const raw = err instanceof Error ? err.message : String(err);
+          //
+          // Classify from BOTH failures, not just the primary one: llmCascade's
+          // thrown error already encodes which of the ~4 fallback providers
+          // were tried and why each one failed (see its `attempts` JSON). A
+          // primary Gemini failure that isn't itself quota-shaped (a 503
+          // "model overloaded", a timeout, a transient network error) would
+          // otherwise always fall to the least-specific message below, even
+          // when every fallback attempt clearly logged a rate limit.
+          const raw = [
+            err instanceof Error ? err.message : String(err),
+            cascadeErr instanceof Error ? cascadeErr.message : String(cascadeErr),
+          ].join(" | ");
           // Two failures that look alike and are not: a rate limit clears on its
           // own in about a minute, an empty balance never does. Telling someone
           // to "try again shortly" when the account is out of credit sends them
           // to wait for something that will not happen.
           const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
           const outOfCredit = /credit balance|insufficient_quota|billing|payment/i.test(raw);
+          // Distinct from a rate limit: the model is up but every provider's
+          // free-tier capacity is momentarily saturated (Gemini's 503 "model
+          // is overloaded" is the common case). Same remedy — retry shortly —
+          // but "I've hit the usage limit" would be the wrong diagnosis.
+          const overloaded = /\b503\b|UNAVAILABLE|overloaded|server.?error/i.test(raw);
           const message = outOfCredit && rateLimited
             ? "Every AI provider I'm configured with is unavailable: at least one account is out of credit, and the rest are rate-limited. The rate limits clear in about a minute; the credit one needs topping up. Adding another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) would give me somewhere to fail over."
             : outOfCredit
               ? "The AI account I'm using is out of credit, so I can't answer until it's topped up or another provider key is added to the deployment."
               : rateLimited
                 ? "I've hit the usage limit on every provider I'm configured with. These reset quickly — try again in about a minute, or add another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) so I can fail over instantly."
-                : "The AI provider is unavailable right now. Please try again in a moment.";
+                : overloaded
+                  ? "Every AI provider I'm configured with is at capacity right now, not out of quota — this clears on its own within a minute or two. Try again shortly."
+                  : "The AI provider is unavailable right now. Please try again in a moment.";
           // A streaming response has already sent its 200 headers by now, so
           // this failure is invisible to anything watching status codes. Log it
           // so it reaches the runtime logs and gets grouped as an error there —
