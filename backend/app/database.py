@@ -10,9 +10,13 @@ from app.config import get_settings
 
 settings = get_settings()
 
-def build_engine_kwargs(database_url: str, environment: str) -> dict:
+def build_engine_kwargs(database_url: str, environment: str, schema: str = "public") -> dict:
     """Engine options for a DSN. SQLite takes no pool sizing — its aiosqlite
-    driver rejects those arguments — so they apply to server databases only."""
+    driver rejects those arguments — so they apply to server databases only.
+
+    When `schema` isn't "public", every connection's search_path is pinned to
+    it, so unqualified DDL/DML from SQLAlchemy and Alembic lands in that
+    schema without schema-qualifying every model — see Settings.db_schema."""
     kwargs = {
         "echo": environment == "development",
         "pool_pre_ping": True,
@@ -20,12 +24,14 @@ def build_engine_kwargs(database_url: str, environment: str) -> dict:
     if not database_url.startswith("sqlite"):
         kwargs["pool_size"] = 10
         kwargs["max_overflow"] = 20
+        if schema != "public":
+            kwargs["connect_args"] = {"server_settings": {"search_path": schema}}
     return kwargs
 
 
 engine = create_async_engine(
     settings.database_url,
-    **build_engine_kwargs(settings.database_url, settings.environment),
+    **build_engine_kwargs(settings.database_url, settings.environment, settings.db_schema),
 )
 
 AsyncSessionLocal = async_sessionmaker(

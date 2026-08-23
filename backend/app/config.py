@@ -22,6 +22,20 @@ class Settings(BaseSettings):
     # Database
     database_url: str
     database_url_sync: str = ""
+    # Dedicated Postgres schema for this service's tables, set via the
+    # connection's search_path (below) rather than schema-qualifying every
+    # model. Lets the backend share a single free-tier Postgres instance —
+    # e.g. the same Supabase project the frontend already uses — without its
+    # tables colliding with the frontend's own `public` schema, instead of
+    # requiring a second, billed database just for this service.
+    db_schema: str = "public"
+
+    @field_validator("db_schema")
+    @classmethod
+    def validate_db_schema(cls, v: str) -> str:
+        if not v.replace("_", "").isalnum() or not v[:1].isalpha():
+            raise ValueError("db_schema must be a plain identifier (letters, digits, underscore)")
+        return v
 
     # Redis
     redis_url: str
@@ -52,6 +66,13 @@ class Settings(BaseSettings):
 
     # CORS — comma-separated origins
     cors_origins: str = "http://localhost:3000"
+
+    # Shared secret for the external cron trigger (see api/health.py's
+    # /internal/run-consolidation). Empty disables the endpoint entirely —
+    # needed on free scale-to-zero compute (Cloud Run et al.), where an
+    # in-process APScheduler job only fires if the instance happens to
+    # already be warm at the scheduled time, which it usually won't be.
+    internal_cron_secret: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

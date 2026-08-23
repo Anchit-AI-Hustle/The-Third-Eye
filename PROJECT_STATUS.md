@@ -41,9 +41,59 @@ the one integration point in the frontend (`lib/api.ts`, `auth.ts`'s
 `BACKEND_URL` POST) is imported nowhere and fails silently. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for its design and ADRs.
 
-**Open decision (AUDIT.md F-01):** retire `backend/` (keep as reference or
-archive), or actually deploy and wire it in. Not decided — do not assume
-either direction when working in this repo.
+**Decision (2026-08-22, AUDIT.md F-01):** deploy it, on a genuinely free
+stack — code changes done and tested, deploy itself not yet run (needs
+`gcloud` auth this environment doesn't have, plus two free third-party
+signups only you can complete).
+
+The original plan (Cloud SQL + Memorystore + a warm Cloud Run instance) was
+real, ongoing paid infrastructure regardless of traffic. Replaced with:
+
+- **Postgres — reuse the existing Supabase project**, in its own dedicated
+  schema (`db_schema` setting, default `"public"`, defaults to no behavior
+  change) so its tables can't collide with the frontend's own `public`
+  schema/RLS. `app/bootstrap_schema.py` creates the schema before Alembic
+  runs (Alembic manages tables inside a schema, not the schema itself). No
+  second database, no new cost.
+- **Redis — [Upstash](https://upstash.com)**, genuinely free tier (no card
+  required at signup), used as a drop-in `REDIS_URL`.
+- **Compute — Cloud Run, scale-to-zero** (no minimum instances). Free within
+  Google's standing always-free quota (2M requests, ~180K vCPU-seconds,
+  ~360K GiB-seconds/month) — comfortably enough for single-user traffic. The
+  honest caveat: this is "free within the free tier," not "incapable of ever
+  billing" if usage grows well past personal-project levels.
+- **Scheduling — GitHub Actions cron**, not the in-process APScheduler job.
+  Scale-to-zero means the process usually isn't running at 2am UTC, so an
+  in-process scheduler can't be relied on. `.github/workflows/backend-
+  consolidation-cron.yml` (already in this repo, no-ops safely until secrets
+  are set) hits a new protected endpoint, `POST /internal/run-consolidation`
+  with an `X-Cron-Secret` header, which wakes the instance and runs the job
+  for real. Disabled by default (`INTERNAL_CRON_SECRET` unset ⇒ the route
+  404s rather than existing at all).
+
+**What's left, and who does it:**
+1. *(you)* Create a free Upstash Redis database, copy its `REDIS_URL`.
+2. *(you)* `gcloud auth login` + `gcloud config set project jarvis-anchit`
+   locally, or grant this environment gcloud access — deploying from here
+   isn't possible without one of those (no CLI, no stored credentials).
+3. *(either)* `gcloud run deploy jarvis-backend --source backend/ --region
+   <your region> --allow-unauthenticated --set-env-vars
+   DB_SCHEMA=backend_app,ENVIRONMENT=production,...` with `DATABASE_URL`
+   (Supabase connection string), `REDIS_URL` (from step 1), and the other
+   required secrets (`SECRET_KEY`, `FINANCIAL_ENCRYPTION_KEY`,
+   `NEXTAUTH_SECRET`, `GOOGLE_AI_API_KEY`, and a new random
+   `INTERNAL_CRON_SECRET`) set via `--set-secrets` or the Cloud Run console,
+   never committed to the repo.
+4. *(you)* Add `BACKEND_URL` (the Cloud Run service URL) and
+   `BACKEND_CRON_SECRET` (same value as `INTERNAL_CRON_SECRET`) as GitHub
+   repo secrets, so the cron workflow starts firing.
+5. Verify: `curl https://<service-url>/health` returns `{"status":
+   "healthy", ...}` and `/api/docs` loads — that's Definition-of-Live
+   criteria #3 satisfied.
+
+Standing it up alone (this plan) is deliberately separate from any later
+decision to actually cut the frontend over to calling it (AUDIT.md §4.4
+option B) — that's a second, larger step, not part of this one.
 
 ## Recent security review (2026-08-19)
 

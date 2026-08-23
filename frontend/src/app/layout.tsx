@@ -11,6 +11,7 @@ import {
   BING_SITE_VERIFICATION,
 } from "@/lib/site";
 import { PWAInstall } from "@/components/PWAInstall";
+import { Analytics } from "@vercel/analytics/react";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -75,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>
         <PWAInstall />
+        <Analytics />
         <script
           dangerouslySetInnerHTML={{
             // Register after load so it never competes with first paint / hydration.
