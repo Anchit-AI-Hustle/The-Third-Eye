@@ -11,7 +11,8 @@ export function generateStaticParams() {
   return calculators.map((c) => ({ slug: c.slug }));
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const c = bySlug[params.slug];
   if (!c) return {};
   const url = `${SITE_URL}/calculators/${c.slug}`;
@@ -30,7 +31,8 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   };
 }
 
-export default function CalculatorPage({ params }: { params: { slug: string } }) {
+export default async function CalculatorPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const c = bySlug[params.slug];
   if (!c) notFound();
 

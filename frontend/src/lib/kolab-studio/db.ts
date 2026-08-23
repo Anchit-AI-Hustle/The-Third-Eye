@@ -9,7 +9,7 @@ import type { EntitlementContext, KycStatus, Plan, Profile, SubStatus } from "./
 
 /** The currently authenticated user, or null. */
 export async function getSessionUser() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -18,7 +18,7 @@ export async function getSessionUser() {
 
 /** Load the signed-in user's profile (RLS-scoped). */
 export async function getMyProfile(): Promise<Profile | null> {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data } = await supabase.from("profiles").select("*").maybeSingle();
   return (data as Profile | null) ?? null;
 }
@@ -28,7 +28,7 @@ export async function getMyProfile(): Promise<Profile | null> {
  * Reads profile.privileged, kyc_verifications.status, subscriptions.status/plan under RLS.
  */
 export async function getEntitlementContext(): Promise<EntitlementContext> {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const [{ data: profile }, { data: kyc }, { data: sub }] = await Promise.all([
     supabase.from("profiles").select("privileged").maybeSingle(),
     supabase.from("kyc_verifications").select("status").maybeSingle(),

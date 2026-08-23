@@ -24,5 +24,5 @@ export async function requireFeatureAccess(): Promise<GateResult> {
   if (!canUseFeatures(ctx)) {
     return { ok: false, response: fail("Verify Aadhaar and subscribe to use this feature", 403) };
   }
-  return { ok: true, user, supabase: supabaseServer() };
+  return { ok: true, user, supabase: await supabaseServer() };
 }

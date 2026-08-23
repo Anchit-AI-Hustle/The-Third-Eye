@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     if (!user) return fail("Not authenticated", 401);
 
     const input = profileUpdateSchema.parse(await req.json());
-    const supabase = supabaseServer();
+    const supabase = await supabaseServer();
 
     // website_url is a Pro-only field. The client disables it for non-Pro users, but a direct
     // POST must not bypass the paid gate — enforce entitlement server-side (CLAUDE.md guardrail #2).

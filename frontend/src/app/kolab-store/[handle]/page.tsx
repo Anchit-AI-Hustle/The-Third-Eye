@@ -7,13 +7,15 @@ import { Logo } from "@/components/kolab-studio/Logo";
 import { StorefrontGrid } from "@/components/kolab-studio/StorefrontGrid";
 import { getPublicStorefront } from "@/lib/kolab-studio/storefront";
 
-export async function generateMetadata({ params }: { params: { handle: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ handle: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const data = await getPublicStorefront(decodeURIComponent(params.handle)).catch(() => null);
   const who = data?.name || data?.handle || "Creator";
   return { title: `${who}'s storefront — Kolab`, description: `Shop ${who}'s picks with their codes.` };
 }
 
-export default async function PublicStorefrontPage({ params }: { params: { handle: string } }) {
+export default async function PublicStorefrontPage(props: { params: Promise<{ handle: string }> }) {
+  const params = await props.params;
   const data = await getPublicStorefront(decodeURIComponent(params.handle)).catch(() => null);
   if (!data) notFound();
   const first = data.name?.split(" ")[0] || data.handle;

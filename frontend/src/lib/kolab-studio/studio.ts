@@ -51,7 +51,8 @@ export interface Channel {
 }
 
 export async function getPillars(): Promise<Pillar[]> {
-  const { data } = await supabaseServer()
+  const supabase = await supabaseServer();
+  const { data } = await supabase
     .from("content_pillars")
     .select("id, name, role, color, sort_order")
     .order("sort_order", { ascending: true });
@@ -59,7 +60,8 @@ export async function getPillars(): Promise<Pillar[]> {
 }
 
 export async function getPlan(): Promise<PlanItem[]> {
-  const { data } = await supabaseServer()
+  const supabase = await supabaseServer();
+  const { data } = await supabase
     .from("content_plan")
     .select("id, pillar_id, format, asset_type, date, time, hook, caption, status, done, notes")
     .order("date", { ascending: true, nullsFirst: false });
@@ -67,7 +69,8 @@ export async function getPlan(): Promise<PlanItem[]> {
 }
 
 export async function getDeals(): Promise<Deal[]> {
-  const { data } = await supabaseServer()
+  const supabase = await supabaseServer();
+  const { data } = await supabase
     .from("deals")
     .select("id, brand, emoji, product, category, code, discount, price, affiliate_url, active")
     .order("created_at", { ascending: false });
@@ -75,7 +78,8 @@ export async function getDeals(): Promise<Deal[]> {
 }
 
 export async function getSchedule(): Promise<ScheduledPost[]> {
-  const { data } = await supabaseServer()
+  const supabase = await supabaseServer();
+  const { data } = await supabase
     .from("scheduled_posts")
     .select("id, title, scheduled_at, channels, publish_status")
     .order("scheduled_at", { ascending: true, nullsFirst: false });
@@ -83,7 +87,8 @@ export async function getSchedule(): Promise<ScheduledPost[]> {
 }
 
 export async function getChannels(): Promise<Channel[]> {
-  const { data } = await supabaseServer()
+  const supabase = await supabaseServer();
+  const { data } = await supabase
     .from("channels")
     .select("id, platform, handle, connected");
   return (data as Channel[] | null) ?? [];

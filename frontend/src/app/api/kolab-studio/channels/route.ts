@@ -14,7 +14,7 @@ export async function PUT(req: Request) {
     if (!user) return fail("Not authenticated", 401);
 
     const { platform, handle } = channelUpsertSchema.parse(await req.json());
-    const supabase = supabaseServer();
+    const supabase = await supabaseServer();
 
     // Manual handle link (not OAuth): mark connected only when a handle is present.
     const upsert = await supabase.from("channels").upsert(
