@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     if (!user) return fail("Not authenticated", 401);
 
     const { type, name, vertical } = orgCreateSchema.parse(await req.json());
-    const supabase = supabaseServer();
+    const supabase = await supabaseServer();
 
     const { data: org, error: orgErr } = await supabase
       .from("organizations")

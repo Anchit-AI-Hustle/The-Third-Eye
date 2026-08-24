@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const appUrl = env.appUrl();
 
   if (code) {
-    const supabase = supabaseServer();
+    const supabase = await supabaseServer();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       return NextResponse.redirect(`${appUrl}/kolab/studio/auth?error=oauth`);

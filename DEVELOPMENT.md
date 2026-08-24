@@ -16,11 +16,14 @@ original `ARCHITECTURE.md` was written.
 
 ## 1. What it is
 
-One assistant with four personas — **JARVIS / FRIDAY / E.D.I.T.H. / ULTRON** —
-sharing one tool-calling backend: tasks, notes, goals, knowledge-base RAG, web /
+One assistant with six personas — **JARVIS / FRIDAY / E.D.I.T.H. / ULTRON /
+ZEUS / ATHENA** (`hooks/useAgentProfile.ts`'s `PRESETS`) — sharing one
+tool-calling backend: tasks, notes, goals, knowledge-base RAG, web /
 news / weather / stocks, calendar, email, reminders, multi-agent reasoning,
 translation, vision, live capture, and a Studio of generators. Same capabilities
-underneath; the persona changes tone + voice.
+underneath; the persona changes tone + voice. Only JARVIS is named in the
+product's own marketing copy — the other five are real, selectable, and
+otherwise undocumented outside this file and the code itself.
 
 ---
 

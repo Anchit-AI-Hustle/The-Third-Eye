@@ -77,7 +77,8 @@ function scrub(row: Record<string, unknown>, email: string) {
   return { ...rest, user_id: email };
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { entity: string } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ entity: string }> }) {
+  const params = await props.params;
   const c = await resolve(params.entity);
   if (!c.ok) return fail(c);
   let q = c.sb.from(c.cfg.table).select("*").eq("user_id", c.email);
@@ -90,7 +91,8 @@ export async function GET(_req: NextRequest, { params }: { params: { entity: str
   return Response.json({ rows: data ?? [] });
 }
 
-export async function POST(req: NextRequest, { params }: { params: { entity: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ entity: string }> }) {
+  const params = await props.params;
   const c = await resolve(params.entity);
   if (!c.ok) return fail(c);
   let body: unknown;
@@ -106,7 +108,8 @@ export async function POST(req: NextRequest, { params }: { params: { entity: str
   return Response.json({ rows: data ?? [] });
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { entity: string } }) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ entity: string }> }) {
+  const params = await props.params;
   const c = await resolve(params.entity);
   if (!c.ok) return fail(c);
   let body: { id?: string; patch?: Record<string, unknown> };
@@ -121,7 +124,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { entity: st
   return Response.json({ ok: true });
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { entity: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ entity: string }> }) {
+  const params = await props.params;
   const c = await resolve(params.entity);
   if (!c.ok) return fail(c);
   const id = new URL(req.url).searchParams.get("id");

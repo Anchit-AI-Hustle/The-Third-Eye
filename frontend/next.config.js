@@ -34,7 +34,10 @@ const nextConfig = {
   // standalone only for Docker; Vercel manages its own output
   ...(process.env.VERCEL ? {} : { output: "standalone" }),
   images: {
-    domains: ["lh3.googleusercontent.com", "avatars.githubusercontent.com"],
+    remotePatterns: [
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+    ],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

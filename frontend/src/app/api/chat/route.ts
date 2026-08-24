@@ -1735,15 +1735,21 @@ export async function POST(req: NextRequest) {
           // is overloaded" is the common case). Same remedy — retry shortly —
           // but "I've hit the usage limit" would be the wrong diagnosis.
           const overloaded = /\b503\b|UNAVAILABLE|overloaded|server.?error/i.test(raw);
+          // User-facing copy stays free of anything that sounds like a devops
+          // runbook — no provider names, no env var names, no "billing" or
+          // "quota". Whoever is chatting with JARVIS is not the operator; the
+          // operator-facing detail (raw, with provider/env-var names) is what
+          // console.error below logs, not what ships to the person waiting on
+          // a reply.
           const message = outOfCredit && rateLimited
-            ? "Every AI provider I'm configured with is unavailable: at least one account is out of credit, and the rest are rate-limited. The rate limits clear in about a minute; the credit one needs topping up. Adding another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) would give me somewhere to fail over."
+            ? "I'm temporarily unable to respond — my AI services are at capacity right now. This should clear within a couple of minutes. Please try again shortly."
             : outOfCredit
-              ? "The AI account I'm using is out of credit, so I can't answer until it's topped up or another provider key is added to the deployment."
+              ? "I'm temporarily unable to respond right now. Please try again in a little while."
               : rateLimited
-                ? "I've hit the usage limit on every provider I'm configured with. These reset quickly — try again in about a minute, or add another free provider key (CEREBRAS_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY) so I can fail over instantly."
+                ? "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute."
                 : overloaded
-                  ? "Every AI provider I'm configured with is at capacity right now, not out of quota — this clears on its own within a minute or two. Try again shortly."
-                  : "The AI provider is unavailable right now. Please try again in a moment.";
+                  ? "I'm at capacity right now — this should clear on its own within a minute or two. Please try again shortly."
+                  : "Something went wrong on my end. Please try again in a moment.";
           // A streaming response has already sent its 200 headers by now, so
           // this failure is invisible to anything watching status codes. Log it
           // so it reaches the runtime logs and gets grouped as an error there —

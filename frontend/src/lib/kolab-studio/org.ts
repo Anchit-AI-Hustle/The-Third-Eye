@@ -26,7 +26,7 @@ export interface MembershipWithOrg {
 }
 
 export async function getMyMemberships(): Promise<MembershipWithOrg[]> {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
   const { data } = await supabase
     .from("memberships")
     .select("role, organizations(id, name, type, vertical, plan, status, seats)")
@@ -42,6 +42,6 @@ export async function getMyMemberships(): Promise<MembershipWithOrg[]> {
 export async function getActiveOrg(): Promise<MembershipWithOrg | null> {
   const memberships = await getMyMemberships();
   if (memberships.length === 0) return null;
-  const selected = cookies().get(ACTIVE_ORG_COOKIE)?.value;
+  const selected = (await cookies()).get(ACTIVE_ORG_COOKIE)?.value;
   return memberships.find((m) => m.org.id === selected) ?? memberships[0];
 }

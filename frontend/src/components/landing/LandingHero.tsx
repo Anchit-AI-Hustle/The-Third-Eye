@@ -8,7 +8,7 @@ import { HoloFrame } from "@/components/hud/HoloFrame";
 const READOUT = [
   { k: "assistant", v: "online" },
   { k: "workspace", v: "private" },
-  { k: "agents", v: "4 ready" },
+  { k: "agents", v: "6 ready" },
 ];
 
 export function LandingHero() {
@@ -36,15 +36,16 @@ export function LandingHero() {
             data-reveal
             className="font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl"
           >
-            Your personal
+            Your tasks are already in your inbox.
             <br />
-            <span className="gradient-text">AI operating system</span>
+            <span className="gradient-text">The Third Eye pulls them out for you.</span>
           </h1>
 
           <p data-reveal className="mt-6 text-base leading-relaxed text-text-secondary md:text-lg">
-            Tasks buried in email and chat. Notes you'll never find again. Answers sitting in your
-            own documents that you still have to dig for yourself. The Third Eye pulls all of it
-            into one private workspace, and acts on it for you — not just another list to maintain.
+            No typing, no re-entry — Gmail and chat get scanned automatically and turned into a
+            tracked list. Notes you'll never lose, answers pulled straight from your own documents,
+            all in one private workspace that remembers and acts for you — not just another list to
+            maintain.
           </p>
 
           <div data-reveal className="mt-9 flex items-center justify-center">

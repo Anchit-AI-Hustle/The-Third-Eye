@@ -6,11 +6,12 @@ import { getSessionUser } from "@/lib/kolab-studio/db";
 import { getMyMemberships } from "@/lib/kolab-studio/org";
 import { OnboardingClient } from "./OnboardingClient";
 
-export default async function OnboardingPage({
-  searchParams,
-}: {
-  searchParams: { add?: string };
-}) {
+export default async function OnboardingPage(
+  props: {
+    searchParams: Promise<{ add?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await getSessionUser().catch(() => null);
   if (!user) redirect("/kolab/studio/auth");
   const memberships = await getMyMemberships();
