@@ -9,7 +9,7 @@ import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
-import { getGoogleAccessToken } from "@/lib/googleToken";
+import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
@@ -1468,11 +1468,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Use the connected Google token (gmail/calendar scopes) when available.
+  // Use the stored Google grant (gmail/calendar scopes) when available. Since
+  // sign-in now requests those scopes, this is normally present for anyone
+  // signed in with Google rather than something they had to connect.
+  let googleScope: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
-    if (connected?.accessToken) accessToken = connected.accessToken;
+    if (connected?.accessToken) {
+      accessToken = connected.accessToken;
+      googleScope = connected.scope;
+    }
   } catch { /* not connected — Google tools will say so */ }
+
+  // Holding a token is not the same as being allowed to use it: the consent
+  // screen lets people untick individual boxes. Report what was actually
+  // granted so the assistant offers to send mail only when it really can.
+  const google = googleCapabilities(googleScope);
 
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
@@ -1600,9 +1611,9 @@ export async function POST(req: NextRequest) {
     timezone: timezone || req.headers.get("x-vercel-ip-timezone") || "UTC",
     tasks,
     capabilities: {
-      gmailSend: !!accessToken,
-      gmailRead: !!accessToken,
-      calendar: !!accessToken,
+      gmailSend: !!accessToken && google.gmailSend,
+      gmailRead: !!accessToken && google.gmailRead,
+      calendar: !!accessToken && google.calendarRead,
       reminders: !!getAdminSupabase(),
       webSearch: !!process.env.SERPER_API_KEY,
     },

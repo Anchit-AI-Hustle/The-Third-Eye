@@ -94,21 +94,69 @@ export async function revokeGoogleAccess(
 }
 
 /**
- * Google scopes the ingestion features need — requested via the connect flow.
+ * Google scopes the Gmail/Calendar/Chat features need.
  *
- * calendar.events was requested here but nothing ever calls the Calendar API
- * to write: "add event" opens a calendar.google.com deep link instead, which
- * needs no OAuth scope at all. An unused restricted scope is exactly what a
- * verification reviewer flags, and there is nothing to demo it doing — so it
- * is not requested.
+ * Requested at sign-in (see lib/auth.ts) so signing in with Google grants
+ * everything in one consent screen: the user is asked once, at that moment, and
+ * nothing needs connecting afterwards. The standalone connect flow stays on as
+ * a repair path for anyone who unticked a box on that screen.
+ *
+ * calendar.events is deliberately absent — nothing ever calls the Calendar API
+ * to write ("add event" opens a calendar.google.com deep link, which needs no
+ * OAuth scope at all). An unused restricted scope is exactly what a
+ * verification reviewer flags, and there is nothing to demo it doing.
  */
-export const INGESTION_SCOPES = [
+export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.messages.readonly",
-].join(" ");
+] as const;
+
+export const INGESTION_SCOPES = INGESTION_SCOPE_LIST.join(" ");
+
+/** Identity scopes every sign-in needs regardless of feature access. */
+export const BASIC_SCOPE_LIST = ["openid", "email", "profile"] as const;
+
+/** The full set requested at sign-in: identity plus every feature scope. */
+export const SIGNIN_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].join(" ");
+
+/**
+ * Whether a granted scope string actually carries a scope.
+ *
+ * Asking for a scope is not the same as getting it: Google's consent screen
+ * lets people untick individual boxes, and the token that comes back lists only
+ * what they allowed. Reading what was granted — rather than assuming the
+ * request succeeded — is what stops the assistant claiming it can send mail for
+ * someone who declined that box.
+ */
+export function hasGoogleScope(granted: string | undefined, scope: string): boolean {
+  if (!granted) return false;
+  return granted.split(/\s+/).includes(scope);
+}
+
+export interface GoogleCapabilities {
+  gmailRead: boolean;
+  gmailSend: boolean;
+  calendarRead: boolean;
+  chatRead: boolean;
+}
+
+/** What a granted scope string actually permits. */
+export function googleCapabilities(granted: string | undefined): GoogleCapabilities {
+  return {
+    gmailRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/gmail.readonly"),
+    gmailSend: hasGoogleScope(granted, "https://www.googleapis.com/auth/gmail.send"),
+    calendarRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.readonly"),
+    chatRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/chat.messages.readonly"),
+  };
+}
+
+/** True when a grant is missing any feature scope, so a re-consent would help. */
+export function needsReconsent(granted: string | undefined): boolean {
+  return INGESTION_SCOPE_LIST.some((s) => !hasGoogleScope(granted, s));
+}
 
 export function appBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
