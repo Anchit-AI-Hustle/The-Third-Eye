@@ -310,7 +310,9 @@ async function runTool(
   // Tools published by a configured MCP server. Namespaced on discovery, so
   // this can never intercept a built-in name.
   if (isMcpTool(name)) {
-    return { result: await callMcpTool(name, input) };
+    // Identity is needed by first-party servers (the in-repo Google one acts on
+    // this user's own grant); the client withholds it from third-party servers.
+    return { result: await callMcpTool(name, input, ctx.email) };
   }
   switch (name) {
     // ─── PLATFORM TOOLS ────────────────────────────────────────────────────
@@ -1669,7 +1671,7 @@ export async function POST(req: NextRequest) {
             const toolResults = await Promise.all(
               functionCalls.map(async (fc) => {
                 // Confirm-then-act: never run world-changing actions silently.
-                if (isSensitive(fc.name)) {
+                if (isSensitive(fc.name, fc.args)) {
                   const summary = summarizeAction(fc.name, fc.args);
                   // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
                   // client opens on the confirming tap; email is server-executed

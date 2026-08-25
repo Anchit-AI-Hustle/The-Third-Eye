@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   } catch { /* not connected — reported below */ }
 
   const { tool, args } = (await req.json().catch(() => ({}))) as { tool?: string; args?: any };
-  if (!tool || !isSensitive(tool)) return json({ error: "Unknown or non-confirmable action" }, 400);
+  if (!tool || !isSensitive(tool, args)) return json({ error: "Unknown or non-confirmable action" }, 400);
 
   // Mirror the chat route's premium gate so the paywall can't be bypassed via the
   // confirmation endpoint when enforcement is on.
@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
   }
 
   switch (tool) {
+    // `communicate` with action='email' is what the model actually calls;
+    // `send_email` is the older intent label. Both land here.
+    case "communicate":
     case "send_email": {
       if (!accessToken) return json({ ok: false, result: "Gmail isn't connected. Signing in with Google normally grants this — sign out and back in, or use Settings → Connections → \"Connect Google\" and allow Gmail access." });
       const sent = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
@@ -47,7 +50,7 @@ export async function POST(req: NextRequest) {
       // — run it against the configured server. Without this branch every
       // connector write would be proposed and then dead-end as "unsupported".
       if (isMcpTool(tool)) {
-        const result = await callMcpTool(tool, args ?? {});
+        const result = await callMcpTool(tool, args ?? {}, email);
         // callMcpTool reports transport and tool errors as text rather than
         // throwing, so the wording is the server's own. Surface it as-is rather
         // than claiming a success we cannot verify.

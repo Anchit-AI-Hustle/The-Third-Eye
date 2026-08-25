@@ -24,15 +24,32 @@ export const SENSITIVE_ACTIONS = new Set<string>([
  * silently grants the model the ability to send, buy or delete on the user's
  * behalf. See lib/mcp/permissions.ts.
  */
-export function isSensitive(tool: string): boolean {
+/**
+ * Some tools are only world-changing for certain arguments. `communicate` is
+ * the important one: with action='email' it sends real mail through Gmail, but
+ * with 'whatsapp'/'sms'/'call' it only builds a deep link the user taps.
+ *
+ * This mattered more than it looks. The names in SENSITIVE_ACTIONS above are
+ * intent labels, not declared tools — the model has no `send_email` tool to
+ * call, it calls `communicate`. So matching on the tool name alone let every
+ * real Gmail send through the confirmation gate untouched.
+ */
+function isSensitiveWithArgs(tool: string, args: any): boolean {
+  if (tool === "communicate") return (args?.action ?? "email") === "email";
+  return false;
+}
+
+export function isSensitive(tool: string, args?: any): boolean {
   if (SENSITIVE_ACTIONS.has(tool)) return true;
   if (isMcpTool(tool)) return isMcpWrite(tool);
-  return false;
+  return isSensitiveWithArgs(tool, args);
 }
 
 export function summarizeAction(tool: string, args: any): string {
   if (isMcpTool(tool)) return summarizeMcpAction(tool, args);
   switch (tool) {
+    case "communicate":
+      return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
     case "send_email":
       return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
     case "pay":
