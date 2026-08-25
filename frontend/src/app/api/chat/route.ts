@@ -22,6 +22,7 @@ import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
+import { normalizePrompt } from "@/lib/promptNormalizer";
 import { randomUUID } from "crypto";
 import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 
@@ -1200,6 +1201,8 @@ interface ChatRequest {
   agentId?: string;
   agentPersona?: string;
   mode?: string;
+  /** IANA zone from the device, e.g. "Asia/Kolkata". Used to resolve "tomorrow
+   *  at 7" into a real timestamp. Falls back to the edge-provided zone header. */
   timezone?: string;
 }
 
@@ -1577,6 +1580,34 @@ export async function POST(req: NextRequest) {
   const tools = mcpDeclarations.length
     ? [{ functionDeclarations: [...geminiTools[0].functionDeclarations, ...mcpDeclarations] }]
     : geminiTools;
+
+  // Normalize the raw turn before the agent sees it. `todayBlock` above gives
+  // the model the date and asks it to resolve relative dates itself; this goes
+  // further and resolves them deterministically, so "tomorrow at 7" arrives as
+  // a real ISO timestamp instead of something the model has to compute. It also
+  // enumerates every intent in a compound request (the usual cause of a dropped
+  // second half) and hints at ids for pronouns. The user's own words still go
+  // through verbatim below — the brief only adds computed context, so a
+  // misfiring heuristic can't lose anything the user actually said.
+  //
+  // Capability flags cover only what we can read the connection state of here.
+  // Tools that already report their own status honestly (the health log, device
+  // control) are left out on purpose, so the brief can never contradict them.
+  const normalized = normalizePrompt({
+    message,
+    // Device zone is most accurate; Vercel's edge header is the fallback so
+    // this still works for clients that don't send one. UTC as a last resort.
+    timezone: timezone || req.headers.get("x-vercel-ip-timezone") || "UTC",
+    tasks,
+    capabilities: {
+      gmailSend: !!accessToken,
+      gmailRead: !!accessToken,
+      calendar: !!accessToken,
+      reminders: !!getAdminSupabase(),
+      webSearch: !!process.env.SERPER_API_KEY,
+    },
+  });
+  systemInstruction += `\n\n${normalized.brief}`;
 
   const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools }) : null;
   const contents: Content[] = [
