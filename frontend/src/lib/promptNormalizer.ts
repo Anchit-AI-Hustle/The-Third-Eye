@@ -174,9 +174,21 @@ function addDays(w: Wall, days: number): Wall {
 
 // ─── Cleaning ────────────────────────────────────────────────────────────────
 
-const WAKE_PREFIX = /^(?:\s*(?:hey|ok|okay|yo|hi|hello)?\s*,?\s*jarvis\b[\s,.:!-]*)+/i;
-const LEADING_FILLER = /^(?:\s*(?:um+|uh+|erm+|hmm+|like|so|well|actually|basically)\b[\s,]*)+/i;
-const TRAILING_POLITE = /[\s,]*\b(?:please|pls|thanks|thank you|thx)\b[\s.!]*$/i;
+// Every pattern here runs against raw request input, so all of them are written
+// to backtrack linearly: no quantifier nested inside another, and no adjacent
+// quantifiers whose character classes overlap. Repetition that used to come
+// from a `(...)+` wrapper is done with a bounded loop below instead — that keeps
+// the behaviour ("umm so add a task") without the quadratic blowup a nested
+// quantifier gives on adversarial input like 30k tab characters.
+//
+// These all run after whitespace has been collapsed, so a single `[\s,]` is
+// enough where a run would otherwise be needed.
+const WAKE_PREFIX = /^(?:(?:hey|ok|okay|yo|hi|hello),? )?jarvis\b[\s,.:!?-]*/i;
+const LEADING_FILLER = /^(?:um+|uh+|erm+|hmm+|like|so|well|actually|basically)(?:[\s,]+|$)/i;
+const TRAILING_POLITE = /[\s,](?:please|pls|thanks|thank you|thx)[\s.!?]*$/i;
+
+/** How many filler words to peel off the front before giving up. */
+const MAX_FILLER_STRIPS = 4;
 
 /**
  * Strip the wake word, leading filler and trailing pleasantry that STT hands us.
@@ -187,7 +199,12 @@ export function cleanMessage(raw: string): string {
   let out = raw.replace(/\s+/g, " ").trim();
   const before = out;
   out = out.replace(WAKE_PREFIX, "");
-  out = out.replace(LEADING_FILLER, "");
+  // Bounded instead of a `+` in the pattern: same result, linear worst case.
+  for (let i = 0; i < MAX_FILLER_STRIPS; i++) {
+    const next = out.replace(LEADING_FILLER, "");
+    if (next === out) break;
+    out = next;
+  }
   out = out.replace(TRAILING_POLITE, "");
   out = out.trim();
   return out.length > 0 ? out : before;
@@ -508,7 +525,11 @@ function findMissing(text: string, intents: DetectedIntent[], hasWhen: boolean):
   if (has("manage_reminders", "set") && !hasWhen) {
     missing.push("manage_reminders(set) needs fire_at — the message gives no resolvable time");
   }
-  if (has("communicate", "email") && !/\S+@\S+\.\S+/.test(text) && !/\b(?:to|email)\s+[A-Z][a-z]+/.test(text)) {
+  // `@` and `.` are excluded from the surrounding classes so there is exactly
+  // one way to match any candidate — `\S+@\S+\.\S+` is the textbook quadratic
+  // case and this runs on request input.
+  const looksLikeEmail = /[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+/.test(text);
+  if (has("communicate", "email") && !looksLikeEmail && !/\b(?:to|email)\s+[A-Z][a-z]+/.test(text)) {
     missing.push("communicate(email) needs a recipient — no address or named contact in the message");
   }
   if (has("pay") && !/(?:₹|\brs\.?\b|\brupees\b)?\s*\d+/.test(text)) {
@@ -521,6 +542,21 @@ function findMissing(text: string, intents: DetectedIntent[], hasWhen: boolean):
 }
 
 // ─── Assembly ────────────────────────────────────────────────────────────────
+
+/**
+ * Detection only ever reads the first this-many characters. Commands live at the
+ * start of a turn; anything longer is pasted material to summarise, where the
+ * instruction is up front anyway. Keeps the pattern sweep bounded no matter how
+ * large the request body is, and stops a future pattern reintroducing a stall.
+ */
+const SCAN_LIMIT = 8_000;
+
+/** Longest excerpt the brief will echo back, so it can't bloat the prompt. */
+const ECHO_LIMIT = 300;
+
+function excerpt(s: string): string {
+  return s.length <= ECHO_LIMIT ? s : `${s.slice(0, ECHO_LIMIT)}… (${s.length} chars total)`;
+}
 
 export function normalizePrompt(input: NormalizeInput): NormalizedPrompt {
   const timezone = input.timezone && input.timezone.length > 0 ? input.timezone : "UTC";
@@ -535,16 +571,19 @@ export function normalizePrompt(input: NormalizeInput): NormalizedPrompt {
     weekday: anchorWall.weekday,
   };
 
-  const times = resolveTimes(cleaned, now, timezone);
-  const recurrence = findRecurrence(cleaned);
-  const { intents, unavailable } = detectIntents(cleaned, input.capabilities);
-  const referents = findReferents(cleaned, input.tasks);
-  const missing = findMissing(cleaned, intents, times.length > 0 || !!recurrence);
+  // Bound what the pattern sweep sees; `cleaned` itself stays whole.
+  const scan = cleaned.length > SCAN_LIMIT ? cleaned.slice(0, SCAN_LIMIT) : cleaned;
+
+  const times = resolveTimes(scan, now, timezone);
+  const recurrence = findRecurrence(scan);
+  const { intents, unavailable } = detectIntents(scan, input.capabilities);
+  const referents = findReferents(scan, input.tasks);
+  const missing = findMissing(scan, intents, times.length > 0 || !!recurrence);
 
   const lines: string[] = [];
   lines.push(`Now: ${anchor.iso} (${timezone}, ${anchor.weekday})`);
   if (cleaned !== original.replace(/\s+/g, " ").trim()) {
-    lines.push(`Cleaned request (wake word / filler stripped): "${cleaned}"`);
+    lines.push(`Cleaned request (wake word / filler stripped): "${excerpt(cleaned)}"`);
   }
 
   if (times.length > 0) {

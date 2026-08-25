@@ -34,6 +34,64 @@ describe("cleanMessage", () => {
   });
 });
 
+// CodeQL flagged four polynomial-backtracking regexes here (this runs on raw
+// request input, so a stall is a real DoS). These pin the linear behaviour: the
+// pre-fix patterns took minutes on these strings, so a regression trips the
+// budget rather than merely getting slower.
+describe("resistance to adversarial input (ReDoS)", () => {
+  const BUDGET_MS = 1_000;
+
+  const attacks: Array<[string, string]> = [
+    ["tabs", "jarvis" + "\t".repeat(40_000)],
+    ["bangs", "add a task thanks" + "!".repeat(40_000)],
+    ["at-signs", "email " + "!@".repeat(20_000)],
+    ["spaces before a pleasantry", "add a task" + " ".repeat(40_000) + "please"],
+    ["filler run", "um ".repeat(20_000) + "add a task"],
+    ["commas", "jarvis" + ",".repeat(40_000)],
+    ["near-miss address", "email me at " + "a".repeat(40_000)],
+  ];
+
+  for (const [label, payload] of attacks) {
+    it(`cleans ${label} in linear time`, () => {
+      const started = Date.now();
+      cleanMessage(payload);
+      expect(Date.now() - started).toBeLessThan(BUDGET_MS);
+    });
+
+    it(`normalizes ${label} in linear time`, () => {
+      const started = Date.now();
+      normalizePrompt({ message: payload, timezone: IST, now: NOW, capabilities: { gmailSend: true } });
+      expect(Date.now() - started).toBeLessThan(BUDGET_MS);
+    });
+  }
+
+  it("caps the excerpt it echoes back into the prompt", () => {
+    const n = normalizePrompt({
+      message: `jarvis ${"the quick brown fox ".repeat(500)}`,
+      timezone: IST,
+      now: NOW,
+    });
+    // The wake word was stripped, so the brief echoes the cleaned text — but
+    // bounded, or a long paste would balloon the system instruction.
+    expect(n.brief).toContain("chars total)");
+    expect(n.brief.length).toBeLessThan(2_000);
+    expect(n.cleaned.length).toBeGreaterThan(2_000); // full value still intact
+  });
+
+  it("keeps the full message while only bounding what it scans", () => {
+    // The scan window is capped, but `cleaned` must stay whole — it is what the
+    // rest of the turn reasons about, and truncating it would silently drop
+    // the user's content.
+    const paste = "lorem ipsum ".repeat(5_000);
+    const n = normalizePrompt({ message: `remind me tomorrow at 7am: ${paste}`, timezone: IST, now: NOW });
+    expect(n.cleaned.length).toBeGreaterThan(50_000);
+    expect(n.cleaned.endsWith("lorem ipsum")).toBe(true);
+    // An instruction at the front is still resolved despite the cap.
+    expect(n.times[0].iso).toBe("2026-08-26T07:00:00+05:30");
+    expect(n.intents.map((i) => i.tool)).toContain("manage_reminders");
+  });
+});
+
 describe("isoInZone", () => {
   it("renders the instant in the target zone with its offset", () => {
     expect(isoInZone(NOW, IST)).toBe("2026-08-25T14:32:10+05:30");
