@@ -17,7 +17,7 @@ const ERRORS: Record<string, { title: string; detail: string }> = {
   AccessDenied: {
     title: "Google blocked the sign-in",
     detail:
-      "Either you dismissed the consent screen, or the OAuth consent screen is still in “Testing” and your account isn’t on the test-users list. Publish the app to production, or add the account as a test user in Google Cloud Console.",
+      "Either you dismissed the consent screen, or this account isn’t on the OAuth consent screen’s test-users list. Sign-in requests restricted Gmail scopes, so publishing the app is NOT enough on its own — until Google’s verification review completes, only listed test users can sign in. Add the account under OAuth consent screen → Test users in Google Cloud Console (docs/GOOGLE_OAUTH.md covers the review and the one-line rollback to identity-only scopes).",
   },
   OAuthSignin: {
     title: "Couldn’t start the Google sign-in",

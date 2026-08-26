@@ -87,6 +87,12 @@ export const authOptions: NextAuthOptions = {
           account.scope,
         );
         if (account.id_token) {
+          // Sign-in must not fail just because the backend is unreachable, so
+          // this stays non-fatal — but it is logged. It used to be swallowed by
+          // a bare `catch {}`, which hid that the backend was rejecting every
+          // one of these tokens (it decoded them HS256 with NEXTAUTH_SECRET,
+          // while Google signs them RS256), so `backendToken` was never set for
+          // anyone and nothing surfaced.
           try {
             const res = await fetch(`${BACKEND_URL}/api/v1/auth/session`, {
               method: "POST",
@@ -96,8 +102,16 @@ export const authOptions: NextAuthOptions = {
             if (res.ok) {
               const data = await res.json();
               token.backendToken = data.access_token;
+            } else {
+              const detail = await res.text().catch(() => "");
+              console.error(
+                `auth: backend session exchange failed (HTTP ${res.status}). ` +
+                  `Backend features will be unavailable. ${detail.slice(0, 500)}`,
+              );
             }
-          } catch {}
+          } catch (err) {
+            console.error("auth: backend session exchange unreachable:", err);
+          }
         }
         return token;
       }

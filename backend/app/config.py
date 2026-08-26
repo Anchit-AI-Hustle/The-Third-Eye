@@ -42,6 +42,13 @@ class Settings(BaseSettings):
 
     # NextAuth bridge
     nextauth_secret: str = Field(..., min_length=32)
+    # Audience a Google ID token must carry. The frontend posts
+    # `account.id_token` to /api/v1/auth/session, and such a token only means
+    # anything to us if Google minted it for *this* OAuth client — otherwise a
+    # token issued to any other Google app would authenticate here. Same value
+    # as the frontend's GOOGLE_CLIENT_ID. Empty disables Google-token exchange,
+    # which then rejects rather than trusting an unverifiable token.
+    google_client_id: str = ""
 
     # AI Providers
     google_ai_api_key: str = Field(..., min_length=1)

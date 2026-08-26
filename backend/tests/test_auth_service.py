@@ -292,7 +292,13 @@ async def test_session_exchange_rejects_an_invalid_token(client: AsyncClient):
     forged = jwt.encode({"email": "x@example.com"}, "wrong-secret", algorithm="HS256")
     response = await client.post("/api/v1/auth/session", json={"token": forged})
     assert response.status_code == 401
-    assert "Invalid NextAuth token" in response.json()["detail"]
+    # The endpoint now tries the token as a Google ID token first and falls back
+    # to NextAuth, reporting both refusals. Naming only one verifier is what let
+    # the Google path fail unnoticed for every user.
+    detail = response.json()["detail"]
+    assert "Token rejected" in detail
+    assert "As a Google ID token" in detail
+    assert "As a NextAuth token" in detail
 
 
 @pytest.mark.asyncio
