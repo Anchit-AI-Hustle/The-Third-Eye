@@ -64,6 +64,70 @@ def verify_nextauth_token(token: str) -> NextAuthSessionPayload:
     return NextAuthSessionPayload(**payload)
 
 
+# Google publishes the public keys for its ID tokens here. PyJWKClient caches
+# them and refetches when it sees an unknown key id, which is what Google's key
+# rotation looks like from our side.
+GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+
+# Google mints ID tokens with either spelling of the issuer; both are valid and
+# no other value is.
+GOOGLE_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
+
+_jwks_client: jwt.PyJWKClient | None = None
+
+
+def _google_jwks_client() -> jwt.PyJWKClient:
+    """Cached JWKS client. A separate function so tests can substitute keys."""
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = jwt.PyJWKClient(GOOGLE_CERTS_URL, cache_keys=True)
+    return _jwks_client
+
+
+def verify_google_id_token(token: str) -> NextAuthSessionPayload:
+    """
+    Validates an ID token issued by Google, applying the checks Google requires:
+    an RS256 signature against their published keys, `aud` equal to this OAuth
+    client id, `iss` one of the two accepted spellings, and an unexpired `exp`.
+
+    This exists because /api/v1/auth/session is posted `account.id_token`, which
+    Google signs RS256 with its own key — while verify_nextauth_token above
+    decodes HS256 with our shared secret. Those can never agree: PyJWT raises
+    InvalidAlgorithmError before it even inspects the signature, so the exchange
+    endpoint failed for every user and the frontend never obtained a backend
+    token. The NextAuth verifier is still correct for the Bearer tokens the API
+    middleware sees, so the two live side by side.
+
+    `email_verified` is required because users are looked up and created by
+    email: accepting an address Google has not confirmed would let someone
+    claim another person's account.
+    """
+    if not settings.google_client_id:
+        raise jwt.InvalidTokenError(
+            "Google token exchange is not configured (GOOGLE_CLIENT_ID unset on the backend)."
+        )
+
+    signing_key = _google_jwks_client().get_signing_key_from_jwt(token)
+    payload = jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=settings.google_client_id,
+        options={"require": ["exp", "iat", "sub", "aud", "iss"]},
+    )
+
+    issuer = payload.get("iss")
+    if issuer not in GOOGLE_ISSUERS:
+        raise jwt.InvalidIssuerError(f"Unexpected ID token issuer: {issuer!r}")
+
+    if not payload.get("email"):
+        raise jwt.InvalidTokenError("ID token carries no email claim.")
+    if payload.get("email_verified") is not True:
+        raise jwt.InvalidTokenError("Google has not verified this account's email address.")
+
+    return NextAuthSessionPayload(**payload)
+
+
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
