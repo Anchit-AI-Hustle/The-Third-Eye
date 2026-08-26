@@ -28,6 +28,18 @@ export interface McpServer {
   name: string;
   url: string;
   headers?: Record<string, string>;
+  /**
+   * Marks a server as first-party — one this deployment owns, such as the
+   * in-repo Google server at /api/mcp/google. Only these are told *which user*
+   * a call is for (`x-mcp-user`), because that server acts on the user's own
+   * stored Google grant and cannot work without knowing whose.
+   *
+   * Third-party servers never receive it. Broadcasting the signed-in user's
+   * email to every configured endpoint would leak identity to anyone the
+   * deployer points MCP_SERVERS at — a far worse trade than one connector not
+   * knowing who is asking.
+   */
+  internal?: boolean;
 }
 
 interface McpTool {
@@ -49,16 +61,24 @@ export function configuredServers(): McpServer[] {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (s): s is McpServer =>
-        !!s && typeof s.name === "string" && typeof s.url === "string" && /^https?:\/\//.test(s.url),
-    );
+    return parsed
+      .filter(
+        (s): s is McpServer =>
+          !!s && typeof s.name === "string" && typeof s.url === "string" && /^https?:\/\//.test(s.url),
+      )
+      .map((s) => ({ ...s, internal: s.internal === true }));
   } catch {
     return [];
   }
 }
 
-async function rpc(server: McpServer, method: string, params: unknown, timeoutMs: number): Promise<any> {
+async function rpc(
+  server: McpServer,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  userEmail?: string,
+): Promise<any> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
@@ -69,6 +89,8 @@ async function rpc(server: McpServer, method: string, params: unknown, timeoutMs
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
         ...(server.headers ?? {}),
+        // Identity goes to first-party servers only — see McpServer.internal.
+        ...(server.internal && userEmail ? { "x-mcp-user": userEmail } : {}),
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
     });
@@ -136,7 +158,7 @@ export async function mcpToolDeclarations(): Promise<
  * the tool dispatch hands back to the model; failures are returned as text
  * rather than thrown, so one bad tool call does not end the conversation.
  */
-export async function callMcpTool(qualified: string, args: unknown): Promise<string> {
+export async function callMcpTool(qualified: string, args: unknown, userEmail?: string): Promise<string> {
   const found = await discoverTools();
   const match = found.find(({ server, tool }) => qualifiedName(server.name, tool.name) === qualified);
   if (!match) return `No MCP tool named ${qualified} is available.`;
@@ -147,6 +169,7 @@ export async function callMcpTool(qualified: string, args: unknown): Promise<str
       "tools/call",
       { name: match.tool.name, arguments: args ?? {} },
       CALL_TIMEOUT_MS,
+      userEmail,
     );
     // MCP returns content blocks; the model only needs the text.
     const content = Array.isArray(result?.content) ? result.content : [];

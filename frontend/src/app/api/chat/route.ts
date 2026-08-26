@@ -9,7 +9,7 @@ import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
-import { getGoogleAccessToken } from "@/lib/googleToken";
+import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
@@ -22,6 +22,7 @@ import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
+import { normalizePrompt } from "@/lib/promptNormalizer";
 import { randomUUID } from "crypto";
 import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 
@@ -309,7 +310,9 @@ async function runTool(
   // Tools published by a configured MCP server. Namespaced on discovery, so
   // this can never intercept a built-in name.
   if (isMcpTool(name)) {
-    return { result: await callMcpTool(name, input) };
+    // Identity is needed by first-party servers (the in-repo Google one acts on
+    // this user's own grant); the client withholds it from third-party servers.
+    return { result: await callMcpTool(name, input, ctx.email) };
   }
   switch (name) {
     // ─── PLATFORM TOOLS ────────────────────────────────────────────────────
@@ -1200,6 +1203,8 @@ interface ChatRequest {
   agentId?: string;
   agentPersona?: string;
   mode?: string;
+  /** IANA zone from the device, e.g. "Asia/Kolkata". Used to resolve "tomorrow
+   *  at 7" into a real timestamp. Falls back to the edge-provided zone header. */
   timezone?: string;
 }
 
@@ -1465,11 +1470,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Use the connected Google token (gmail/calendar scopes) when available.
+  // Use the stored Google grant (gmail/calendar scopes) when available. Since
+  // sign-in now requests those scopes, this is normally present for anyone
+  // signed in with Google rather than something they had to connect.
+  let googleScope: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
-    if (connected?.accessToken) accessToken = connected.accessToken;
+    if (connected?.accessToken) {
+      accessToken = connected.accessToken;
+      googleScope = connected.scope;
+    }
   } catch { /* not connected — Google tools will say so */ }
+
+  // Holding a token is not the same as being allowed to use it: the consent
+  // screen lets people untick individual boxes. Report what was actually
+  // granted so the assistant offers to send mail only when it really can.
+  const google = googleCapabilities(googleScope);
 
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
@@ -1578,6 +1594,34 @@ export async function POST(req: NextRequest) {
     ? [{ functionDeclarations: [...geminiTools[0].functionDeclarations, ...mcpDeclarations] }]
     : geminiTools;
 
+  // Normalize the raw turn before the agent sees it. `todayBlock` above gives
+  // the model the date and asks it to resolve relative dates itself; this goes
+  // further and resolves them deterministically, so "tomorrow at 7" arrives as
+  // a real ISO timestamp instead of something the model has to compute. It also
+  // enumerates every intent in a compound request (the usual cause of a dropped
+  // second half) and hints at ids for pronouns. The user's own words still go
+  // through verbatim below — the brief only adds computed context, so a
+  // misfiring heuristic can't lose anything the user actually said.
+  //
+  // Capability flags cover only what we can read the connection state of here.
+  // Tools that already report their own status honestly (the health log, device
+  // control) are left out on purpose, so the brief can never contradict them.
+  const normalized = normalizePrompt({
+    message,
+    // Device zone is most accurate; Vercel's edge header is the fallback so
+    // this still works for clients that don't send one. UTC as a last resort.
+    timezone: timezone || req.headers.get("x-vercel-ip-timezone") || "UTC",
+    tasks,
+    capabilities: {
+      gmailSend: !!accessToken && google.gmailSend,
+      gmailRead: !!accessToken && google.gmailRead,
+      calendar: !!accessToken && google.calendarRead,
+      reminders: !!getAdminSupabase(),
+      webSearch: !!process.env.SERPER_API_KEY,
+    },
+  });
+  systemInstruction += `\n\n${normalized.brief}`;
+
   const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools }) : null;
   const contents: Content[] = [
     ...convertHistory(history),
@@ -1627,7 +1671,7 @@ export async function POST(req: NextRequest) {
             const toolResults = await Promise.all(
               functionCalls.map(async (fc) => {
                 // Confirm-then-act: never run world-changing actions silently.
-                if (isSensitive(fc.name)) {
+                if (isSensitive(fc.name, fc.args)) {
                   const summary = summarizeAction(fc.name, fc.args);
                   // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
                   // client opens on the confirming tap; email is server-executed

@@ -3,6 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
 import { resolveAuthSecret } from "@/lib/authSecret";
+import { SIGNIN_SCOPES } from "@/lib/googleToken";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
 
@@ -49,13 +50,23 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          // Basic sign-in only. Sensitive/restricted Google scopes
-          // (gmail.*, calendar.*) force OAuth app verification before
-          // non-test users can sign in, which blocks login. They are
-          // re-added alongside the Gmail/Chat ingestion feature, when
-          // restricted-scope verification is completed.
-          scope: ["openid", "email", "profile"].join(" "),
+          // Everything is asked for here, in one consent screen, so signing in
+          // with Google IS connecting Google — Gmail, Calendar and Chat work
+          // immediately afterwards with no second step for the user to find.
+          //
+          // The cost: gmail.readonly and gmail.send are *restricted* scopes, so
+          // until this OAuth client passes Google's verification review only
+          // accounts on the project's test-user list can finish signing in.
+          // That is a Google Cloud console state, not something code can change
+          // — see docs/GOOGLE_OAUTH.md for the review and the rollback.
+          scope: SIGNIN_SCOPES,
+          // offline + a forced consent are what actually yield a refresh token.
+          // Without prompt=consent Google omits it for anyone who authorized
+          // before, and the crons (reminders, Gmail scrape) can only act while
+          // the user is away if a refresh token was stored.
           access_type: "offline",
+          prompt: "consent",
+          include_granted_scopes: "true",
         },
       },
     }),
