@@ -1,27 +1,38 @@
-# Google OAuth verification — how to clear the "App functionality" rejection
+# Google OAuth verification — clearing the "App functionality" rejection
 
-The rejection is about **the demo video** and **giving the Trust & Safety team a way to test the OAuth consent flow** — not the app code. This doc has everything to submit.
+The rejection (last reviewed **Aug 20, 2026**) is about **the demo video** and **giving the Trust & Safety team a way to test the OAuth consent flow**. Four findings, none of them code:
 
-## The app + scopes under review
+1. The demo video does not show the same app that was submitted.
+2. The demo video does not show the OAuth consent flow.
+3. The demo video does not sufficiently demonstrate the app's functionality.
+4. Trust & Safety cannot reach the consent process without more information — **reply to their email**.
+
+> ### ⚠️ The consent flow moved. Re-read this before recording.
+>
+> A previous version of this doc said sign-in requests only `openid email profile`, and that the sensitive scopes come from a separate **Settings → Connections → Connect Google** step. **That is no longer true.** Sign-in now requests every scope in one consent screen (`SIGNIN_SCOPES` in `frontend/src/lib/googleToken.ts`).
+>
+> **The consent screen now appears immediately when you click "Continue with Google".** A video that goes looking for it under Settings shows the wrong flow and gets rejected again for the same reason. The Connections page still exists, but only as a repair path for someone who declined a scope.
+
+## The app + the scopes actually under review
+
 - **App:** The Third Eye — `https://the-third-eye.anchit-tandon.com`
-- **OAuth consent screen must show this exact app name + logo** (the video is rejected as "not the same app" when the registered name/logo/domain don't match what's on screen). In Google Cloud Console → **APIs & Services → OAuth consent screen**, confirm: App name = *The Third Eye*, the logo, **Application home page** = the URL above, **Privacy policy** = `…/privacy_policy`, **Terms** = `…/terms_of_service`, **Authorized domain** = `anchit-tandon.com`.
-- **Requested scopes and why (state these verbatim in the justification):**
-  | Scope | Why the app needs it |
-  |---|---|
-  | `gmail.readonly` | Scan recent emails to auto-extract action items into the user's Task Tracker. |
-  | `gmail.send` | Send an email **only** when the user explicitly confirms a drafted message in the assistant. |
-  | `calendar.readonly` | Show the user their upcoming events when they ask about their schedule. |
-  | `calendar.events` | Create a calendar event when the user asks the assistant to schedule one. |
-  | `chat.spaces.readonly`, `chat.messages.readonly` | Scan Google Chat messages to auto-extract action items into the Task Tracker. |
+- **Consent screen must match the live app.** In Google Cloud Console → **Google Auth Platform → Branding**, confirm App name = *The Third Eye*, the logo, **Application home page** = the URL above, **Privacy policy** = `…/privacy_policy`, **Terms** = `…/terms_of_service`, **Authorized domain** = `anchit-tandon.com`. Finding #1 is what a mismatch here looks like.
 
-## Where the consent flow lives (critical — the reviewer must test THIS)
-Sign-in (NextAuth) requests **only** `openid email profile` — no sensitive scopes. The sensitive/restricted scopes are requested by the **separate, opt-in "Connect Google" flow** at **`/api/connect/google`**, reachable from:
-- **Settings → Connections** ("Connect Gmail / Calendar / Chat"), and
-- the **Task Tracker** "Connect Gmail & Chat" banner.
+**Five scopes are requested. Not six.** Verified against `INGESTION_SCOPE_LIST`:
 
-The video and the reviewer must go through **that Connect flow** to see the consent screen with the sensitive scopes — not just the plain sign-in.
+| Scope | Justification (state verbatim) | Demonstrated by |
+|---|---|---|
+| `gmail.readonly` | Scan recent email to extract action items into the user's Task Tracker. | Open **Task Tracker** — ingest runs in the foreground and tasks appear. |
+| `gmail.send` | Send an email only when the user explicitly confirms a drafted message. | Ask the assistant to email someone → confirmation card → **Confirm**. |
+| `calendar.readonly` | Show the user their upcoming events when they ask about their schedule. | Ask "what's on my calendar this week". |
+| `chat.spaces.readonly` | List the user's Chat spaces so their messages can be scanned. | Task Tracker ingest (same run as Gmail). |
+| `chat.messages.readonly` | Scan Chat messages to extract action items into the Task Tracker. | Task Tracker ingest (same run as Gmail). |
 
-## 1) Reply to the Trust & Safety email (copy-paste, fill the brackets)
+> **`calendar.events` is NOT requested — do not list or demo it.** An earlier version of this doc listed it and told the reviewer that "schedule an event" creates a calendar entry. **It does not.** `manage_calendar(action:'add')` builds a `calendar.google.com` deep link that the user clicks; there is no Calendar API write anywhere in the codebase. The scope was deliberately dropped (see the comment in `googleToken.ts`) because an unused restricted scope is exactly what a reviewer flags. Claiming a capability the app does not have is worse than a rejection — it is a false statement to Trust & Safety.
+
+## 1) Reply to the Trust & Safety email
+
+This clears finding #4, and it blocks everything else — the reviewer cannot proceed at all without it. Fill the brackets.
 
 > Subject: Re: OAuth verification — The Third Eye — test instructions
 >
@@ -29,46 +40,57 @@ The video and the reviewer must go through **that Connect flow** to see the cons
 >
 > Thank you for the review. Here is how to reach and test the OAuth consent flow for **The Third Eye** (`https://the-third-eye.anchit-tandon.com`).
 >
-> **Test account (already allow-listed as a Test User):**
-> - Email: `[your-test-gmail@gmail.com]`
+> **Test account (already added under Test users):**
+> - Email: `[test-account@gmail.com]`
 > - Password: `[password]`
-> - This account has 2-Step Verification **disabled** and a few sample emails/Chat messages so the functionality is visible.
+> - 2-Step Verification is **disabled** on this account, and it holds sample emails and Google Chat messages so the functionality is visible.
 >
-> **Steps to reach the OAuth consent screen:**
-> 1. Open `https://the-third-eye.anchit-tandon.com` and click **Sign in with Google**; sign in with the test account (this step uses only `openid email profile`).
-> 2. In the left sidebar open **Settings → Connections** (or open **Task Tracker** and use the **"Connect Gmail & Chat"** banner).
-> 3. Click **Connect Gmail / Calendar / Chat**. This starts the OAuth flow at `/api/connect/google` and shows the Google **consent screen** listing the Gmail, Calendar, and Chat scopes. Click **Allow**.
-> 4. You are redirected back to the app; the Connections page now shows the account as connected.
+> **Reaching the consent screen — it is the first thing you see:**
+> 1. Open `https://the-third-eye.anchit-tandon.com` and click **Continue with Google**.
+> 2. Choose the test account. The **Google consent screen appears immediately**, listing all requested Gmail, Calendar and Chat scopes together. Click **Allow**.
+> 3. You land on the dashboard, already connected. There is no second connection step.
 >
-> **How each scope is exercised (for the functionality demonstration):**
-> - Gmail read → open **Task Tracker**; recent emails are scanned and action items appear as tasks.
-> - Gmail send → ask the assistant "email [x] about [y]"; it drafts the email and asks for confirmation, and only sends on **Confirm**.
-> - Calendar → ask the assistant "what's on my calendar"; and "schedule [event] tomorrow at 3pm" creates an event.
-> - Google Chat read → messages in the connected account's spaces are scanned into the Task Tracker.
+> **Exercising each scope:**
+> - `gmail.readonly`, `chat.spaces.readonly`, `chat.messages.readonly` → open **Task Tracker** in the sidebar. Recent email and Chat messages are scanned on open, and action items appear as tasks, each showing its source.
+> - `gmail.send` → open **Assistant** and type: *"email [recipient] saying the report is ready"*. The assistant drafts it and shows a confirmation card with the exact recipient, subject and body. Nothing is sent until **Confirm** is clicked.
+> - `calendar.readonly` → in **Assistant**, ask *"what's on my calendar this week"*. Upcoming events are listed.
 >
 > Please let me know if you need anything else.
 >
 > Thanks,
 > Anchit Tandon
 
-## 2) Demo video — shot list (screen recording, 2–4 min, no cuts through the consent step)
+## 2) Demo video — shot list
 
-Record on the **production URL** so the registered app name/logo appear. Cover, in one flow:
+Clears findings #1, #2 and #3. Record on the **production URL**, 2–4 minutes, **one continuous capture through the consent step** (a spliced consent screen is rejected).
 
-1. **Show the app is the submitted app** — the browser address bar on `the-third-eye.anchit-tandon.com`, the app name/logo on screen.
-2. **Sign in** with the test account (Google sign-in).
-3. **Trigger the OAuth consent flow** — Settings → Connections → **Connect Gmail/Calendar/Chat**. Show:
-   - the Google **account chooser**,
-   - the **consent screen** with the app name and the **full list of requested scopes** clearly visible,
-   - clicking **Allow**, and the **redirect back** to the app showing "connected".
-4. **Demonstrate functionality for each scope** (this is the part that was "insufficient"):
-   - Task Tracker showing **tasks auto-created from Gmail** (and Chat).
-   - Ask the assistant to **draft + send an email** → show the confirm step → sent.
-   - Ask **"what's on my calendar"** → events shown; **"schedule …"** → event created.
-5. Keep it a **single continuous capture** through the consent step (reviewers reject edited/spliced consent screens).
+**Record signed out, in a fresh profile or incognito window.** If you are already signed in you never see the consent screen — which is finding #2.
 
-## 3) Console checklist before resubmitting
-- OAuth consent screen: app name/logo/home/privacy/terms/authorized-domain all match the live app (see top).
-- **Test users:** add the test account under **OAuth consent screen → Test users** (and the reviewer's address if they provide one).
-- All six scopes listed above are added under **Data access** with the justifications.
-- Re-upload the new video, reply to the T&S email with the instructions above, then **Resubmit for verification**.
+1. **Prove it is the submitted app** — address bar showing `the-third-eye.anchit-tandon.com`, app name and logo on screen. Hold for a beat.
+2. **Click "Continue with Google"** → account chooser → **the consent screen**. Let the full scope list be readable; scroll it if it is clipped. Click **Allow**. Do not cut anywhere in this sequence.
+3. **Land on the dashboard**, signed in.
+4. **Gmail + Chat read** — open **Task Tracker**. Show tasks extracted from email and Chat, pointing out the source on a task.
+5. **Gmail send** — open **Assistant**, ask it to email someone. Show the confirmation card, click **Confirm**, then show the message in the test account's Gmail **Sent** folder. That last shot is what makes the send undeniable.
+6. **Calendar read** — ask *"what's on my calendar this week"* and show the events returned.
+
+Do **not** demonstrate creating a calendar event. See the note above.
+
+## 3) Pre-flight before you record
+
+Each of these has a live failure mode that would ruin the take or cause another rejection.
+
+- **The test account is under *Test users*.** Sign-in requests restricted scopes, so a non-test account gets `AccessDenied` **at login** — you would never reach the consent screen.
+- **`GEMINI_API_KEY` is set and has quota.** Check `https://the-third-eye.anchit-tandon.com/api/health` → `providers.gemini` must be `true`. If Gemini fails, the assistant drops into degraded mode and answers *"Live actions are temporarily unavailable"* — on camera, in the middle of the `gmail.send` demo.
+- **`GOOGLE_CLIENT_ID` is set on the backend**, or the backend session exchange fails.
+- **Ingest cooldown is 60s** (`/api/ingest/run`). Opening Task Tracker repeatedly while rehearsing can return `skipped: cooldown` and show no new tasks. Wait a minute between takes.
+- **Sample data exists** in the test account — a few emails and Chat messages that clearly contain action items, so step 4 has something to show.
+- **`commit_short`** from `/api/health` matches the build you expect to be live.
+
+## 4) Console checklist, then resubmit
+
+- Branding: name, logo, home page, privacy policy, terms, authorized domain all match the live app.
+- **Test users:** the test account, plus any address Trust & Safety gives you.
+- **Data access:** exactly the five scopes above, each with its justification. Remove `calendar.events` if it is still listed.
+- Upload the new video, **reply to the Trust & Safety email**, then **Resubmit for verification**.
+
+Restricted-scope review also requires a **CASA security assessment** through a Google-approved assessor — budget several weeks and a recurring fee. Until it clears, only test users can sign in; `docs/GOOGLE_OAUTH.md` carries the one-line rollback to identity-only scopes if you need open sign-in sooner.
