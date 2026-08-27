@@ -1719,10 +1719,77 @@ export async function POST(req: NextRequest) {
         controller.close();
       } catch (err) {
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
-        // Fall back to the multi-provider cascade for a plain-text answer so the
-        // assistant stays usable instead of erroring. Tools are unavailable on
+        // Tier 2: try a tool-capable fallback (Groq/Cerebras/Mistral all speak
+        // OpenAI-style function calling) so live actions — send an email, add
+        // a task, open an app — keep working instead of going dead for as
+        // long as Gemini stays rate-limited. Only if every one of those is
+        // also unavailable does this drop to the tools-less text cascade below.
+        let tier2Handled = false;
+        try {
+          const { toolCallCascade, geminiToolsToOpenAI } = await import("@/lib/llmCascade");
+          const openAiTools = geminiToolsToOpenAI(tools[0].functionDeclarations);
+          const parseArgs = (raw: string): any => { try { return JSON.parse(raw || "{}"); } catch { return {}; } };
+          type ToolMsg = import("@/lib/llmCascade").OpenAIChatMessage;
+          const toolMessages: ToolMsg[] = [
+            { role: "system", content: systemInstruction },
+            ...history
+              .map((h): ToolMsg => ({
+                role: h.role === "assistant" ? "assistant" : "user",
+                content: typeof h.content === "string" ? h.content : "",
+              }))
+              .filter((m) => m.content),
+            { role: "user", content: message },
+          ];
+
+          let loopGuard2 = 0;
+          let usedProvider = "";
+          let usedModel = "";
+          while (loopGuard2++ < 8) {
+            const out = await toolCallCascade({ messages: toolMessages, tools: openAiTools, temperature: 0.6, maxTokens: 1500 });
+            usedProvider = out.provider;
+            usedModel = out.model;
+
+            if (out.tool_calls && out.tool_calls.length > 0) {
+              toolMessages.push({ role: "assistant", content: out.content, tool_calls: out.tool_calls });
+              for (const tc of out.tool_calls) send("tool", { name: tc.function.name, input: parseArgs(tc.function.arguments) });
+
+              const results = await Promise.all(out.tool_calls.map(async (tc) => {
+                const args = parseArgs(tc.function.arguments);
+                if (isSensitive(tc.function.name)) {
+                  const summary = summarizeAction(tc.function.name, args);
+                  const intent = resolveIntent(tc.function.name, args);
+                  send("confirm", { id: crypto.randomUUID(), tool: tc.function.name, args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });
+                  return { id: tc.id, result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
+                }
+                const tr = await runTool(tc.function.name, args, ctx);
+                if (tr.sideEffect) {
+                  if (tr.sideEffect.type === "batch" && Array.isArray(tr.sideEffect.data)) sideEffects.push(...tr.sideEffect.data);
+                  else sideEffects.push(tr.sideEffect);
+                }
+                return { id: tc.id, result: tr.result };
+              }));
+              for (const r of results) toolMessages.push({ role: "tool", tool_call_id: r.id, content: r.result });
+              continue;
+            }
+
+            if (out.content) send("text", { text: out.content });
+            await saveMemory(email, memory, memoryStore);
+            send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects });
+            if (email && out.content) void rememberExchange(email, message, out.content).catch(() => {});
+            break;
+          }
+          tier2Handled = true;
+          controller.close();
+        } catch {
+          // Tier 2 also unavailable (no Groq/Cerebras/Mistral key, or all
+          // rate-limited too) — fall through to tier 3 below.
+        }
+        if (tier2Handled) return;
+
+        // Tier 3: the multi-provider cascade for a plain-text answer so the
+        // assistant stays at least conversational. Tools are unavailable on
         // this path (it's a text completion), and it needs at least one other
-        // provider key (e.g. GROQ_API_KEY / CEREBRAS_API_KEY) configured.
+        // provider key (e.g. OPENAI_API_KEY/ANTHROPIC_API_KEY) configured.
         try {
           const { llmCascade } = await import("@/lib/llmCascade");
           const fbMessages = [

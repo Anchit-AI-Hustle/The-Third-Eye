@@ -412,6 +412,113 @@ export async function visionCascade(o: VisionCascadeOptions): Promise<VisionCasc
   throw new Error(`All vision providers failed (${errors.join(", ") || "no keys configured"}).`);
 }
 
+// ─── Tool-calling fallback cascade ────────────────────────────────────────
+// When the primary Gemini tool-calling path fails (most often a free-tier
+// 429), the plain-text llmCascade above can't perform any action — it has no
+// tools at all. That left live actions (send an email, add a task, open an
+// app) completely dead for as long as Gemini stayed rate-limited, even with
+// several other provider keys configured. Groq, Cerebras and Mistral all
+// speak the same OpenAI-compatible function-calling wire format, so this
+// gives the chat route a real, tool-capable fallback to try before it gives
+// up and degrades to text-only mode.
+export interface OpenAIToolCall { id: string; type: "function"; function: { name: string; arguments: string } }
+export type OpenAIChatMessage =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: OpenAIToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+export interface ToolCallCascadeOptions {
+  messages: OpenAIChatMessage[];
+  tools: any[];
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+}
+export interface ToolCallCascadeResult {
+  content: string | null;
+  tool_calls?: OpenAIToolCall[];
+  provider: string;
+  model: string;
+}
+
+async function callOpenAICompatibleTools(base: string, key: string, model: string, opts: ToolCallCascadeOptions) {
+  const { signal, clear } = withTimeout(opts.timeoutMs ?? 30_000);
+  try {
+    const r = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        messages: opts.messages,
+        tools: opts.tools,
+        tool_choice: "auto",
+        max_tokens: opts.maxTokens ?? 2000,
+        temperature: opts.temperature ?? 0.7,
+      }),
+      signal,
+    });
+    if (!r.ok) {
+      const err = await r.text().catch(() => "");
+      return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) };
+    }
+    const data = await r.json();
+    const msg = data.choices?.[0]?.message ?? {};
+    return { ok: true as const, content: (msg.content as string | null) ?? null, tool_calls: msg.tool_calls as OpenAIToolCall[] | undefined, model };
+  } catch (e) {
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+  } finally { clear(); }
+}
+
+// Only providers verified to support tool calling on their free-tier models —
+// deliberately smaller than the full text-only cascade order above.
+const TOOL_CAPABLE_ORDER: { provider: "groq" | "cerebras" | "mistral"; base: string; model: string }[] = [
+  { provider: "groq", base: GROQ_BASE, model: "llama-3.3-70b-versatile" },
+  { provider: "cerebras", base: CEREBRAS_BASE, model: "llama-3.3-70b" },
+  { provider: "mistral", base: MISTRAL_BASE, model: "mistral-small-latest" },
+];
+
+export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
+  const keys = loadKeys();
+  const byProvider: Record<string, string> = { groq: keys.groq, cerebras: keys.cerebras, mistral: keys.mistral };
+  const attempts: string[] = [];
+  for (const { provider, base, model } of TOOL_CAPABLE_ORDER) {
+    const key = byProvider[provider];
+    if (!key) { attempts.push(`${provider}:no key`); continue; }
+    if (inCooldown(provider)) { attempts.push(`${provider}:cooling down`); continue; }
+    const res = await callOpenAICompatibleTools(base, key, model, opts);
+    if (res.ok) return { content: res.content, tool_calls: res.tool_calls, provider, model };
+    attempts.push(`${provider}:${res.status}`);
+    if (res.quota) startCooldown(provider);
+  }
+  throw new Error(`All tool-capable fallback providers failed. Attempts: ${attempts.join(", ") || "no keys configured"}`);
+}
+
+// Gemini function declarations use uppercase JSON-schema type names (OBJECT,
+// STRING, ...); OpenAI-compatible tool schemas need them lowercase. Recurses
+// into nested `properties`/`items` so nested object/array parameters convert
+// too.
+export function geminiToolsToOpenAI(
+  functionDeclarations: { name: string; description?: string; parameters?: any }[],
+): any[] {
+  const lowerTypes = (schema: any): any => {
+    if (!schema || typeof schema !== "object") return schema;
+    if (Array.isArray(schema)) return schema.map(lowerTypes);
+    const out: any = {};
+    for (const [k, v] of Object.entries(schema)) {
+      out[k] = k === "type" && typeof v === "string" ? v.toLowerCase() : lowerTypes(v);
+    }
+    return out;
+  };
+  return functionDeclarations.map((fd) => ({
+    type: "function",
+    function: {
+      name: fd.name,
+      description: fd.description,
+      parameters: lowerTypes(fd.parameters ?? { type: "OBJECT", properties: {} }),
+    },
+  }));
+}
+
 // ─── Transcription cascade (audio → text) ────────────────────────────────
 // Groq Whisper (free, fast) → OpenAI Whisper. Both are OpenAI-compatible
 // multipart endpoints, so the same request shape works for each.
