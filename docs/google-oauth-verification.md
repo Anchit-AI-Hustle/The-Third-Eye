@@ -64,10 +64,21 @@ This clears finding #4, and it blocks everything else — the reviewer cannot pr
 
 Clears findings #1, #2 and #3. Record on the **production URL**, 2–4 minutes, **one continuous capture through the consent step** (a spliced consent screen is rejected).
 
+**Where it goes: YouTube, visibility Unlisted.** Google takes a link, not a file — you paste the URL into the verification form. Do **not** commit the recording to this repository: GitHub rejects files over 100 MB, there is no Git LFS configured here, and a binary that size would live in the history permanently (the whole repo is currently ~8 MB).
+
 **Record signed out, in a fresh profile or incognito window.** If you are already signed in you never see the consent screen — which is finding #2.
 
+**The whole browser window must be in frame, address bar included** — see step 2. Record the full screen or a maximized window; do not crop to the page content.
+
+**Narrate it, in English.** Voice-over or on-screen callouts pointing at each requirement as it appears. Google explicitly says this speeds the review, and the reviewer is matching your footage against a checklist.
+
 1. **Prove it is the submitted app** — address bar showing `the-third-eye.anchit-tandon.com`, app name and logo on screen. Hold for a beat.
-2. **Click "Continue with Google"** → account chooser → **the consent screen**. Let the full scope list be readable; scroll it if it is clipped. Click **Allow**. Do not cut anywhere in this sequence.
+2. **Click "Continue with Google"** → account chooser → **the consent screen**. Three things must be legible here, and this is the shot the review turns on:
+   - the **app name** on the consent screen,
+   - the **full scope list** — scroll it if it is clipped,
+   - **the browser address bar, including the `client_id=…` parameter**. Google requires the OAuth client ID to be visible in the URL of the consent screen, which is how they tie the recording to the client under review. A cropped or narrow window hides it and fails the check.
+
+   Then click **Allow**. Do not cut anywhere in this sequence.
 3. **Land on the dashboard**, signed in.
 4. **Gmail + Chat read** — open **Task Tracker**. Show tasks extracted from email and Chat, pointing out the source on a task.
 5. **Gmail send** — open **Assistant**, ask it to email someone. Show the confirmation card, click **Confirm**, then show the message in the test account's Gmail **Sent** folder. That last shot is what makes the send undeniable.

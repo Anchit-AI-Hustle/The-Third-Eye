@@ -5,7 +5,17 @@ import { encrypt } from "@/lib/crypto";
 import { resolveAuthSecret } from "@/lib/authSecret";
 import { SIGNIN_SCOPES } from "@/lib/googleToken";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
+/**
+ * The FastAPI backend, when one is reachable.
+ *
+ * Deliberately no default. The old fallback was `http://backend:8000` — a
+ * docker-compose service name that resolves only inside that network. On Vercel
+ * it resolves nowhere, so every single sign-in fired a doomed request and paid
+ * the connection failure before finishing. docker-compose sets BACKEND_URL
+ * explicitly, so treating "unset" as "no backend" keeps local development
+ * working and makes the hosted deployment stop calling into the void.
+ */
+const BACKEND_URL = process.env.BACKEND_URL?.trim();
 
 async function persistRefreshToken(email: string | undefined, refreshToken: string | undefined, scope: string | undefined) {
   if (!email || !refreshToken) return;
@@ -86,7 +96,12 @@ export const authOptions: NextAuthOptions = {
           account.refresh_token,
           account.scope,
         );
-        if (account.id_token) {
+        // No BACKEND_URL means no backend is deployed for this environment, so
+        // there is nothing to exchange the token with. Skipping keeps sign-in
+        // off a request that can only fail, and keeps the log honest: an error
+        // per login for an absent optional service is noise that buries real
+        // failures.
+        if (account.id_token && BACKEND_URL) {
           // Sign-in must not fail just because the backend is unreachable, so
           // this stays non-fatal — but it is logged. It used to be swallowed by
           // a bare `catch {}`, which hid that the backend was rejecting every
