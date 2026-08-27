@@ -37,6 +37,15 @@ export async function POST(req: NextRequest) {
     // `send_email` is the older intent label. Both land here.
     case "communicate":
     case "send_email": {
+      // Sending mail was premium-gated inside runTool's `communicate` case. Now
+      // that the email action is confirmed first, it never reaches runTool — so
+      // that check has to live here or the paywall is bypassed whenever
+      // ENFORCE_PREMIUM is on. Gating on the action rather than adding
+      // `communicate` to PREMIUM_TOOLS keeps whatsapp/sms/call/read_emails free,
+      // which is what they were.
+      if (premiumEnforced() && (await getTier(email)) !== "premium") {
+        return json({ ok: false, result: "Sending email needs JARVIS Premium. Upgrade in Settings → Upgrade." });
+      }
       if (!accessToken) return json({ ok: false, result: "Gmail isn't connected. Signing in with Google normally grants this — sign out and back in, or use Settings → Connections → \"Connect Google\" and allow Gmail access." });
       const sent = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
       if (sent.ok) return json({ ok: true, result: `Email sent to ${args?.to}.` });
