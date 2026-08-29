@@ -34,6 +34,9 @@ const ENTITIES: Record<string, EntityCfg> = {
   knowledge_docs: { table: "knowledge_docs", order: [{ col: "created_at", asc: false }] },
   expenses: { table: "expenses", order: [{ col: "spent_on", asc: false }, { col: "created_at", asc: false }] },
   music_tracks: { table: "music_tracks", order: [{ col: "created_at", asc: false }] },
+  // Pause/resume/delete for automations (lib/automations.ts) and plain reminders —
+  // listing with joined last-run status is server-computed at /api/automations.
+  reminders: { table: "reminders", order: [{ col: "fire_at", asc: true }] },
   // ── Job Agent (all user-owned; RLS-backed) ──
   job_agent_profiles: { table: "job_agent_profiles", order: [{ col: "updated_at", asc: false }] },
   career_preferences: { table: "career_preferences", order: [{ col: "updated_at", asc: false }] },

@@ -58,7 +58,7 @@ create table if not exists reminders (
   fire_at timestamptz not null,
   recurrence text,               -- null | 'daily' | 'weekly' | 'monthly'
   channel text not null default 'email', -- 'email' | 'push'
-  status text not null default 'pending', -- 'pending' | 'sent' | 'canceled'
+  status text not null default 'pending', -- 'pending' | 'paused' | 'sent' | 'canceled'
   created_at timestamptz not null default now(),
   sent_at timestamptz
 );

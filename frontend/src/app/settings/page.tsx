@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 import { ConnectionsCard } from "@/components/settings/ConnectionsCard";
 import { ConversationSourcesCard } from "@/components/settings/ConversationSourcesCard";
+import { AutomationsCard } from "@/components/settings/AutomationsCard";
 import { PermissionsCard } from "@/components/settings/PermissionsCard";
 
 export const metadata = { title: "Settings — The Third Eye" };
@@ -21,6 +22,7 @@ export default async function SettingsPage() {
       <SettingsClient user={session?.user ?? null} />
       <ConnectionsCard />
       <ConversationSourcesCard />
+      <AutomationsCard />
       <PermissionsCard />
     </div>
   );
