@@ -391,7 +391,7 @@ export const geminiTools = [
       },
       {
         name: "deep_research",
-        description: "Multi-step research: search web, read sources, synthesize findings, deliver comprehensive report with citations. Use for competitive analysis, market research, tech comparisons.",
+        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons — not for a simple factual lookup, use web_search for that.",
         parameters: {
           type: "OBJECT",
           properties: {

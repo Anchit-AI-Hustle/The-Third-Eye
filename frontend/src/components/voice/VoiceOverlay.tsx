@@ -17,6 +17,7 @@ import { useAgentConfirm, classifyVoiceConfirm, type PendingAction } from "@/hoo
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { ActionCard } from "@/components/assistant/ActionCard";
+import { toolLabel } from "@/lib/toolLabels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -41,6 +42,7 @@ export function VoiceOverlay() {
   const [lastQuery, setLastQuery] = useState("");
   const [response, setResponse] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; content: string; size: number }>>([]);
 
@@ -259,6 +261,7 @@ export function VoiceOverlay() {
       setLastQuery(msg);
       setResponse("");
       setLiveBubble(null);
+      setActiveTool(null);
       setExpanded(true);
       setIsStreaming(true);
       abortRef.current = new AbortController();
@@ -315,6 +318,8 @@ export function VoiceOverlay() {
                 if (eventType === "text" && parsed.text !== undefined) {
                   fullText += parsed.text;
                   setResponse(fullText);
+                } else if (eventType === "tool" && parsed.name) {
+                  setActiveTool(toolLabel(parsed.name, parsed.input));
                 } else if (eventType === "confirm" && parsed.tool) {
                   // Sensitive action needs explicit approval. Show the card and,
                   // hands-free, prompt the user to say "confirm" or "cancel".
@@ -328,8 +333,10 @@ export function VoiceOverlay() {
                   // and the user is waiting on a reply that never comes.
                   if (micOn || handsFreeRef.current) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
                 } else if (eventType === "error") {
+                  setActiveTool(null);
                   setResponse(`Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
+                  setActiveTool(null);
                   if (parsed.memory) memoryRef.current = parsed.memory;
                   historyRef.current = [
                     ...historyRef.current,
@@ -347,6 +354,7 @@ export function VoiceOverlay() {
         }
       } catch (err: any) {
         if (err?.name === "AbortError") return;
+        setActiveTool(null);
         setResponse(`Error: ${err?.message ?? "Unknown error"}`);
       } finally {
         setIsStreaming(false);
@@ -494,6 +502,19 @@ export function VoiceOverlay() {
                       Recognising…
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Live tool activity — what the agent is doing right now */}
+            {isStreaming && activeTool && !response && (
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/20 flex items-center justify-center flex-none mt-0.5">
+                  <Cpu size={9} className="text-[#4FC3F7]" />
+                </div>
+                <div className="flex-1 min-w-0 rounded-card px-3 py-2 bg-background-surface border border-border-default flex items-center gap-2 text-text-secondary text-[13px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse" />
+                  {activeTool}…
                 </div>
               </div>
             )}
