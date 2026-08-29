@@ -24,6 +24,10 @@ export const runtime = "nodejs";
 interface EntityCfg {
   table: string;
   order?: Array<{ col: string; asc?: boolean }>;
+  /** Blocks POST — for entities that must only ever be created through their own gated flow (e.g. entitlement-checked). */
+  noCreate?: boolean;
+  /** When set, PATCH may only touch these columns — for entities whose other columns are entitlement-sensitive. */
+  patchFields?: string[];
 }
 
 const ENTITIES: Record<string, EntityCfg> = {
@@ -34,6 +38,13 @@ const ENTITIES: Record<string, EntityCfg> = {
   knowledge_docs: { table: "knowledge_docs", order: [{ col: "created_at", asc: false }] },
   expenses: { table: "expenses", order: [{ col: "spent_on", asc: false }, { col: "created_at", asc: false }] },
   music_tracks: { table: "music_tracks", order: [{ col: "created_at", asc: false }] },
+  // Pause/resume/delete for automations (lib/automations.ts) and plain reminders —
+  // listing with joined last-run status is server-computed at /api/automations.
+  // Creation and any change to what fires (body/fire_at/recurrence) must go
+  // through the chat tool's set_reminder handler, which enforces the free-tier
+  // activeReminders cap and the Premium-only recurring gate — this route only
+  // exposes the pause/resume toggle those entitlement checks don't apply to.
+  reminders: { table: "reminders", order: [{ col: "fire_at", asc: true }], noCreate: true, patchFields: ["status"] },
   // ── Job Agent (all user-owned; RLS-backed) ──
   job_agent_profiles: { table: "job_agent_profiles", order: [{ col: "updated_at", asc: false }] },
   career_preferences: { table: "career_preferences", order: [{ col: "updated_at", asc: false }] },
@@ -95,6 +106,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ entity: 
   const params = await props.params;
   const c = await resolve(params.entity);
   if (!c.ok) return fail(c);
+  if (c.cfg.noCreate) return Response.json({ error: "Not creatable via this route" }, { status: 403 });
   let body: unknown;
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   const rows = Array.isArray(body) ? body : [body];
@@ -116,6 +128,9 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ entity:
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.id || !body.patch) return Response.json({ error: "id and patch required" }, { status: 400 });
   const { user_id: _drop, id: _dropId, ...patch } = body.patch;
+  if (c.cfg.patchFields && Object.keys(patch).some((k) => !c.cfg.patchFields!.includes(k))) {
+    return Response.json({ error: "Field not patchable via this route" }, { status: 403 });
+  }
   const { error } = await c.sb.from(c.cfg.table).update(patch).eq("id", body.id).eq("user_id", c.email);
   if (error) {
     console.error(`data PATCH ${c.cfg.table}:`, error.message);
