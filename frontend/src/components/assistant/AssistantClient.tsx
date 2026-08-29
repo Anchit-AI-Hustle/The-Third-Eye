@@ -24,6 +24,7 @@ import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
+import { toolLabel } from "@/lib/toolLabels";
 
 interface Message {
   id: string;
@@ -482,7 +483,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   m.id === assistantId ? { ...m, content: fullText, toolsUsed } : m
                 ));
               } else if (eventType === "tool" && parsed.name) {
-                toolsUsed.push(parsed.name);
+                toolsUsed.push(toolLabel(parsed.name, parsed.input));
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
                 ));
@@ -1050,8 +1051,9 @@ function MessageBubble({ message, session }: { message: Message; session: any })
         {message.toolsUsed && message.toolsUsed.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {message.toolsUsed.map((tool, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet">
-                <Zap size={9} /> {tool}
+              <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet">
+                <Zap size={9} className={message.streaming && i === message.toolsUsed!.length - 1 ? "animate-pulse" : undefined} />
+                {tool}{message.streaming && i === message.toolsUsed!.length - 1 ? "…" : ""}
               </span>
             ))}
           </div>
