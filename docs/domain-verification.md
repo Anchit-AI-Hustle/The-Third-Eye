@@ -8,6 +8,30 @@ emitted until you set the matching env var, so this is safe to deploy as-is.
 What remains can only be done by you, in the provider consoles + DNS zone for
 `anchit-tandon.com`. Do these once, then redeploy.
 
+## Current state — audited 2026-08-28 over DNS-over-HTTPS
+
+Queried live, so this is what the zone actually serves rather than what was
+intended:
+
+| Check | Result |
+|---|---|
+| `the-third-eye.anchit-tandon.com` | CNAME → `cname.vercel-dns.com` → `66.33.60.194`, `76.76.21.93` — correct Vercel setup, site returns HTTP 200 |
+| `anchit-tandon.com` (apex) | A → `64.29.17.1`, `64.29.17.65` (Vercel) |
+| Google Search Console | **Verified.** `google-site-verification=…` TXT present on the apex — the Domain-property method, which covers every subdomain. Nothing to deploy, and `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` is not needed. |
+| Meta domain verification | **Not done** — no `facebook-domain-verification` TXT, and no meta tag rendered on the live homepage. Only needed if you run Meta ads. |
+| Bing | **Not done** — no meta tag rendered. Optional. |
+| SPF | **Absent** |
+| DMARC | **Absent** |
+| MX | **Absent** — the domain receives no mail |
+
+**Nothing is broken.** The site resolves correctly and search verification is in
+place. What is missing is the anti-spoofing pair in section 4, plus the two
+optional verifications above.
+
+None of the `NEXT_PUBLIC_*_VERIFICATION` env vars are set in production, which
+is why no verification `<meta>` tag appears in the homepage source. That is
+expected — Google was verified by TXT instead.
+
 ## 1. Google Search Console (search verification)
 
 Property type **Domain** (covers all subdomains) is best:
@@ -41,16 +65,34 @@ HTML Meta Tag method → copy the `msvalidate.01` content value →
 
 ## 4. Email domain authentication (SPF / DKIM / DMARC)
 
-DNS-only, no code. From your email sender (Google Workspace / the cron mailer):
+DNS-only, no code.
 
-| Record | Host | Value (example) |
-|---|---|---|
-| SPF (TXT) | `@` | `v=spf1 include:_spf.google.com ~all` |
-| DKIM (TXT/CNAME) | provider selector, e.g. `google._domainkey` | issued by the provider |
-| DMARC (TXT) | `_dmarc` | `v=DMARC1; p=quarantine; rua=mailto:you@anchit-tandon.com` |
+> **This does not affect reminder or digest deliverability.** An earlier version
+> of this doc said SPF/DKIM here "stop your reminder and digest emails from
+> landing in spam". They don't. `sendGmail()` in `frontend/src/lib/google.ts`
+> sets no `From:` header, so Gmail's `messages/send` stamps the **authenticated
+> account** as the sender — and the token comes from the *user's own* stored
+> Google grant. Those mails leave as the user, through Google's servers,
+> authenticated by Gmail's SPF/DKIM/DMARC. Records on `anchit-tandon.com` have
+> no bearing on them.
 
-Add all three to the `anchit-tandon.com` DNS zone. SPF/DKIM stop your reminder
-and digest emails from landing in spam; DMARC ties them together.
+What these records are actually for here is **anti-spoofing**. The domain sends
+no mail of its own (no MX, no SPF — see the audit above), and a domain with
+neither SPF nor DMARC can be spoofed by anyone. The correct hardening for a
+non-sending domain is to say so explicitly:
+
+| Record | Host | Value | Why |
+|---|---|---|---|
+| SPF (TXT) | `@` | `v=spf1 -all` | "Nothing is authorised to send as this domain." |
+| DMARC (TXT) | `_dmarc` | `v=DMARC1; p=reject; rua=mailto:anchit.tandon@vahdam.com` | Reject anything claiming to be from here, and report it. |
+
+No DKIM record is needed while nothing sends from the domain.
+
+**If you later send mail from `@anchit-tandon.com`** — Google Workspace, a
+transactional provider, anything — `-all` will block it. Swap SPF to that
+provider's include (Workspace: `v=spf1 include:_spf.google.com ~all`), add the
+provider's DKIM selector, and relax DMARC to `p=quarantine` until you have
+confirmed the reports are clean.
 
 ## Env vars added
 
