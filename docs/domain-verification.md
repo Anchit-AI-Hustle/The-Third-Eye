@@ -38,7 +38,8 @@ Property type **Domain** (covers all subdomains) is best:
 
 1. Search Console → Add property → **Domain** → enter `anchit-tandon.com`.
 2. It gives a `google-site-verification=…` **TXT record**. Add it to the DNS
-   zone for `anchit-tandon.com` (GoDaddy → DNS → Add → TXT, host `@`).
+   zone for `anchit-tandon.com` (see **Where the zone lives** below — it is on
+   Vercel DNS, not the registrar's own panel).
 3. Click **Verify**. Done — nothing to deploy for the Domain method.
 
 Or property type **URL prefix** (`https://the-third-eye.anchit-tandon.com`):
@@ -80,6 +81,31 @@ What these records are actually for here is **anti-spoofing**. The domain sends
 no mail of its own (no MX, no SPF — see the audit above), and a domain with
 neither SPF nor DMARC can be spoofed by anyone. The correct hardening for a
 non-sending domain is to say so explicitly:
+
+### Where the zone lives
+
+`anchit-tandon.com` delegates to **`ns1.vercel-dns.com` / `ns2.vercel-dns.com`** —
+the zone is hosted by **Vercel DNS**, so records are added there and *not* in the
+registrar's DNS panel. An earlier version of this doc said "GoDaddy → DNS → Add →
+TXT", which is the wrong console: edits made there would not take effect while
+the nameservers point at Vercel.
+
+Dashboard: **Vercel → Domains → `anchit-tandon.com` → DNS Records**.
+
+Or from the CLI, which is exact and quotable — `'@'` means the domain itself:
+
+```bash
+# Nothing is authorised to send mail as this domain.
+vercel dns add anchit-tandon.com '@' TXT 'v=spf1 -all'
+
+# Reject anything that claims to be, and send the reports somewhere you read.
+vercel dns add anchit-tandon.com _dmarc TXT 'v=DMARC1; p=reject; rua=mailto:anchit.tandon@vahdam.com'
+
+vercel dns ls                 # confirm both landed
+vercel dns rm <record-id>     # undo, using the id from `ls`
+```
+
+Allow up to 24 hours for propagation, though Vercel DNS is usually minutes.
 
 | Record | Host | Value | Why |
 |---|---|---|---|
