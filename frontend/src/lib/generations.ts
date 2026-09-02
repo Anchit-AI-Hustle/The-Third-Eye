@@ -32,6 +32,7 @@ export const GEN_APPS: Record<string, { label: string; color: string; icon: stri
   studio: { label: "Studio", color: "#4FC3F7", icon: "Wand2" },
   music: { label: "Music", color: "#34D399", icon: "Music" },
   kolab: { label: "Kolab", color: "#A78BFA", icon: "Workflow" },
+  avatar: { label: "Video Avatar", color: "#F97316", icon: "Video" },
   jobagent: { label: "Job Agent", color: "#F5C451", icon: "Briefcase" },
   health: { label: "Health", color: "#F472B6", icon: "HeartPulse" },
   assistant: { label: "Assistant", color: "#5EEAD4", icon: "MessageSquare" },
