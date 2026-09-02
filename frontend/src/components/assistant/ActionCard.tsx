@@ -25,7 +25,11 @@ export function ActionCard({
         <div className="rounded-card border border-amber-400/30 bg-amber-400/5 px-4 py-3">
           <p className="text-[11px] font-mono uppercase tracking-wider text-amber-300/80 mb-1">Confirm before I act</p>
           <p className="text-sm text-text-primary font-medium">{a.summary}</p>
-          {a.tool === "send_email" && (
+          {/* The model calls the unified "communicate" tool (action:"email") for
+              a real send, not a "send_email" tool — that name only appears in
+              summarizeAction's copy. Match on the actual dispatched shape so the
+              To/Subject/Body preview isn't silently skipped on every real send. */}
+          {(a.tool === "send_email" || (a.tool === "communicate" && a.args?.action === "email")) && (
             <div className="mt-2 space-y-1 text-xs text-text-secondary bg-background-base/50 rounded-input p-2 border border-border-default">
               <div><span className="text-text-muted">To:</span> {a.args?.to}</div>
               <div><span className="text-text-muted">Subject:</span> {a.args?.subject}</div>
