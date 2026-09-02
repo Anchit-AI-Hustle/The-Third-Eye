@@ -4,14 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Radio, Check, X } from "lucide-react";
 import { announceSystems, resolveSystems, type SystemDef, type SystemsTarget } from "@/lib/systems";
-import { logAgentAction } from "@/lib/agentControl";
+import { isAgentKilled, logAgentAction } from "@/lib/agentControl";
 
 // Global "All Systems Online" HUD. Listens for the `te:systems-online` window
 // event (dispatched by the assistant, the ambient mic, or the manual button) and
 // runs a status sequence — each system reports in its own voice while its row
 // lights up green.
+//
+// Gated on the real kill switch: when it's engaged, no system is actually
+// running, so this skips the spoken "online, nominal" roll-call entirely and
+// shows every row as halted instead of announcing a status that isn't true.
 
-type Phase = "pending" | "speaking" | "online";
+type Phase = "pending" | "speaking" | "online" | "halted";
 
 export function SystemsOnline() {
   const router = useRouter();
@@ -32,9 +36,18 @@ export function SystemsOnline() {
     try { router.push("/agents"); } catch { /* noop */ }
 
     setSystems(list);
-    setPhases(Object.fromEntries(list.map((s) => [s.id, "pending" as Phase])));
     setLines({});
     setOpen(true);
+
+    if (isAgentKilled()) {
+      setPhases(Object.fromEntries(list.map((s) => [s.id, "halted" as Phase])));
+      try { logAgentAction({ type: "systems.status", label: "Status check blocked — kill switch engaged", outcome: "blocked" }); } catch { /* noop */ }
+      running.current = false;
+      closeTimer.current = setTimeout(() => setOpen(false), 2600);
+      return;
+    }
+
+    setPhases(Object.fromEntries(list.map((s) => [s.id, "pending" as Phase])));
 
     await announceSystems(list, (id, phase, line) => {
       setPhases((p) => ({ ...p, [id]: phase }));
@@ -58,12 +71,13 @@ export function SystemsOnline() {
   if (!open) return null;
 
   const total = systems.length;
+  const halted = systems.some((s) => phases[s.id] === "halted");
   const done = systems.filter((s) => phases[s.id] === "online").length;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
       onClick={() => !running.current && setOpen(false)}>
-      <div className="relative w-full max-w-md rounded-2xl border border-[#4FC3F7]/30 bg-[#070B12] shadow-[0_0_60px_rgba(79,195,247,0.25)]"
+      <div className={`relative w-full max-w-md rounded-2xl border bg-[#070B12] ${halted ? "border-[#EF4444]/30 shadow-[0_0_60px_rgba(239,68,68,0.2)]" : "border-[#4FC3F7]/30 shadow-[0_0_60px_rgba(79,195,247,0.25)]"}`}
         onClick={(e) => e.stopPropagation()}>
         {!running.current && (
           <button onClick={() => setOpen(false)} className="absolute top-3 right-3 text-text-muted hover:text-text-primary" aria-label="Close">
@@ -72,11 +86,13 @@ export function SystemsOnline() {
         )}
         <div className="p-6">
           <div className="flex items-center gap-2.5 mb-1">
-            <Radio size={16} className="text-[#4FC3F7] animate-pulse" />
-            <span className="hud-label text-[#4FC3F7]">// Systems status</span>
+            <Radio size={16} className={halted ? "text-[#EF4444]" : "text-[#4FC3F7] animate-pulse"} />
+            <span className={`hud-label ${halted ? "text-[#EF4444]" : "text-[#4FC3F7]"}`}>// Systems status</span>
           </div>
           <h2 className="font-display text-lg font-semibold text-text-primary mb-4">
-            {total === 1 ? systems[0].name : "All Systems"} — {done}/{total} online
+            {halted
+              ? "Kill switch engaged"
+              : `${total === 1 ? systems[0].name : "All Systems"} — ${done}/${total} online`}
           </h2>
 
           <div className="space-y-2">
@@ -86,8 +102,8 @@ export function SystemsOnline() {
                 <div key={s.id} className="flex items-center gap-3 rounded-input border border-border-default bg-background-surface/40 px-3 py-2.5">
                   <span className="relative flex-none w-2.5 h-2.5">
                     <span className="absolute inset-0 rounded-full" style={{
-                      background: ph === "online" ? "#34D399" : ph === "speaking" ? s.accentColor : "#3A3A4A",
-                      boxShadow: ph === "online" ? "0 0 8px #34D399" : ph === "speaking" ? `0 0 8px ${s.accentColor}` : "none",
+                      background: ph === "online" ? "#34D399" : ph === "halted" ? "#EF4444" : ph === "speaking" ? s.accentColor : "#3A3A4A",
+                      boxShadow: ph === "online" ? "0 0 8px #34D399" : ph === "halted" ? "0 0 8px #EF4444" : ph === "speaking" ? `0 0 8px ${s.accentColor}` : "none",
                     }} />
                     {ph === "speaking" && <span className="absolute inset-0 rounded-full animate-ping" style={{ background: s.accentColor }} />}
                   </span>
@@ -97,12 +113,12 @@ export function SystemsOnline() {
                       {ph === "online" && <Check size={13} className="text-[#34D399]" />}
                     </div>
                     <div className="text-[11px] font-mono text-text-muted truncate">
-                      {ph === "pending" ? "standby…" : ph === "speaking" ? (lines[s.id] ?? "reporting…") : "online"}
+                      {ph === "pending" ? "standby…" : ph === "halted" ? "kill switch engaged" : ph === "speaking" ? (lines[s.id] ?? "reporting…") : "online"}
                     </div>
                   </div>
                   <span className="text-[9px] font-mono uppercase tracking-wider flex-none"
-                    style={{ color: ph === "online" ? "#34D399" : ph === "speaking" ? s.accentColor : "#6B7690" }}>
-                    {ph === "online" ? "online" : ph === "speaking" ? "reporting" : "…"}
+                    style={{ color: ph === "online" ? "#34D399" : ph === "halted" ? "#EF4444" : ph === "speaking" ? s.accentColor : "#6B7690" }}>
+                    {ph === "online" ? "online" : ph === "halted" ? "halted" : ph === "speaking" ? "reporting" : "…"}
                   </span>
                 </div>
               );
