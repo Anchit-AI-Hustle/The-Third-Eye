@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowLeft, Copy, Check, Download, Trash2, Eye, Code2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Download, Trash2, Eye, Code2, AlertTriangle } from "lucide-react";
 import { GEN_APPS, deleteGeneration, getGeneration, type GenerationRecord } from "@/lib/generations";
 
 // Full input → output view for one generation.
 export function GenerationDetail({ id }: { id: string }) {
+  const router = useRouter();
   const [rec, setRec] = useState<GenerationRecord | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
   const [htmlView, setHtmlView] = useState<"preview" | "code">("preview");
+  const [audioBroken, setAudioBroken] = useState(false);
 
-  useEffect(() => { setRec(getGeneration(id)); }, [id]);
+  useEffect(() => { setRec(getGeneration(id)); setAudioBroken(false); }, [id]);
 
   if (rec === undefined) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-primary/20 border-t-accent-primary rounded-full animate-spin" /></div>;
   if (rec === null) {
@@ -44,7 +47,16 @@ export function GenerationDetail({ id }: { id: string }) {
             <button onClick={copy} className={btn}>{copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}</button>
           )}
           {rec.kind !== "audio" && <button onClick={download} className={btn}><Download size={13} /> Download</button>}
-          <button onClick={() => { deleteGeneration(rec.id); history.back(); }} className={btn}><Trash2 size={13} /> Delete</button>
+          <button
+            onClick={() => {
+              if (!confirm(`Delete "${rec.title}"? This can't be undone.`)) return;
+              deleteGeneration(rec.id);
+              router.push("/generations");
+            }}
+            className={btn}
+          >
+            <Trash2 size={13} /> Delete
+          </button>
         </div>
       </div>
 
@@ -88,7 +100,14 @@ export function GenerationDetail({ id }: { id: string }) {
 
         {rec.kind === "audio" ? (
           <div className="space-y-3">
-            <audio controls src={rec.output} className="w-full" />
+            {audioBroken ? (
+              <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">
+                <AlertTriangle size={14} className="text-warning flex-none mt-0.5" />
+                <span>This audio can no longer be played — it was generated in a browser session that has since ended, and audio isn&apos;t re-fetchable across sessions. Generate a new track to hear it again.</span>
+              </div>
+            ) : (
+              <audio controls src={rec.output} className="w-full" onError={() => setAudioBroken(true)} />
+            )}
             {typeof rec.meta?.lyrics === "string" && rec.meta.lyrics.trim() && (
               <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono bg-background-base rounded-input p-3 border border-border-default">{rec.meta.lyrics as string}</pre>
             )}
