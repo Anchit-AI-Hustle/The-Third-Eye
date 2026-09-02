@@ -6,6 +6,7 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { ReactorCanvas } from "./ReactorCanvas";
 import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
+import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
   Target, FileText, Cpu, Shield, Mic, TrendingUp, AlertTriangle,
@@ -16,7 +17,6 @@ import Link from "next/link";
 const PRIORITY_DOT: Record<string, string> = {
   low: "bg-text-muted", medium: "bg-[#4FC3F7]", high: "bg-warning", urgent: "bg-accent-red",
 };
-const PRIORITY_COLOR = PRIORITY_DOT;
 const PRIORITY_RING: Record<string, string> = {
   low: "border-text-muted/20", medium: "border-[#4FC3F7]/30", high: "border-warning/30", urgent: "border-accent-red/40",
 };
@@ -57,11 +57,40 @@ function useUptime() {
   return uptime;
 }
 
+// Kill-switch state (localStorage-backed, see lib/agentControl) so the HUD's
+// "system status" claim never contradicts the Agent Activity widget, which
+// already shows "Halted" once the switch is on.
+function useKillSwitch() {
+  const [killed, setKilled] = useState(() => isAgentKilled());
+  useEffect(() => {
+    const sync = () => setKilled(isAgentKilled());
+    window.addEventListener(AGENT_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(AGENT_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+  return killed;
+}
+
+// Rendered inline in the page header (a server component), which is why this
+// is its own tiny client piece rather than inline state there.
+export function SystemStatusText() {
+  const killed = useKillSwitch();
+  return (
+    <span className={killed ? "text-accent-red" : undefined}>
+      {killed ? "AGENT HALTED — KILL SWITCH ON" : "ALL SYSTEMS OPERATIONAL"}
+    </span>
+  );
+}
+
 export function DashboardClient() {
   const { allTasks, ready } = useLocalTasks();
   const { active: agent } = useAgentProfile();
   const { time, date, seconds } = useClock();
   const uptime = useUptime();
+  const killed = useKillSwitch();
 
   const open     = allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
   const urgent   = open.filter((t) => t.priority === "urgent" || t.priority === "high");
@@ -100,12 +129,19 @@ export function DashboardClient() {
             {/* Status bar */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
-                <span className="status-dot" />
-                <span className="hud-label text-[#4FC3F7]">System Online</span>
+                <span
+                  className="status-dot"
+                  style={killed ? { background: "var(--color-accent-red)", boxShadow: "0 0 0 2px rgba(239,68,68,0.2), 0 0 8px rgba(239,68,68,0.4)" } : undefined}
+                />
+                <span className={cn("hud-label", killed ? "text-accent-red" : "text-[#4FC3F7]")}>
+                  {killed ? "Agent Halted" : "System Online"}
+                </span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="hud-label">uptime {uptime}</span>
-                <span className="hud-label text-success">all systems nominal</span>
+                <span className={cn("hud-label", killed ? "text-accent-red" : "text-success")}>
+                  {killed ? "kill switch engaged" : "all systems nominal"}
+                </span>
               </div>
             </div>
 
@@ -145,7 +181,7 @@ export function DashboardClient() {
             <StatusRow icon={<Mic size={12} />} label="Voice I/O" value="Ready" status="online" />
             <StatusRow icon={<Shield size={12} />} label="Auth" value="Secured" status="online" />
             <StatusRow icon={<Database size={12} />} label="Knowledge" value="Indexed" status="idle" />
-            <StatusRow icon={<TrendingUp size={12} />} label="Finance" value="Phase 2" status="pending" />
+            <StatusRow icon={<TrendingUp size={12} />} label="Finance" value="AI-assisted" status="online" />
           </div>
         </div>
       </div>
@@ -160,7 +196,7 @@ export function DashboardClient() {
               <TickerItem label="COMPLETED" value={`${doneToday.length} today`} />
               <TickerItem label="VOICE" value="STT + TTS" />
               <TickerItem label="MODEL" value="gemini-2.5-flash" />
-              <TickerItem label="STATUS" value="operational" />
+              <TickerItem label="STATUS" value={killed ? "halted" : "operational"} />
               <TickerItem label="LATENCY" value="<200ms" />
             </div>
           ))}
@@ -281,12 +317,12 @@ export function DashboardClient() {
             { label: "Voice I/O", active: true },
             { label: "Memory Core", active: true },
             { label: "Knowledge DB", active: true },
-            { label: "Web Recon", active: false },
-            { label: "Comms (Email)", active: false },
-            { label: "Scheduler", active: false },
-            { label: "Finance AI", active: false },
-            { label: "Multi-Agent", active: false },
-            { label: "Automation", active: false },
+            { label: "Web Recon", active: true },
+            { label: "Comms (Email)", active: true },
+            { label: "Scheduler", active: true },
+            { label: "Finance AI", active: true },
+            { label: "Multi-Agent", active: true },
+            { label: "Automation", active: true },
             { label: "Digital Twin", active: false },
           ].map(({ label, active }) => (
             <div key={label} className={cn(
@@ -410,20 +446,6 @@ function QuickCard({ href, icon, label, sub, glow }: {
       </div>
       <ArrowRight size={13} className="ml-auto text-text-muted flex-none" />
     </Link>
-  );
-}
-
-function SystemLine({ icon, label, value, status }: {
-  icon: React.ReactNode; label: string; value: string; status: "online" | "idle" | "pending";
-}) {
-  const dot = status === "online" ? "bg-[#4FC3F7] animate-pulse" : status === "idle" ? "bg-success" : "bg-warning";
-  return (
-    <div className="flex items-center gap-2 text-[11px] font-mono">
-      <span className="text-[#4FC3F7]/60 flex-none">{icon}</span>
-      <span className="text-text-muted flex-1">{label}</span>
-      <span className="text-text-secondary">{value}</span>
-      <span className={cn("w-1.5 h-1.5 rounded-full flex-none", dot)} />
-    </div>
   );
 }
 

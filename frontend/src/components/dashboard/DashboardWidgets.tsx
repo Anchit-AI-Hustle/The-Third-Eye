@@ -20,20 +20,21 @@ const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 // dashboard is a real command center rather than just a task list. GSAP staggers
 // the cards in on mount (lazy-loaded, reduced-motion-aware).
 export function DashboardWidgets() {
-  const { allTasks } = useLocalTasks();
-  const { goals } = useLocalGoals();
-  const { notes } = useLocalNotes();
-  const { docs } = useLocalKnowledge();
-  const { expenses } = useLocalExpenses();
+  const { allTasks, ready: tasksReady } = useLocalTasks();
+  const { goals, ready: goalsReady } = useLocalGoals();
+  const { notes, ready: notesReady } = useLocalNotes();
+  const { docs, ready: docsReady } = useLocalKnowledge();
+  const { expenses, ready: expensesReady } = useLocalExpenses();
+  const dataReady = tasksReady && goalsReady && notesReady && docsReady && expensesReady;
 
   const root = useRef<HTMLDivElement>(null);
 
-  // Agent-safety layer state (kill switch + audit log) is localStorage-backed,
-  // so read it on the client and stay live via the agent-control event.
-  const [agent, setAgent] = useState({ count: 0, killed: false });
+  // Agent-safety layer state (kill switch + audit log) is localStorage-backed
+  // and readable synchronously, so seed it from the real value on mount
+  // instead of a placeholder 0/false that would flash before the effect runs.
+  const [agent, setAgent] = useState(() => ({ count: getAgentLog().length, killed: isAgentKilled() }));
   useEffect(() => {
     const sync = () => setAgent({ count: getAgentLog().length, killed: isAgentKilled() });
-    sync();
     window.addEventListener(AGENT_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {
@@ -56,12 +57,12 @@ export function DashboardWidgets() {
   const widgets = [
     { href: "/assistant", icon: MessageSquare, label: "Assistant", stat: "Ask anything", sub: "voice + actions", color: "#4FC3F7" },
     { href: "/apps", icon: LayoutGrid, label: "Apps", stat: "Open apps", sub: "daily apps + emergencies", color: "#34D399" },
-    { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: `${stats.open} open`, sub: `${stats.urgent} urgent`, color: "#4FC3F7" },
+    { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: dataReady ? `${stats.open} open` : "—", sub: dataReady ? `${stats.urgent} urgent` : "Manage tasks", color: "#4FC3F7" },
     { href: "/tasks", icon: Radio, label: "Live Capture", stat: "Capture", sub: "mic + inbox → tracker", color: "#F05B8D" },
-    { href: "/notes", icon: FileText, label: "Notes", stat: `${notes.length}`, sub: "captured", color: "#F0C94E" },
-    { href: "/goals", icon: Target, label: "Goals", stat: `${stats.avgGoal}%`, sub: "avg progress", color: "#34D399" },
-    { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: `${docs.length}`, sub: "documents", color: "#A78BFA" },
-    { href: "/finance", icon: BarChart2, label: "Finance", stat: `₹${inr.format(Math.round(stats.spend))}`, sub: "this month", color: "#4F8EF7" },
+    { href: "/notes", icon: FileText, label: "Notes", stat: dataReady ? `${notes.length}` : "—", sub: "captured", color: "#F0C94E" },
+    { href: "/goals", icon: Target, label: "Goals", stat: dataReady ? `${stats.avgGoal}%` : "—", sub: "avg progress", color: "#34D399" },
+    { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: dataReady ? `${docs.length}` : "—", sub: "documents", color: "#A78BFA" },
+    { href: "/finance", icon: BarChart2, label: "Finance", stat: dataReady ? `₹${inr.format(Math.round(stats.spend))}` : "—", sub: "this month", color: "#4F8EF7" },
     { href: "/tools", icon: Wand2, label: "Studio", stat: "Create", sub: "pages · mailers · more", color: "#A78BFA" },
     { href: "/job-agent", icon: Briefcase, label: "Job Agent", stat: "Apply", sub: "search · tailor · track", color: "#4FC3F7" },
     { href: "/capabilities", icon: Sparkles, label: "Capabilities", stat: "Explore", sub: "what it can do", color: "#4FC3F7" },

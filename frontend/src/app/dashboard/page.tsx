@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { DashboardClient } from "@/components/dashboard/DashboardClient";
+import { DashboardClient, SystemStatusText } from "@/components/dashboard/DashboardClient";
 
 export const metadata = { title: "Dashboard — The Third Eye" };
 
@@ -24,7 +24,7 @@ export default async function DashboardPage() {
             month: "long",
             day: "numeric",
           }).format(new Date())}
-          {" · "}ALL SYSTEMS OPERATIONAL
+          {" · "}<SystemStatusText />
         </p>
       </div>
       <DashboardClient />
