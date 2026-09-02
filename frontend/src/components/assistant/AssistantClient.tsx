@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, ShieldCheck, Check, X, Loader2, Ear, Bookmark, History, GitBranch } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, VolumeX, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,10 +16,12 @@ import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
+import { useAgentConfirm } from "@/hooks/useAgentConfirm";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
-import { useWakeWord } from "@/hooks/useWakeWord";
+import { ActionCard } from "./ActionCard";
+import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { Persona3D } from "@/components/persona/Persona3D";
@@ -39,18 +41,6 @@ interface LiveBubble {
   phase: "recording" | "transcribing" | "interim";
   level: number;
   text?: string;
-}
-
-interface PendingAction {
-  id: string;
-  tool: string;
-  args: any;
-  summary: string;
-  status: "pending" | "running" | "done" | "failed" | "canceled";
-  result?: string;
-  url?: string;          // deep link to open on approval (pay/whatsapp/call/sms)
-  openLabel?: string;    // confirm-button label for a client action
-  clientAction?: boolean; // true → open url on the confirming tap (no /api/act)
 }
 
 interface HistoryEntry {
@@ -105,7 +95,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [systemOnline, setSystemOnline] = useState(false);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [idleIdx, setIdleIdx] = useState(0);
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   // How the mic behaves: "call" = hands-free, each utterance auto-sends and the
   // reply is read aloud; "dictate" = speech fills the input box for review and
   // is NOT sent until the user presses send.
@@ -162,9 +151,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { expenses } = useLocalExpenses();
   const applyActions = useAgentActions();
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
-  // Links the assistant asked to open but the browser blocked (iOS blocks
-  // window.open outside a tap) — rendered as tappable chips so one tap opens.
-  const [pendingOpens, setPendingOpens] = useState<{ url: string; label: string }[]>([]);
+  const {
+    pendingActions,
+    pendingOpens,
+    addPending,
+    clearPending,
+    dismissOpen,
+    openLinks,
+    confirmAction,
+    cancelAction,
+  } = useAgentConfirm();
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
@@ -182,22 +178,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (undoTimer.current) clearTimeout(undoTimer.current);
   }, [undoable]);
 
-  // The agent asked to open one or more links (open_app tool). Try to open each
-  // in a new tab immediately; iOS/Safari block window.open outside a tap, so any
-  // that don't open are surfaced as tappable chips (one tap = a real gesture).
-  const openLinks = useCallback((sideEffects?: { type: string; data?: any }[]) => {
-    const opens = (sideEffects ?? []).filter((fx) => fx.type === "open_url" && fx.data?.url);
-    if (!opens.length) return;
-    const blocked: { url: string; label: string }[] = [];
-    for (const fx of opens) {
-      const url = String(fx.data.url);
-      if (!/^https?:\/\//i.test(url)) continue; // only ever open http(s)
-      let win: Window | null = null;
-      try { win = window.open(url, "_blank", "noopener,noreferrer"); } catch { win = null; }
-      if (!win) blocked.push({ url, label: fx.data.label || url });
-    }
-    setPendingOpens(blocked);
-  }, []);
   const tts = useTTS(agent?.voicePreference);
 
   const stt = useVoiceSTT({
@@ -248,13 +228,21 @@ export function AssistantClient({ userName }: { userName?: string }) {
     window.addEventListener(PERM_POLICY_EVENT, read);
     return () => window.removeEventListener(PERM_POLICY_EVENT, read);
   }, []);
-  const onWake = useCallback(async () => {
+  const onWake = useCallback(async (trigger: string, transcript: string) => {
     if (isStreamingRef.current) return;
     if (!(await requestCapability("microphone"))) return;
     setVoiceMode("call");
+    // "Hey JARVIS, what's the weather" carries its command in the same breath
+    // as the name — answer it instead of opening the mic and making the user
+    // say it again. Only when the agent was actually named, though; a bare
+    // "hey"/"ok" wake shouldn't act on whatever followed it.
+    const command = isNameTrigger(trigger, agent?.name ?? "JARVIS")
+      ? stripWakeTrigger(transcript, trigger)
+      : "";
+    if (command) { sendRef.current(command); return; }
     stt.enable();
     setMicOn(true);
-  }, [stt, requestCapability]);
+  }, [stt, requestCapability, agent?.name]);
   useWakeWord({ agentName: agent?.name ?? "JARVIS", enabled: wakeEnabled && micAlways && !micOn, onWake, cooldownMs: 2000 });
 
   // Track TTS state in a ref so callbacks can see it
@@ -488,11 +476,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
                 ));
               } else if (eventType === "confirm" && parsed.tool) {
-                setPendingActions((prev) => [...prev, {
+                addPending({
                   id: parsed.id, tool: parsed.tool, args: parsed.args,
                   summary: parsed.summary, status: "pending",
                   url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
-                }]);
+                });
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
                 setMessages((prev) => prev.map((m) =>
@@ -537,7 +525,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, session, userName, allTasks, docs, applyActions, tts]);
+  }, [input, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -577,7 +565,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setApiError(null);
     historyRef.current = [];
     memoryRef.current = {};
-    setPendingActions([]);
+    clearPending();
     setIsStreaming(false);
   }
 
@@ -612,41 +600,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [interrupt, tts.speaking]);
-
-  const confirmAction = useCallback(async (action: PendingAction) => {
-    // Deep-link intents (pay/whatsapp/call/sms): open the target app on THIS
-    // tap (a real user gesture, so iOS allows it). The app opens pre-filled and
-    // the user completes/approves it there — we never execute the payment.
-    if (action.clientAction && action.url) {
-      const url = action.url;
-      try {
-        if (/^https?:/i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
-        else window.location.href = url; // upi: / tel: / sms: → OS opens the app
-      } catch { /* noop */ }
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "done", result: `Opened ${action.tool === "pay" ? "your payment app" : "the app"} — complete it there.` } : a));
-      return;
-    }
-    setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "running" } : a));
-    try {
-      const res = await fetch("/api/act", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: action.tool, args: action.args }),
-      });
-      const data = await res.json().catch(() => ({}));
-      // The action truly succeeded only if the HTTP call is ok AND the endpoint
-      // didn't report a failure (ok:false / error). Otherwise it's a rejection.
-      const succeeded = res.ok && data.ok !== false && !data.error;
-      const result = data.result ?? data.error ?? (succeeded ? "Done." : "The action was rejected.");
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: succeeded ? "done" : "failed", result } : a));
-    } catch {
-      setPendingActions((prev) => prev.map((a) => a.id === action.id ? { ...a, status: "failed", result: "Couldn't reach the server — nothing was done." } : a));
-    }
-  }, []);
-
-  const cancelAction = useCallback((id: string) => {
-    setPendingActions((prev) => prev.map((a) => a.id === id ? { ...a, status: "canceled" } : a));
-  }, []);
 
   async function toggleMic() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
@@ -732,7 +685,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <span className="text-[10px] font-mono text-accent-red ml-2">· Add GEMINI_API_KEY in Vercel</span>
           )}
         </div>
-        <div className="flex items-center gap-1 relative">            <button onClick={() => setShowLang((v) => !v)} aria-label="Select language" aria-expanded={showLang}
+        <div className="flex items-center gap-1 relative">
+          {(showLang || showCheckpoints) && (
+            <div className="fixed inset-0 z-40" onClick={() => { setShowLang(false); setShowCheckpoints(false); }} />
+          )}
+          <button onClick={() => setShowLang((v) => !v)} aria-label="Select language" aria-expanded={showLang}
             className={cn("p-1.5 rounded-input transition-colors", showLang ? "text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
             <Globe size={12} aria-hidden="true" />
           </button>
@@ -862,7 +819,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <span className="text-xs text-text-secondary flex-none">Tap to open:</span>
             {pendingOpens.map((o) => (
               <a key={o.url} href={o.url} target="_blank" rel="noopener noreferrer"
-                onClick={() => setPendingOpens((p) => p.filter((x) => x.url !== o.url))}
+                onClick={() => dismissOpen(o.url)}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-success border border-success/30 rounded-input px-2.5 py-1 hover:bg-success/15 transition-colors">
                 <Globe size={12} /> {o.label}
               </a>
@@ -1088,68 +1045,6 @@ function MessageBubble({ message, session }: { message: Message; session: any })
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
             </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ActionCard({ action, onConfirm, onCancel }: { action: PendingAction; onConfirm: () => void; onCancel: () => void }) {
-  const a = action;
-  return (
-    <div className="flex items-start gap-3 animate-slide-in">
-      <div className="w-7 h-7 rounded-full bg-amber-400/20 border border-amber-400/30 flex-none flex items-center justify-center">
-        <ShieldCheck size={13} className="text-amber-300" />
-      </div>
-      <div className="max-w-[85%] sm:max-w-[75%] w-full">
-        <div className="rounded-card border border-amber-400/30 bg-amber-400/5 px-4 py-3">
-          <p className="text-[11px] font-mono uppercase tracking-wider text-amber-300/80 mb-1">Confirm before I act</p>
-          <p className="text-sm text-text-primary font-medium">{a.summary}</p>
-          {a.tool === "send_email" && (
-            <div className="mt-2 space-y-1 text-xs text-text-secondary bg-background-base/50 rounded-input p-2 border border-border-default">
-              <div><span className="text-text-muted">To:</span> {a.args?.to}</div>
-              <div><span className="text-text-muted">Subject:</span> {a.args?.subject}</div>
-              <div className="whitespace-pre-wrap"><span className="text-text-muted">Body:</span> {a.args?.body}</div>
-            </div>
-          )}
-          {a.status === "pending" && (
-            <div className="flex items-center gap-2 mt-3">
-              <button onClick={onConfirm} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-success/15 text-success border border-success/30 text-xs font-medium hover:bg-success/25 transition-colors">
-                <Check size={13} /> {a.openLabel ?? "Confirm & do it"}
-              </button>
-              <button onClick={onCancel} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-muted border border-border-default text-xs hover:text-text-secondary transition-colors">
-                <X size={13} /> Cancel
-              </button>
-            </div>
-          )}
-          {a.status === "running" && (
-            <div className="flex items-center gap-2 mt-3 text-xs text-accent-blue"><Loader2 size={13} className="animate-spin" /> Doing it…</div>
-          )}
-          {a.status === "done" && (
-            <div className="flex items-center gap-2 mt-3 text-xs text-success"><Check size={13} /> {a.result}</div>
-          )}
-          {a.status === "failed" && (
-            <div className="mt-3 space-y-2">
-              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it — {a.result}</span></div>
-              {/* Missing connection/permission → let the user grant it inline and
-                  retry, so the action actually completes rather than dead-ending. */}
-              {/(connect|not connected|permission|scope|authoriz)/i.test(a.result ?? "") && (
-                <div className="flex items-center gap-2">
-                  <a href="/api/connect/google"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-accent-blue/15 text-accent-blue border border-accent-blue/30 text-xs font-medium hover:bg-accent-blue/25 transition-colors">
-                    <ShieldCheck size={13} /> Connect Google &amp; grant access
-                  </a>
-                  <button onClick={onConfirm}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input text-text-secondary border border-border-default text-xs hover:text-text-primary transition-colors">
-                    <RotateCcw size={12} /> Try again
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {a.status === "canceled" && (
-            <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>
           )}
         </div>
       </div>
