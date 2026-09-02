@@ -24,6 +24,7 @@ import { ActionCard } from "./ActionCard";
 import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
+import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
 import { toolLabel } from "@/lib/toolLabels";
@@ -93,6 +94,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [micOn, setMicOn] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<{ ai: boolean; openai: boolean; supabase: boolean; serper: boolean } | null>(null);
   const [systemOnline, setSystemOnline] = useState(false);
+  const [killed, setKilled] = useState(false);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [idleIdx, setIdleIdx] = useState(0);
   // How the mic behaves: "call" = hands-free, each utterance auto-sends and the
@@ -269,15 +271,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } catch {}
   }, [session?.user?.email]);
 
-  // Check service status on mount; show "all systems online" banner briefly
+  // Check service status on mount; show "all systems online" banner briefly.
+  // Gated on the kill switch: greeting someone with "all systems online" right
+  // after they halted the agent is exactly the reassurance a kill switch must
+  // never give.
   useEffect(() => {
     fetch("/api/status").then((r) => r.json()).then((d) => {
       setServiceStatus(d);
-      if (d.ai) {
+      if (d.ai && !isAgentKilled()) {
         setSystemOnline(true);
         setTimeout(() => setSystemOnline(false), 4000);
       }
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setKilled(isAgentKilled());
+    sync();
+    window.addEventListener(AGENT_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(AGENT_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
 
   // Rotate idle taglines every 9s when nothing is happening
@@ -663,14 +679,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : "bg-text-muted"
           )} />
           <span className={cn("text-xs font-mono transition-colors duration-300",
-            systemOnline ? "text-success"
+            killed ? "text-warning"
+            : systemOnline ? "text-success"
             : doneMsg ? "text-accent-blue"
             : tts.speaking ? "text-accent-violet"
             : isStreaming ? "text-accent-violet"
             : liveBubble ? "text-accent-blue"
             : "text-text-muted"
           )}>
-            {systemOnline ? "JARVIS activated · all systems online"
+            {killed ? "Agent stopped · turn it back on in Settings"
+              : systemOnline ? "JARVIS activated · all systems online"
               : tts.speaking ? "Speaking · hold on…"
               : doneMsg ?? (
                 isStreaming ? "Processing · composing response…"
