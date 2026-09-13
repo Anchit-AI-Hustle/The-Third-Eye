@@ -1,0 +1,71 @@
+name: Scheduled jobs
+
+# Vercel Hobby only runs a cron job once per day, so the sub-daily schedules
+# this project used to declare in frontend/vercel.json (*/5 and */15) were
+# rejected outright - every production deploy failed at "Provisioning
+# Integrations" with "Hobby accounts are limited to daily cron jobs".
+#
+# vercel.json now declares the two daily runs Hobby does allow (a floor that
+# fires even if this workflow is disabled), and this workflow drives the same
+# endpoints more often, for free, from GitHub Actions.
+#
+# The cadence is deliberately modest: private repositories draw on the
+# account's 2,000 free Actions minutes a month and every run is billed as a
+# whole minute, so */5 here would cost roughly 8,600 minutes. Every two hours
+# costs roughly 360.
+#
+# Setup - one repo secret (Settings -> Secrets and variables -> Actions):
+#   CRON_SECRET - the same value as the CRON_SECRET environment variable on
+#                 the Vercel project. The handlers require
+#                 "Authorization: Bearer <CRON_SECRET>" and answer 401
+#                 without it. With no secret this workflow skips with a
+#                 notice rather than failing.
+
+on:
+  schedule:
+    - cron: "5 */2 * * *" # every two hours, off the hour
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+env:
+  SITE: https://the-third-eye.anchit-tandon.com
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the scheduled endpoints
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::notice::No CRON_SECRET repo secret, so there is nothing to authorise with - skipping."
+            echo "::notice::Add it under Settings -> Secrets and variables -> Actions, matching the Vercel environment variable of the same name."
+            exit 0
+          fi
+
+          failed=0
+          for path in \
+            "/api/cron/dispatch?job=reminders" \
+            "/api/cron/scrape-gmail" \
+            "/api/cron/scrape-chat"
+          do
+            echo "--- GET $path"
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 60 \
+                     -H "Authorization: Bearer $CRON_SECRET" \
+                     "$SITE$path" || echo 000)
+            head -c 500 /tmp/body; echo
+            case "$code" in
+              2*)  echo "ok ($code)" ;;
+              501) echo "::notice::$path is not configured on the server ($code) - not a failure." ;;
+              *)   echo "::error::$path returned $code"; failed=1 ;;
+            esac
+          done
+          exit $failed
