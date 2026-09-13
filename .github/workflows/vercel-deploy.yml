@@ -15,8 +15,15 @@ name: Deploy to Vercel
 #      site that has fallen behind main is.
 #
 # It also runs on a schedule, so if the integration stalls between pushes the
-# alarm goes off within half an hour instead of being noticed by eye weeks later.
+# alarm goes off on its own rather than being noticed by eye weeks later.
 # Scheduled runs check once rather than polling — nothing is in flight to wait for.
+#
+# That schedule was every 30 minutes while this repository was public, where
+# Actions is free. It is private now, and private repositories draw on the
+# account's 2,000 included minutes a month with every run billed as a whole
+# minute: 48 runs a day is 1,440 minutes, most of the allowance, spent watching
+# for a problem that a push already checks for. Every six hours costs 120.
+# Raise it again if the Git integration starts dropping pushes the way it did.
 #
 # Setup — ONE of these repo secrets is required
 # (GitHub → Settings → Secrets and variables → Actions):
@@ -38,7 +45,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch: {}
   workflow_call:
     inputs:
