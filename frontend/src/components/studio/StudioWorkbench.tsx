@@ -9,6 +9,7 @@ import { useMode } from "@/hooks/useMode";
 import { useModeTags } from "@/hooks/useModeTags";
 import { dataInsert } from "@/lib/dataClient";
 import { recordGeneration, fieldsFrom } from "@/lib/generations";
+import { VideoScenes } from "@/components/studio/VideoScenes";
 
 export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const { modeId } = useMode();
@@ -173,6 +174,10 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
             )
           )}
         </div>
+
+        {tool.id === "video" && output && !loading && (
+          <VideoScenes script={output} title={inputs[tool.fields[0].name]?.slice(0, 60) || "Untitled"} accent={tool.accent} />
+        )}
       </div>
     </div>
   );

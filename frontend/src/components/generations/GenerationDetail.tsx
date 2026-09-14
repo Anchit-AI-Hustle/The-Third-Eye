@@ -14,9 +14,9 @@ export function GenerationDetail({ id }: { id: string }) {
   const [rec, setRec] = useState<GenerationRecord | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
   const [htmlView, setHtmlView] = useState<"preview" | "code">("preview");
-  const [audioBroken, setAudioBroken] = useState(false);
+  const [mediaBroken, setMediaBroken] = useState(false);
 
-  useEffect(() => { setRec(getGeneration(id)); setAudioBroken(false); }, [id]);
+  useEffect(() => { setRec(getGeneration(id)); setMediaBroken(false); }, [id]);
 
   if (rec === undefined) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-primary/20 border-t-accent-primary rounded-full animate-spin" /></div>;
   if (rec === null) {
@@ -31,6 +31,9 @@ export function GenerationDetail({ id }: { id: string }) {
   const meta = GEN_APPS[rec.app] ?? { label: rec.app, color: "#8891A8", icon: "FileText" };
   const copy = () => navigator.clipboard.writeText(rec.output).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   const download = () => {
+    // Media outputs are a provider URL, not text — wrapping one in a .md blob
+    // would "download" the link itself. Open it so the browser saves the file.
+    if (rec.kind === "video" || rec.kind === "audio") { window.open(rec.output, "_blank", "noopener"); return; }
     const ext = rec.kind === "html" ? "html" : rec.kind === "json" ? "json" : "md";
     const mime = rec.kind === "html" ? "text/html" : rec.kind === "json" ? "application/json" : "text/markdown";
     const blob = new Blob([rec.output], { type: mime });
@@ -100,18 +103,27 @@ export function GenerationDetail({ id }: { id: string }) {
 
         {rec.kind === "audio" ? (
           <div className="space-y-3">
-            {audioBroken ? (
+            {mediaBroken ? (
               <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">
                 <AlertTriangle size={14} className="text-warning flex-none mt-0.5" />
                 <span>This audio can no longer be played — it was generated in a browser session that has since ended, and audio isn&apos;t re-fetchable across sessions. Generate a new track to hear it again.</span>
               </div>
             ) : (
-              <audio controls src={rec.output} className="w-full" onError={() => setAudioBroken(true)} />
+              <audio controls src={rec.output} className="w-full" onError={() => setMediaBroken(true)} />
             )}
             {typeof rec.meta?.lyrics === "string" && rec.meta.lyrics.trim() && (
               <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono bg-background-base rounded-input p-3 border border-border-default">{rec.meta.lyrics as string}</pre>
             )}
           </div>
+        ) : rec.kind === "video" ? (
+          mediaBroken ? (
+            <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">
+              <AlertTriangle size={14} className="text-warning flex-none mt-0.5" />
+              <span>This clip has expired — rendered videos are hosted by the generation provider for about an hour, so old links stop resolving. Download a clip when you render it to keep it.</span>
+            </div>
+          ) : (
+            <video controls src={rec.output} className="w-full rounded-input border border-border-default bg-black" onError={() => setMediaBroken(true)} />
+          )
         ) : rec.kind === "html" ? (
           htmlView === "preview"
             ? <iframe title="output" sandbox="" srcDoc={rec.output} className="w-full h-[70vh] rounded-input border border-border-default bg-white" />
