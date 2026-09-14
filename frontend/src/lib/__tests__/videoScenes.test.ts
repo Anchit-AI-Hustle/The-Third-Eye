@@ -1,0 +1,61 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { planScenes } from "@/lib/videoScenes";
+import { videoUrlFrom } from "@/lib/replicate";
+
+vi.mock("@/lib/llmCascade", () => ({
+  llmCascade: vi.fn(),
+}));
+
+import { llmCascade } from "@/lib/llmCascade";
+const mockCascade = vi.mocked(llmCascade);
+
+function reply(text: string) {
+  mockCascade.mockResolvedValue({ text, provider: "groq" } as Awaited<ReturnType<typeof llmCascade>>);
+}
+
+afterEach(() => vi.clearAllMocks());
+
+describe("planScenes", () => {
+  it("parses a shot list and clamps clip length to what video models can render", async () => {
+    reply(JSON.stringify([
+      { title: "Neon alley", seconds: 6, prompt: "A woman in a red coat walks down a rain-slick neon alley…" },
+      { title: "Rooftop", seconds: 30, prompt: "Wide drone shot rising over a rain-soaked city rooftop…" },
+      { title: "Close", seconds: 1, prompt: "Extreme close-up on a cracked wristwatch face…" },
+    ]));
+
+    const { scenes } = await planScenes("# The Midnight Circuit\n\nEpisode 1 …");
+    expect(scenes.map((s) => s.seconds)).toEqual([6, 8, 4]);
+    expect(scenes.map((s) => s.n)).toEqual([1, 2, 3]);
+    expect(scenes[0].title).toBe("Neon alley");
+  });
+
+  it("recovers a JSON array wrapped in prose or fences", async () => {
+    reply('Here is the shot list:\n```json\n[{"title":"A","seconds":5,"prompt":"A lone lighthouse…"}]\n```\nEnjoy.');
+    const { scenes } = await planScenes("script");
+    expect(scenes).toHaveLength(1);
+    expect(scenes[0].prompt).toBe("A lone lighthouse…");
+  });
+
+  it("drops entries with no prompt rather than rendering an empty clip", async () => {
+    reply(JSON.stringify([{ title: "Empty", seconds: 5 }, { title: "Real", seconds: 5, prompt: "A red balloon…" }]));
+    const { scenes } = await planScenes("script");
+    expect(scenes).toHaveLength(1);
+    expect(scenes[0].n).toBe(1);
+  });
+
+  it("throws when the model returns no usable list", async () => {
+    reply("I can't help with that.");
+    await expect(planScenes("script")).rejects.toThrow(/shot list/i);
+  });
+});
+
+describe("videoUrlFrom", () => {
+  it("normalizes the shapes Replicate video models return", () => {
+    expect(videoUrlFrom("https://x/v.mp4")).toBe("https://x/v.mp4");
+    expect(videoUrlFrom(["https://x/v.mp4"])).toBe("https://x/v.mp4");
+    expect(videoUrlFrom({ video: "https://x/v.mp4" })).toBe("https://x/v.mp4");
+    expect(videoUrlFrom({ output: "https://x/v.mp4" })).toBe("https://x/v.mp4");
+    expect(videoUrlFrom(null)).toBeNull();
+  });
+});

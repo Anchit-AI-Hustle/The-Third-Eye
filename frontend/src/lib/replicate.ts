@@ -118,8 +118,7 @@ export async function getPrediction(id: string): Promise<Prediction> {
   return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
 }
 
-/** Normalize the varied Replicate audio outputs (string | string[] | {audio}) to one URL. */
-export function audioUrlFrom(output: unknown): string | null {
+function urlFrom(output: unknown, keys: string[]): string | null {
   if (!output) return null;
   if (typeof output === "string") return output;
   if (Array.isArray(output)) {
@@ -128,9 +127,19 @@ export function audioUrlFrom(output: unknown): string | null {
   }
   if (typeof output === "object") {
     const o = output as Record<string, unknown>;
-    for (const k of ["audio", "audio_out", "output", "url"]) {
+    for (const k of keys) {
       if (typeof o[k] === "string") return o[k] as string;
     }
   }
   return null;
+}
+
+/** Normalize the varied Replicate audio outputs (string | string[] | {audio}) to one URL. */
+export function audioUrlFrom(output: unknown): string | null {
+  return urlFrom(output, ["audio", "audio_out", "output", "url"]);
+}
+
+/** Same for video models, whose object outputs key on video/output/url instead. */
+export function videoUrlFrom(output: unknown): string | null {
+  return urlFrom(output, ["video", "video_out", "output", "url"]);
 }

@@ -7,7 +7,7 @@ import { logAgentAction } from "@/lib/agentControl";
 // the /generations dashboard can list every input→output across the whole app
 // and open a detail page for the full view. Stored on-device (device vault).
 
-export type GenKind = "text" | "markdown" | "html" | "audio" | "json";
+export type GenKind = "text" | "markdown" | "html" | "audio" | "video" | "json";
 
 export interface GenInputField { label: string; value: string }
 
@@ -33,6 +33,7 @@ export const GEN_APPS: Record<string, { label: string; color: string; icon: stri
   music: { label: "Music", color: "#34D399", icon: "Music" },
   kolab: { label: "Kolab", color: "#A78BFA", icon: "Workflow" },
   avatar: { label: "Video Avatar", color: "#F97316", icon: "Video" },
+  video: { label: "Video Studio", color: "#F0C94E", icon: "Clapperboard" },
   jobagent: { label: "Job Agent", color: "#F5C451", icon: "Briefcase" },
   health: { label: "Health", color: "#F472B6", icon: "HeartPulse" },
   assistant: { label: "Assistant", color: "#5EEAD4", icon: "MessageSquare" },

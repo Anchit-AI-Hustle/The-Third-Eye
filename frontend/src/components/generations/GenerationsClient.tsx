@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Wand2, Music, Workflow, Briefcase, HeartPulse, MessageSquare, Video, FileText, Trash2, Search, Inbox, type LucideIcon } from "lucide-react";
+import { Wand2, Music, Workflow, Briefcase, HeartPulse, MessageSquare, Video, Clapperboard, FileText, Trash2, Search, Inbox, type LucideIcon } from "lucide-react";
 import { GEN_APPS, deleteGeneration, listGenerations, type GenerationRecord } from "@/lib/generations";
 
-const ICONS: Record<string, LucideIcon> = { Wand2, Music, Workflow, Briefcase, HeartPulse, MessageSquare, Video };
+const ICONS: Record<string, LucideIcon> = { Wand2, Music, Workflow, Briefcase, HeartPulse, MessageSquare, Video, Clapperboard };
 const PAGE_SIZE = 30;
 
 function timeAgo(iso: string): string {
