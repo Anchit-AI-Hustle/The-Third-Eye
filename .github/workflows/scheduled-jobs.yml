@@ -11,8 +11,17 @@ name: Scheduled jobs
 #
 # The cadence is deliberately modest: private repositories draw on the
 # account's 2,000 free Actions minutes a month and every run is billed as a
-# whole minute, so */5 here would cost roughly 8,600 minutes. Every two hours
-# costs roughly 360.
+# whole minute, so */5 here would cost roughly 8,600 minutes. Every three
+# hours costs roughly 240.
+#
+# It was every two hours (360) until the account exhausted its allowance and
+# GitHub began refusing to start jobs at all — every check on main failing in
+# seconds with no runner assigned. Three hours is the compromise: the curl
+# below takes about five seconds, so this is billing twelve whole minutes a
+# day for under a minute of work, and the cost is entirely in how often it
+# fires. Reminders are the user-visible casualty — a reminder can now be up to
+# three hours late rather than two. Tighten it again if the allowance is
+# raised; the daily crons in frontend/vercel.json remain the floor either way.
 #
 # Setup - one repo secret (Settings -> Secrets and variables -> Actions):
 #   CRON_SECRET - the same value as the CRON_SECRET environment variable on
@@ -23,7 +32,7 @@ name: Scheduled jobs
 
 on:
   schedule:
-    - cron: "5 */2 * * *" # every two hours, off the hour
+    - cron: "5 */3 * * *" # every three hours, off the hour
   workflow_dispatch: {}
 
 permissions:
