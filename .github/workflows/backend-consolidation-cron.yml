@@ -11,10 +11,17 @@ name: Backend nightly memory consolidation
 # set (backend not deployed yet, or deployed without INTERNAL_CRON_SECRET
 # configured) — the curl fails with an explanatory log line instead of the
 # workflow appearing to hang or silently doing nothing.
+#
+# There is deliberately no schedule. Those secrets are unset because the
+# backend is not deployed anywhere (see PROJECT_STATUS.md), so a nightly run
+# only ever reached the skip branch above — roughly 30 minutes a month of the
+# account's 2,000 free Actions minutes spent printing "skipping", on a private
+# repository where every run bills a whole minute. Restore
+#   schedule: [{ cron: "17 2 * * *" }]
+# when the backend is actually deployed and both secrets are set; until then
+# workflow_dispatch runs it on demand.
 
 on:
-  schedule:
-    - cron: "17 2 * * *" # 02:17 UTC daily — off the hour, avoids the top-of-hour crowd
   workflow_dispatch: {}
 
 permissions:
