@@ -9,6 +9,8 @@ import {
   Briefcase, Heart, MonitorSmartphone, Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isOverdue, isDueSoon } from "@/lib/taskDates";
+import { TASK_STATUSES, taskStatusLabel } from "@/lib/taskStatus";
 import { useAgentProfile, type AgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
@@ -19,12 +21,7 @@ import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 type ViewMode = "table" | "kanban";
 type SortKey = "title" | "assignee" | "start_date" | "due_date" | "priority" | "status";
 
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: "todo", label: "To Do" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "done", label: "Done" },
-  { value: "cancelled", label: "Cancelled" },
-];
+const STATUS_OPTIONS = TASK_STATUSES;
 
 // Tab split: Office = Vahdam work, Personal = everything else. Tasks without a
 // workspace (legacy rows, Vahdam-gated email/chat extraction) land on Office.
@@ -55,14 +52,10 @@ const PRIORITY_STYLE: Record<TaskPriority, string> = {
 const STATUS_STYLE: Record<TaskStatus, string> = {
   todo:       "bg-background-elevated text-text-secondary border border-border-default",
   in_progress:"bg-accent-blue/10 text-accent-blue border border-accent-blue/30",
+  review:     "bg-accent-violet/10 text-accent-violet border border-accent-violet/30",
   done:       "bg-success/10 text-success border border-success/30",
   cancelled:  "bg-accent-red/10 text-accent-red border border-accent-red/20",
 };
-
-function isOverdue(due?: string, status?: TaskStatus): boolean {
-  if (!due || status === "done" || status === "cancelled") return false;
-  return new Date(due) < new Date(new Date().toDateString());
-}
 
 function fmtDate(iso?: string): string {
   if (!iso) return "—";
@@ -97,6 +90,9 @@ export function TasksClient() {
   const [filterAgent, setFilterAgent] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
+  // Where a task came from — Email, Chat, Manual. The ingest has always
+  // written source_type; until now nothing let you filter on it.
+  const [filterSource, setFilterSource] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("due_date");
   const [sortAsc, setSortAsc] = useState(true);
 
@@ -126,6 +122,7 @@ export function TasksClient() {
       if (filterAgent && t.agent !== filterAgent) return false;
       if (filterStatus && t.status !== filterStatus) return false;
       if (filterPriority && t.priority !== filterPriority) return false;
+      if (filterSource && (t.source_type ?? "") !== filterSource) return false;
       return true;
     })
     .sort((a, b) => {
@@ -192,6 +189,7 @@ export function TasksClient() {
   }
 
   const uniqueAssignees = Array.from(new Set(allTasks.map((t) => t.assignee).filter(Boolean))) as string[];
+  const uniqueSources = Array.from(new Set(allTasks.map((t) => t.source_type).filter(Boolean))) as string[];
 
   if (!ready) {
     return <div className="flex justify-center py-20"><div className="w-5 h-5 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
@@ -271,6 +269,10 @@ export function TasksClient() {
           options={[{ value: "", label: "All agents" }, ...profiles.map((p) => ({ value: p.id, label: p.name }))]} />
         <FilterSelect value={filterStatus} onChange={setFilterStatus}
           options={[{ value: "", label: "All statuses" }, ...STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label }))]} />
+        {uniqueSources.length > 0 && (
+          <FilterSelect value={filterSource} onChange={setFilterSource}
+            options={[{ value: "", label: "All sources" }, ...uniqueSources.map((x) => ({ value: x, label: x }))]} />
+        )}
         <FilterSelect value={filterPriority} onChange={setFilterPriority}
           options={[{ value: "", label: "All priorities" }, ...PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label }))]} />
 
@@ -290,7 +292,7 @@ export function TasksClient() {
 
       {/* ── View ───────────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <EmptyState hasFilters={!!(search || filterAssignee || filterAgent || filterStatus || filterPriority || !showAllModes)} onNew={openNew} />
+        <EmptyState hasFilters={!!(search || filterAssignee || filterAgent || filterStatus || filterPriority || filterSource || !showAllModes)} onNew={openNew} />
       ) : view === "table" ? (
         <TableView tasks={filtered} profiles={profiles} sortKey={sortKey} sortAsc={sortAsc}
           onSort={handleSort} onEdit={openEdit} onDelete={remove} />
@@ -369,6 +371,7 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
           <tbody className="divide-y divide-border-default">
             {tasks.map((t) => {
               const overdue = isOverdue(t.due_date, t.status);
+              const dueSoon = isDueSoon(t.due_date, t.status);
               return (
                 <tr key={t.id} className="hover:bg-background-elevated/50 transition-colors group">
                   <td className="px-4 py-3 max-w-[320px]">
@@ -378,6 +381,7 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                         {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
                       </div>
                       <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                      <PillarBadge pillar={t.growth_pillar} />
                       <AgentChip id={t.agent} profiles={profiles} />
                     </div>
                   </td>
@@ -385,9 +389,10 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.start_date)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {t.due_date ? (
-                      <span className={cn("leading-tight", overdue ? "text-accent-red" : "text-text-secondary")}>
+                      <span className={cn("leading-tight", overdue ? "text-accent-red" : dueSoon ? "text-warning" : "text-text-secondary")}>
                         {fmtDate(t.due_date)}
                         {overdue && <span className="block text-[10px]">(overdue)</span>}
+                        {dueSoon && <span className="block text-[10px]">(due soon)</span>}
                       </span>
                     ) : <span className="text-text-muted">—</span>}
                   </td>
@@ -420,12 +425,9 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
 
 // ─── Kanban view ──────────────────────────────────────────────────────────────
 
-const KANBAN_COLS: { status: TaskStatus; label: string }[] = [
-  { status: "todo", label: "To Do" },
-  { status: "in_progress", label: "In Progress" },
-  { status: "done", label: "Done" },
-  { status: "cancelled", label: "Cancelled" },
-];
+const KANBAN_COLS: { status: TaskStatus; label: string }[] = STATUS_OPTIONS.map(
+  ({ value, label }) => ({ status: value, label }),
+);
 
 function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
   tasks: LocalTask[];
@@ -442,7 +444,7 @@ function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
       {KANBAN_COLS.map(({ status, label }) => {
         const col = tasks.filter((t) => t.status === status);
         return (
@@ -463,6 +465,7 @@ function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
             <div className="p-3 space-y-2 min-h-[120px]">
               {col.map((t) => {
                 const overdue = isOverdue(t.due_date, t.status);
+                const dueSoon = isDueSoon(t.due_date, t.status);
                 return (
                   <div key={t.id}
                     draggable
@@ -477,6 +480,7 @@ function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
                       <p className="text-text-primary text-sm leading-snug">{t.title}</p>
                       <div className="flex items-center gap-1 flex-none">
                         <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                        <PillarBadge pillar={t.growth_pillar} />
                         <AgentChip id={t.agent} profiles={profiles} />
                       </div>
                     </div>
@@ -485,7 +489,7 @@ function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
                       <div className="flex items-center gap-2 text-xs text-text-muted">
                         {t.assignee && <span>{t.assignee}</span>}
                         {t.due_date && (
-                          <span className={cn(overdue && "text-accent-red")}>
+                          <span className={cn(overdue ? "text-accent-red" : dueSoon && "text-warning")}>
                             {fmtDate(t.due_date)}
                           </span>
                         )}
@@ -701,6 +705,15 @@ const SOURCE_META: Record<string, { label: string; icon: typeof Mail; color: str
   devicelog: { label: "Log Sync", icon: MonitorSmartphone, color: "#A78BFA" },
 };
 
+function PillarBadge({ pillar }: { pillar?: string }) {
+  if (!pillar) return null;
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none bg-success/10 text-success border-success/30">
+      {pillar}
+    </span>
+  );
+}
+
 function SourceBadge({ type, link, detail }: { type?: string; link?: string; detail?: string }) {
   if (!type) return null;
   const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#7878A8" };
@@ -748,10 +761,9 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 }
 
 function StatusBadge({ status }: { status: TaskStatus }) {
-  const label: Record<TaskStatus, string> = { todo: "To Do", in_progress: "In Progress", done: "Done", cancelled: "Cancelled" };
   return (
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium", STATUS_STYLE[status])}>
-      {label[status]}
+      {taskStatusLabel(status)}
     </span>
   );
 }

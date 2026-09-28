@@ -17,6 +17,10 @@ export interface Task {
   project_id: string | null;
   title: string;
   description: string | null;
+  // Mirrors backend/app/tasks/schemas.py::TaskUpdate, which accepts exactly
+  // these four — a fifth here would type-check and then 422 at the API. The
+  // tracker's own status set, which does include "review", is the separate
+  // TaskStatus in hooks/useLocalTasks.ts; the two are not the same contract.
   status: "todo" | "in_progress" | "done" | "cancelled";
   priority: "low" | "medium" | "high" | "urgent";
   due_date: string | null;

@@ -25,7 +25,7 @@ export const geminiTools = [
             id: { type: "STRING", description: "Task ID, if known from a previous search. Omit it rather than guessing — pass title instead." },
             title: { type: "STRING", description: "Task title. On create, the new task's title. On update/delete without an id, the title to match against existing tasks; with an id, the new title to rename to." },
             priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Priority level" },
-            status: { type: "STRING", enum: ["todo", "in_progress", "done", "cancelled"], description: "Task status (for update)" },
+            status: { type: "STRING", enum: ["todo", "in_progress", "review", "done", "cancelled"], description: "Task status (for update). 'review' is the In Review column — work finished but awaiting a check." },
             assignee: { type: "STRING", description: "Person responsible" },
             agent: { type: "STRING", description: "Appointed AI agent profile id (jarvis|friday|edith|ultron|zeus|athena) — set when the user appoints an agent to the task, '' to un-appoint" },
             due_date: { type: "STRING", description: "Due date YYYY-MM-DD (infer from 'tomorrow', 'Friday', etc.)" },

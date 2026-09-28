@@ -7,6 +7,7 @@ import { ReactorCanvas } from "./ReactorCanvas";
 import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
 import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
+import { taskStatusLabel } from "@/lib/taskStatus";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
   Target, FileText, Cpu, Shield, Mic, TrendingUp, AlertTriangle,
@@ -265,7 +266,7 @@ export function DashboardClient() {
                         "hidden md:inline text-[10px] font-mono px-1.5 py-0.5 rounded border",
                         t.status === "in_progress" ? "text-[#4FC3F7] border-[#4FC3F7]/20 bg-[#4FC3F7]/5" : "text-text-muted border-border-default"
                       )}>
-                        {t.status === "in_progress" ? "In Progress" : "To Do"}
+                        {taskStatusLabel(t.status)}
                       </span>
                     </li>
                   );

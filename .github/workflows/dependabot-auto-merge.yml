@@ -1,0 +1,143 @@
+name: Dependabot auto-merge
+
+# Dependabot opens several PRs a week here, they all touch
+# frontend/package.json and frontend/package-lock.json, and left sitting they
+# conflict with each other and with main. Merging them by hand is the toil
+# this removes: a dependency PR that CI is happy with should not need a human
+# to press a button.
+#
+# WHAT THIS DOES NOT DO, AND WHY THAT MATTERS
+#
+# It asks GitHub to enable auto-merge. It never merges anything itself.
+# GitHub then merges the PR when the branch's required status checks pass.
+#
+# That last sentence is the whole safety model, and it rests on `main` having
+# required status checks. It does not, as of writing:
+#
+#   GET /repos/.../branches/main
+#   { "protected": false,
+#     "required_status_checks": { "enforcement_level": "off", "contexts": [] } }
+#
+# With nothing required, a PR is mergeable the moment it opens, and asking for
+# auto-merge on an already-mergeable PR merges it immediately — CI unread.
+# That is the opposite of what this file is for, and it is how react-dom
+# 19.3.0 reached main without react 19.3.0 and broke `npm ci` for everyone
+# (fixed in #305), with no CI run to catch it.
+#
+# So the job below checks for required checks first and stands down if there
+# are none, rather than quietly becoming a merge-everything bot. To actually
+# turn this on:
+#
+#   1. Settle the org's Actions billing. Every job is currently refused with
+#      "recent account payments have failed or your spending limit needs to
+#      be increased", so no check can report anything to gate on.
+#   2. Make `frontend` and `backend` required on `main` — the two checks in
+#      MUST_REQUIRE below. Not `scan`: it succeeds without scanning on
+#      Dependabot PRs, for the reason set out where MUST_REQUIRE is defined,
+#      so requiring it would add a green tick and no assurance.
+#
+# Step 2 has a prerequisite that is easy to miss. Requiring a check needs
+# either classic branch protection or a ruleset, and on a PRIVATE repository
+# both need a paid plan. Asked today, GitHub answers:
+#
+#   GET /repos/.../rules/branches/main
+#   403 "Upgrade to GitHub Pro or make this repository public to enable
+#        this feature."
+#
+# So the choice is a paid plan or a public repository; there is no third
+# option where a private repository on the free plan requires a check. Until
+# one of those is true this workflow runs, finds no gate, and does nothing —
+# which is the correct behaviour, not a failure.
+
+on:
+  pull_request_target:
+
+# pull_request_target runs in the base repository's context, so the token has
+# write access. A plain `pull_request` event hands Dependabot a read-only
+# token that cannot enable auto-merge. Nothing here checks out or executes the
+# PR's code, which is what makes pull_request_target safe to use.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a CI gate before arming auto-merge
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          # The checks that actually have to be green before a dependency bump
+          # may merge itself: the two jobs in ci.yml.
+          #
+          # `scan` from strix-security.yml is deliberately NOT here. It needs
+          # LLM_API_KEY, and when that is absent its creds step sets
+          # ready=false, every later step is skipped by `if:`, and the job
+          # SUCCEEDS with a notice — by design, so the workflow does not turn
+          # every pull request red before the secret exists. But a Dependabot
+          # `pull_request` run never receives secrets, so for exactly the PRs
+          # this file merges, `scan` is green without having scanned anything.
+          # Requiring it would gate on a check that cannot fail, which is the
+          # same false assurance this whole file exists to avoid.
+          #
+          # To make security a real gate here, `scan` has to be able to fail:
+          # give Dependabot runs the credential (Settings -> Secrets ->
+          # Dependabot), or make the job fail rather than skip when the key is
+          # missing. Add it to this list once either is true.
+          MUST_REQUIRE: "frontend backend"
+        run: |
+          set -uo pipefail
+          # Two independent mechanisms can require a check, and a branch can use
+          # either. Classic branch protection reports through the branch payload;
+          # a ruleset does not appear there at all, so reading only the first
+          # would see a ruleset-protected branch as ungated and stand down for
+          # ever. Both are read, and their context NAMES collected — not just a
+          # count. A count answers "is anything required", which is the wrong
+          # question: one unrelated required context (a deploy check, a review
+          # bot) would satisfy it while frontend, backend and scan stayed
+          # optional, and this PR would merge with the actual test suite red.
+          classic=$(gh api "repos/$REPO/branches/$BASE" \
+            --jq '.protection.required_status_checks.contexts // [] | .[]' 2>/dev/null) || classic=""
+          ruleset=$(gh api "repos/$REPO/rules/branches/$BASE" \
+            --jq '.[] | select(.type == "required_status_checks")
+                      | .parameters.required_status_checks // [] | .[].context' 2>/dev/null) || ruleset=""
+
+          # An unreadable endpoint is not an empty one. Rulesets 403 with
+          # "Upgrade to GitHub Pro or make this repository public" on a private
+          # repository outside a paid plan, and a token without
+          # administration:read cannot see classic protection either. Both are
+          # reported rather than silently treated as "nothing required" — either
+          # way the job stands down, because a gate that cannot be read is not a
+          # gate that can be trusted.
+          [ -n "$classic" ] || echo "::notice::No classic branch protection contexts read on $BASE (none set, 403 for this token, or unavailable on this plan)."
+          [ -n "$ruleset" ] || echo "::notice::No ruleset contexts read on $BASE (none set, 403 for this token, or rulesets need GitHub Pro on a private repository)."
+
+          have=$(printf '%s\n%s\n' "$classic" "$ruleset" | sed '/^$/d' | sort -u)
+          echo "Required contexts on $BASE: $(echo "$have" | tr '\n' ' ')"
+
+          # Every name in MUST_REQUIRE has to be required, or the gate is not the
+          # gate this file claims. Keep it in step with the job names in ci.yml
+          # and strix-security.yml.
+          missing=""
+          for want in $MUST_REQUIRE; do
+            printf '%s\n' "$have" | grep -qxF "$want" || missing="$missing $want"
+          done
+
+          if [ -n "$missing" ]; then
+            echo "gated=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$BASE does not require:$missing — so auto-merge could merge this PR while those are failing. Standing down. See this file's header for what turns this on."
+          else
+            echo "gated=true" >> "$GITHUB_OUTPUT"
+            echo "All of '$MUST_REQUIRE' are required on $BASE; arming auto-merge."
+          fi
+
+      - name: Ask GitHub to merge it once the checks pass
+        if: steps.gate.outputs.gated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
