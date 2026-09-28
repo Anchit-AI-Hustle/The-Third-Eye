@@ -1,0 +1,79 @@
+name: Dependabot auto-merge
+
+# Dependabot opens several PRs a week here, they all touch
+# frontend/package.json and frontend/package-lock.json, and left sitting they
+# conflict with each other and with main. Merging them by hand is the toil
+# this removes: a dependency PR that CI is happy with should not need a human
+# to press a button.
+#
+# WHAT THIS DOES NOT DO, AND WHY THAT MATTERS
+#
+# It asks GitHub to enable auto-merge. It never merges anything itself.
+# GitHub then merges the PR when the branch's required status checks pass.
+#
+# That last sentence is the whole safety model, and it rests on `main` having
+# required status checks. It does not, as of writing:
+#
+#   GET /repos/.../branches/main
+#   { "protected": false,
+#     "required_status_checks": { "enforcement_level": "off", "contexts": [] } }
+#
+# With nothing required, a PR is mergeable the moment it opens, and asking for
+# auto-merge on an already-mergeable PR merges it immediately — CI unread.
+# That is the opposite of what this file is for, and it is how react-dom
+# 19.3.0 reached main without react 19.3.0 and broke `npm ci` for everyone
+# (fixed in #305), with no CI run to catch it.
+#
+# So the job below checks for required checks first and stands down if there
+# are none, rather than quietly becoming a merge-everything bot. To actually
+# turn this on:
+#
+#   1. Settle the org's Actions billing. Every job is currently refused with
+#      "recent account payments have failed or your spending limit needs to
+#      be increased", so no check can report anything to gate on.
+#   2. Protect `main` and mark `frontend`, `backend` and `scan` as required
+#      (Settings -> Branches -> Add branch ruleset).
+#
+# Until both are done this workflow runs, finds no gate, and does nothing —
+# which is the correct behaviour, not a failure.
+
+on:
+  pull_request_target:
+
+# pull_request_target runs in the base repository's context, so the token has
+# write access. A plain `pull_request` event hands Dependabot a read-only
+# token that cannot enable auto-merge. Nothing here checks out or executes the
+# PR's code, which is what makes pull_request_target safe to use.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a CI gate before arming auto-merge
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          contexts=$(gh api "repos/$REPO/branches/$BASE" \
+            --jq '[.protection.required_status_checks.contexts // [] | .[]] | length' 2>/dev/null || echo 0)
+          echo "Required status checks on $BASE: $contexts"
+          if [ "$contexts" -eq 0 ]; then
+            echo "gated=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$BASE has no required status checks, so auto-merge would merge this PR without waiting for CI. Standing down. See this file's header for the two steps that turn this on."
+          else
+            echo "gated=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ask GitHub to merge it once the checks pass
+        if: steps.gate.outputs.gated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
