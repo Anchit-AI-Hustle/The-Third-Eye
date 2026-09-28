@@ -68,36 +68,54 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BASE: ${{ github.event.pull_request.base.ref }}
+          # The checks that actually have to be green before a dependency bump
+          # may merge itself. These are job names from ci.yml (frontend,
+          # backend) and strix-security.yml (scan).
+          MUST_REQUIRE: "frontend backend scan"
         run: |
           set -uo pipefail
           # Two independent mechanisms can require a check, and a branch can use
           # either. Classic branch protection reports through the branch payload;
-          # a ruleset does not appear there at all, so counting only the first
-          # would read a ruleset-protected branch as ungated and stand down for
-          # ever. Both are counted.
+          # a ruleset does not appear there at all, so reading only the first
+          # would see a ruleset-protected branch as ungated and stand down for
+          # ever. Both are read, and their context NAMES collected — not just a
+          # count. A count answers "is anything required", which is the wrong
+          # question: one unrelated required context (a deploy check, a review
+          # bot) would satisfy it while frontend, backend and scan stayed
+          # optional, and this PR would merge with the actual test suite red.
           classic=$(gh api "repos/$REPO/branches/$BASE" \
-            --jq '[.protection.required_status_checks.contexts // [] | .[]] | length' 2>/dev/null) || classic=""
+            --jq '.protection.required_status_checks.contexts // [] | .[]' 2>/dev/null) || classic=""
           ruleset=$(gh api "repos/$REPO/rules/branches/$BASE" \
-            --jq '[.[] | select(.type == "required_status_checks")
-                       | .parameters.required_status_checks // [] | .[]] | length' 2>/dev/null) || ruleset=""
+            --jq '.[] | select(.type == "required_status_checks")
+                      | .parameters.required_status_checks // [] | .[].context' 2>/dev/null) || ruleset=""
 
           # An unreadable endpoint is not an empty one. Rulesets 403 with
           # "Upgrade to GitHub Pro or make this repository public" on a private
-          # repository outside a paid plan, which is this repository today, and a
-          # token without administration:read cannot see classic protection
-          # either. Both are reported rather than silently counted as zero — but
-          # either way the job stands down, because a gate that cannot be read is
-          # not a gate that can be trusted.
-          [ -n "$classic" ] || echo "::notice::Could not read classic branch protection on $BASE (403 for this token, or unavailable on this plan)."
-          [ -n "$ruleset" ] || echo "::notice::Could not read branch rulesets on $BASE (403 for this token, or rulesets need GitHub Pro on a private repository)."
+          # repository outside a paid plan, and a token without
+          # administration:read cannot see classic protection either. Both are
+          # reported rather than silently treated as "nothing required" — either
+          # way the job stands down, because a gate that cannot be read is not a
+          # gate that can be trusted.
+          [ -n "$classic" ] || echo "::notice::No classic branch protection contexts read on $BASE (none set, 403 for this token, or unavailable on this plan)."
+          [ -n "$ruleset" ] || echo "::notice::No ruleset contexts read on $BASE (none set, 403 for this token, or rulesets need GitHub Pro on a private repository)."
 
-          total=$(( ${classic:-0} + ${ruleset:-0} ))
-          echo "Required status checks on $BASE — classic: ${classic:-unreadable}, ruleset: ${ruleset:-unreadable}, counted: $total"
-          if [ "$total" -eq 0 ]; then
+          have=$(printf '%s\n%s\n' "$classic" "$ruleset" | sed '/^$/d' | sort -u)
+          echo "Required contexts on $BASE: $(echo "$have" | tr '\n' ' ')"
+
+          # Every name in MUST_REQUIRE has to be required, or the gate is not the
+          # gate this file claims. Keep it in step with the job names in ci.yml
+          # and strix-security.yml.
+          missing=""
+          for want in $MUST_REQUIRE; do
+            printf '%s\n' "$have" | grep -qxF "$want" || missing="$missing $want"
+          done
+
+          if [ -n "$missing" ]; then
             echo "gated=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::$BASE has no readable required status checks, so auto-merge would merge this PR without waiting for CI. Standing down. See this file's header for what turns this on."
+            echo "::notice::$BASE does not require:$missing — so auto-merge could merge this PR while those are failing. Standing down. See this file's header for what turns this on."
           else
             echo "gated=true" >> "$GITHUB_OUTPUT"
+            echo "All of '$MUST_REQUIRE' are required on $BASE; arming auto-merge."
           fi
 
       - name: Ask GitHub to merge it once the checks pass
