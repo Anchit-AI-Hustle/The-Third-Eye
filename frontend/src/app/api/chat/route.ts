@@ -1466,8 +1466,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Use the stored Google grant (gmail/calendar scopes) when available. Sign-in
-  // is a phone number and a PIN, so this is present only for someone who has
-  // been through Settings → Connections.
+  // grants nothing from Google at all - it is a mobile number and a PIN - so
+  // this is absent until the user goes through /api/connect/google, and the
+  // capability check below is what the assistant must act on rather than the
+  // presence of a token.
   let googleScope: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);

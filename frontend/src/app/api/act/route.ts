@@ -15,8 +15,9 @@ export async function POST(req: NextRequest) {
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
   // The confirmed send needs a token carrying gmail.send, and only the opt-in
-  // connect flow (Settings → Connections) ever grants it — sign-in is a phone
-  // number and a PIN and asks Google for nothing.
+  // connect flow (/api/connect/google - Settings -> Connections) ever grants it:
+  // signing in is a mobile number and a PIN and asks Google for nothing. The
+  // session token is not used here either, because it can lag a re-consent.
   let accessToken: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);

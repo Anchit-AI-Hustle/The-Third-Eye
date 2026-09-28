@@ -96,10 +96,22 @@ export async function revokeGoogleAccess(
 /**
  * Google scopes the Gmail/Calendar/Chat features need.
  *
- * Requested by the standalone connect flow (/api/connect/google) alone. Sign-in
- * is a mobile number and a 4-digit PIN (see lib/auth.ts) and asks Google for
- * nothing, so connecting Google is always a separate, explicit step —
- * Settings → Connections.
+ * NOT requested at sign-in — and now sign-in could not request them if it
+ * wanted to: signing in is a mobile number and a 4-digit PIN (see lib/auth.ts)
+ * and asks Google for nothing at all. These are requested only by
+ * /api/connect/google, i.e. Settings → Connections, so connecting Google is
+ * always a separate, explicit step.
+ *
+ * They were kept off the login screen even while Google WAS the login, because
+ * gmail.readonly and gmail.send are restricted scopes and asking for them there
+ * makes Google's verification review a gate on logging in at all - while the
+ * screen is unverified, only test users get in.
+ *
+ * This comment used to say the opposite, and said it after the rollback had
+ * already shipped. Two call sites read it and repeated the claim, and
+ * /api/connect/google/status was built on it - reporting "Connected" to every
+ * signed-in user. A stale comment about who grants what is not a cosmetic
+ * defect in this file.
  *
  * calendar.events is deliberately absent — nothing ever calls the Calendar API
  * to write ("add event" opens a calendar.google.com deep link, which needs no

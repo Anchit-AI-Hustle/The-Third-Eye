@@ -55,7 +55,7 @@ export const authOptions: NextAuthOptions = {
     //   import GoogleProvider from "next-auth/providers/google";
     //   import { getAdminSupabase } from "@/lib/serverSupabase";
     //   import { encrypt } from "@/lib/crypto";
-    //   import { BASIC_SCOPE_LIST } from "@/lib/googleToken";
+    //   import { BASIC_SCOPE_LIST, INGESTION_SCOPE_LIST, hasGoogleScope } from "@/lib/googleToken";
     // and the `persistRefreshToken` / `refreshAccessToken` helpers, the `jwt`
     // callback that used them, the `session` callback that copied accessToken /
     // backendToken onto the session, the module augmentations that typed them,
@@ -63,6 +63,18 @@ export const authOptions: NextAuthOptions = {
     // lib/__tests__/signinScopes.test.ts and authBackendExchange.test.ts — which
     // were deleted with the code they pinned rather than left asserting against
     // a comment.
+    //
+    // ONE OF THOSE HELPERS CARRIED A FIX THAT MUST COME BACK WITH IT (#313).
+    // `persistRefreshToken` has to begin:
+    //
+    //   if (!INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(scope, s))) return;
+    //
+    // google_tokens holds one row per user, upserted on user_id, and it is the
+    // row the Gmail/Chat crons, /api/chat and /api/act all read. Sign-in asks
+    // for identity only, so without that line a user who had connected Google
+    // properly and then signed in again had their feature-scoped grant
+    // overwritten by an identity-only one: Gmail stops working, and the row
+    // looks healthier than ever because updated_at is fresh.
     //
     // GoogleProvider({
     //   clientId: process.env.GOOGLE_CLIENT_ID!,

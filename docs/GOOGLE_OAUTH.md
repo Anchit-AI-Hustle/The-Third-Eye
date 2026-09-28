@@ -1,46 +1,62 @@
 # Google Sign-In & OAuth runbook
 
-Sign-in uses NextAuth's Google provider and requests **every** scope the app
-uses in one consent screen — `openid email profile` plus Gmail, Calendar and
-Chat (`lib/googleToken.ts` → `SIGNIN_SCOPES`). Signing in with Google therefore
-*is* connecting Google: the user is asked once, at that moment, and Gmail and
-Calendar work immediately with nothing to connect afterwards.
+**Google is no longer a sign-in provider at all.** Signing in is a mobile number
+and a 4-digit PIN (`lib/auth.ts`, a NextAuth credentials provider; the Google
+provider is commented out in the same file). Google is only ever a *connection*,
+through *Settings → Connections → Connect Google*, which requests
+`INGESTION_SCOPES` on its own consent screen.
+
+So everything below about **signing in** now describes the commented-out
+provider, and matters when restoring it. Everything about **connecting** —
+sections 1 to 5, the redirect URI, the consent screen, verification — is live and
+unchanged: it is how Gmail, Calendar and Chat are granted, and always was.
+
+Before it was commented out, sign-in requested **identity only** —
+`openid email profile` (`lib/googleToken.ts` → `BASIC_SCOPE_LIST`).
+
+This document described the opposite until now, and kept doing so after the
+change shipped. Two code comments and `/api/connect/google/status` were written
+against that claim; the status route reported "Connected" to every signed-in
+user as a result. If you are changing who grants what, this file is part of the
+change.
 
 ## Read this before deploying
 
-`gmail.readonly` and `gmail.send` are **restricted** scopes, and requesting them
-at sign-in makes verification a **gate on logging in at all**, not just on the
-Gmail features:
+`gmail.readonly` and `gmail.send` are **restricted** scopes. Requesting them *at
+sign-in* makes Google's verification review a gate on **logging in at all**, not
+just on the Gmail features:
 
-| Consent screen status | Who can sign in |
+| Consent screen status | Who can sign in, if sign-in asks for restricted scopes |
 |---|---|
 | Testing | Only accounts on the **test users** list (max 100). Everyone else gets `AccessDenied`. |
 | In production, unverified | Test users only, and others see an "unverified app" warning. |
 | In production, verified | Anyone. |
 
-So while the app is unverified, **only test users can log in**. Add every
-account that needs access under *OAuth consent screen → Test users*, or complete
-the review in `docs/google-oauth-verification.md`. Restricted-scope review needs
-a CASA security assessment and takes weeks.
-
-### Rollback
-
-If sign-in must work for arbitrary accounts before verification clears, drop
-back to identity-only scopes in `lib/auth.ts`:
-
-```ts
-scope: BASIC_SCOPE_LIST.join(" "),   // instead of SIGNIN_SCOPES
-```
-
-Login then works for anyone with no review, and Gmail/Calendar go back to being
-opt-in through *Settings → Connections → Connect Google*, which requests
-`INGESTION_SCOPES` on its own. That connect route stays wired either way, so
-this is a one-line change with no other edits.
+That is what was happening: the app worked for its author, who is a test user,
+and refused everybody else. **Sign-in no longer asks for them**, so none of the
+rows above gate login today. Publishing the consent screen is enough for anyone
+to sign in; the unverified warning still applies to the separate *connect*
+screen, and restricted-scope review (a CASA assessment, weeks) still gates
+Gmail/Chat ingestion — see `docs/google-oauth-verification.md`.
 
 Nothing is silently broken in the meantime: the granted scope string is stored
-with the refresh token, and `googleCapabilities()` reads it, so a user who
-unticks Gmail on the consent screen is told the feature isn't connected rather
-than watching it fail.
+with the refresh token and `googleCapabilities()` reads it, so a user without
+Gmail is told the feature isn't connected rather than watching it fail. And an
+identity-only grant is never written to `google_tokens` — it would displace a
+working feature-scoped one, since that table holds one row per user.
+
+### Restoring the one-screen flow
+
+Once restricted-scope verification clears, sign-in can ask for everything again
+and connecting becomes unnecessary. In `lib/auth.ts`:
+
+```ts
+scope: SIGNIN_SCOPES,   // instead of BASIC_SCOPE_LIST.join(" ")
+```
+
+`src/lib/__tests__/signinScopes.test.ts` exists to stop that happening by
+accident before the review clears; delete it deliberately as part of that
+change, and update this file with it.
 
 ## 1. Google Cloud Console — OAuth client
 
@@ -50,7 +66,13 @@ APIs & Services → Credentials → your OAuth 2.0 Client ID:
   - `https://<your-domain>`
 - **Authorized redirect URIs**
   - `https://<your-domain>/api/auth/callback/google`  ← sign-in
-  - `https://<your-domain>/api/connect/google/callback`  ← Gmail/Chat connect (optional)
+  - `https://<your-domain>/api/connect/google/callback`  ← Gmail/Chat connect
+
+**Both are required.** The second one used to be marked optional, from when
+sign-in granted the Gmail scopes itself. It is now the *only* way any user can
+connect Gmail, Calendar or Chat. Omit it and the exchange in
+`api/connect/google/callback` fails with `redirect_uri_mismatch`, which surfaces
+as `?connect=google_error` on the Settings page — nowhere near this list.
 
 Add the `http://localhost:3000` equivalents too for local dev.
 
@@ -59,10 +81,12 @@ Add the `http://localhost:3000` equivalents too for local dev.
 - User type: **External**.
 - If status is **Testing**, only listed **test users** can sign in (everyone
   else gets `AccessDenied`). Add each account under **Test users**.
-- "Publish app" alone is **not** enough now that sign-in requests restricted
-  Gmail scopes: publishing without review still limits sign-in to test users and
-  shows the unverified warning. Either finish verification, or take the rollback
-  above.
+- **Publish app** is enough for sign-in, because sign-in asks for identity only.
+  Users then see no warning and no test-user list applies.
+- Verification is still required for the **connect** flow's restricted Gmail/Chat
+  scopes. Until it clears, only test users can complete *Connect Google*, and
+  they see the unverified warning while doing it. That limits a feature; it no
+  longer limits logging in.
 
 ## 3. Deployment env (Vercel → Production)
 
@@ -82,11 +106,12 @@ The `/auth/error` page shows the NextAuth error code and the likely fix:
 | Code | Meaning / fix |
 |---|---|
 | `OAuthCallback` | Redirect-URI mismatch — add the exact `…/api/auth/callback/google` URI; check `NEXTAUTH_URL`. |
-| `AccessDenied` | Consent screen in Testing and the account isn't a test user — publish or add the user. |
+| `AccessDenied` | Consent screen in Testing and the account isn't a test user — publish or add the user. Since sign-in asks for identity only, publishing resolves this outright. |
 | `Configuration` | Missing server env — set the four variables above. |
 | `OAuthSignin` | Wrong client id/secret or unauthorized origin. |
+| `?connect=google_error` on Settings | Not a NextAuth code — the *connect* flow. Usually `…/api/connect/google/callback` missing from Authorized redirect URIs, or the account is not a test user while the restricted scopes are unverified. |
 
-## 5. Verification (only for the warning + Gmail/Chat ingestion)
+## 5. Verification (needed for Gmail/Chat ingestion, not for sign-in)
 
 Consent screen → submit for verification. Requires a **verified domain**
 (Search Console), the app homepage, the privacy policy (`/privacy_policy`), and
