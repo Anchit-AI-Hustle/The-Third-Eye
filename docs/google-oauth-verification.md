@@ -7,11 +7,15 @@ The rejection (last reviewed **Aug 20, 2026**) is about **the demo video** and *
 3. The demo video does not sufficiently demonstrate the app's functionality.
 4. Trust & Safety cannot reach the consent process without more information — **reply to their email**.
 
-> ### ⚠️ The consent flow moved. Re-read this before recording.
+> ### ⚠️ The consent flow is SPLIT. Re-read this before recording.
 >
-> A previous version of this doc said sign-in requests only `openid email profile`, and that the sensitive scopes come from a separate **Settings → Connections → Connect Google** step. **That is no longer true.** Sign-in now requests every scope in one consent screen (`SIGNIN_SCOPES` in `frontend/src/lib/googleToken.ts`).
+> This block previously said the opposite, and said it after the change had already shipped. Both directions have now been wrong here at least once, so check `frontend/src/lib/auth.ts` against this paragraph before you record anything.
 >
-> **The consent screen now appears immediately when you click "Continue with Google".** A video that goes looking for it under Settings shows the wrong flow and gets rejected again for the same reason. The Connections page still exists, but only as a repair path for someone who declined a scope.
+> **As of the identity-only rollback, sign-in requests `openid email profile` and nothing else** (`BASIC_SCOPE_LIST`, wired in `lib/auth.ts`). Clicking **Continue with Google** shows a consent screen carrying **no Gmail, Calendar or Chat scope at all** — because asking for restricted scopes at sign-in made this very review a gate on logging in, and only test users could get in.
+>
+> **The restricted scopes come from a second, separate consent screen:** *Settings → Connections → Connect Google*, which requests `INGESTION_SCOPES` on its own.
+>
+> So a video that stops after "Continue with Google" never shows the restricted-scope consent screen, and gets rejected again on finding #2. **The recording has to cover both screens**, and the second one is the one the review is actually about.
 
 ## The app + the scopes actually under review
 
@@ -45,10 +49,14 @@ This clears finding #4, and it blocks everything else — the reviewer cannot pr
 > - Password: `[password]`
 > - 2-Step Verification is **disabled** on this account, and it holds sample emails and Google Chat messages so the functionality is visible.
 >
-> **Reaching the consent screen — it is the first thing you see:**
+> **Reaching the consent screens — there are two, and the second is the one under review:**
 > 1. Open `https://the-third-eye.anchit-tandon.com` and click **Continue with Google**.
-> 2. Choose the test account. The **Google consent screen appears immediately**, listing all requested Gmail, Calendar and Chat scopes together. Click **Allow**.
-> 3. You land on the dashboard, already connected. There is no second connection step.
+> 2. Choose the test account. This first consent screen asks for **sign-in identity only** — name, email address, profile picture. No Gmail, Calendar or Chat scope appears here. Click **Allow**.
+> 3. You land on the dashboard. Gmail, Calendar and Chat are **not** connected yet, and the app says so.
+> 4. Go to **Settings → Connections → Connect Google**. This opens the **second** consent screen, which lists the Gmail, Calendar and Chat scopes together. Click **Allow**.
+> 5. Settings now shows Google as connected, with the granted permissions listed.
+>
+> Step 4 is the consent flow this submission is about. Steps 1-3 grant nothing that needs review.
 >
 > **Exercising each scope:**
 > - `gmail.readonly`, `chat.spaces.readonly`, `chat.messages.readonly` → open **Task Tracker** in the sidebar. Recent email and Chat messages are scanned on open, and action items appear as tasks, each showing its source.
