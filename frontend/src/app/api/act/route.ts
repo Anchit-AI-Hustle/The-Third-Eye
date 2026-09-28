@@ -14,9 +14,11 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
-  // The confirmed send needs a token carrying gmail.send. Sign-in now requests
-  // that scope, so the stored grant normally has it; the session token is still
-  // not used here because it can lag a re-consent.
+  // The confirmed send needs a token carrying gmail.send. Sign-in does NOT
+  // request it - identity only, because it is a restricted scope that would
+  // gate login on Google's verification review - so the stored grant has it
+  // only for users who went through /api/connect/google. The session token is
+  // not used here either, because it can lag a re-consent.
   let accessToken: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
