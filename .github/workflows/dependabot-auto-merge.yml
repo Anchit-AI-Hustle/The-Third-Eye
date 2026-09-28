@@ -31,7 +31,10 @@ name: Dependabot auto-merge
 #   1. Settle the org's Actions billing. Every job is currently refused with
 #      "recent account payments have failed or your spending limit needs to
 #      be increased", so no check can report anything to gate on.
-#   2. Make `frontend`, `backend` and `scan` required on `main`.
+#   2. Make `frontend` and `backend` required on `main` — the two checks in
+#      MUST_REQUIRE below. Not `scan`: it succeeds without scanning on
+#      Dependabot PRs, for the reason set out where MUST_REQUIRE is defined,
+#      so requiring it would add a green tick and no assurance.
 #
 # Step 2 has a prerequisite that is easy to miss. Requiring a check needs
 # either classic branch protection or a ruleset, and on a PRIVATE repository
