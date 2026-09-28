@@ -4,7 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
-export type TaskStatus = "todo" | "in_progress" | "done" | "cancelled";
+// `review` sits between in_progress and done, matching the board at
+// /board on the Personal AI OS. tasks.status is a free-text column with no
+// check constraint, so a new value needs no migration — rows simply start
+// carrying it once someone drags a card into the column.
+export type TaskStatus = "todo" | "in_progress" | "review" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type TaskWorkspace = "office" | "personal";
 
@@ -22,6 +26,12 @@ export interface LocalTask {
   source_type?: string;
   source_link?: string;
   source_detail?: string;
+  // Written by the Gmail/Chat ingest (lib/ingest.ts -> lib/tasks.ts) into
+  // columns the tasks table has carried since the ingestion migration, and
+  // until now read by nothing: the tracker captured them and then dropped
+  // them at the display layer.
+  growth_pillar?: string;
+  rationale?: string;
   workspace?: TaskWorkspace;
   agent?: string; // appointed AgentProfile id
   all_updates?: string;
