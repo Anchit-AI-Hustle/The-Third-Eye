@@ -3,27 +3,102 @@
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import { PHONE_CC, PIN_LEN, normPhone } from "@/lib/phone";
+
+// Sign in, or sign up, with a mobile number and a 4-digit PIN — the parwah-hq
+// flow. One form, two steps: the number decides which second step you get.
+// A number nobody has used yet asks for a name and a new PIN, so there is no
+// separate sign-up page to find; a number we know asks for the PIN.
+//
+// Google sign-in is commented out (see lib/auth.ts). Connecting Google for Gmail
+// and Calendar still lives in Settings → Connections, where it always did.
+
+type Step = "phone" | "pin" | "signup" | "setpin";
+
+const CC_CODES = Object.keys(PHONE_CC);
 
 export default function SignInPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+
+  const [step, setStep] = useState<Step>("phone");
+  const [cc, setCc] = useState("+91");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState("");
+  const [known, setKnown] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "authenticated") router.push("/dashboard");
   }, [status, router]);
 
-  async function handleGoogleSignIn() {
-    setIsLoading(true);
+  const parsed = useMemo(() => normPhone(phone, cc), [phone, cc]);
+
+  async function checkNumber() {
+    if (!parsed) {
+      setError(`That does not look like a ${PHONE_CC[cc]?.name ?? "valid"} number.`);
+      return;
+    }
+    setBusy(true);
     setError(null);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      const res = await fetch("/api/auth/phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: parsed.e164, cc }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        exists?: boolean;
+        setPin?: boolean;
+        name?: string;
+        error?: string;
+      };
+      if (!body.ok) {
+        setError(body.error ?? "Could not check that number.");
+        return;
+      }
+      setKnown(body.name ?? null);
+      setStep(!body.exists ? "signup" : body.setPin ? "setpin" : "pin");
     } catch {
-      setError("Sign in failed. Please try again.");
-      setIsLoading(false);
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  async function submitPin() {
+    if (pin.length !== PIN_LEN) {
+      setError(`Your PIN is ${PIN_LEN} numbers.`);
+      return;
+    }
+    if (step === "signup" && !name.trim()) {
+      setError("Please tell us your name.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await signIn("phone", {
+      redirect: false,
+      phone: parsed?.e164,
+      cc,
+      pin,
+      name: step === "signup" ? name.trim() : undefined,
+      callbackUrl: "/dashboard",
+    });
+    if (res?.ok) {
+      router.push("/dashboard");
+      return;
+    }
+    // A wrong PIN says how many tries are left, and a locked account how long
+    // for, so the message from the server is shown as-is.
+    setPin("");
+    setError(res?.error ?? "That did not work. Please try again.");
+    setBusy(false);
   }
 
   if (status === "loading") {
@@ -33,6 +108,8 @@ export default function SignInPage() {
       </div>
     );
   }
+
+  const onPhoneStep = step === "phone";
 
   return (
     <div className="min-h-screen bg-background-base flex flex-col items-center justify-center px-4 relative overflow-hidden">
@@ -53,7 +130,6 @@ export default function SignInPage() {
               onError={(e) => {
                 const el = e.target as HTMLImageElement;
                 el.style.display = "none";
-                el.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center text-accent-blue font-bold text-2xl font-display">AJ</div>`;
                 el.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center text-accent-blue font-bold text-2xl font-display">👁</div>`;
               }}
             />
@@ -68,9 +144,20 @@ export default function SignInPage() {
 
         {/* Card */}
         <div className="bg-background-surface border border-border-default rounded-card p-8 shadow-elevated">
-          <h2 className="text-text-primary font-semibold text-base mb-6 text-center">
-            Sign in to continue
+          <h2 className="text-text-primary font-semibold text-base mb-1 text-center">
+            {onPhoneStep
+              ? "Sign in to continue"
+              : step === "signup"
+                ? "Create your account"
+                : step === "setpin"
+                  ? "Choose a PIN"
+                  : `Welcome back${known ? `, ${known}` : ""}`}
           </h2>
+          <p className="text-text-muted text-xs text-center mb-6">
+            {onPhoneStep
+              ? "Your mobile number and a 4-digit PIN. Nothing else."
+              : parsed?.e164}
+          </p>
 
           {error && (
             <div className="mb-5 p-3 bg-accent-red/10 border border-accent-red/20 rounded-input text-accent-red text-sm text-center">
@@ -78,26 +165,112 @@ export default function SignInPage() {
             </div>
           )}
 
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-3 bg-background-elevated hover:bg-border-default border border-border-hover rounded-input px-4 h-12 text-text-primary text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
-          >
-            {isLoading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-text-muted border-t-transparent rounded-full animate-spin" />
-                <span className="text-text-muted">Connecting…</span>
+          {onPhoneStep ? (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="phone" className="block text-text-secondary text-xs mb-2">
+                  Mobile number
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    aria-label="Country code"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    className="bg-background-elevated border border-border-hover rounded-input px-2 h-12 text-text-primary text-sm focus:outline-none focus:border-accent-blue"
+                  >
+                    {CC_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    autoFocus
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, "").slice(0, 14))}
+                    onKeyDown={(e) => e.key === "Enter" && checkNumber()}
+                    placeholder={cc === "+91" ? "98765 43210" : "Your number"}
+                    className="flex-1 min-w-0 bg-background-elevated border border-border-hover rounded-input px-3 h-12 text-text-primary text-sm tracking-wide focus:outline-none focus:border-accent-blue"
+                  />
+                </div>
               </div>
-            ) : (
-              <>
-                <GoogleIcon />
-                <span>Continue with Google</span>
-              </>
-            )}
-          </button>
+              <button
+                onClick={checkNumber}
+                disabled={busy || !parsed}
+                className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {busy ? <Spinner /> : "Continue"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {step === "signup" && (
+                <div>
+                  <label htmlFor="name" className="block text-text-secondary text-xs mb-2">
+                    Your name
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    autoComplete="name"
+                    autoFocus
+                    maxLength={60}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-background-elevated border border-border-hover rounded-input px-3 h-12 text-text-primary text-sm focus:outline-none focus:border-accent-blue"
+                  />
+                </div>
+              )}
+              <div>
+                <label htmlFor="pin" className="block text-text-secondary text-xs mb-2">
+                  {step === "pin" ? `Your ${PIN_LEN}-digit PIN` : `Choose a ${PIN_LEN}-digit PIN`}
+                </label>
+                <input
+                  id="pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus={step !== "signup"}
+                  maxLength={PIN_LEN}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, "").slice(0, PIN_LEN))}
+                  onKeyDown={(e) => e.key === "Enter" && submitPin()}
+                  className="w-full bg-background-elevated border border-border-hover rounded-input px-3 h-12 text-text-primary text-lg text-center tracking-[0.6em] focus:outline-none focus:border-accent-blue"
+                />
+                {step !== "pin" && (
+                  <p className="text-text-muted text-xs mt-2 leading-relaxed">
+                    {PIN_LEN} numbers you will remember, and that nobody would guess first.
+                    It is what stops someone who knows your number opening your account.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={submitPin}
+                disabled={busy || pin.length !== PIN_LEN}
+                className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {busy ? <Spinner /> : step === "pin" ? "Sign in" : "Set my PIN & continue"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("phone");
+                  setPin("");
+                  setError(null);
+                }}
+                className="w-full text-text-muted hover:text-text-secondary text-xs transition-colors"
+              >
+                Use a different number
+              </button>
+            </div>
+          )}
 
           <p className="text-text-muted text-xs text-center mt-5 leading-relaxed">
-            By signing in, you agree to our{" "}
+            By continuing, you agree to our{" "}
             <Link href="/terms_of_service" className="text-accent-blue hover:underline">
               Terms of Service
             </Link>{" "}
@@ -109,21 +282,12 @@ export default function SignInPage() {
           </p>
         </div>
 
-        <p className="text-text-muted text-xs font-mono text-center mt-6">
-          v0.1.0 · Phase 1
-        </p>
+        <p className="text-text-muted text-xs font-mono text-center mt-6">v0.1.0 · Phase 1</p>
       </div>
     </div>
   );
 }
 
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-    </svg>
-  );
+function Spinner() {
+  return <div className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />;
 }

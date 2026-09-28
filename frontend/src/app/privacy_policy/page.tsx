@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Data We Collect</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Google account name, email address, and profile photo (via Google Sign-In)</li>
+              <li>Your mobile number and the name you give when you sign up, plus a one-way hash of your 4-digit PIN (never the PIN itself)</li>
               <li>Messages and queries you send to the assistant, and its replies</li>
               <li>Documents and files you upload to the knowledge base</li>
               <li>Tasks, notes, goals, reminders, and expense records you create</li>

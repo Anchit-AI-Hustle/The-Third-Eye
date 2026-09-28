@@ -50,8 +50,8 @@ const FEATURES: Feature[] = [
 const FLOW = [
   {
     step: "01",
-    title: "Sign in with Google",
-    body: "One click. We ask for your name and email to identify your workspace — nothing else, unless you turn on an integration yourself.",
+    title: "Sign in with your mobile number",
+    body: "Your number and a 4-digit PIN. We ask for your name once — nothing else, unless you turn on an integration yourself.",
   },
   {
     step: "02",
@@ -184,7 +184,7 @@ export default async function Home() {
                   href="/auth/signin"
                   className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-input bg-accent-blue px-7 text-sm font-semibold text-background-base shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-interaction hover:brightness-110 active:scale-[0.98]"
                 >
-                  Get started with Google
+                  Get started
                   <span aria-hidden>→</span>
                 </Link>
               </HoloFrame>

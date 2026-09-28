@@ -30,9 +30,16 @@ otherwise undocumented outside this file and the code itself.
 ## 2. Tech stack & platform
 
 - **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
-- **Auth:** NextAuth v4, Google OAuth, **JWT** sessions. Basic sign-in requests only
-  `openid email profile`; the sensitive Gmail/Chat scopes are gated behind a
-  separate opt-in "Connect Google" flow so login never trips OAuth-verification.
+- **Auth:** NextAuth v4 with a **credentials** provider — a **mobile number and a
+  4-digit PIN**, ported from parwah-hq. **JWT** sessions. Accounts live in
+  `phone_users` (scrypt PIN hash, 5 wrong tries → 15-minute lock); the sign-in
+  form pre-flights the number against `POST /api/auth/phone` to decide whether to
+  ask for a name (sign-up) or the PIN. The identity the whole app keys on,
+  `session.user.email`, is now the E.164 number — an opaque string to every
+  consumer. **Google OAuth is commented out in `lib/auth.ts`, not deleted.**
+  Removing it costs no feature: Gmail/Calendar always ran on the refresh token
+  from the separate opt-in "Connect Google" flow (Settings → Connections), never
+  on the session's Google token.
 - **Data:** Supabase (Postgres) with **pgvector** for memory/RAG. The browser never
   talks to Supabase directly (see §4).
 - **LLM:** a 7-provider server-side cascade (`lib/llmCascade.ts`) — openai →

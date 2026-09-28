@@ -6,36 +6,27 @@ import { Suspense } from "react";
 
 // NextAuth redirects here with ?error=<code>. Map each code to something the
 // operator can act on, and always surface the raw code — a generic "an error
-// occurred" hides whether the problem is a redirect-URI mismatch, a consent
-// screen still in Testing mode, or missing server env.
+// occurred" hides whether the problem is missing server env or a bad PIN.
+//
+// The OAuth codes (OAuthSignin, OAuthCallback, OAuthAccountNotLinked,
+// AccessDenied for a Google consent screen) went when Google stopped being a
+// sign-in provider — see lib/auth.ts. Sign-in is now a mobile number and a
+// 4-digit PIN, and the form shows a wrong PIN or a locked account inline, so
+// almost nothing should ever land here.
 const ERRORS: Record<string, { title: string; detail: string }> = {
   Configuration: {
     title: "Server isn't configured for sign-in",
     detail:
-      "The Google credentials or NextAuth secret are missing on the server. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET and NEXTAUTH_URL in the deployment environment.",
+      "Sign-in needs NEXTAUTH_SECRET and NEXTAUTH_URL, and a Supabase service-role key to keep accounts in (NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY). Set them in the deployment environment.",
   },
-  AccessDenied: {
-    title: "Google blocked the sign-in",
+  CredentialsSignin: {
+    title: "That number and PIN didn’t match",
     detail:
-      "Either you dismissed the consent screen, or this account isn’t on the OAuth consent screen’s test-users list. Sign-in requests restricted Gmail scopes, so publishing the app is NOT enough on its own — until Google’s verification review completes, only listed test users can sign in. Add the account under OAuth consent screen → Test users in Google Cloud Console (docs/GOOGLE_OAUTH.md covers the review and the one-line rollback to identity-only scopes).",
+      "Check the number, then the PIN. Five wrong PINs lock the account for fifteen minutes; after that, try again.",
   },
-  OAuthSignin: {
-    title: "Couldn’t start the Google sign-in",
-    detail:
-      "Usually the client ID/secret is wrong, or the app’s authorized origin doesn’t match. Check the OAuth client in Google Cloud Console.",
-  },
-  OAuthCallback: {
-    title: "Google rejected the callback",
-    detail:
-      "This is almost always a redirect-URI mismatch. Add exactly “<this-origin>/api/auth/callback/google” to Authorized redirect URIs on the OAuth client, and make sure NEXTAUTH_URL matches this origin.",
-  },
-  OAuthAccountNotLinked: {
-    title: "That email is linked to a different sign-in method",
-    detail: "Use the provider you originally signed in with for this email.",
-  },
-  Verification: {
-    title: "This sign-in link has expired",
-    detail: "Request a fresh link and try again.",
+  SessionRequired: {
+    title: "Please sign in to see that page",
+    detail: "Your session has expired, or you were never signed in on this device.",
   },
   Default: {
     title: "Authentication error",

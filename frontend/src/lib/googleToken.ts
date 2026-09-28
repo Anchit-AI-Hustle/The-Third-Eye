@@ -96,10 +96,10 @@ export async function revokeGoogleAccess(
 /**
  * Google scopes the Gmail/Calendar/Chat features need.
  *
- * Requested at sign-in (see lib/auth.ts) so signing in with Google grants
- * everything in one consent screen: the user is asked once, at that moment, and
- * nothing needs connecting afterwards. The standalone connect flow stays on as
- * a repair path for anyone who unticked a box on that screen.
+ * Requested by the standalone connect flow (/api/connect/google) alone. Sign-in
+ * is a mobile number and a 4-digit PIN (see lib/auth.ts) and asks Google for
+ * nothing, so connecting Google is always a separate, explicit step —
+ * Settings → Connections.
  *
  * calendar.events is deliberately absent — nothing ever calls the Calendar API
  * to write ("add event" opens a calendar.google.com deep link, which needs no

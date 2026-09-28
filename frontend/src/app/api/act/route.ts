@@ -14,9 +14,9 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
-  // The confirmed send needs a token carrying gmail.send. Sign-in now requests
-  // that scope, so the stored grant normally has it; the session token is still
-  // not used here because it can lag a re-consent.
+  // The confirmed send needs a token carrying gmail.send, and only the opt-in
+  // connect flow (Settings → Connections) ever grants it — sign-in is a phone
+  // number and a PIN and asks Google for nothing.
   let accessToken: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       if (premiumEnforced() && (await getTier(email)) !== "premium") {
         return json({ ok: false, result: "Sending email needs JARVIS Premium. Upgrade in Settings → Upgrade." });
       }
-      if (!accessToken) return json({ ok: false, result: "Gmail isn't connected. Signing in with Google normally grants this — sign out and back in, or use Settings → Connections → \"Connect Google\" and allow Gmail access." });
+      if (!accessToken) return json({ ok: false, result: "Gmail isn't connected. Signing in grants no mail access, so this is a one-time step: Settings → Connections → \"Connect Google\", and allow Gmail access." });
       const sent = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
       if (sent.ok) return json({ ok: true, result: `Email sent to ${args?.to}.` });
       if (sent.status === 401 || sent.status === 403)

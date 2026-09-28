@@ -257,7 +257,7 @@ function IngestStatusPanel() {
       </div>
       {(!conn?.connected) && (
         <p className="mt-2 text-xs text-text-muted">
-          Signing in with Google doesn’t grant inbox access — connect here to let the assistant read Gmail &amp; Chat and turn them into tasks. Scans also run automatically every 15 minutes once connected.
+          Signing in doesn’t grant inbox access — connect here to let the assistant read Gmail &amp; Chat and turn them into tasks. Scans also run automatically every 15 minutes once connected.
         </p>
       )}
       {result && <p className="mt-2 text-xs text-[#4FC3F7] font-mono">{result}</p>}
