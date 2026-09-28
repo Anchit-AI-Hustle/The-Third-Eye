@@ -3,7 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
 import { resolveAuthSecret } from "@/lib/authSecret";
-import { SIGNIN_SCOPES } from "@/lib/googleToken";
+import { BASIC_SCOPE_LIST } from "@/lib/googleToken";
 
 /**
  * The FastAPI backend, when one is reachable.
@@ -60,16 +60,33 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          // Everything is asked for here, in one consent screen, so signing in
-          // with Google IS connecting Google — Gmail, Calendar and Chat work
-          // immediately afterwards with no second step for the user to find.
+          // IDENTITY ONLY AT SIGN-IN. This is the rollback documented in
+          // docs/GOOGLE_OAUTH.md, taken because the cost described below was
+          // being paid in full.
           //
-          // The cost: gmail.readonly and gmail.send are *restricted* scopes, so
-          // until this OAuth client passes Google's verification review only
-          // accounts on the project's test-user list can finish signing in.
-          // That is a Google Cloud console state, not something code can change
-          // — see docs/GOOGLE_OAUTH.md for the review and the rollback.
-          scope: SIGNIN_SCOPES,
+          // Sign-in used to request SIGNIN_SCOPES — identity plus Gmail,
+          // Calendar and Chat — so that signing in with Google also connected
+          // it, in one consent screen. gmail.readonly and gmail.send are
+          // *restricted* scopes, and requesting them AT SIGN-IN makes Google's
+          // verification review a gate on logging in at all: while the consent
+          // screen is unverified, only accounts on the test-user list can get
+          // in and everybody else is refused with AccessDenied.
+          //
+          // That is exactly what was happening. It worked for the owner, who is
+          // a test user, and failed for every other person who tried — the same
+          // shape as a link that opens for whoever is already signed in and
+          // shows a wall to everyone else.
+          //
+          // Restricted-scope review needs a CASA assessment and takes weeks, so
+          // until it clears, identity-only is the difference between an app
+          // anyone can use and an app only its author can use.
+          //
+          // Gmail, Calendar and Chat are not lost. /api/connect/google requests
+          // INGESTION_SCOPES on its own, and googleCapabilities() reads what was
+          // actually granted, so a user without them is told the feature is not
+          // connected rather than watching it fail. Restoring the one-screen
+          // flow after verification is this line going back to SIGNIN_SCOPES.
+          scope: BASIC_SCOPE_LIST.join(" "),
           // offline + a forced consent are what actually yield a refresh token.
           // Without prompt=consent Google omits it for anyone who authorized
           // before, and the crons (reminders, Gmail scrape) can only act while
