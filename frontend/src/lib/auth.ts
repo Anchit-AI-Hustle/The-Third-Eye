@@ -3,7 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
 import { resolveAuthSecret } from "@/lib/authSecret";
-import { BASIC_SCOPE_LIST } from "@/lib/googleToken";
+import { BASIC_SCOPE_LIST, INGESTION_SCOPE_LIST, hasGoogleScope } from "@/lib/googleToken";
 
 /**
  * The FastAPI backend, when one is reachable.
@@ -17,8 +17,34 @@ import { BASIC_SCOPE_LIST } from "@/lib/googleToken";
  */
 const BACKEND_URL = process.env.BACKEND_URL?.trim();
 
+/**
+ * Store a refresh token for the background jobs - but only one that can do
+ * something for them.
+ *
+ * THE BUG THIS FIXES
+ *   Sign-in asks for identity only (see the provider config below). The refresh
+ *   token it yields can mint nothing but identity, and this function used to
+ *   store it anyway.
+ *
+ *   google_tokens holds ONE row per user, upserted on user_id, and it is the row
+ *   the Gmail/Chat crons, /api/chat and /api/act all read. So a user who
+ *   connected Google through /api/connect/google and then signed in again had
+ *   their feature-scoped grant overwritten by an identity-only one: Gmail stops
+ *   working, and the row looks healthier than ever because updated_at is fresh.
+ *
+ *   The same write drove the "Connected" badge in Settings, which read row
+ *   presence. Every sign-in created a row, so every user was told Google was
+ *   connected when no feature scope had ever been granted. (That endpoint now
+ *   reads the scopes as well - two independent defects, one cause.)
+ *
+ *   Nothing needs an identity-only refresh token. Sessions are JWTs, and the
+ *   only readers of this row want Gmail, Calendar or Chat. So the rule is: a
+ *   grant that carries no feature scope does not belong in that row, and must
+ *   not be allowed to displace one that does.
+ */
 async function persistRefreshToken(email: string | undefined, refreshToken: string | undefined, scope: string | undefined) {
   if (!email || !refreshToken) return;
+  if (!INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(scope, s))) return;
   const sb = getAdminSupabase();
   const enc = encrypt(refreshToken);
   if (!sb || !enc) return;
