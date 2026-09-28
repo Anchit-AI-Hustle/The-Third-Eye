@@ -69,9 +69,23 @@ jobs:
           REPO: ${{ github.repository }}
           BASE: ${{ github.event.pull_request.base.ref }}
           # The checks that actually have to be green before a dependency bump
-          # may merge itself. These are job names from ci.yml (frontend,
-          # backend) and strix-security.yml (scan).
-          MUST_REQUIRE: "frontend backend scan"
+          # may merge itself: the two jobs in ci.yml.
+          #
+          # `scan` from strix-security.yml is deliberately NOT here. It needs
+          # LLM_API_KEY, and when that is absent its creds step sets
+          # ready=false, every later step is skipped by `if:`, and the job
+          # SUCCEEDS with a notice — by design, so the workflow does not turn
+          # every pull request red before the secret exists. But a Dependabot
+          # `pull_request` run never receives secrets, so for exactly the PRs
+          # this file merges, `scan` is green without having scanned anything.
+          # Requiring it would gate on a check that cannot fail, which is the
+          # same false assurance this whole file exists to avoid.
+          #
+          # To make security a real gate here, `scan` has to be able to fail:
+          # give Dependabot runs the credential (Settings -> Secrets ->
+          # Dependabot), or make the job fail rather than skip when the key is
+          # missing. Add it to this list once either is true.
+          MUST_REQUIRE: "frontend backend"
         run: |
           set -uo pipefail
           # Two independent mechanisms can require a check, and a branch can use

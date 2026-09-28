@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isOverdue, isDueSoon } from "@/lib/taskDates";
+import { TASK_STATUSES, taskStatusLabel } from "@/lib/taskStatus";
 import { useAgentProfile, type AgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
@@ -20,13 +21,7 @@ import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 type ViewMode = "table" | "kanban";
 type SortKey = "title" | "assignee" | "start_date" | "due_date" | "priority" | "status";
 
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: "todo", label: "To Do" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "review", label: "In Review" },
-  { value: "done", label: "Done" },
-  { value: "cancelled", label: "Cancelled" },
-];
+const STATUS_OPTIONS = TASK_STATUSES;
 
 // Tab split: Office = Vahdam work, Personal = everything else. Tasks without a
 // workspace (legacy rows, Vahdam-gated email/chat extraction) land on Office.
@@ -766,10 +761,9 @@ function PriorityBadge({ priority }: { priority: TaskPriority }) {
 }
 
 function StatusBadge({ status }: { status: TaskStatus }) {
-  const label: Record<TaskStatus, string> = { todo: "To Do", in_progress: "In Progress", review: "In Review", done: "Done", cancelled: "Cancelled" };
   return (
     <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium", STATUS_STYLE[status])}>
-      {label[status]}
+      {taskStatusLabel(status)}
     </span>
   );
 }
