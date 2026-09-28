@@ -1466,9 +1466,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Use the stored Google grant (gmail/calendar scopes) when available. Since
-  // sign-in now requests those scopes, this is normally present for anyone
-  // signed in with Google rather than something they had to connect.
+  // Use the stored Google grant (gmail/calendar scopes) when available. Sign-in
+  // does NOT grant these - it asks for identity only, because the Gmail scopes
+  // are restricted and requesting them at sign-in gates login on Google's
+  // verification review. So this is absent for most signed-in users until they
+  // go through /api/connect/google, and the capability check below is what the
+  // assistant must act on rather than the presence of a token.
   let googleScope: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);

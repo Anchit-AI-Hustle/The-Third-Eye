@@ -96,10 +96,17 @@ export async function revokeGoogleAccess(
 /**
  * Google scopes the Gmail/Calendar/Chat features need.
  *
- * Requested at sign-in (see lib/auth.ts) so signing in with Google grants
- * everything in one consent screen: the user is asked once, at that moment, and
- * nothing needs connecting afterwards. The standalone connect flow stays on as
- * a repair path for anyone who unticked a box on that screen.
+ * NOT requested at sign-in. gmail.readonly and gmail.send are restricted
+ * scopes, and asking for them on the login consent screen makes Google's
+ * verification review a gate on logging in at all - while the screen is
+ * unverified, only test users get in. lib/auth.ts therefore asks for identity
+ * only, and these are requested separately by /api/connect/google.
+ *
+ * This comment used to say the opposite, and said it after the rollback had
+ * already shipped. Two call sites read it and repeated the claim, and
+ * /api/connect/google/status was built on it - reporting "Connected" to every
+ * signed-in user. A stale comment about who grants what is not a cosmetic
+ * defect in this file.
  *
  * calendar.events is deliberately absent — nothing ever calls the Calendar API
  * to write ("add event" opens a calendar.google.com deep link, which needs no
