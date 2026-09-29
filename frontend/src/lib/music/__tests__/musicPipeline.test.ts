@@ -97,3 +97,16 @@ describe("normalising AI values", () => {
     expect(cleanTempo("fast")).toBeNull();
   });
 });
+
+describe("daily chains", () => {
+  it("keeps every chain within what one link accepts, however many users there are", async () => {
+    const { splitChains, CHAIN_MAX } = await import("@/lib/music/daily");
+    for (const n of [0, 3, 5, 4999, 5001, 12_345]) {
+      const users = Array.from({ length: n }, (_, i) => `u${i}`);
+      const chains = splitChains(users);
+      expect(chains.every((c) => c.length > 0 && c.length <= CHAIN_MAX)).toBe(true);
+      expect(chains.flat().sort()).toEqual([...users].sort());
+    }
+    expect(splitChains(Array.from({ length: 5001 }, (_, i) => `u${i}`)).length).toBe(6);
+  });
+});

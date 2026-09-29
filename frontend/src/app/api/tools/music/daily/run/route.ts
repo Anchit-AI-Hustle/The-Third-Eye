@@ -1,6 +1,6 @@
 import { NextRequest, after } from "next/server";
 import { getDb } from "@/lib/db";
-import { runDaily, startChain } from "@/lib/music/daily";
+import { CHAIN_MAX, runDaily, startChain } from "@/lib/music/daily";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   let users: unknown;
   try { ({ users } = await req.json()); } catch { return new Response("Invalid JSON", { status: 400 }); }
-  if (!Array.isArray(users) || !users.length || users.length > 1000 || !users.every((u) => typeof u === "string" && u.length > 0 && u.length <= 320)) {
+  if (!Array.isArray(users) || !users.length || users.length > CHAIN_MAX || !users.every((u) => typeof u === "string" && u.length > 0 && u.length <= 320)) {
     return new Response("users must be a non-empty list of ids", { status: 400 });
   }
   const [head, ...rest] = users as string[];

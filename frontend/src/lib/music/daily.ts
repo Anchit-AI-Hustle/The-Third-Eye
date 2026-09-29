@@ -18,6 +18,8 @@ import type { MusicInput } from "./types";
 export const CHUNK = 1024 * 1024;
 const CLAIM_LEASE_MS = 5 * 60_000;
 const CHAINS = 5;
+/** The most user ids one chain link accepts. */
+export const CHAIN_MAX = 1000;
 export const KEEP_DAYS = 7;
 const MAX_AUDIO = 40 * 1024 * 1024;
 
@@ -180,16 +182,24 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
  * the rest of its list — so no user waits on another's time budget, and there
  * is no cap on how many get a track.
  */
-export async function dispatchDaily(db: Db): Promise<{ users: number; chains: number }> {
+/** Round-robin the users into at least CHAINS chains, and as many more as keep each within CHAIN_MAX. */
+export function splitChains(users: string[]): string[][] {
+  const count = Math.min(users.length, Math.max(CHAINS, Math.ceil(users.length / CHAIN_MAX)));
+  return Array.from({ length: count }, (_, c) => users.filter((_, i) => i % count === c));
+}
+
+export async function dispatchDaily(db: Db): Promise<{ users: number; chains: number; started: number; unstarted: number }> {
   const [{ data: enabled }, { data: done }] = await Promise.all([
     db.from("music_daily").select("user_id").eq("enabled", true),
     db.from("music_daily_tracks").select("user_id").eq("day", today()),
   ]);
   const have = new Set(((done as { user_id: string }[] | null) ?? []).map((r) => r.user_id));
   const users = ((enabled as { user_id: string }[] | null) ?? []).map((r) => r.user_id).filter((u) => !have.has(u));
-  const chains = Array.from({ length: Math.min(CHAINS, users.length) }, (_, c) => users.filter((_, i) => i % CHAINS === c));
-  await Promise.all(chains.map(startChain));
-  return { users: users.length, chains: chains.length };
+  const chains = splitChains(users);
+  const ok = await Promise.all(chains.map(startChain));
+  // Reported, not swallowed: a chain that didn't start is users without today's track.
+  const unstarted = chains.filter((_, i) => !ok[i]).reduce((n, c) => n + c.length, 0);
+  return { users: users.length, chains: chains.length, started: ok.filter(Boolean).length, unstarted };
 }
 
 /** Hand a list of users to the next chain link. Resolves once that link has accepted it. */
