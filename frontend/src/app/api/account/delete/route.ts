@@ -48,27 +48,67 @@ export async function POST(_req: NextRequest) {
   const deleted: string[] = [];
   const failed: string[] = [];
 
-  // THE SIGN-IN CREDENTIAL ITSELF, deleted explicitly rather than through the
-  // loop below, because it is the one table keyed by `phone` — and because a
-  // deletion that leaves it behind is the worst kind of failure here: the user is
-  // told their account is gone and signed out, while their number, name and PIN
-  // hash remain and they can sign straight back into an account that supposedly
-  // does not exist. `email` IS the E.164 number under phone sign-in (see
-  // lib/auth.ts), which is what makes this match.
-  {
-    const { error } = await sb.from("phone_users").delete().eq("phone", email);
-    (error ? failed : deleted).push("phone_users");
-  }
+  // A table or column this schema does not have is not a failed deletion —
+  // there was nothing there to delete. Only a real error counts, and only a real
+  // error may stop the credential being removed below.
+  const SCHEMA_CODES = new Set(["42P01", "42703", "PGRST204", "PGRST205"]);
+  const realFailures: string[] = [];
 
   for (const table of TABLES) {
     let ok = false;
+    let lastCode: string | undefined;
     for (const col of ["user_id", "email"]) {
       const { error } = await sb.from(table).delete().eq(col, email);
       if (!error) { ok = true; break; }
+      lastCode = (error as { code?: string }).code;
       // Column-missing / relation-missing → try the other column / skip table.
     }
     (ok ? deleted : failed).push(table);
+    if (!ok && !SCHEMA_CODES.has(lastCode ?? "")) realFailures.push(table);
   }
+
+  // THE SIGN-IN CREDENTIAL GOES LAST, AND ONLY IF EVERYTHING ELSE WENT.
+  //
+  // It was first, so that it would be visible rather than buried in the loop.
+  // That was the wrong order. If a later delete failed, the credential was
+  // already gone, this route still answered 200, the client wiped local storage
+  // and signed the user out — and they could no longer authenticate to try
+  // again, while the rows named in `failed` stayed in the database for good.
+  // Erasure that removes the only way to ask again is worse than erasure that
+  // has to be repeated.
+  //
+  // `email` IS the E.164 number under phone sign-in (see lib/auth.ts), which is
+  // what makes this match; the loop above cannot do it, because it keys on
+  // `user_id`/`email` and this is the one table keyed on `phone`.
+  if (realFailures.length) {
+    return Response.json(
+      {
+        error:
+          "Some of your data could not be deleted, so your sign-in has been left intact — " +
+          "you are still signed in and can try again.",
+        remote: true,
+        deleted,
+        failed: realFailures,
+        google,
+      },
+      { status: 500 },
+    );
+  }
+
+  const { error: credError } = await sb.from("phone_users").delete().eq("phone", email);
+  if (credError) {
+    return Response.json(
+      {
+        error: "Your data was deleted, but your sign-in could not be removed. Please try again.",
+        remote: true,
+        deleted,
+        failed,
+        google,
+      },
+      { status: 500 },
+    );
+  }
+  deleted.push("phone_users");
 
   return Response.json({ ok: true, remote: true, deleted, failed, google });
 }

@@ -45,14 +45,20 @@ type Cache = Map<string, Mailbox>;
 async function mailboxFor(sb: Sb, cache: Cache, userId: string): Promise<Mailbox> {
   const hit = cache.get(userId);
   if (hit) return hit;
-  const { data } = await sb.from("google_tokens").select("refresh_token_enc").eq("user_id", userId).maybeSingle();
+  const { data } = await sb
+    .from("google_tokens")
+    .select("refresh_token_enc, email")
+    .eq("user_id", userId)
+    .maybeSingle();
   const refresh = data?.refresh_token_enc ? decrypt(data.refresh_token_enc) : null;
   const token = refresh ? await accessTokenFromRefresh(refresh) : null;
+  // The address recorded when they connected is the reliable one. Asking Gmail
+  // is the fallback for grants stored before that column existed, and it only
+  // works on a scope that can read the mailbox — getProfile refuses a send-only
+  // grant, which is why the stored value comes first.
   const to = isEmailIdentity(userId)
     ? userId
-    : token
-      ? await gmailAddressFor(token)
-      : null;
+    : (data?.email as string | undefined) || (token ? await gmailAddressFor(token) : null);
   const box: Mailbox = { token, to };
   cache.set(userId, box);
   return box;

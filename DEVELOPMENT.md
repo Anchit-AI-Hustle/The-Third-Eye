@@ -43,8 +43,9 @@ otherwise undocumented outside this file and the code itself.
   pre-flights the number against `POST /api/auth/phone` to decide whether to ask
   for a name (sign-up) or the PIN — that route returns **only** whether the
   number is registered, never the account holder's name or lock state.
-  Deleting an account removes the `phone_users` row too, or the user is signed
-  out of an account they can walk straight back into. The identity the whole app keys on,
+  Deleting an account removes the `phone_users` row too — **last**, and only once
+  every other table succeeded, so a partial failure can still be retried rather
+  than signing someone out of an account they can no longer reach. The identity the whole app keys on,
   `session.user.email`, is now the E.164 number — an opaque key to almost every
   consumer, but **anything that writes *to* the identity rather than keying on it
   must check `isEmailIdentity()`** (`lib/serverIdentity.ts`): Stripe's

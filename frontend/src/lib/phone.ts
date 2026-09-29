@@ -7,20 +7,29 @@
 // what a valid number looks like and what a bad PIN looks like are the same
 // answers on both sides of the wire, and the form gives them before a round trip.
 
-export const PHONE_CC: Record<string, { min: number; max: number; re?: RegExp; name: string }> = {
-  "+91": { min: 10, max: 10, re: /^[6-9]\d{9}$/, name: "India" },
+// `trunk` marks a country whose domestic form carries a leading 0 that E.164
+// drops. Those countries' subscriber numbers never begin with 0, so the digit can
+// be removed with no ambiguity — see the note on canonicalisation in normPhone.
+// +1 (NANP) and +65 have no trunk prefix; +86 mobiles are 11 digits beginning 1,
+// so a leading 0 there would be a landline form this table does not accept
+// anyway, and stripping it would invent a number.
+export const PHONE_CC: Record<
+  string,
+  { min: number; max: number; re?: RegExp; name: string; trunk?: boolean }
+> = {
+  "+91": { min: 10, max: 10, re: /^[6-9]\d{9}$/, name: "India", trunk: true },
   "+1": { min: 10, max: 10, re: /^[2-9]\d{9}$/, name: "USA / Canada" },
-  "+44": { min: 9, max: 10, name: "UK" },
-  "+971": { min: 8, max: 9, name: "UAE" },
-  "+61": { min: 9, max: 9, name: "Australia" },
+  "+44": { min: 9, max: 10, name: "UK", trunk: true },
+  "+971": { min: 8, max: 9, name: "UAE", trunk: true },
+  "+61": { min: 9, max: 9, name: "Australia", trunk: true },
   "+65": { min: 8, max: 8, re: /^[3689]\d{7}$/, name: "Singapore" },
-  "+49": { min: 7, max: 11, name: "Germany" },
-  "+81": { min: 9, max: 10, name: "Japan" },
+  "+49": { min: 7, max: 11, name: "Germany", trunk: true },
+  "+81": { min: 9, max: 10, name: "Japan", trunk: true },
   "+86": { min: 11, max: 11, name: "China" },
-  "+92": { min: 10, max: 10, name: "Pakistan" },
-  "+880": { min: 10, max: 10, name: "Bangladesh" },
-  "+977": { min: 10, max: 10, name: "Nepal" },
-  "+94": { min: 9, max: 9, name: "Sri Lanka" },
+  "+92": { min: 10, max: 10, name: "Pakistan", trunk: true },
+  "+880": { min: 10, max: 10, name: "Bangladesh", trunk: true },
+  "+977": { min: 10, max: 10, name: "Nepal", trunk: true },
+  "+94": { min: 9, max: 9, name: "Sri Lanka", trunk: true },
 };
 
 export interface ParsedPhone {
@@ -70,18 +79,29 @@ export function normPhone(v: unknown, cc?: unknown): ParsedPhone | null {
 
   // A LEADING ZERO IS A TRUNK PREFIX, NOT PART OF THE NUMBER. The form asks for
   // a national number next to a country code, which is exactly how people write
-  // and how browsers autofill: 07123 456789 in the UK, 0412 345 678 in
-  // Australia, 09876543210 in India. Those carry a domestic dialling prefix that
-  // E.164 drops, and measuring them with it still attached rejected perfectly
-  // ordinary numbers — the UK's 11 digits against a maximum of 10, Australia's
-  // 10 against a required 9 — and told the person their own number was invalid.
+  // it and how browsers autofill it: 07123 456789 in the UK, 0412 345 678 in
+  // Australia, 03-1234-5678 in Japan, 09876543210 in India. E.164 drops that
+  // digit.
   //
-  // Tried WITH the zero first, so nothing that used to be accepted stops being
-  // accepted, and the zero is only dropped from a number that would otherwise be
-  // refused. One zero, not all of them: a trunk prefix is a single digit.
-  return (
-    accept(code, local!) ?? (local!.startsWith("0") ? accept(code, local!.slice(1)) : null)
-  );
+  // CANONICALISED BEFORE VALIDATING, NOT AS A FALLBACK. Stripping it only when
+  // the number failed as typed looked conservative and was worse: a Japanese
+  // 0312345678 is ten digits, so it PASSED the 9-10 rule untouched and was stored
+  // as +810312345678, while the same person entering +81312345678 got
+  // +81312345678. One subscriber, two identities, each with its own PIN and its
+  // own workspace — and since the number is the identity key, that is a silent
+  // account split rather than a validation nit.
+  //
+  // So for a country whose domestic form carries the prefix, the digit is removed
+  // first and the rules then see one canonical form. Only those countries, and
+  // only one digit: a trunk prefix is a single 0, and in those countries no
+  // subscriber number begins with one.
+  const rule = PHONE_CC[code];
+  if (rule?.trunk && local!.length > 1 && local!.startsWith("0")) local = local!.slice(1);
+
+  // Countries with no rules of their own keep the old lenient retry, since there
+  // is no table to say whether they use a prefix.
+  if (rule) return accept(code, local!);
+  return accept(code, local!) ?? (local!.startsWith("0") ? accept(code, local!.slice(1)) : null);
 }
 
 function accept(code: string, local: string): ParsedPhone | null {

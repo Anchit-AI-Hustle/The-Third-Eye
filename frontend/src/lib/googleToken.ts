@@ -126,13 +126,25 @@ export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/chat.messages.readonly",
 ] as const;
 
-export const INGESTION_SCOPES = INGESTION_SCOPE_LIST.join(" ");
-
-/** Identity scopes every sign-in needs regardless of feature access. */
+/** Identity scopes. Requested by the connect flow, and by sign-in if Google is
+ * ever restored as a provider (see lib/auth.ts). */
 export const BASIC_SCOPE_LIST = ["openid", "email", "profile"] as const;
 
-/** The full set requested at sign-in: identity plus every feature scope. */
-export const SIGNIN_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].join(" ");
+/**
+ * Everything /api/connect/google asks for: the feature scopes plus identity.
+ *
+ * Identity is in there so the callback can record WHICH mailbox the grant belongs
+ * to — the cron needs that to send someone their own reminders, and it can be
+ * neither inferred from the identity key (a phone number since sign-in changed)
+ * nor always read back from Gmail, because users/me/profile refuses a send-only
+ * grant. openid/email are not restricted, so including them does not put this
+ * screen behind OAuth verification.
+ *
+ * "connected" still means holding a FEATURE scope (see
+ * /api/connect/google/status), so adding identity here cannot make an
+ * identity-only grant look like a connection — the defect #313 fixed.
+ */
+export const CONNECT_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].join(" ");
 
 /**
  * Whether a granted scope string actually carries a scope.

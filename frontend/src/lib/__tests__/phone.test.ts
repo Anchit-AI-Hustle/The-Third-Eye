@@ -53,6 +53,25 @@ describe("normPhone", () => {
     expect(normPhone("0000000")).toBeNull();
   });
 
+  it("gives one subscriber one identity, whichever form they type", () => {
+    // THE BUG THIS PINS. The zero used to be dropped only when the number failed
+    // as typed. Japanese 0312345678 is ten digits, so it passed the 9-10 rule
+    // untouched and became +810312345678, while +81312345678 stayed itself. The
+    // number IS the identity key, so that was two accounts for one person — two
+    // PINs, two workspaces — not a formatting nit.
+    expect(normPhone("0312345678", "+81")?.e164).toBe("+81312345678");
+    expect(normPhone("+81312345678")?.e164).toBe("+81312345678");
+    expect(normPhone("0312345678", "+81")?.e164).toBe(normPhone("+81312345678")?.e164);
+    // Same for a country where the domestic form was already being rejected.
+    expect(normPhone("07123456789", "+44")?.e164).toBe(normPhone("+447123456789")?.e164);
+  });
+
+  it("leaves a country with no trunk prefix alone", () => {
+    // NANP has none: a leading 0 is not a prefix there, it is an invalid number.
+    expect(normPhone("0415555267", "+1")).toBeNull();
+    expect(normPhone("4155552671", "+1")?.e164).toBe("+14155552671");
+  });
+
   it("returns null rather than a half-parsed number for junk", () => {
     expect(normPhone("")).toBeNull();
     expect(normPhone("not a phone")).toBeNull();

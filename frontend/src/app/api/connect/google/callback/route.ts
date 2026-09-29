@@ -7,6 +7,29 @@ import { originFromRequest } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
+/**
+ * The address out of Google's id_token, without verifying the signature.
+ *
+ * Safe here and only here: this token came back over TLS from Google's own token
+ * endpoint in direct response to our code exchange, so it is not attacker-
+ * supplied. It is used as a delivery address for the user's own mail, never as
+ * proof of identity — that is `session.user.email`, which this never touches.
+ */
+function emailFromIdToken(idToken: string | undefined): string | null {
+  if (!idToken) return null;
+  try {
+    const payload = idToken.split(".")[1];
+    if (!payload) return null;
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      email?: string;
+      email_verified?: boolean;
+    };
+    return claims.email && claims.email_verified !== false ? claims.email : null;
+  } catch {
+    return null;
+  }
+}
+
 // Completes the opt-in Google connect flow: exchanges the code for a refresh
 // token carrying the Gmail/Chat scopes and stores it (encrypted) for the user.
 export async function GET(req: Request) {
@@ -45,13 +68,26 @@ export async function GET(req: Request) {
     return NextResponse.redirect(`${base}/settings?connect=google_error`);
   }
 
-  const tok = (await res.json()) as { refresh_token?: string; scope?: string };
+  const tok = (await res.json()) as { refresh_token?: string; scope?: string; id_token?: string };
+
+  // WHICH MAILBOX THIS GRANT IS FOR. Recorded here because this is the one moment
+  // it is known for certain: the identity key is a phone number under phone
+  // sign-in, and Gmail's users/me/profile refuses a send-only grant, so somebody
+  // who allowed "send" and declined "read" would otherwise have a token that can
+  // deliver their reminders and no address to deliver them to.
+  const mailbox = emailFromIdToken(tok.id_token);
   const sb = getAdminSupabase();
   if (tok.refresh_token && sb) {
     const enc = encrypt(tok.refresh_token);
     if (enc) {
       await sb.from("google_tokens").upsert(
-        { user_id: email, refresh_token_enc: enc, scope: tok.scope, updated_at: new Date().toISOString() },
+        {
+          user_id: email,
+          refresh_token_enc: enc,
+          scope: tok.scope,
+          ...(mailbox ? { email: mailbox } : {}),
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: "user_id" },
       );
     }

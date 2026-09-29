@@ -1,0 +1,18 @@
+-- The Third Eye — remember which mailbox a Google grant belongs to.
+-- Run in Supabase Dashboard → SQL Editor. Safe to re-run.
+--
+-- WHY. Scheduled reminders and the daily digest are sent to the user's own
+-- inbox. The address used to be the app's identity key, which stopped being an
+-- email when sign-in became a mobile number — so the cron addressed mail to
+-- "+919876543210". The first fix asked the mailbox its own name at send time
+-- (gmail users/me/profile), which works but needs a scope that can READ the
+-- mailbox: getProfile accepts gmail.metadata, gmail.readonly or gmail.modify,
+-- and NOT gmail.send. Google's consent screen lets people tick boxes
+-- individually, so somebody who allowed "send" and declined "read" had a token
+-- that could deliver their reminders and no way to learn where to deliver them.
+--
+-- The address is known for certain at exactly one moment — the connect flow, which
+-- now also asks for `openid email` and reads it out of the id_token — so it is
+-- recorded there and read back at send time. getProfile stays as the fallback for
+-- grants stored before this column existed.
+alter table public.google_tokens add column if not exists email text;
