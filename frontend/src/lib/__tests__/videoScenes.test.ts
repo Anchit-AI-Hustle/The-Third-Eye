@@ -102,3 +102,12 @@ describe("reel framing", () => {
     expect(coverFit(1280, 720, 1280, 720)).toEqual({ x: 0, y: 0, w: 1280, h: 720 });
   });
 });
+
+describe("reel timeline", () => {
+  it("has no title or end card, so a reel runs its stated length and loops", () => {
+    const segs = planTimeline([{ clip: 5, voice: 0 }, { clip: 5, voice: 0 }], false);
+    expect(segs.map((s) => s.kind)).toEqual(["shot", "shot"]);
+    expect(segs[0].start).toBe(0);
+    expect(segs.at(-1)!.end).toBe(10);
+  });
+});

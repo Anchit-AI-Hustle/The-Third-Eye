@@ -40,17 +40,18 @@ const FADE = 0.35;
 /**
  * Lay the episode out in time. A shot lasts as long as its clip, or as long as
  * its voice-over plus a short tail if that runs longer — the last frame holds
- * rather than the line spilling into the next shot.
+ * rather than the line spilling into the next shot. A reel has no title or end
+ * card: it has to run its stated length, and its last shot loops into its first.
  */
-export function planTimeline(shots: { clip: number; voice: number }[]): Segment[] {
-  const segs: Segment[] = [{ kind: "title", start: 0, end: TITLE_SECONDS }];
-  let t = TITLE_SECONDS;
+export function planTimeline(shots: { clip: number; voice: number }[], cards = true): Segment[] {
+  const segs: Segment[] = cards ? [{ kind: "title", start: 0, end: TITLE_SECONDS }] : [];
+  let t = cards ? TITLE_SECONDS : 0;
   shots.forEach((s, i) => {
     const len = Math.max(s.clip, s.voice > 0 ? s.voice + VOICE_TAIL : 0);
     segs.push({ kind: "shot", start: t, end: t + len, shot: i });
     t += len;
   });
-  segs.push({ kind: "end", start: t, end: t + END_SECONDS });
+  if (cards) segs.push({ kind: "end", start: t, end: t + END_SECONDS });
   return segs;
 }
 
@@ -163,7 +164,8 @@ export async function assembleEpisode(opts: {
       opts.shots.map((s, i) => (s.voiceUrl ? loadVoice(ctx, s.voiceUrl, i + 1) : Promise.resolve(null))),
     );
     const music = opts.soundtrack ? await loadSoundtrack(ctx, opts.soundtrack.url) : null;
-    const segs = planTimeline(videos.map((v, i) => ({ clip: v.duration, voice: voices[i]?.duration ?? 0 })));
+    const reel = opts.aspect === "9:16";
+    const segs = planTimeline(videos.map((v, i) => ({ clip: v.duration, voice: voices[i]?.duration ?? 0 })), !reel);
     const total = segs[segs.length - 1].end;
 
     const { W, H } = canvasSize(opts.aspect ?? "16:9");
@@ -211,7 +213,7 @@ export async function assembleEpisode(opts: {
     carrier.offset.value = 0;
     carrier.connect(dest);
 
-    card(opts.title, "");
+    if (!reel) card(opts.title, "");
     await ctx.resume();
     const t0 = ctx.currentTime;
     carrier.start(t0);
@@ -227,7 +229,9 @@ export async function assembleEpisode(opts: {
     if (music) {
       const src = ctx.createBufferSource();
       src.buffer = music;
-      src.loop = music.duration < total;
+      const from = Math.min(Math.max(0, opts.soundtrack?.start ?? 0), Math.max(0, music.duration - 1));
+      // Loop on what is left after the start point, not the whole track.
+      src.loop = music.duration - from < total;
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(MUSIC_FULL, t0);
       for (const seg of segs) {
@@ -237,7 +241,7 @@ export async function assembleEpisode(opts: {
       }
       gain.gain.setTargetAtTime(0, t0 + total - MUSIC_FADE_OUT, MUSIC_FADE_OUT / 4);
       src.connect(gain).connect(dest);
-      src.start(t0, Math.min(Math.max(0, opts.soundtrack?.start ?? 0), Math.max(0, music.duration - 1)), total);
+      src.start(t0, from, total);
     }
     rec.start(1000);
 
@@ -255,7 +259,8 @@ export async function assembleEpisode(opts: {
         } else {
           card(opts.title, seg.kind === "end" ? "Made with The Third Eye" : "");
         }
-        const edge = Math.min(t - seg.start, seg.end - t);
+        // A reel cuts straight in and out, so its last frame loops into its first.
+        const edge = Math.min(reel && seg.start === 0 ? FADE : t - seg.start, reel && seg.end === total ? FADE : seg.end - t);
         if (edge < FADE) { g.fillStyle = `rgba(0,0,0,${1 - edge / FADE})`; g.fillRect(0, 0, W, H); }
         opts.onProgress?.(t / total);
         raf = requestAnimationFrame(draw);

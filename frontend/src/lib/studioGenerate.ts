@@ -177,7 +177,11 @@ export async function generateStudio(
 
   // Long-form markdown tools need more room than a short snippet tool.
   const LONG_FORM = new Set(["blog", "proposal", "prd", "report", "pitch", "lifecycle", "social", "study", "campaign", "video"]);
-  const maxTokens = tool.format === "html" ? 4000 : LONG_FORM.has(tool.id) ? 3600 : 2000;
+  // A book outline grows with its chapter count (3-5 beats each); cut short, it
+  // would quietly plan fewer chapters than were asked for.
+  const maxTokens = tool.format === "html" ? 4000
+    : tool.id === "book" ? 800 + 220 * (Number(inputs.chapters) || 12)
+    : LONG_FORM.has(tool.id) ? 3600 : 2000;
 
   const out = await llmCascade({
     system: studioSystemPrompt(tool.id, mode),

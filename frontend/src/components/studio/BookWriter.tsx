@@ -164,6 +164,9 @@ export function BookWriter({ outline, inputs, accent }: { outline: string; input
             )}
         </div>
       </div>
+      {chapters.length < (Number(inputs.chapters) || 0) && (
+        <p className="text-xs text-warning">The outline came back with {chapters.length} of the {inputs.chapters} chapters asked for — plan the book again for the full set.</p>
+      )}
       <p className="text-xs text-text-muted">
         Each chapter is written in order, about {perChapter.toLocaleString("en-IN")} words, picking up from how the last one ended. The draft is kept in this browser as you go; edit any chapter before you export.
       </p>
