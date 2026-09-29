@@ -19,9 +19,9 @@ export const CHUNK = 1024 * 1024;
 // Just past a function's 60s lifetime: a holder can't still be working after
 // this, so a claim this old belongs to an invocation that died.
 const CLAIM_LEASE_MS = 70_000;
-const CHAINS = 5;
-/** The most user ids one chain link accepts. */
-export const CHAIN_MAX = 1000;
+// At most this many daily renders run at once: Replicate throttles prediction
+// creation, and a throttled render used to be recorded as failed for the day.
+const WORKERS = 5;
 export const KEEP_DAYS = 7;
 const MAX_AUDIO = 40 * 1024 * 1024;
 
@@ -81,8 +81,11 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
 
   const { data: saved } = await db.from("music_daily").select("preset, refs").eq("user_id", userId).maybeSingle();
   if (!saved) return "no-preset";
-  const { data: already } = await db.from("music_daily_tracks").select("id").eq("user_id", userId).eq("day", day).maybeSingle();
-  if (already) return "exists";
+  const { data: already } = await db.from("music_daily_tracks").select("id, status, prediction_id").eq("user_id", userId).eq("day", day).maybeSingle();
+  // A failure before Replicate accepted the render cost nothing, so it is redone
+  // rather than counted as today's track.
+  if (already && !(already.status === "failed" && !already.prediction_id)) return "exists";
+  if (already) await db.from("music_daily_tracks").delete().eq("id", already.id);
 
   const preset = saved.preset as MusicInput;
   const refs = String(saved.refs ?? "");
@@ -178,46 +181,68 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
 }
 
 /**
- * The daily cron's part: split every enabled user still without today's track
- * into a few chains and start each one. A chain link (`/api/tools/music/daily/run`)
- * makes one user's track in its own invocation, then starts the next link with
- * the rest of its list — so no user waits on another's time budget, and there
- * is no cap on how many get a track.
+ * The daily crons' part: queue every enabled user whose day isn't settled, and
+ * start up to WORKERS workers (/api/tools/music/daily/run). Each worker claims
+ * one queued user, renders, then starts exactly one successor — so renders are
+ * bounded, and a worker that dies leaves its user's claim to expire and be
+ * picked up. Running it again (the second daily cron) re-queues anyone still
+ * waiting and restarts workers that died, without disturbing live claims.
  */
-/** Round-robin the users into at least CHAINS chains, and as many more as keep each within CHAIN_MAX. */
-export function splitChains(users: string[]): string[][] {
-  const count = Math.min(users.length, Math.max(CHAINS, Math.ceil(users.length / CHAIN_MAX)));
-  return Array.from({ length: count }, (_, c) => users.filter((_, i) => i % count === c));
-}
-
-export async function dispatchDaily(db: Db): Promise<{ users: number; chains: number; started: number; unstarted: number }> {
-  const [{ data: enabled }, { data: done }] = await Promise.all([
-    db.from("music_daily").select("user_id").eq("enabled", true),
-    db.from("music_daily_tracks").select("user_id").eq("day", today()),
+export async function dispatchDaily(db: Db): Promise<{ queued: number; workers: number }> {
+  const day = today();
+  const [{ data: enabled }, { data: tracks }] = await Promise.all([
+    db.from("music_daily").select("user_id, queued_on").eq("enabled", true),
+    db.from("music_daily_tracks").select("user_id, status, prediction_id").eq("day", day),
   ]);
-  const have = new Set(((done as { user_id: string }[] | null) ?? []).map((r) => r.user_id));
-  const users = ((enabled as { user_id: string }[] | null) ?? []).map((r) => r.user_id).filter((u) => !have.has(u));
-  const chains = splitChains(users);
-  const ok = await Promise.all(chains.map((c) => startChain(c)));
-  // Reported, not swallowed: a chain that didn't start is users without today's track.
-  const unstarted = chains.filter((_, i) => !ok[i]).reduce((n, c) => n + c.length, 0);
-  return { users: users.length, chains: chains.length, started: ok.filter(Boolean).length, unstarted };
+  const settled = new Set(
+    ((tracks as { user_id: string; status: string; prediction_id: string | null }[] | null) ?? [])
+      .filter((t) => !(t.status === "failed" && !t.prediction_id))
+      .map((t) => t.user_id),
+  );
+  const waiting = ((enabled as { user_id: string; queued_on: string | null }[] | null) ?? []).filter((u) => !settled.has(u.user_id));
+  const fresh = waiting.filter((u) => u.queued_on !== day).map((u) => u.user_id);
+  if (fresh.length) await db.from("music_daily").update({ queued_on: day, claimed_at: null }).in("user_id", fresh);
+  const started = await Promise.all(Array.from({ length: Math.min(WORKERS, waiting.length) }, () => startWorker()));
+  return { queued: waiting.length, workers: started.filter(Boolean).length };
 }
 
-/**
- * Hand a list of users to the next chain link, retrying a failed hand-off —
- * a dropped hand-off would leave everyone in `users` without today's track.
- * Resolves once a link has accepted the list, or false after the last try.
- */
-export async function startChain(users: string[], waits: number[] = [1_000, 3_000]): Promise<boolean> {
+// Just past a function's 60s lifetime, like the finalize claim.
+const QUEUE_LEASE_MS = 70_000;
+
+/** Claim the next queued user for today, skipping live claims. Null when the queue is drained. */
+export async function claimNext(db: Db): Promise<string | null> {
+  const day = today();
+  const free = `claimed_at.is.null,claimed_at.lt.${new Date(Date.now() - QUEUE_LEASE_MS).toISOString()}`;
+  const { data } = await db.from("music_daily").select("user_id").eq("queued_on", day).or(free).limit(WORKERS * 2);
+  for (const { user_id } of (data as { user_id: string }[] | null) ?? []) {
+    const { data: got } = await db.from("music_daily")
+      .update({ claimed_at: new Date().toISOString() })
+      .eq("user_id", user_id).eq("queued_on", day).or(free)
+      .select("user_id");
+    if (got?.length) return user_id;
+  }
+  return null;
+}
+
+/** One worker's turn: claim a user, render, dequeue, and start the next worker. */
+export async function workOnce(db: Db): Promise<string | null> {
+  const user = await claimNext(db);
+  if (!user) return null;
+  await runDaily(db, user).catch(() => "failed");
+  await db.from("music_daily").update({ queued_on: null, claimed_at: null }).eq("user_id", user);
+  await startWorker();
+  return user;
+}
+
+/** Start a worker, retrying a failed start. Resolves once one has accepted, or false after the last try. */
+export async function startWorker(waits: number[] = [1_000, 3_000]): Promise<boolean> {
   const base = baseUrl();
   const secret = process.env.CRON_SECRET;
-  if (!users.length || !base || !secret) return false;
+  if (!base || !secret) return false;
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${base}/api/tools/music/daily/run`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ users }),
+      headers: { Authorization: `Bearer ${secret}` },
     }).catch(() => null);
     if (res?.status === 202) return true;
     if (attempt >= waits.length) return false;

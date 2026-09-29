@@ -11,8 +11,8 @@ export const maxDuration = 60;
 // and dual-write via the dedup/merge path. Opt-in — only runs for users who
 // granted gmail.readonly through /api/connect/google.
 //
-// Also the daily drop's second sweep, 45 minutes after the first: anyone whose
-// chain hand-off failed still has no track for today and is dispatched again.
+// Also the daily drop's second sweep, 45 minutes after the first: anyone still
+// without today's track is re-queued and dead workers are replaced.
 // (Hobby plans get two daily crons; this is the other one.)
 export async function GET(req: NextRequest) {
   if (!cronAuthorized(req)) return new Response("Unauthorized", { status: 401 });

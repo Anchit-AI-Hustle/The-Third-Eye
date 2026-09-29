@@ -27,6 +27,19 @@ describe("AiFieldBar", () => {
     expect(onChange).toHaveBeenCalledWith("Mid-range");
   });
 
+  it("keeps what was typed while the suggestion was on its way", async () => {
+    let resolve!: (r: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>((r) => { resolve = r; })));
+    const onChange = vi.fn();
+    const field = { name: "a", label: "A", type: "text" as const };
+    const { rerender } = render(<AiFieldBar tool={{ label: "X" }} field={field} value="draft" context={{}} onChange={onChange} />);
+    fireEvent.click(screen.getByText("Enhance").previousSibling as HTMLElement);
+    rerender(<AiFieldBar tool={{ label: "X" }} field={field} value="draft, then a lot more typing" context={{}} onChange={onChange} />);
+    resolve(new Response(JSON.stringify({ suggestion: "polished draft" }), { status: 200 }));
+    expect(await screen.findByText(/kept your edit/)).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("shows why a suggestion failed", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "No usable suggestion came back — try again." }), { status: 502 })));
     render(<AiFieldBar tool={{ label: "X" }} field={{ name: "a", label: "A", type: "text" }} value="" context={{}} onChange={vi.fn()} />);

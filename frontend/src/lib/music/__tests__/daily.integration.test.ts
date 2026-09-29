@@ -111,39 +111,63 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     expect((await get(`bytes=${AUDIO.length}-`)).status).toBe(416);
   });
 
-  it("chains the cron's users, one invocation each, behind the cron secret", async () => {
-    const calls: { users: string[]; auth: string | null }[] = [];
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (_u: string, init: RequestInit) => {
-      calls.push({ users: JSON.parse(String(init.body)).users, auth: new Headers(init.headers).get("authorization") });
-      return new Response(null, { status: 202 });
-    }));
-    const { POST } = await import("@/app/api/tools/music/daily/run/route");
-    const call = (users: unknown, auth = "Bearer s3cret") => POST(new Request("https://x", { method: "POST", headers: { authorization: auth }, body: JSON.stringify({ users }) }) as never);
-    expect((await call(["a"], "Bearer nope")).status).toBe(401);
-    expect((await call([])).status).toBe(400);
-
-    // U already has today's track, so its link finds it done and passes on the rest.
-    expect((await call([U, "next-user", "last-user"])).status).toBe(202);
-    await Promise.all(deferred);
+  it("runs at most five workers, however many users are queued", async () => {
+    // Handing each successor on before rendering launched nearly every user at
+    // once, straight into Replicate's creation throttle.
+    const many = Array.from({ length: 12 }, (_, i) => `${U}-q${i}`);
+    for (const u of many) await db.from("music_daily").upsert({ user_id: u, enabled: true, preset: { description: "x" }, refs: "" }, { onConflict: "user_id" });
+    const starts = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", starts);
+    const { dispatchDaily } = await import("@/lib/music/daily");
+    const out = await dispatchDaily(db);
     vi.unstubAllGlobals();
-    expect(calls).toEqual([{ users: ["next-user", "last-user"], auth: "Bearer s3cret" }]);
-    expect(createPrediction).toHaveBeenCalledTimes(1);
+    expect(out.workers).toBe(5);
+    expect(starts).toHaveBeenCalledTimes(5);
+    expect(new Headers(starts.mock.calls[0][1].headers).get("authorization")).toBe("Bearer s3cret");
+    const { count } = await db.from("music_daily").select("user_id", { count: "exact", head: true }).in("user_id", many).not("queued_on", "is", null);
+    expect(count).toBe(12);
+    await db.from("music_daily").delete().in("user_id", many);
   });
 
-  it("hands the chain on before rendering, so a hung render strands no one", async () => {
-    const V = `${U}-hang`;
-    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "acid rave" }, refs: "" }, { onConflict: "user_id" });
-    const { planSong } = await import("@/lib/music/agents");
-    vi.mocked(planSong).mockImplementationOnce(() => new Promise(() => {}));
-    const calls: string[][] = [];
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (_u: string, init: RequestInit) => {
-      calls.push(JSON.parse(String(init.body)).users);
-      return new Response(null, { status: 202 });
-    }));
+  it("a worker claims one user, renders, dequeues, then starts exactly one successor", async () => {
+    const V = `${U}-w`;
+    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "acid rave" }, refs: "", queued_on: (await import("@/lib/music/daily")).today() }, { onConflict: "user_id" });
+    createPrediction.mockClear();
+    const order: string[] = [];
+    createPrediction.mockImplementation(async () => { order.push("render"); return { id: "predW", status: "starting" }; });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => { order.push("successor"); return new Response(null, { status: 202 }); }));
     const { POST } = await import("@/app/api/tools/music/daily/run/route");
-    await POST(new Request("https://x", { method: "POST", headers: { authorization: "Bearer s3cret" }, body: JSON.stringify({ users: [V, "after-hang"] }) }) as never);
-    await vi.waitFor(() => expect(calls).toEqual([["after-hang"]]));
+    expect((await POST(new Request("https://x", { method: "POST", headers: { authorization: "Bearer nope" } }) as never)).status).toBe(401);
+    expect((await POST(new Request("https://x", { method: "POST", headers: { authorization: "Bearer s3cret" } }) as never)).status).toBe(202);
+    await Promise.all(deferred);
     vi.unstubAllGlobals();
+    expect(order).toEqual(["render", "successor"]);
+    const { data } = await db.from("music_daily").select("queued_on, claimed_at").eq("user_id", V).single();
+    expect(data).toEqual({ queued_on: null, claimed_at: null });
+    await db.from("music_daily_tracks").delete().eq("user_id", V);
+    await db.from("music_daily").delete().eq("user_id", V);
+  });
+
+  it("leaves a live claim alone and takes over one whose worker died", async () => {
+    const { claimNext, today } = await import("@/lib/music/daily");
+    const live = `${U}-live`, dead = `${U}-dead`;
+    await db.from("music_daily").upsert({ user_id: live, enabled: true, preset: {}, refs: "", queued_on: today(), claimed_at: new Date().toISOString() }, { onConflict: "user_id" });
+    await db.from("music_daily").upsert({ user_id: dead, enabled: true, preset: {}, refs: "", queued_on: today(), claimed_at: new Date(Date.now() - 120_000).toISOString() }, { onConflict: "user_id" });
+    expect(await claimNext(db)).toBe(dead);
+    expect(await claimNext(db)).toBeNull();
+    await db.from("music_daily").delete().in("user_id", [live, dead]);
+  });
+
+  it("redoes a failure that never reached Replicate, but not a real render", async () => {
+    const { runDaily } = await import("@/lib/music/daily");
+    createPrediction.mockRejectedValueOnce(new Error("Replicate 429: throttled"));
+    const V = `${U}-thr`;
+    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "x" }, refs: "" }, { onConflict: "user_id" });
+    expect(await runDaily(db, V)).toBe("failed");
+    createPrediction.mockResolvedValueOnce({ id: "predR", status: "starting" });
+    expect(await runDaily(db, V)).toBe("started");
+    expect(await runDaily(db, V)).toBe("exists");
+    await db.from("music_daily_tracks").delete().eq("user_id", V);
     await db.from("music_daily").delete().eq("user_id", V);
   });
 
@@ -158,19 +182,19 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     await db.from("music_daily_tracks").update({ status: "done", claimed_at: null }).eq("user_id", U);
   });
 
-  it("retries a failed hand-off instead of dropping the rest of the chain", async () => {
+  it("retries a worker that fails to start", async () => {
     const statuses = [503, 0, 202];
     const fetchMock = vi.fn().mockImplementation(async () => {
-      const s = statuses.shift();
-      if (!s) throw new Error("network");
-      return new Response(null, { status: s });
+      const st = statuses.shift();
+      if (!st) throw new Error("network");
+      return new Response(null, { status: st });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { startChain } = await import("@/lib/music/daily");
-    expect(await startChain(["a", "b"], [1, 1])).toBe(true);
+    const { startWorker } = await import("@/lib/music/daily");
+    expect(await startWorker([1, 1])).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
-    expect(await startChain(["a"], [1, 1])).toBe(false);
+    expect(await startWorker([1, 1])).toBe(false);
     vi.unstubAllGlobals();
   });
 

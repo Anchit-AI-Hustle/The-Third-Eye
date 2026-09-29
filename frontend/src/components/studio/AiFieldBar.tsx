@@ -50,6 +50,10 @@ export function AiFieldBar({ tool, field, value, context, onChange, clearTo = ""
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const previous = useRef<string[]>([]);
+  // The field stays editable while a suggestion is in flight; this is what it
+  // holds now, so a slow reply can't overwrite what was typed meanwhile.
+  const latest = useRef(value);
+  latest.current = value;
 
   async function run(action: (typeof ACTIONS)[number]["id"]) {
     setBusy(action); setError(null);
@@ -60,6 +64,7 @@ export function AiFieldBar({ tool, field, value, context, onChange, clearTo = ""
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.suggestion) { setError(d.error ?? `HTTP ${res.status}`); return; }
+      if (latest.current !== value) { setError("You edited the field meanwhile — kept your edit."); return; }
       if (value) previous.current = [...previous.current, value.slice(0, 120)].slice(-6);
       onChange(d.suggestion);
     } catch { setError("Network error."); }
