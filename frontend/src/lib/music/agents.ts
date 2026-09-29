@@ -12,7 +12,8 @@
 
 import { llmCascade } from "@/lib/llmCascade";
 import { knowledgeContext, lookupGenres } from "./knowledge";
-import type { MusicInput, MusicBrief, BeatSpec, FinalPlan } from "./types";
+import { sectionsOf } from "./structures";
+import { BPM_MAX, BPM_MIN, type MusicInput, type MusicBrief, type BeatSpec, type FinalPlan } from "./types";
 
 // Pull the first {...} JSON object out of an LLM response (defensive parse).
 function parseJson<T>(text: string, fallback: T): T {
@@ -38,7 +39,7 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
   const system = [
     "You are a world-class musicologist and ethnomusicologist with encyclopaedic knowledge of every genre across the world and through history — its origins, instrumentation, rhythm, structure, and cultural context.",
     "Given a music request and knowledge-base grounding, produce a precise musical BRIEF the production team will build from.",
-    "Honour the user's explicit choices (genre, tempo, instruments, mood) but enrich them with accurate, genre-idiomatic detail. Blend genres faithfully when several are named (e.g. 'hard techno + psy acid' = fast distorted kicks + rolling acid basslines).",
+    "Honour the user's explicit choices (genre, tempo, instruments, mood) but enrich them with accurate, genre-idiomatic detail. A tempo hint is the user's chosen BPM: use it exactly, even far outside the genre's usual range. Blend genres faithfully when several are named (e.g. 'hard techno + psy acid' = fast distorted kicks + rolling acid basslines).",
     "Output ONLY a JSON object — no prose, no markdown — with keys:",
     "genre, subgenre, region, era, bpm (number), timeSignature, key, instruments (string[]), structure (string), moods (string[]), energy (1-10 number), vocalStyle (string; 'instrumental' if no vocals), referenceArtists (string[]; for feel only), culturalContext (1-2 sentences), productionNotes (string).",
   ].join("\n");
@@ -68,13 +69,14 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
     subgenre: j.subgenre || i.subgenre,
     region: j.region || "Global",
     era: j.era || "contemporary",
-    bpm: num(j.bpm ?? i.tempo, 40, 220, 120),
+    // The form's tempo and energy are the user's decisions, not hints to overrule.
+    bpm: num(i.tempo ?? j.bpm, BPM_MIN, BPM_MAX, 120),
     timeSignature: j.timeSignature || "4/4",
     key: j.key,
     instruments: Array.isArray(j.instruments) && j.instruments.length ? j.instruments : (i.instruments ? i.instruments.split(/,\s*/) : []),
     structure: j.structure || i.structure || "Intro - build - main - break - main - outro",
     moods: Array.isArray(j.moods) && j.moods.length ? j.moods : (i.mood ? [i.mood] : ["energetic"]),
-    energy: num(j.energy ?? i.energy, 1, 10, 6),
+    energy: num(i.energy ?? j.energy, 1, 10, 6),
     vocalStyle: j.vocalStyle || (i.vocals === false ? "instrumental" : (i.vocalStyle || "instrumental")),
     referenceArtists: Array.isArray(j.referenceArtists) ? j.referenceArtists.slice(0, 5) : [],
     culturalContext: j.culturalContext || "",
@@ -87,7 +89,7 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
 export async function beatSmith(i: MusicInput, brief: MusicBrief): Promise<BeatSpec> {
   const system = [
     "You are an elite music producer and beat-maker. From a musical brief, design the arrangement and write the PROMPT for a text-to-music model (MusicGen / Stable Audio / ACE-Step).",
-    "The model prompt must be a single vivid paragraph (max ~60 words) describing genre, BPM, groove, key instruments, and sound design — concrete and production-specific, no fluff.",
+    "The model prompt must be a single vivid paragraph (max ~60 words) that opens with the exact BPM, then genre, groove, key instruments and sound design — concrete and production-specific, no fluff.",
     "Output ONLY JSON with keys: modelPrompt (string), styleTags (string; comma-separated descriptors), negativePrompt (string; what to avoid), tempo (number BPM), arrangement (string; brief section-by-section beat/production plan).",
   ].join("\n");
   const user = [
@@ -105,42 +107,63 @@ export async function beatSmith(i: MusicInput, brief: MusicBrief): Promise<BeatS
   const out = await llmCascade({ system, messages: [{ role: "user", content: user }], jsonMode: true, maxTokens: 700, temperature: 0.7, stage: "music:beatsmith" });
   const j = parseJson<Partial<BeatSpec>>(out.text, {});
   const tags = j.styleTags || [brief.genre, brief.subgenre, `${brief.bpm} BPM`, ...brief.moods, brief.instruments.join(" ")].filter(Boolean).join(", ");
+  const modelPrompt = j.modelPrompt || `${brief.genre}, ${brief.moods.join(" ")}, ${brief.instruments.join(", ")}`;
   return {
-    modelPrompt: (j.modelPrompt || `${brief.genre} at ${brief.bpm} BPM, ${brief.moods.join(" ")}, ${brief.instruments.join(", ")}`).slice(0, 600),
+    modelPrompt: (modelPrompt.includes(String(brief.bpm)) ? modelPrompt : `${brief.bpm} BPM. ${modelPrompt}`).slice(0, 600),
     styleTags: tags,
     negativePrompt: j.negativePrompt,
-    tempo: num(j.tempo ?? brief.bpm, 40, 220, brief.bpm),
+    tempo: brief.bpm,
     arrangement: j.arrangement || brief.structure,
   };
 }
 
 // ── Agent 3: Lyricist ────────────────────────────────────────────────────────
-// Writes singable lyrics that fit the brief's structure, mood and language.
+// Writes lyrics that follow the chosen structure section by section, at the
+// vocal density the genre actually has: a psytrance drop is not a pop verse.
+
+const VOCAL_LIGHT = /psy|goa|trance|techno|acid|rave|house|edm|dnb|drum|dubstep|hardcore|hardstyle|gabber|core|ambient|electro|dance/i;
+
 export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string> {
-  const lang = i.vocalLanguage || "English";
-  const structure = i.structure || brief.structure || "Verse - Chorus - Verse - Chorus - Bridge - Chorus";
+  const langs = (i.vocalLanguage || "English").split(",").map((l) => l.trim()).filter(Boolean);
+  const structure = i.structure || brief.structure || "Verse–Chorus–Verse–Chorus–Bridge–Chorus";
+  const sections = sectionsOf(structure);
+  const light = VOCAL_LIGHT.test(`${brief.genre} ${brief.subgenre ?? ""} ${i.genre ?? ""}`);
   const system = [
-    "You are a professional songwriter/topliner writing for Suno, Udio and ACE-Step.",
-    "Write original, emotionally resonant, SINGABLE lyrics — concrete imagery, a memorable hook, natural rhyme and consistent meter that fits the groove.",
-    "Rules:",
-    "• Use lowercase section tags on their own line: [intro], [verse], [pre-chorus], [chorus], [bridge], [outro].",
-    "• The [chorus] repeats the same lyric each time (it's the hook).",
-    "• 4–6 lines per section; keep lines short and rhythmic.",
-    `• Language: ${lang}. Match the genre's vocal tradition and the requested mood.`,
-    "• Output ONLY the lyrics with tags — no title, no explanation, no markdown, no quotes.",
+    "You are a professional topliner writing lyrics to be sung by an AI singing model (ACE-Step / Suno).",
+    "Write ORIGINAL lyrics with concrete imagery, a memorable hook and a consistent meter that sits on the groove. Never reuse existing song lyrics.",
+    sections.length
+      ? `Use EXACTLY these section tags, in this order, each on its own line in lowercase square brackets: ${sections.map((x) => `[${x}]`).join(" ")}. Do not add, rename or skip sections.`
+      : "Use lowercase section tags on their own line: [intro], [verse], [pre-chorus], [chorus], [bridge], [outro].",
+    light
+      ? "This is club music, so vocals are sparse: mantras, chants, vocal shots and short hooks of 2–6 words per line, at most 4 lines in any section. Purely instrumental sections (builds, drops, grooves, DJ intro/outro) get only their tag line, or a single short vocal shot where the genre uses one. Repetition is a feature: the hook returns word-for-word."
+      : "Verses carry the story in 4–8 lines; the chorus is the hook and repeats word-for-word each time; keep lines short and rhythmic.",
+    langs.length > 1
+      ? `Languages: ${langs.join(", ")}. Give each language a deliberate role (for example the mantra or hook in one, the verses in another) — never translate the same line into every language. Each line is entirely in one language.`
+      : `Language: ${langs[0]}.`,
+    "Write Sanskrit, Hindi and other Indic languages in simple romanized transliteration (e.g. \"om namah shivaya\"), which the singing model pronounces far more reliably than Devanagari.",
+    "Finish every section you open. Output ONLY the tagged lyrics — no title, notes, markdown or quotes.",
   ].join("\n");
   const user = [
     `Title: ${i.title || "(untitled)"}`,
     `Theme / brief: ${i.description || brief.culturalContext}`,
-    `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM`,
+    `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM, energy ${brief.energy}/10`,
     `Vocal style: ${brief.vocalStyle}`,
-    i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 — write shorter, sparser lines toward 1 (whispered/intimate) and bigger, more declamatory lines toward 10 (belted/anthemic).` : "",
-    i.artistInspiration ? `Vibe reference (do NOT copy any existing lyrics): ${i.artistInspiration}` : "",
-    `Structure to follow: ${structure}`,
+    i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 — sparser, softer lines toward 1 (whispered/intimate), bigger declamatory lines toward 10 (belted/anthemic).` : "",
+    i.vocalEffects ? `Vocal effects the production will add: ${i.vocalEffects} — write lines that suit them (e.g. short phrases for heavy delay).` : "",
+    i.artistInspiration ? `Vibe reference (feel only, never their words): ${i.artistInspiration}` : "",
+    `Structure: ${structure}`,
   ].filter(Boolean).join("\n");
 
-  const out = await llmCascade({ system, messages: [{ role: "user", content: user }], maxTokens: 900, temperature: 0.9, stage: "music:lyricist" });
-  return cleanLyrics(out.text);
+  const out = await llmCascade({ system, messages: [{ role: "user", content: user }], maxTokens: 1600, temperature: 0.85, stage: "music:lyricist" });
+  return completeLyrics(cleanLyrics(out.text));
+}
+
+// A reply cut off mid-line ends in a half-written tag or line; drop the
+// fragment rather than send the singer "[" or half a word.
+export function completeLyrics(lyrics: string): string {
+  const lines = lyrics.split("\n");
+  while (lines.length && /^\[[^\]]*$/.test(lines[lines.length - 1].trim())) lines.pop();
+  return lines.join("\n").trim();
 }
 
 // ── Agent 4: Conductor (synchroniser) ────────────────────────────────────────
@@ -168,10 +191,16 @@ export function conductor(
     intensityWord,
     i.vocalEffects || "",
   ].filter(Boolean).join(", ");
-  const tags = [
-    beats.styleTags,
-    sing ? vocalTag : "instrumental, no vocals",
-  ].filter(Boolean).join(", ").slice(0, 600);
+  // ACE-Step reads short comma tags and weighs early ones most, so the tempo
+  // and genre lead — "200 BPM" buried behind ten descriptors got ignored and
+  // came back at ~144.
+  const lead = [`${beats.tempo} bpm`, tempoFeel(beats.tempo), brief.genre, brief.subgenre, brief.key].filter(Boolean) as string[];
+  const seen = new Set<string>();
+  const tags = [...lead, ...beats.styleTags.split(","), ...(sing ? [vocalTag] : ["instrumental, no vocals"])]
+    .map((t) => t.trim())
+    .filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
+    .join(", ")
+    .slice(0, 600);
   // The instrumental/model prompt is the beat-smith's prompt (already vocals-agnostic).
   const prompt = beats.modelPrompt.slice(0, 600);
   return {
@@ -181,6 +210,34 @@ export function conductor(
     durationHint: i.duration,
     coherenceNotes: `${brief.genre} @ ${beats.tempo} BPM · ${brief.moods.join("/")} · ${sing ? "vocal" : "instrumental"}`,
   };
+}
+
+export function tempoFeel(bpm: number): string {
+  if (bpm < 90) return "slow tempo";
+  if (bpm < 120) return "mid-tempo";
+  if (bpm < 150) return "uptempo";
+  if (bpm < 190) return "fast tempo";
+  if (bpm < 260) return "very fast tempo, relentless double-time";
+  return "extreme speed, blurred machine-gun kicks";
+}
+
+/**
+ * The whole pipeline: Musicologist → Beat-smith + Lyricist in parallel →
+ * Conductor. Each agent falls back independently, so one provider outage never
+ * collapses it, and a vocal track always has something to sing.
+ */
+export async function planSong(i: MusicInput): Promise<{ brief: MusicBrief; plan: FinalPlan; sing: boolean }> {
+  const vocals = i.vocals !== false && i.lyricsMode !== "none";
+  const brief = await musicologist(i).catch(() => fallbackBrief(i));
+  const manual = vocals && i.lyricsMode === "manual" ? cleanLyrics(i.lyricsText ?? "") : "";
+  const [beats, autoLyrics] = await Promise.all([
+    beatSmith(i, brief).catch(() => fallbackBeats(i, brief)),
+    vocals && i.lyricsMode !== "manual" ? lyricist(i, brief).catch(() => "") : Promise.resolve(""),
+  ]);
+  let lyrics = (manual || autoLyrics).trim();
+  if (vocals && !lyrics) lyrics = fallbackLyrics(i, brief);
+  const plan = conductor(i, brief, beats, lyrics);
+  return { brief, plan, sing: vocals && plan.lyrics.trim().length > 0 };
 }
 
 // ── Deterministic fallbacks ──────────────────────────────────────────────────
@@ -195,7 +252,7 @@ export function fallbackBrief(i: MusicInput): MusicBrief {
     subgenre: i.subgenre,
     region: kb?.region || "Global",
     era: kb?.era || "contemporary",
-    bpm: num(i.tempo, 40, 220, kb ? Math.round((kb.bpm[0] + kb.bpm[1]) / 2) : 120),
+    bpm: num(i.tempo, BPM_MIN, BPM_MAX, kb ? Math.round((kb.bpm[0] + kb.bpm[1]) / 2) : 120),
     timeSignature: "4/4",
     instruments: i.instruments ? i.instruments.split(/,\s*/) : (kb?.instruments ?? []),
     structure: i.structure || kb?.structure || "Intro - verse - chorus - verse - chorus - outro",
@@ -245,7 +302,7 @@ export function cleanLyrics(raw: string): string {
         const parts = inner.split(/\s+/);
         if (parts.length > 1 && /^\d{1,3}$/.test(parts[parts.length - 1])) parts.pop();
         inner = parts.join(" ");
-        if (inner && /^[a-z][a-z -]{0,20}$/.test(inner)) return `[${inner}]`;
+        if (inner && /^[a-z][a-z' -]{0,23}$/.test(inner)) return `[${inner}]`;
       }
       return line.trimEnd();
     })

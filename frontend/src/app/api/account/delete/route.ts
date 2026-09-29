@@ -31,6 +31,8 @@ const TABLES = [
   "cortex_memories", "cortex_doc_chunks", "reminders", "push_subscriptions",
   "notification_log", "processed_messages", "chat_watermarks", "activity_log", "device_logs",
   "profiles", "google_tokens",
+  // The daily song style and tracks; their audio chunks go with the tracks.
+  "music_daily", "music_daily_tracks",
   // GATEWAY CREDENTIALS, AND THEY MATTER MORE THAN THE REST OF THIS LIST.
   // gateway_tokens holds long-lived bearer tokens, and emailForToken()
   // authenticates from that row alone — /api/chat never re-checks phone_users. So

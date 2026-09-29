@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { replicateConfigured, createPrediction, getPrediction, audioUrlFrom } from "@/lib/replicate";
-import { musicologist, beatSmith, lyricist, conductor, cleanLyrics, fallbackBrief, fallbackBeats, fallbackLyrics } from "@/lib/music/agents";
-import type { MusicInput, MusicBrief } from "@/lib/music/types";
+import { planSong } from "@/lib/music/agents";
+import { SONG_MODEL as VOCAL_MODEL, SONG_CLIP_MAX as VOCAL_CLIP_MAX } from "@/lib/music/models";
+import type { MusicInput } from "@/lib/music/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,14 +29,12 @@ const INSTRUMENTAL_MODEL = process.env.MUSIC_INSTRUMENTAL_MODEL || "meta/musicge
 const INSTRUMENTAL_MODEL_VERSION = process.env.MUSIC_INSTRUMENTAL_VERSION || "stereo-large";
 const STABLE_AUDIO_MODEL = "stackadoc/stable-audio-open-1.0";
 const STABLE_AUDIO_VERSION = "9aff84a639f96d0f7e6081cdea002d15133d0043727f849c40abdd166b7c75a8";
-const VOCAL_MODEL = process.env.MUSIC_SONG_MODEL || "lucataco/ace-step";
 
 // Text-to-music models render at most seconds→minutes per call. Longer sessions
 // (up to 5h) are produced by seamlessly looping a base clip in the player, so we
 // cap the actual generated clip to each model's practical maximum.
 const INSTRUMENTAL_CLIP_MAX = 60;  // a real mini-composition, not a tiny loop
 const STABLE_AUDIO_CLIP_MAX = 47;  // stable-audio-open's native window
-const VOCAL_CLIP_MAX = 240;        // ace-step
 const MAX_SESSION_SECONDS = 18000; // 5 hours
 
 async function email() {
@@ -94,35 +93,11 @@ export async function POST(req: NextRequest) {
 
   const description = (i.description ?? "").trim();
   if (!description) return Response.json({ error: "A description is required" }, { status: 400 });
-  const vocals = i.vocals !== false && i.lyricsMode !== "none";
   const sessionSeconds = Math.min(Math.max(Number(i.duration) || 30, 10), MAX_SESSION_SECONDS);
 
-  // ── Four-agent pipeline ───────────────────────────────────────────────────
-  // Musicologist (knowledge) → Beat-smith + Lyricist (parallel) → Conductor
-  // (synchronise). All cascaded; if every LLM provider is down we fall back to
-  // deterministic tags so instrumental generation still works.
-  // Each agent is independently resilient: one failing (e.g. all LLM providers
-  // down) falls back to a deterministic result instead of collapsing the whole
-  // pipeline — so lyrics never silently vanish.
-  const brief: MusicBrief = await musicologist(i).catch(() => fallbackBrief(i));
-  const manual = vocals && i.lyricsMode === "manual" ? cleanLyrics(i.lyricsText ?? "") : "";
-  const [beats, autoLyrics] = await Promise.all([
-    beatSmith(i, brief).catch(() => fallbackBeats(i, brief)),
-    vocals && i.lyricsMode !== "manual" ? lyricist(i, brief).catch(() => "") : Promise.resolve(""),
-  ]);
-  // Guarantee lyrics whenever the track isn't explicitly instrumental — even if
-  // the Lyricist was unavailable, a minimal deterministic lyric is used.
-  let chosenLyrics = (manual || autoLyrics || "").trim();
-  if (vocals && !chosenLyrics) chosenLyrics = fallbackLyrics(i, brief);
-  const finalPlan = conductor(i, brief, beats, chosenLyrics);
-  const prompt = finalPlan.prompt, tags = finalPlan.tags, lyrics = finalPlan.lyrics;
-  const briefMeta = brief
-    ? { brief: { genre: brief.genre, subgenre: brief.subgenre, region: brief.region, era: brief.era, bpm: brief.bpm, moods: brief.moods, energy: brief.energy, instruments: brief.instruments, vocalStyle: brief.vocalStyle, referenceArtists: brief.referenceArtists, culturalContext: brief.culturalContext } }
-    : {};
-
-  // Only sing if we actually have lyrics — otherwise the vocal model would try to
-  // "sing" the raw description. No lyrics → instrumental.
-  const sing = vocals && lyrics.trim().length > 0;
+  const { brief, plan, sing } = await planSong(i);
+  const { prompt, tags, lyrics } = plan;
+  const briefMeta = { brief: { genre: brief.genre, subgenre: brief.subgenre, region: brief.region, era: brief.era, bpm: brief.bpm, moods: brief.moods, energy: brief.energy, instruments: brief.instruments, vocalStyle: brief.vocalStyle, referenceArtists: brief.referenceArtists, culturalContext: brief.culturalContext } };
 
   // The clip we actually render; the player loops it to fill the session.
   const clipSeconds = Math.min(sessionSeconds, sing ? VOCAL_CLIP_MAX : INSTRUMENTAL_CLIP_MAX);

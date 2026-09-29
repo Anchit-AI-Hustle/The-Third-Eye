@@ -11,6 +11,10 @@
 //   4. Conductor   — synchronises everything into one coherent FinalPlan
 //      (prompt + tags + lyrics + duration), resolving any conflicts.
 
+// Tempo range the Studio offers. Speedcore and extratone live up past 250.
+export const BPM_MIN = 40;
+export const BPM_MAX = 400;
+
 export interface MusicInput {
   title?: string; description?: string; genre?: string; subgenre?: string; mood?: string;
   tempo?: number; duration?: number; vocals?: boolean; vocalStyle?: string; vocalLanguage?: string;

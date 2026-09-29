@@ -220,6 +220,20 @@ Generators, all powered by the shared `llmCascade` (no new keys):
   (`matchOption`/`matchOptions`) prefers the most specific option over the
   first substring match, and splits a blended AI response into separate
   chips for multi-select fields instead of collapsing to one.
+  Generation runs the four-agent pipeline in `lib/music/agents.ts` (`planSong`).
+  The form's BPM (40–400) is authoritative and leads the song model's tags;
+  song structures come per genre from `lib/music/structures.ts`, and their
+  sections become the lyric's section tags. AI values are cleaned by
+  `lib/music/normalize.ts`.
+  **Daily drop** (`lib/music/daily.ts`): "Save as my daily style" stores the
+  form in `music_daily`; the daily cron (`/api/cron/dispatch`, job `music`)
+  makes one new track per user per day and hands it to Replicate with a
+  webhook (`/api/tools/music/daily/webhook`). The audio is kept in Neon
+  (`music_daily_chunks`, 1 MiB chunks, last 7 days) because Replicate deletes
+  outputs within the hour, and it is served by byte range
+  (`/api/tools/music/daily/[id]`) because a Vercel response can't exceed
+  4.5 MB. It needs `REPLICATE_API_TOKEN` and a production URL (`NEXTAUTH_URL`)
+  that Replicate can reach.
 
 Each shares `StudioWorkbench` (form → generate → HTML iframe / Markdown preview, with
 Copy / Download / **Save to Knowledge** — the saved doc is mode-tagged). The same
