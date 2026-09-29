@@ -20,7 +20,7 @@ import { scheduleAutomation } from "@/lib/automations";
 import { identify } from "@/lib/serverIdentity";
 import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
-import { FORMULAS, gstBreakup } from "@/lib/calculators/formulas";
+import { FORMULAS, gstBreakup, toGstSlab } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
 import { normalizePrompt } from "@/lib/promptNormalizer";
 import { randomUUID } from "crypto";
@@ -436,7 +436,8 @@ async function runTool(
       if (action === "create") {
         const amount = Number(input.amount);
         if (!amount || amount <= 0) return { result: "I need a positive amount to log an expense." };
-        const rate = Number(input.gst_rate) || 0;
+        // Enforced here, since the schema can no longer carry the slabs as an enum.
+        const rate = toGstSlab(input.gst_rate);
         const expense = {
           amount,
           category: input.category ?? "Other",

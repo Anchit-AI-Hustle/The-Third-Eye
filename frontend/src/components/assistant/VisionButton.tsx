@@ -95,7 +95,9 @@ export function VisionButton({
         {busy ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />}
       </button>
       {open && (
-        <div className="absolute bottom-10 left-0 z-50 w-52 bg-background-elevated border border-border-default rounded-card shadow-xl p-1.5">
+        // Anchored RIGHT. The button sits beside Send at the right end of the
+        // input bar, so a left-anchored menu grew 208px rightwards off-screen.
+        <div className="absolute bottom-10 right-0 z-50 w-52 bg-background-elevated border border-border-default rounded-card shadow-xl p-1.5">
           <button type="button" onClick={() => analyze("screen")}
             className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-text-secondary hover:bg-background-surface hover:text-text-primary">
             <Monitor size={14} /><span><span className="block text-[13px] font-medium">Analyze screen</span><span className="block text-[11px] text-text-muted">Share a window/tab to analyze</span></span>

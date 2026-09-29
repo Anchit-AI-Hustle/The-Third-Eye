@@ -1,20 +1,20 @@
 name: Deploy migration pushes
 
-# Migrations are no longer pushed from CI.
+# Migrations are NOT applied by CI, and NOT applied by the build.
 #
-# The database moved from Supabase to Neon, and the schema is now applied by
-# `node scripts/migrate.mjs`, which runs as the first half of the Vercel build
-# (frontend/package.json -> "build"). That is the only moment when the
-# connection string and the SQL files are in the same place, and it makes the
-# schema and the code that reads it land together or not at all.
+# This header used to say the database had moved to Neon and that
+# `scripts/migrate.mjs` applied the schema as the first half of the Vercel build.
+# Neither is true: that move was undone, `scripts/migrate.mjs` does not exist, and
+# frontend/package.json's "build" is plain `next build`. The database is Supabase,
+# and each file in supabase/migrations/ is run by hand in the Supabase SQL editor,
+# as the files themselves say. A push that adds one DEPLOYS CODE THAT EXPECTS A
+# SCHEMA NOBODY HAS APPLIED YET — run the migration first.
 #
 # This workflow is kept because vercel-deploy.yml defers migration pushes to it
-# BY NAME: a push touching supabase/migrations/** is handed here so the schema
-# is applied before the app is promoted. That ordering is now intrinsic to the
-# build, so all this has left to do is hand the push straight back with the
-# defer suppressed. Deleting this file without also removing that guard would
-# leave migration pushes deferred to a workflow that does not exist, and they
-# would never deploy at all.
+# BY NAME. All it does is hand the push straight back with the defer
+# suppressed. Deleting this file without also removing that guard would leave
+# migration pushes deferred to a workflow that does not exist, and they would
+# never deploy at all.
 #
 # SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD are no longer read by anything
 # in this repository and can be removed from the repo's Actions secrets.
