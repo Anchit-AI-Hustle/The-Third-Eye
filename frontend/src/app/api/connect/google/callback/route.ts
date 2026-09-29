@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { encrypt } from "@/lib/crypto";
-import { originFromRequest } from "@/lib/googleToken";
+import { INGESTION_SCOPE_LIST, hasGoogleScope, originFromRequest } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -76,6 +76,32 @@ export async function GET(req: Request) {
   // who allowed "send" and declined "read" would otherwise have a token that can
   // deliver their reminders and no address to deliver them to.
   const mailbox = emailFromIdToken(tok.id_token);
+
+  // A GRANT THAT CAN DO NOTHING MUST NOT DISPLACE ONE THAT CAN — #313's fix, which
+  // lived only in the sign-in helper and so went with it.
+  //
+  // google_tokens holds ONE row per user, upserted on user_id, and it is the row
+  // /api/chat, /api/act and the crons all read. Google's consent screen lets people
+  // untick boxes individually, so a re-connect where they decline Gmail and
+  // Calendar returns a perfectly valid token that can mint nothing useful — and
+  // writing it here silently replaced a working grant, with updated_at looking
+  // healthier than ever.
+  //
+  // THIS PR MADE THAT OUTCOME ORDINARY RATHER THAN A CORNER CASE: CONNECT_SCOPES
+  // now asks for openid/email too, so "declined everything that matters" still
+  // comes back holding identity scopes. I argued on the PR that adding identity
+  // could not cause #313's defect because "connected" still requires a feature
+  // scope — which was true of the status endpoint I checked, and beside the point
+  // for this write, which I did not.
+  const granted = INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(tok.scope, s));
+  if (!granted) {
+    // Nothing stored, nothing overwritten, and the user is told why rather than
+    // being returned to a screen that claims success.
+    const denied = NextResponse.redirect(`${base}/settings?connect=google_no_scopes`);
+    denied.cookies.delete("g_connect_state");
+    return denied;
+  }
+
   const sb = getAdminSupabase();
   if (tok.refresh_token && sb) {
     const enc = encrypt(tok.refresh_token);

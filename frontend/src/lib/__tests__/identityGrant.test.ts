@@ -27,10 +27,13 @@ const USER = "user@example.com";
 
 let row: { scope?: string; updated_at?: string } | null = null;
 
+const upsert = vi.fn().mockResolvedValue({ error: null });
+
 vi.mock("@/lib/serverSupabase", () => ({
   getAdminSupabase: () => ({
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: row }) }) }),
+      upsert: (...a: unknown[]) => upsert(...a),
     }),
   }),
 }));
@@ -43,6 +46,8 @@ const OLD_ENV = process.env;
 beforeEach(() => {
   process.env = { ...OLD_ENV, GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "secret" };
   vi.resetModules();
+  vi.unstubAllGlobals();
+  upsert.mockClear();
   row = null;
 });
 afterEach(() => {
@@ -83,5 +88,42 @@ describe('what Settings is told "connected" means', () => {
     const body = await status();
     expect(body.connected).toBe(true);
     expect(body.capabilities).toMatchObject({ gmailRead: false, gmailSend: false, calendarRead: true });
+  });
+});
+
+describe("what the connect callback is allowed to store", () => {
+  // #313's fix lived in the sign-in helper and went with it. The connect callback
+  // never had it, and this PR made the bad outcome ORDINARY by adding openid/email
+  // to CONNECT_SCOPES: "declined Gmail and Calendar" now still comes back holding
+  // identity scopes, and writing that row replaced a working grant with a useless
+  // one while updated_at looked healthy.
+  async function callback(scope: string) {
+    vi.doMock("@/lib/googleToken", async () => {
+      const real = await vi.importActual<typeof import("@/lib/googleToken")>("@/lib/googleToken");
+      return { ...real, originFromRequest: () => "https://example.com" };
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ refresh_token: "1//rt", scope }),
+      text: () => Promise.resolve(""),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { GET } = await import("@/app/api/connect/google/callback/route");
+    const req = new Request("https://example.com/api/connect/google/callback?code=c&state=s", {
+      headers: { cookie: "g_connect_state=s" },
+    });
+    return GET(req);
+  }
+
+  it("stores nothing when no feature scope was granted", async () => {
+    const res = await callback(IDENTITY);
+    expect(res.headers.get("location")).toContain("connect=google_no_scopes");
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("stores the grant when a feature scope was granted", async () => {
+    const res = await callback(WITH_GMAIL);
+    expect(res.headers.get("location")).toContain("connect=google_connected");
+    expect(upsert).toHaveBeenCalledTimes(1);
   });
 });

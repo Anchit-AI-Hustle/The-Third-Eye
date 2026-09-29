@@ -22,13 +22,16 @@ function scopeLabels(scopes: string[]): string[] {
 
 export function ConnectionsCard() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [banner, setBanner] = useState<"connected" | "error" | "disconnected" | null>(null);
+  const [banner, setBanner] = useState<
+    "connected" | "error" | "disconnected" | "no_scopes" | null
+  >(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
-    // Reflect the result of the OAuth round-trip (?connect=google_connected|google_error).
+    // Reflect the result of the OAuth round-trip.
     const q = new URLSearchParams(window.location.search).get("connect");
     if (q === "google_connected") setBanner("connected");
+    else if (q === "google_no_scopes") setBanner("no_scopes");
     else if (q === "google_error") setBanner("error");
     if (q) window.history.replaceState({}, "", window.location.pathname);
 
@@ -75,6 +78,16 @@ export function ConnectionsCard() {
       {banner === "disconnected" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-success">
           <Check size={13} /> Disconnected. Access was revoked at Google and the stored token deleted.
+        </div>
+      )}
+      {banner === "no_scopes" && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-warning">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>
+            Nothing was connected — none of the Gmail, Calendar or Chat boxes were ticked on
+            Google&apos;s screen. Any access you had already granted is untouched. Try again and
+            allow at least one.
+          </span>
         </div>
       )}
       {banner === "error" && (
