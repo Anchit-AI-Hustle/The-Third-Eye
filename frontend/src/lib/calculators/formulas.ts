@@ -28,6 +28,20 @@ const safe = (n: number) => (Number.isFinite(n) ? n : 0);
  * Intra-state GST splits evenly into CGST + SGST; inter-state it's a single IGST
  * of the same total — both are surfaced so the caller can show whichever applies.
  */
+/** India's GST slabs, in percent. The only rates an expense may be tagged with. */
+export const GST_SLABS = [0, 5, 12, 18, 28, 40] as const;
+
+/**
+ * A rate the model supplied, reduced to a slab or to 0 (untracked). Tool input is
+ * model output, not a form with a dropdown: it can be 15, "18%", or 18.0001, and
+ * a stored rate outside the slabs would quietly mis-state every GST total built
+ * from it.
+ */
+export function toGstSlab(value: unknown): number {
+  const n = Number(value);
+  return (GST_SLABS as readonly number[]).includes(n) ? n : 0;
+}
+
 export function gstBreakup(amount: number, ratePct: number, mode: "add" | "remove" = "add") {
   const amt = Math.max(safe(amount), 0);
   const rate = Math.max(safe(ratePct), 0) / 100;

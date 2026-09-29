@@ -10,6 +10,7 @@
 // does not exist.
 
 import { STUDIO_TOOLS } from "@/lib/studioTools";
+import { GST_SLABS } from "@/lib/calculators/formulas";
 
 export const geminiTools = [
   {
@@ -80,7 +81,13 @@ export const geminiTools = [
             amount: { type: "NUMBER", description: "Amount paid (GST-inclusive), for create" },
             category: { type: "STRING", enum: ["Food", "Groceries", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Travel", "Other"], description: "Expense category" },
             note: { type: "STRING", description: "Short note, e.g. 'lunch with team'" },
-            gst_rate: { type: "NUMBER", enum: [0, 5, 12, 18, 28, 40], description: "GST % already included in the amount (0 if unknown/none)" },
+            // NO `enum` HERE. Gemini accepts `enum` only on STRING properties, and a
+            // numeric one is not ignored — it fails validation of the WHOLE tool
+            // list with a 400, so every chat request lost every tool and the
+            // assistant fell into its "connection temporarily down" mode for good.
+            // The slabs are listed for the model in the description and enforced
+            // where the value lands (toGstSlab in lib/calculators/formulas.ts).
+            gst_rate: { type: "NUMBER", description: `GST % already included in the amount — one of ${GST_SLABS.join(", ")}. Use 0 if unknown or none.` },
             spent_on: { type: "STRING", description: "Date YYYY-MM-DD (defaults to today; infer from 'yesterday' etc.)" },
           },
           required: ["action"],
