@@ -38,8 +38,10 @@ otherwise undocumented outside this file and the code itself.
   tests the lock and spends the try in one statement **before** any hashing, so a
   burst of concurrent requests cannot test more than five in a window;
   `phone_pin_ok` clears the count, lock and ladder on success. `auth_rate_limit` +
-  `auth_rate_limit_hit` cap attempts per number (10/10 min, unforgeable) and per
-  caller (60/10 min, best-effort), and fail **closed**. The sign-in form
+  `auth_rate_limit_hit` cap attempts per caller (60/10 min, best-effort — checked
+  first, so an abusive caller cannot seed number buckets) then per number (10/10
+  min, unforgeable); both fail **closed**, and the function prunes expired rows so
+  the limiter's own table cannot be grown without bound. The sign-in form
   pre-flights the number against `POST /api/auth/phone` to decide whether to ask
   for a name (sign-up) or the PIN — that route returns **only** whether the
   number is registered, never the account holder's name or lock state.

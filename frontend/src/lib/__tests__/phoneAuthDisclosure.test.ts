@@ -124,6 +124,26 @@ describe("the rate limit in front of the path", () => {
     expect(res).toMatchObject({ ok: false, reason: "rate_limited" });
   });
 
+  it("spends the caller window before the number window, so an abusive caller cannot seed rows", async () => {
+    // Each check writes a row keyed by what it counts, and auth_rate_limit has no
+    // per-request ceiling of its own. Checking the number first meant a caller
+    // cycling through numbers had already inserted a bucket per request by the
+    // time the caller limit refused them.
+    const buckets: string[] = [];
+    rpc.mockImplementation((fn: string, args: Record<string, unknown>) => {
+      if (fn !== "auth_rate_limit_hit") {
+        return Promise.resolve({ data: [{ allowed: true, tries: 1, locked_until: null }], error: null });
+      }
+      buckets.push(String(args.p_bucket));
+      // Over the caller limit, under the number limit.
+      return Promise.resolve({ data: args.p_bucket === "phone_ip" ? 999 : 1, error: null });
+    });
+    const { enter } = await import("@/lib/phoneAuth");
+    const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
+    expect(res).toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(buckets).toEqual(["phone_ip"]);
+  });
+
   it("limits on the number itself, which no header can change", async () => {
     const seen: string[] = [];
     rpc.mockImplementation((fn: string, args: Record<string, unknown>) => {

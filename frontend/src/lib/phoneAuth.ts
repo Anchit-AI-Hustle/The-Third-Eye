@@ -129,27 +129,34 @@ export async function enter(input: {
 
   // TWO WINDOWS, BEFORE ANYTHING IS READ OR HASHED.
   //
-  // The per-NUMBER one is the real control: its key comes from the validated
-  // E.164 number in the request body, so no header a caller can set will move
-  // it. Ten in ten minutes sits above the five-try account lockout, so it never
-  // becomes the thing a real person hits first, and it bounds both the scrypt
-  // spent on one number and how often that number can be locked.
+  // CALLER FIRST, THEN NUMBER — and the order is not cosmetic. Each check writes
+  // a row keyed by what it counts, so checking the number first meant a caller
+  // cycling through numbers had already inserted a bucket per request by the time
+  // the caller limit refused them. Refusing the caller before touching the number
+  // bucket keeps an abusive-but-honest client from growing that table at all.
+  // (What actually bounds it is expiry — auth_rate_limit_hit prunes — because a
+  // forged X-Forwarded-For passes this check every time however it is ordered.)
   //
-  // The per-caller one is defence in depth and is best-effort by nature — see
-  // clientIp. It is looser, because a shared or misread address must not be able
-  // to shut a household, or a whole CDN's worth of people, out of signing in.
-  if (!(await withinLimit(sb, "phone_number", np.e164, 10, 600))) {
-    return {
-      ok: false,
-      reason: "rate_limited",
-      error: "Too many attempts for that number — please wait a few minutes.",
-    };
-  }
+  // The per-caller window is best-effort by nature, see clientIp, and looser at
+  // sixty, because a shared or misread address must not shut a household — or a
+  // whole CDN's worth of people — out of signing in.
   if (input.ip && !(await withinLimit(sb, "phone_ip", input.ip, 60, 600))) {
     return {
       ok: false,
       reason: "rate_limited",
       error: "Too many sign-in attempts from this device — please wait a few minutes.",
+    };
+  }
+  // The per-NUMBER window is the real control: its key is the validated E.164
+  // from the request body, so no header a caller can set will move it. Ten in ten
+  // minutes sits above the five-try lockout, so a real person never meets it
+  // first, and it bounds both the scrypt spent on one number and how often that
+  // number can be locked.
+  if (!(await withinLimit(sb, "phone_number", np.e164, 10, 600))) {
+    return {
+      ok: false,
+      reason: "rate_limited",
+      error: "Too many attempts for that number — please wait a few minutes.",
     };
   }
 
