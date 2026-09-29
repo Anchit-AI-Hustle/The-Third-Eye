@@ -23,8 +23,19 @@ import { clientIp, enter } from "@/lib/phoneAuth";
  * number could subscribe) and the cron addressed reminder mail `To:` it. Both
  * now ask `isEmailIdentity()` first (lib/serverIdentity.ts). Anything new that
  * wants to WRITE TO the identity rather than key on it has to do the same.
- * ACCOUNTS CREATED UNDER GOOGLE SIGN-IN KEEP THEIR DATA UNDER THEIR EMAIL KEY:
- * signing in by number is a new identity, not a rename of the old one.
+ * ACCOUNTS CREATED UNDER GOOGLE SIGN-IN KEEP THEIR DATA UNDER THEIR EMAIL KEY.
+ * Signing in by number is a new identity, not a rename, and that has a
+ * consequence worth stating plainly rather than in passing: with Google no longer
+ * a provider, once an existing session's 24-hour JWT expires there is nothing
+ * left that can produce the email identity, so its tasks, notes, billing row and
+ * stored Google grant are no longer reachable from any sign-in. Nothing is
+ * deleted, but on a deployment with real data somebody must re-key it —
+ * DEVELOPMENT.md §4a has the one-off statement and the order to run it in.
+ *
+ * Deliberately not automatic. Linking two identities on a guess, on a path where
+ * possession of the number is not yet proved, would hand one person's workspace
+ * to whoever registered a number first; an obviously empty account is the safer
+ * failure.
  */
 export const authOptions: NextAuthOptions = {
   providers: [

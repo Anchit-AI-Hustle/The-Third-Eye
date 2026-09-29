@@ -117,6 +117,47 @@ through one server route**, `app/api/data/[entity]/route.ts`:
   (`components/layout/CloudSyncBadge.tsx` + `/api/sync-status`) surfaces which mode
   you're in so a missing service key isn't a silent data-loss trap.
 
+### 4a. Moving an existing workspace onto a phone identity
+
+**Read this before signing in by number on a deployment that has real data.**
+
+`user_id` is whatever sign-in put in `session.user.email`. Under Google that was
+an email address; under phone sign-in it is an E.164 number. They are *different
+identities*, so a phone account starts empty and **the data keyed by the old
+email is not reachable from it** — and since Google is no longer a sign-in
+provider, once the existing 24-hour JWT expires there is nothing that can produce
+the email identity again either.
+
+There is no automatic link, on purpose: silently merging two identities is a
+worse failure than an obvious empty workspace. Re-key deliberately instead, once,
+with the service role (Supabase SQL editor), **before** putting anything into the
+new account so nothing collides:
+
+```sql
+-- Substitute your own two values. Run once.
+DO $$
+DECLARE t text;
+BEGIN
+  FOR t IN
+    SELECT table_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND column_name = 'user_id'
+  LOOP
+    EXECUTE format('update public.%I set user_id = $1 where user_id = $2', t)
+      USING '+919876543210', 'you@example.com';
+  END LOOP;
+END $$;
+```
+
+It walks every `public` table with a `user_id` column, so it covers tables added
+since this was written. Two things to know:
+
+- **Order matters.** `google_tokens.user_id` is a primary key and several tables
+  are unique on `(user_id, …)`, so if the phone identity already has rows the
+  update raises a conflict. Re-key first, use the account after.
+- **Stripe.** `profiles.stripe_customer_id` moves with the row, so an existing
+  subscription follows; but the `metadata.email` on the Stripe subscription
+  itself still holds the old address, which only matters if you reconcile by it.
+
 ---
 
 ## 5. Cortex — RAG + memory (pgvector)

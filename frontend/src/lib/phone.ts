@@ -68,12 +68,29 @@ export function normPhone(v: unknown, cc?: unknown): ParsedPhone | null {
     local = raw;
   }
 
+  // A LEADING ZERO IS A TRUNK PREFIX, NOT PART OF THE NUMBER. The form asks for
+  // a national number next to a country code, which is exactly how people write
+  // and how browsers autofill: 07123 456789 in the UK, 0412 345 678 in
+  // Australia, 09876543210 in India. Those carry a domestic dialling prefix that
+  // E.164 drops, and measuring them with it still attached rejected perfectly
+  // ordinary numbers — the UK's 11 digits against a maximum of 10, Australia's
+  // 10 against a required 9 — and told the person their own number was invalid.
+  //
+  // Tried WITH the zero first, so nothing that used to be accepted stops being
+  // accepted, and the zero is only dropped from a number that would otherwise be
+  // refused. One zero, not all of them: a trunk prefix is a single digit.
+  return (
+    accept(code, local!) ?? (local!.startsWith("0") ? accept(code, local!.slice(1)) : null)
+  );
+}
+
+function accept(code: string, local: string): ParsedPhone | null {
   const rule = PHONE_CC[code];
   if (rule) {
-    if (local!.length < rule.min || local!.length > rule.max) return null;
-    if (rule.re && !rule.re.test(local!)) return null;
-  } else if (local!.length < 6 || local!.length > 12) return null;
-  return { e164: code + local!, cc: code, local: local! };
+    if (local.length < rule.min || local.length > rule.max) return null;
+    if (rule.re && !rule.re.test(local)) return null;
+  } else if (local.length < 6 || local.length > 12) return null;
+  return { e164: code + local, cc: code, local };
 }
 
 /** Human message when a number fails: names the country and the shape expected. */

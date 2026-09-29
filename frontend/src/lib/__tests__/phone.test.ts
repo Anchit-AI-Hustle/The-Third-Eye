@@ -38,6 +38,21 @@ describe("normPhone", () => {
     expect(normPhone("4155552671", "+1")?.e164).toBe("+14155552671");
   });
 
+  it("drops a national trunk prefix, because that is how people type their number", () => {
+    // The form asks for a national number beside a country code, and browsers
+    // autofill it with the domestic dialling zero. Measuring the length with the
+    // zero still attached told people their own number was invalid.
+    expect(normPhone("07123456789", "+44")?.e164).toBe("+447123456789");
+    expect(normPhone("0412345678", "+61")?.e164).toBe("+61412345678");
+    expect(normPhone("09876543210")?.e164).toBe("+919876543210");
+  });
+
+  it("does not let the zero rescue a number that is wrong anyway", () => {
+    // Nine digits after the trunk zero is still not an Indian mobile.
+    expect(normPhone("0123456789")).toBeNull();
+    expect(normPhone("0000000")).toBeNull();
+  });
+
   it("returns null rather than a half-parsed number for junk", () => {
     expect(normPhone("")).toBeNull();
     expect(normPhone("not a phone")).toBeNull();

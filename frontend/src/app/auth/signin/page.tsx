@@ -80,23 +80,32 @@ export default function SignInPage() {
     }
     setBusy(true);
     setError(null);
-    const res = await signIn("phone", {
-      redirect: false,
-      phone: parsed?.e164,
-      cc,
-      pin,
-      name: step === "signup" ? name.trim() : undefined,
-      callbackUrl: "/dashboard",
-    });
-    if (res?.ok) {
-      router.push("/dashboard");
-      return;
+    // signIn REJECTS as well as returning a failure — drop the connection
+    // mid-submit and it throws. Without the catch, `busy` stayed true and the
+    // form sat disabled behind a spinner until the page was reloaded.
+    try {
+      const res = await signIn("phone", {
+        redirect: false,
+        phone: parsed?.e164,
+        cc,
+        pin,
+        name: step === "signup" ? name.trim() : undefined,
+        callbackUrl: "/dashboard",
+      });
+      if (res?.ok) {
+        router.push("/dashboard");
+        return;
+      }
+      // A wrong PIN says how many tries are left, and a locked account how long
+      // for, so the message from the server is shown as-is.
+      setPin("");
+      setError(res?.error ?? "That did not work. Please try again.");
+    } catch {
+      setPin("");
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    // A wrong PIN says how many tries are left, and a locked account how long
-    // for, so the message from the server is shown as-is.
-    setPin("");
-    setError(res?.error ?? "That did not work. Please try again.");
-    setBusy(false);
   }
 
   if (status === "loading") {
