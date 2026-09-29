@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { planScenes } from "@/lib/videoScenes";
+import { planTimeline } from "@/lib/episodeVideo";
 import { videoUrlFrom } from "@/lib/replicate";
 
 vi.mock("@/lib/llmCascade", () => ({
@@ -44,6 +45,19 @@ describe("planScenes", () => {
     expect(scenes[0].n).toBe(1);
   });
 
+  it("keeps each voice-over within what its shot can carry", async () => {
+    const long = Array.from({ length: 40 }, (_, i) => `w${i}`).join(" ");
+    reply(JSON.stringify([
+      { title: "A", seconds: 4, prompt: "A lighthouse at dusk…", narration: long },
+      { title: "B", seconds: 6, prompt: "A harbour at dawn…", narration: "  The tide turns.  " },
+      { title: "C", seconds: 5, prompt: "An empty pier…" },
+    ]));
+    const { scenes } = await planScenes("script");
+    expect(scenes[0].narration.split(" ")).toHaveLength(10);
+    expect(scenes[1].narration).toBe("The tide turns.");
+    expect(scenes[2].narration).toBe("");
+  });
+
   it("throws when the model returns no usable list", async () => {
     reply("I can't help with that.");
     await expect(planScenes("script")).rejects.toThrow(/shot list/i);
@@ -57,5 +71,23 @@ describe("videoUrlFrom", () => {
     expect(videoUrlFrom({ video: "https://x/v.mp4" })).toBe("https://x/v.mp4");
     expect(videoUrlFrom({ output: "https://x/v.mp4" })).toBe("https://x/v.mp4");
     expect(videoUrlFrom(null)).toBeNull();
+  });
+});
+
+describe("planTimeline", () => {
+  it("opens on a title card, plays shots in order, and closes on an end card", () => {
+    const segs = planTimeline([{ clip: 5, voice: 0 }, { clip: 6, voice: 3 }]);
+    expect(segs.map((s) => [s.kind, s.start, s.end])).toEqual([
+      ["title", 0, 3],
+      ["shot", 3, 8],
+      ["shot", 8, 14],
+      ["end", 14, 16],
+    ]);
+  });
+
+  it("holds a shot when its voice-over runs longer than the clip", () => {
+    const [, shot, end] = planTimeline([{ clip: 4, voice: 5 }]);
+    expect(shot.end - shot.start).toBeCloseTo(5.4);
+    expect(end.start).toBeCloseTo(shot.end);
   });
 });

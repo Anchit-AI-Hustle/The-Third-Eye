@@ -5,9 +5,10 @@ import { authOptions } from "@/lib/auth";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Same-origin media proxy for generated audio. The video visualizer runs the
-// track through Web Audio (analyser), which taints on cross-origin sources — so
-// we stream the (allowlisted) provider URL through here.
+// Same-origin media proxy for generated audio and video. The music visualizer
+// runs tracks through Web Audio, and the Video Studio episode assembler draws
+// clips to a canvas and decodes voice-overs — both taint or fail on cross-origin
+// sources, so the (allowlisted) provider URL is streamed through here.
 //
 // SSRF-safe: the host must be an EXACT match in the allowlist, and the URL we
 // fetch is rebuilt from the vetted host + path only — no raw user string ever
