@@ -30,16 +30,17 @@ async function email() {
   return s?.user?.email ?? null;
 }
 
-type Body = { script?: string; scene?: { prompt?: unknown; seconds?: unknown }; narration?: unknown };
+type Body = { script?: unknown; scene?: unknown; narration?: unknown };
 
 export async function POST(req: NextRequest) {
   if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
   let body: Body;
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  if (!body || typeof body !== "object") return Response.json({ error: "Invalid JSON" }, { status: 400 });
 
   if (body.scene === undefined && body.narration === undefined) {
-    const script = (body.script ?? "").trim();
+    const script = typeof body.script === "string" ? body.script.trim() : "";
     if (!script) return Response.json({ error: "A script is required" }, { status: 400 });
     try {
       const { scenes } = await planScenes(script);
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest) {
   let model: string;
   let input: Record<string, unknown>;
   if (body.scene !== undefined) {
-    const prompt = typeof body.scene.prompt === "string" ? body.scene.prompt.trim() : "";
-    const seconds = Number(body.scene.seconds);
+    const scene = (body.scene && typeof body.scene === "object" ? body.scene : {}) as { prompt?: unknown; seconds?: unknown };
+    const prompt = typeof scene.prompt === "string" ? scene.prompt.trim() : "";
+    const seconds = Number(scene.seconds);
     if (!prompt || prompt.length > 1500 || !Number.isInteger(seconds) || seconds < 4 || seconds > 8) {
       return Response.json({ error: "A shot needs a prompt and 4–8 seconds" }, { status: 400 });
     }

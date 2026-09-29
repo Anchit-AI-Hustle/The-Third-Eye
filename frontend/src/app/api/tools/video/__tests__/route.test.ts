@@ -39,6 +39,13 @@ describe("/api/tools/video", () => {
     expect(createPrediction).not.toHaveBeenCalled();
   });
 
+  it("answers malformed bodies with a 400, not a crash", async () => {
+    for (const body of [null, 7, "x", { scene: null }, { scene: "x" }, { script: 42 }, { narration: null }]) {
+      expect((await post(body)).status).toBe(400);
+    }
+    expect(createPrediction).not.toHaveBeenCalled();
+  });
+
   it("voices one narration line", async () => {
     const res = await post({ narration: "The city never sleeps." });
     expect(res.status).toBe(200);
