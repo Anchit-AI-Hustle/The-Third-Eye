@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { anchorDispatch, anchorRequestFrom, runAnchor, toDrop } from "@/lib/anchor";
 import { isSensitive, summarizeAction } from "@/lib/actions";
@@ -75,5 +77,14 @@ describe("confirm-then-act", () => {
     expect(isSensitive("anchor", { action: "status" })).toBe(false);
     for (const action of ["run_drop", "rehearse", "queue_song", "mix"]) expect(isSensitive("anchor", { action })).toBe(true);
     expect(summarizeAction("anchor", { action: "queue_song", song: SONG })).toContain(SONG);
+  });
+
+  it("is checked with the call's arguments on every provider path", () => {
+    // The tool-calling fallback passed the name alone, so an ANCHOR run read as
+    // "status", skipped the confirmation and never ran.
+    const chat = readFileSync(path.resolve(__dirname, "../../app/api/chat/route.ts"), "utf8");
+    const calls = [...chat.matchAll(/isSensitive\(([^)]*)\)/g)].map((m) => m[1]);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const args of calls) expect(args).toContain(",");
   });
 });

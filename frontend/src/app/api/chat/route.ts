@@ -1759,7 +1759,7 @@ export async function POST(req: NextRequest) {
 
               const results = await Promise.all(out.tool_calls.map(async (tc) => {
                 const args = parseArgs(tc.function.arguments);
-                if (isSensitive(tc.function.name)) {
+                if (isSensitive(tc.function.name, args)) {
                   const summary = summarizeAction(tc.function.name, args);
                   const intent = resolveIntent(tc.function.name, args);
                   send("confirm", { id: crypto.randomUUID(), tool: tc.function.name, args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });

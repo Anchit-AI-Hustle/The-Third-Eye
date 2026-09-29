@@ -185,7 +185,8 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
 
         {(tool.id === "video" || tool.id === "reel") && output && !loading && (
           <VideoScenes script={output} title={inputs[tool.fields[0].name]?.slice(0, 60) || "Untitled"} accent={tool.accent}
-            aspect={tool.id === "reel" || inputs.format?.startsWith("Short-form") ? "9:16" : "16:9"} />
+            aspect={tool.id === "reel" || inputs.format?.startsWith("Short-form") ? "9:16" : "16:9"}
+            seconds={tool.id === "reel" ? parseInt(inputs.length, 10) || undefined : undefined} />
         )}
         {tool.id === "book" && output && !loading && <BookWriter outline={output} inputs={inputs} accent={tool.accent} />}
       </div>

@@ -9,7 +9,7 @@ export const maxDuration = 60;
 
 // Real clip rendering for the Video Studio — the same submit-then-poll shape as
 // /api/tools/music, on the same REPLICATE_API_TOKEN.
-//   POST { script }                → shot list only, no spend → { scenes }
+//   POST { script, seconds? }      → shot list only, no spend → { scenes }
 //   POST { scene: {prompt,seconds,aspect?}} → render that one clip → { jobId, status }
 //   POST { narration }             → voice that one line       → { jobId, status }
 //   GET  ?id=…                     → poll                      → { status, url }
@@ -31,7 +31,7 @@ async function email() {
   return s?.user?.email ?? null;
 }
 
-type Body = { script?: unknown; scene?: unknown; narration?: unknown };
+type Body = { script?: unknown; seconds?: unknown; scene?: unknown; narration?: unknown };
 
 export async function POST(req: NextRequest) {
   if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -43,8 +43,10 @@ export async function POST(req: NextRequest) {
   if (body.scene === undefined && body.narration === undefined) {
     const script = typeof body.script === "string" ? body.script.trim() : "";
     if (!script) return Response.json({ error: "A script is required" }, { status: 400 });
+    // A reel's running time; the shots are fitted to add up to exactly it.
+    const seconds = Number(body.seconds);
     try {
-      const { scenes } = await planScenes(script);
+      const { scenes } = await planScenes(script, Number.isInteger(seconds) && seconds >= 8 && seconds <= 120 ? seconds : undefined);
       return Response.json({ scenes, configured: replicateConfigured() });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : "Shot list failed" }, { status: 502 });

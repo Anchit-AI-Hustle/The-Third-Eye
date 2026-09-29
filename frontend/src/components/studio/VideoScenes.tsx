@@ -14,7 +14,7 @@ type Episode = { status: "idle" | "building" | "done" | "error"; progress?: numb
 // file. Clips are paid renders, so nothing starts on its own: each shot has its
 // own Render button, and "Render all" says how many paid jobs it is about to
 // start and asks first. Assembling the episode is free — it happens in the browser.
-export function VideoScenes({ script, title, accent, aspect = "16:9" }: { script: string; title: string; accent: string; aspect?: Aspect }) {
+export function VideoScenes({ script, title, accent, aspect = "16:9", seconds }: { script: string; title: string; accent: string; aspect?: Aspect; seconds?: number }) {
   const [scenes, setScenes] = useState<Scene[] | null>(null);
   const [planning, setPlanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9" }: { script
   const [queueing, setQueueing] = useState(false);
   const polls = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
-  useEffect(() => { setScenes(null); setClips({}); setVoices({}); setEpisode({ status: "idle" }); setError(null); }, [script, aspect]);
+  useEffect(() => { setScenes(null); setClips({}); setVoices({}); setEpisode({ status: "idle" }); setError(null); }, [script, aspect, seconds]);
 
   const stopPoll = useCallback((key: string) => {
     const t = polls.current[key];
@@ -44,7 +44,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9" }: { script
     try {
       const res = await fetch("/api/tools/video", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script }),
+        body: JSON.stringify({ script, seconds }),
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? `HTTP ${res.status}`); return; }

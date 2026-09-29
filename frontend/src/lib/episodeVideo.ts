@@ -239,7 +239,9 @@ export async function assembleEpisode(opts: {
         gain.gain.setTargetAtTime(MUSIC_DUCKED, t0 + seg.start, 0.08);
         gain.gain.setTargetAtTime(MUSIC_FULL, t0 + seg.start + voices[seg.shot]!.duration, 0.25);
       }
-      gain.gain.setTargetAtTime(0, t0 + total - MUSIC_FADE_OUT, MUSIC_FADE_OUT / 4);
+      // An episode fades out over its end card; a reel plays through, so the
+      // music carries across the loop back to its first frame.
+      if (!reel) gain.gain.setTargetAtTime(0, t0 + total - MUSIC_FADE_OUT, MUSIC_FADE_OUT / 4);
       src.connect(gain).connect(dest);
       src.start(t0, from, total);
     }

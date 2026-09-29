@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { planScenes } from "@/lib/videoScenes";
+import { fitScenes, planScenes } from "@/lib/videoScenes";
 import { canvasSize, coverFit, planTimeline } from "@/lib/episodeVideo";
 import { videoUrlFrom } from "@/lib/replicate";
 
@@ -109,5 +109,32 @@ describe("reel timeline", () => {
     expect(segs.map((s) => s.kind)).toEqual(["shot", "shot"]);
     expect(segs[0].start).toBe(0);
     expect(segs.at(-1)!.end).toBe(10);
+  });
+});
+
+describe("reel length", () => {
+  const scene = (n: number, seconds: number, narration = "") => ({ n, title: `S${n}`, seconds, prompt: "p", narration });
+
+  it("fits the shots to the reel's exact running time, each within 4-8 seconds", () => {
+    // Shots were planned with no idea of the length asked for, so a 15-second
+    // reel came out at 16+ and a 60-second one topped out near 48.
+    for (const [target, shots] of [[15, [6, 6, 6]], [30, [5, 5, 5, 5, 5]], [60, [8, 8, 8, 8, 8, 8, 8, 8]], [45, [4, 4, 4, 4, 4, 4, 4, 4, 4]]] as const) {
+      const fitted = fitScenes(shots.map((sec, i) => scene(i + 1, sec)), target);
+      expect(fitted.reduce((t, s) => t + s.seconds, 0)).toBe(target);
+      for (const s of fitted) { expect(s.seconds).toBeGreaterThanOrEqual(4); expect(s.seconds).toBeLessThanOrEqual(8); }
+    }
+  });
+
+  it("drops shots the time can't hold and re-cuts each voice-over to its shot", () => {
+    const fitted = fitScenes([1, 2, 3, 4, 5].map((i) => scene(i, 6, "one two three four five six seven eight nine ten eleven twelve")), 15);
+    expect(fitted).toHaveLength(3);
+    for (const s of fitted) expect(s.narration.split(" ").length).toBeLessThanOrEqual(Math.floor(s.seconds * 2.5));
+  });
+
+  it("tells the planner the reel's length and fits what comes back", async () => {
+    reply(JSON.stringify([6, 6, 6].map((seconds, i) => ({ title: `S${i}`, seconds, prompt: "a vertical shot", narration: "" }))));
+    const { scenes } = await planScenes("# Reel", 15);
+    expect(mockCascade.mock.calls[0][0].system).toContain("add up to exactly 15");
+    expect(scenes.reduce((t, s) => t + s.seconds, 0)).toBe(15);
   });
 });
