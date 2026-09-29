@@ -189,7 +189,7 @@ function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   return <button onClick={onClick} className={`px-2.5 py-2 rounded-input border text-xs font-medium transition-colors ${on ? "border-[#34D399] text-[#34D399] bg-[#34D399]/10" : "border-border-default text-text-muted hover:text-text-secondary"}`}>{children}</button>;
 }
 function Field({ label, ai, children }: { label: string; ai?: React.ReactNode; children: React.ReactNode }) {
-  return <div><label className="flex flex-wrap items-center text-[11px] text-text-secondary mb-1">{label}{ai}</label>{children}</div>;
+  return <div><div className="flex flex-wrap items-center text-[11px] text-text-secondary mb-1"><label>{label}</label>{ai}</div>{children}</div>;
 }
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return <div><div className="text-lg font-bold" style={{ color: color || "var(--text-primary)" }}>{value}</div><div className="text-[10px] font-mono text-text-muted uppercase">{label}</div>{sub && <div className="text-[10px] text-text-muted">{sub}</div>}</div>;

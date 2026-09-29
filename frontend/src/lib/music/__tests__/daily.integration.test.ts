@@ -158,6 +158,23 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     await db.from("music_daily").delete().in("user_id", [live, dead]);
   });
 
+  it("never lets live claims exceed five, and a sweep only fills the free slots", async () => {
+    // The second daily sweep used to start five more workers beside five live ones.
+    const { claimNext, dispatchDaily, today } = await import("@/lib/music/daily");
+    const users = Array.from({ length: 9 }, (_, i) => `${U}-cap${i}`);
+    for (const [i, u] of users.entries()) {
+      await db.from("music_daily").upsert({ user_id: u, enabled: true, preset: {}, refs: "", queued_on: today(), claimed_at: i < 3 ? new Date().toISOString() : null }, { onConflict: "user_id" });
+    }
+    const starts = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", starts);
+    expect((await dispatchDaily(db)).workers).toBe(2);
+    vi.unstubAllGlobals();
+    const got = await Promise.all(Array.from({ length: 4 }, () => claimNext(db)));
+    expect(got.filter(Boolean)).toHaveLength(2);
+    expect(await claimNext(db)).toBeNull();
+    await db.from("music_daily").delete().in("user_id", users);
+  });
+
   it("redoes a failure that never reached Replicate, but not a real render", async () => {
     const { runDaily } = await import("@/lib/music/daily");
     createPrediction.mockRejectedValueOnce(new Error("Replicate 429: throttled"));

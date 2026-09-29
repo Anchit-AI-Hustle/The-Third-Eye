@@ -90,23 +90,24 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-4 self-start">
         {tool.fields.map((f) => (
           <div key={f.name}>
-            <label className="flex flex-wrap items-center text-xs font-mono text-text-secondary mb-1.5">
-              {f.label}{f.required && <span className="text-accent-red"> *</span>}
+            {/* The toolbar sits beside the label, not in it: a label's first button is its implicit control. */}
+            <div className="flex flex-wrap items-center text-xs font-mono text-text-secondary mb-1.5">
+              <label htmlFor={`${tool.id}-${f.name}`}>{f.label}{f.required && <span className="text-accent-red"> *</span>}</label>
               <AiFieldBar tool={{ label: tool.label, purpose: tool.blurb }} field={f} value={inputs[f.name] ?? ""}
                 context={contextFor(f.name)} onChange={set(f.name)} clearTo={f.type === "select" ? f.options?.[0] ?? "" : ""} />
-            </label>
+            </div>
             {f.type === "textarea" ? (
-              <textarea value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}
+              <textarea id={`${tool.id}-${f.name}`} value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}
                 placeholder={f.placeholder} rows={4}
                 className="w-full bg-background-base border border-border-default rounded-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-[var(--te-accent)] transition-colors resize-y"
                 style={{ ["--te-accent" as string]: tool.accent }} />
             ) : f.type === "select" ? (
-              <select value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}
+              <select id={`${tool.id}-${f.name}`} value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}
                 className="w-full bg-background-base border border-border-default rounded-input px-3 py-2 text-sm text-text-primary outline-none">
                 {f.options?.map((o) => <option key={o}>{o}</option>)}
               </select>
             ) : (
-              <input value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}
+              <input id={`${tool.id}-${f.name}`} value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}
                 placeholder={f.placeholder}
                 className="w-full bg-background-base border border-border-default rounded-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-[var(--te-accent)] transition-colors"
                 style={{ ["--te-accent" as string]: tool.accent }} />

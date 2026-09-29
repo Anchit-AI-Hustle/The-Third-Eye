@@ -110,12 +110,13 @@ function AddEvent({ onAdd, onCancel }: { onAdd: (e: SubscribedEvent) => void; on
     <div className="rounded-card border border-border-default bg-background-surface/40 p-4 space-y-2.5 mb-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <label className="flex items-center text-[11px] text-text-secondary mb-1">Event name
+          <div className="flex items-center text-[11px] text-text-secondary mb-1">
+            <label htmlFor="health-event-title">Event name</label>
             <AiFieldBar tool={{ label: "Health events", purpose: "a recurring fitness or wellness event to schedule" }}
               field={{ name: "title", label: "Event name", type: "text", placeholder: "e.g. Morning yoga" }} value={title}
               context={{ Activity: ACTIVITY_LABELS[activity], Format: fmt === "online" ? "Online" : "In-person", Frequency: frequency }} onChange={setTitle} />
-          </label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event name (e.g. Morning yoga)" className={inp} />
+          </div>
+          <input id="health-event-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event name (e.g. Morning yoga)" className={inp} />
         </div>
         <select value={activity} onChange={(e) => setActivity(e.target.value as ActivityType)} className={inp}>{Object.entries(ACTIVITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         <select value={fmt} onChange={(e) => setFmt(e.target.value as EventFormat)} className={inp}><option value="in_person">In-person</option><option value="online">Online</option></select>

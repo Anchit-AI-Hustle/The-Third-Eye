@@ -180,9 +180,13 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   return "done";
 }
 
+// Just past a function's 60s lifetime, like the finalize claim.
+const QUEUE_LEASE_MS = 70_000;
+
 /**
  * The daily crons' part: queue every enabled user whose day isn't settled, and
- * start up to WORKERS workers (/api/tools/music/daily/run). Each worker claims
+ * start workers (/api/tools/music/daily/run) for the slots that live claims
+ * leave free, up to WORKERS. Each worker claims
  * one queued user, renders, then starts exactly one successor — so renders are
  * bounded, and a worker that dies leaves its user's claim to expire and be
  * picked up. Running it again (the second daily cron) re-queues anyone still
@@ -202,26 +206,21 @@ export async function dispatchDaily(db: Db): Promise<{ queued: number; workers: 
   const waiting = ((enabled as { user_id: string; queued_on: string | null }[] | null) ?? []).filter((u) => !settled.has(u.user_id));
   const fresh = waiting.filter((u) => u.queued_on !== day).map((u) => u.user_id);
   if (fresh.length) await db.from("music_daily").update({ queued_on: day, claimed_at: null }).in("user_id", fresh);
-  const started = await Promise.all(Array.from({ length: Math.min(WORKERS, waiting.length) }, () => startWorker()));
+  const { count: live } = await db.from("music_daily").select("user_id", { count: "exact", head: true })
+    .eq("queued_on", day).gte("claimed_at", new Date(Date.now() - QUEUE_LEASE_MS).toISOString());
+  const slots = Math.min(WORKERS - (live ?? 0), waiting.length - (live ?? 0));
+  const started = await Promise.all(Array.from({ length: Math.max(0, slots) }, () => startWorker()));
   return { queued: waiting.length, workers: started.filter(Boolean).length };
 }
 
-// Just past a function's 60s lifetime, like the finalize claim.
-const QUEUE_LEASE_MS = 70_000;
-
-/** Claim the next queued user for today, skipping live claims. Null when the queue is drained. */
+/**
+ * Claim the next queued user for today, skipping live claims. Null when the
+ * queue is drained or WORKERS claims are already live — the cap is enforced
+ * here, atomically, so no mix of sweeps and workers can exceed it.
+ */
 export async function claimNext(db: Db): Promise<string | null> {
-  const day = today();
-  const free = `claimed_at.is.null,claimed_at.lt.${new Date(Date.now() - QUEUE_LEASE_MS).toISOString()}`;
-  const { data } = await db.from("music_daily").select("user_id").eq("queued_on", day).or(free).limit(WORKERS * 2);
-  for (const { user_id } of (data as { user_id: string }[] | null) ?? []) {
-    const { data: got } = await db.from("music_daily")
-      .update({ claimed_at: new Date().toISOString() })
-      .eq("user_id", user_id).eq("queued_on", day).or(free)
-      .select("user_id");
-    if (got?.length) return user_id;
-  }
-  return null;
+  const { data } = await db.rpc("music_daily_claim", { p_day: today(), p_lease_ms: QUEUE_LEASE_MS, p_max: WORKERS });
+  return (data as string | null) ?? null;
 }
 
 /** One worker's turn: claim a user, render, dequeue, and start the next worker. */
