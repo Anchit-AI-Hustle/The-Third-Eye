@@ -44,8 +44,10 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Google User Data</h2>
             <p className="mb-3">
-              Connecting Google is optional and separate from signing in. Signing in requests only
-              your basic profile. Gmail and Calendar access is granted only if you complete the
+              Connecting Google is optional and entirely separate from signing in. Signing in uses
+              your mobile number and PIN and requests nothing at all from Google — we receive no
+              Google profile, name, email address or photo unless you connect. Gmail and Calendar
+              access is granted only if you complete the
               &ldquo;Connect Google&rdquo; step in Settings, and can be revoked at any time from
               that screen or from your{" "}
               <a

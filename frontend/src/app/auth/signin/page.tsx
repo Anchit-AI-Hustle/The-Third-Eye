@@ -28,7 +28,6 @@ export default function SignInPage() {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
-  const [known, setKnown] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,14 +54,14 @@ export default function SignInPage() {
         ok?: boolean;
         exists?: boolean;
         setPin?: boolean;
-        name?: string;
         error?: string;
       };
       if (!body.ok) {
         setError(body.error ?? "Could not check that number.");
         return;
       }
-      setKnown(body.name ?? null);
+      // No name comes back from this call on purpose — greeting someone by name
+      // before they have proved anything hands it to whoever typed the number.
       setStep(!body.exists ? "signup" : body.setPin ? "setpin" : "pin");
     } catch {
       setError("Could not reach the server. Check your connection and try again.");
@@ -151,7 +150,7 @@ export default function SignInPage() {
                 ? "Create your account"
                 : step === "setpin"
                   ? "Choose a PIN"
-                  : `Welcome back${known ? `, ${known}` : ""}`}
+                  : "Welcome back"}
           </h2>
           <p className="text-text-muted text-xs text-center mb-6">
             {onPhoneStep

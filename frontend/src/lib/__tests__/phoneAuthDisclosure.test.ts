@@ -1,0 +1,176 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * What the unauthenticated sign-in surface is allowed to give away, and what the
+ * lockout counter has to guarantee.
+ *
+ * THE THREE THINGS PINNED HERE
+ *   1. POST /api/auth/phone is reachable by anyone who can guess a number
+ *      (middleware does not cover /api/*). It answers one bit — is this number
+ *      registered — and must not return the account holder's NAME, which would
+ *      turn a list of numbers into a list of people and hand a phisher "Welcome
+ *      back, <name>". It also must not distinguish a locked account, which would
+ *      confirm to an attacker that their lockout attack landed.
+ *   2. A wrong PIN must be counted by the database in one statement. Counting it
+ *      in application code let parallel guesses all read the same value and write
+ *      the same one back, so N simultaneous attempts moved the counter by one and
+ *      the lock never arrived — against a secret that is one of ten thousand.
+ *   3. A PIN of the wrong shape must not be hashed. scrypt is the expensive part,
+ *      and this path is unauthenticated.
+ */
+
+const rpc = vi.fn();
+const updates: Record<string, unknown>[] = [];
+let row: Record<string, unknown> | null = null;
+
+const chain = (table: string) => ({
+  select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: row }) }) }),
+  update: (patch: Record<string, unknown>) => {
+    if (table === "phone_users") updates.push(patch);
+    return { eq: () => Promise.resolve({ error: null }) };
+  },
+  insert: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: row }) }) }),
+});
+
+vi.mock("@/lib/serverSupabase", () => ({
+  getAdminSupabase: () => ({ from: (t: string) => chain(t), rpc: (...a: unknown[]) => rpc(...a) }),
+}));
+
+const PHONE = "+919876543210";
+const PIN = "8305";
+
+/** A row whose stored hash really is the PIN above, so verifyPin does real work. */
+async function seedRow(overrides: Record<string, unknown> = {}) {
+  const { hashPin } = await import("@/lib/phonePin");
+  const h = hashPin(PIN);
+  row = {
+    id: "11111111-1111-4111-8111-111111111111",
+    phone: PHONE,
+    name: "Anchit",
+    pin_hash: h.hash,
+    pin_salt: h.salt,
+    pin_tries: 0,
+    locked_until: null,
+    ...overrides,
+  };
+}
+
+beforeEach(async () => {
+  vi.resetModules();
+  rpc.mockReset();
+  updates.length = 0;
+  // Every call is allowed unless a test says otherwise, and the fail counter
+  // reports "one try used" unless a test says otherwise.
+  rpc.mockImplementation((fn: string) =>
+    fn === "auth_rate_limit_hit"
+      ? Promise.resolve({ data: 1, error: null })
+      : Promise.resolve({ data: [{ tries: 1, locked_until: null }], error: null }),
+  );
+  await seedRow();
+});
+afterEach(() => {
+  row = null;
+});
+
+async function preflight(body: Record<string, unknown>) {
+  const { POST } = await import("@/app/api/auth/phone/route");
+  const res = await POST(
+    new Request("https://example.com/api/auth/phone", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.9" },
+      body: JSON.stringify(body),
+    }),
+  );
+  return { status: res.status, body: await res.json() };
+}
+
+describe("POST /api/auth/phone", () => {
+  it("never returns the account holder's name", async () => {
+    const { body } = await preflight({ phone: PHONE });
+    expect(body).toEqual({ ok: true, exists: true });
+    expect(JSON.stringify(body)).not.toContain("Anchit");
+  });
+
+  it("answers a locked account exactly as it answers an unlocked one", async () => {
+    const open = await preflight({ phone: PHONE });
+    await seedRow({ locked_until: new Date(Date.now() + 9e5).toISOString() });
+    const locked = await preflight({ phone: PHONE });
+    expect(locked).toEqual(open);
+  });
+
+  it("says a number is not registered without inventing an account", async () => {
+    row = null;
+    const { body } = await preflight({ phone: PHONE });
+    expect(body).toEqual({ ok: true, exists: false });
+  });
+
+  it("refuses a number that is not a valid number at all", async () => {
+    expect((await preflight({ phone: "12345" })).status).toBe(400);
+  });
+
+  it("rate-limits by caller once the window is spent", async () => {
+    rpc.mockImplementation(() => Promise.resolve({ data: 999, error: null }));
+    expect((await preflight({ phone: PHONE })).status).toBe(429);
+  });
+});
+
+describe("counting a wrong PIN", () => {
+  async function attempt(pin: string) {
+    const { enter } = await import("@/lib/phoneAuth");
+    return enter({ phone: PHONE, pin, ip: "203.0.113.9" });
+  }
+
+  it("delegates the increment to one database statement, not a read-then-write", async () => {
+    const res = await attempt("8306");
+    expect(res.ok).toBe(false);
+    expect(rpc).toHaveBeenCalledWith("phone_pin_fail", expect.objectContaining({ p_max: 5 }));
+    // The row must not be updated with a locally computed count.
+    expect(updates.filter((u) => "pin_tries" in u)).toHaveLength(0);
+  });
+
+  it("reports the lock when that statement says this attempt locked the account", async () => {
+    rpc.mockImplementation((fn: string) =>
+      fn === "auth_rate_limit_hit"
+        ? Promise.resolve({ data: 1, error: null })
+        : Promise.resolve({
+            data: [{ tries: 0, locked_until: new Date(Date.now() + 9e5).toISOString() }],
+            error: null,
+          }),
+    );
+    const res = await attempt("8306");
+    expect(res).toMatchObject({ ok: false, reason: "locked" });
+  });
+
+  it("refuses the attempt rather than granting a free guess if the counter cannot move", async () => {
+    rpc.mockImplementation((fn: string) =>
+      fn === "auth_rate_limit_hit"
+        ? Promise.resolve({ data: 1, error: null })
+        : Promise.resolve({ data: null, error: { message: "function does not exist" } }),
+    );
+    const res = await attempt("8306");
+    expect(res.ok).toBe(false);
+    expect(res).toMatchObject({ reason: "locked" });
+  });
+
+  it("does not pay for scrypt on a PIN that cannot be right", async () => {
+    const phonePin = await import("@/lib/phonePin");
+    const spy = vi.spyOn(phonePin, "verifyPin");
+
+    await attempt("83");
+    expect(spy).not.toHaveBeenCalled();
+    // Still counted, so malformed guesses are not a way around the lockout.
+    expect(rpc).toHaveBeenCalledWith("phone_pin_fail", expect.anything());
+
+    // And the spy really does observe this call site — without this the
+    // assertion above would pass for a spy that was never wired up at all.
+    await attempt("8306");
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets the right PIN through and clears nothing it should not", async () => {
+    const { enter } = await import("@/lib/phoneAuth");
+    const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
+    expect(res.ok).toBe(true);
+    expect(rpc).not.toHaveBeenCalledWith("phone_pin_fail", expect.anything());
+  });
+});

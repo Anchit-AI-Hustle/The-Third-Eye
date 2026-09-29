@@ -47,6 +47,19 @@ export async function POST(_req: NextRequest) {
 
   const deleted: string[] = [];
   const failed: string[] = [];
+
+  // THE SIGN-IN CREDENTIAL ITSELF, deleted explicitly rather than through the
+  // loop below, because it is the one table keyed by `phone` — and because a
+  // deletion that leaves it behind is the worst kind of failure here: the user is
+  // told their account is gone and signed out, while their number, name and PIN
+  // hash remain and they can sign straight back into an account that supposedly
+  // does not exist. `email` IS the E.164 number under phone sign-in (see
+  // lib/auth.ts), which is what makes this match.
+  {
+    const { error } = await sb.from("phone_users").delete().eq("phone", email);
+    (error ? failed : deleted).push("phone_users");
+  }
+
   for (const table of TABLES) {
     let ok = false;
     for (const col of ["user_id", "email"]) {

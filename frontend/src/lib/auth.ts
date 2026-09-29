@@ -1,7 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { resolveAuthSecret } from "@/lib/authSecret";
-import { enter } from "@/lib/phoneAuth";
+import { clientIp, enter } from "@/lib/phoneAuth";
 
 /**
  * SIGN-IN IS A MOBILE NUMBER AND A 4-DIGIT PIN, ported from parwah-hq.
@@ -34,12 +34,18 @@ export const authOptions: NextAuthOptions = {
         // creates the account, so signing up and signing in are one flow.
         name: { label: "Name", type: "text" },
       },
-      async authorize(credentials) {
+      // `req` is here for the caller's address alone, which `enter` uses as a
+      // rate-limit key and never stores. This endpoint is unauthenticated and
+      // does real work per call — a scrypt hash — so without a limit in front of
+      // it anyone can spend the deployment's CPU, walk a list of numbers, or
+      // re-lock somebody's account every fifteen minutes indefinitely.
+      async authorize(credentials, req) {
         const res = await enter({
           phone: credentials?.phone,
           cc: credentials?.cc,
           pin: credentials?.pin,
           name: credentials?.name,
+          ip: clientIp(req?.headers),
         });
         if (res.ok) {
           // `email` is the app's identity key, not an address. See the note above.

@@ -32,9 +32,15 @@ otherwise undocumented outside this file and the code itself.
 - **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
 - **Auth:** NextAuth v4 with a **credentials** provider — a **mobile number and a
   4-digit PIN**, ported from parwah-hq. **JWT** sessions. Accounts live in
-  `phone_users` (scrypt PIN hash, 5 wrong tries → 15-minute lock); the sign-in
-  form pre-flights the number against `POST /api/auth/phone` to decide whether to
-  ask for a name (sign-up) or the PIN. The identity the whole app keys on,
+  `phone_users` (scrypt PIN hash, 5 wrong tries → 15-minute lock, counted by the
+  `phone_pin_fail` SQL function in one statement so parallel guesses cannot slip
+  past it); `auth_rate_limit` + `auth_rate_limit_hit` cap attempts per caller,
+  since this path is unauthenticated and hashes on every call. The sign-in form
+  pre-flights the number against `POST /api/auth/phone` to decide whether to ask
+  for a name (sign-up) or the PIN — that route returns **only** whether the
+  number is registered, never the account holder's name or lock state.
+  Deleting an account removes the `phone_users` row too, or the user is signed
+  out of an account they can walk straight back into. The identity the whole app keys on,
   `session.user.email`, is now the E.164 number — an opaque string to every
   consumer. **Google OAuth is commented out in `lib/auth.ts`, not deleted.**
   Removing it costs no feature: Gmail/Calendar always ran on the refresh token
