@@ -32,6 +32,13 @@ describe("/api/tools/video", () => {
     expect(createPrediction).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ prompt: "A red kite over dunes at noon.", duration: 6 }));
   });
 
+  it("renders a reel's shot upright, and ignores an aspect the model doesn't take", async () => {
+    await post({ scene: { prompt: "p", seconds: 5, aspect: "9:16" } });
+    expect(createPrediction.mock.calls[0][1]).toMatchObject({ aspect_ratio: "9:16" });
+    await post({ scene: { prompt: "p", seconds: 5, aspect: "21:9" } });
+    expect(createPrediction.mock.calls[1][1]).toMatchObject({ aspect_ratio: "16:9" });
+  });
+
   it("refuses shots the video model cannot render", async () => {
     for (const scene of [{ prompt: "", seconds: 5 }, { prompt: "x", seconds: 12 }, { prompt: "x", seconds: 4.5 }, { prompt: "x".repeat(1501), seconds: 5 }]) {
       expect((await post({ scene })).status).toBe(400);

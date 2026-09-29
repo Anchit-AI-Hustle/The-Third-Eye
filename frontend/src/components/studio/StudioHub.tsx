@@ -6,10 +6,10 @@ import {
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket,
   Building2, ArrowRight, Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper,
   CalendarDays, Send, Tag, Briefcase, ScrollText, Target, FileSignature,
-  Share2, Clapperboard, TrendingUp, BookOpenCheck,
+  Share2, Clapperboard, TrendingUp, BookOpenCheck, Film, BookOpen, AudioLines,
   type LucideIcon,
 } from "lucide-react";
-import { STUDIO_TOOLS, STUDIOS, CATEGORY_ORDER, categoryOf, type ModeId } from "@/lib/studioTools";
+import { STUDIO_TOOLS, STUDIO_LINKS, STUDIOS, CATEGORY_ORDER, categoryOf, type ModeId } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -17,18 +17,20 @@ const ICONS: Record<string, LucideIcon> = {
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket, Building2,
   Dumbbell, GraduationCap, NotebookPen, Wallet, Newspaper, CalendarDays, Send, Tag,
   Briefcase, ScrollText, Target, FileSignature, Share2, Clapperboard, TrendingUp, BookOpenCheck,
+  Film, BookOpen, AudioLines,
 };
 
 // Studio is mode-aware: it shows the tools for the CURRENTLY selected user mode
 // only (Personal → Hobby Studio, Professional → Startup Studio, Enterprise →
 // Office Studio). A tab row lets you switch studios, which switches the app mode.
 const ORDER: ModeId[] = ["professional", "enterprise", "personal"];
+const ALL = [...STUDIO_TOOLS, ...STUDIO_LINKS];
 
 export function StudioHub() {
   const { modeId, setMode } = useMode();
   const studio = STUDIOS[modeId];
   const StudioIcon = ICONS[studio.icon] ?? Rocket;
-  const tools = STUDIO_TOOLS.filter((t) => t.mode === modeId);
+  const tools = ALL.filter((t) => t.mode === modeId);
 
   return (
     <div className="space-y-6">
@@ -38,7 +40,7 @@ export function StudioHub() {
           const s = STUDIOS[m];
           const Icon = ICONS[s.icon] ?? Rocket;
           const active = modeId === m;
-          const count = STUDIO_TOOLS.filter((t) => t.mode === m).length;
+          const count = ALL.filter((t) => t.mode === m).length;
           return (
             <button
               key={m}

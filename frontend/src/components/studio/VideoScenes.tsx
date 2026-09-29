@@ -1,28 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clapperboard, Loader2, Film, Download, AlertTriangle, Mic, Tv } from "lucide-react";
+import { Clapperboard, Loader2, Film, Download, AlertTriangle, Mic, Tv, Layers } from "lucide-react";
 import { recordGeneration } from "@/lib/generations";
-import { assembleEpisode } from "@/lib/episodeVideo";
+import { assembleEpisode, type Aspect, type Soundtrack } from "@/lib/episodeVideo";
+import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
 
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
 type JobState = { status: "idle" | "rendering" | "done" | "error"; url?: string; msg?: string };
 type Episode = { status: "idle" | "building" | "done" | "error"; progress?: number; url?: string; ext?: string; msg?: string };
 
 // Turns a finished Video Studio script into real clips, then into one episode
-// file. Deliberately one paid job per click: this is the only surface in the app
-// that spends money per call, so there is no "render all" button and nothing
-// starts on its own. Assembling the episode is free — it happens in the browser.
-export function VideoScenes({ script, title, accent }: { script: string; title: string; accent: string }) {
+// file. Clips are paid renders, so nothing starts on its own: each shot has its
+// own Render button, and "Render all" says how many paid jobs it is about to
+// start and asks first. Assembling the episode is free — it happens in the browser.
+export function VideoScenes({ script, title, accent, aspect = "16:9" }: { script: string; title: string; accent: string; aspect?: Aspect }) {
   const [scenes, setScenes] = useState<Scene[] | null>(null);
   const [planning, setPlanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clips, setClips] = useState<Record<number, JobState>>({});
   const [voices, setVoices] = useState<Record<number, JobState>>({});
   const [episode, setEpisode] = useState<Episode>({ status: "idle" });
+  const [soundtrack, setSoundtrack] = useState<Soundtrack | null>(null);
+  const [queueing, setQueueing] = useState(false);
   const polls = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
-  useEffect(() => { setScenes(null); setClips({}); setVoices({}); setEpisode({ status: "idle" }); setError(null); }, [script]);
+  useEffect(() => { setScenes(null); setClips({}); setVoices({}); setEpisode({ status: "idle" }); setError(null); }, [script, aspect]);
 
   const stopPoll = useCallback((key: string) => {
     const t = polls.current[key];
@@ -66,7 +69,7 @@ export function VideoScenes({ script, title, accent }: { script: string; title: 
     try {
       const res = await fetch("/api/tools/video", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(kind === "clip" ? { scene: { prompt: scene.prompt, seconds: scene.seconds } } : { narration: scene.narration }),
+        body: JSON.stringify(kind === "clip" ? { scene: { prompt: scene.prompt, seconds: scene.seconds, aspect } } : { narration: scene.narration }),
       });
       const d = await res.json();
       if (!res.ok || !d.jobId) return fail(d.error ?? `HTTP ${res.status}`);
@@ -102,6 +105,20 @@ export function VideoScenes({ script, title, accent }: { script: string; title: 
       }));
 
   const ready = scenes?.filter((s) => clips[s.n]?.status === "done") ?? [];
+  const idle = (m: Record<number, JobState>, n: number) => !m[n] || m[n].status === "idle" || m[n].status === "error";
+  const pendingClips = scenes?.filter((s) => idle(clips, s.n)) ?? [];
+  const pendingVoices = scenes?.filter((s) => s.narration && idle(voices, s.n)) ?? [];
+
+  async function renderAll() {
+    const jobs = pendingClips.length + pendingVoices.length;
+    if (!jobs || !confirm(`Start ${pendingClips.length} clip render${pendingClips.length === 1 ? "" : "s"}${pendingVoices.length ? ` and ${pendingVoices.length} voice-over${pendingVoices.length === 1 ? "" : "s"}` : ""}? Each one is a paid render.`)) return;
+    setQueueing(true);
+    try {
+      // Staggered, not simultaneous: the provider throttles bursts of new jobs.
+      for (const s of pendingClips) { await renderClip(s); await new Promise((r) => setTimeout(r, 1500)); }
+      for (const s of pendingVoices) { await submit("voice", s, setVoices); await new Promise((r) => setTimeout(r, 1500)); }
+    } finally { setQueueing(false); }
+  }
 
   async function buildEpisode() {
     if (!scenes) return;
@@ -109,6 +126,8 @@ export function VideoScenes({ script, title, accent }: { script: string; title: 
     try {
       const { blob, ext } = await assembleEpisode({
         title,
+        aspect,
+        soundtrack: soundtrack ?? undefined,
         shots: ready.map((s) => ({
           title: s.title,
           clipUrl: clips[s.n].url!,
@@ -138,11 +157,19 @@ export function VideoScenes({ script, title, accent }: { script: string; title: 
             {planning ? "Breaking down…" : "Build shot list"}
           </button>
         )}
+        {scenes && (pendingClips.length + pendingVoices.length > 0 || queueing) && (
+          <button onClick={renderAll} disabled={queueing}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-input text-[11px] font-semibold text-[#07070F] hover:brightness-110 disabled:opacity-50"
+            style={{ background: accent }}>
+            {queueing ? <Loader2 size={12} className="animate-spin" /> : <Layers size={12} />}
+            {queueing ? "Starting renders…" : `Render all (${pendingClips.length + pendingVoices.length})`}
+          </button>
+        )}
       </div>
 
       {!scenes && !planning && (
         <p className="text-xs text-text-muted">
-          Break the script into shots, render them one at a time, add voice-over, then assemble one episode file. Each clip and each voice-over is a separate paid render — nothing renders until you press it.
+          Break the script into shots, render them ({aspect === "9:16" ? "upright, for reels" : "widescreen"}), add voice-over and a soundtrack, then assemble one {aspect === "9:16" ? "reel" : "episode"} file. Each clip and each voice-over is a separate paid render — nothing renders until you press it.
         </p>
       )}
 
@@ -202,7 +229,7 @@ export function VideoScenes({ script, title, accent }: { script: string; title: 
         <div className="rounded-input border p-3 space-y-2" style={{ borderColor: accent }}>
           <div className="flex items-center gap-2 flex-wrap">
             <Tv size={14} style={{ color: accent }} />
-            <span className="text-xs font-semibold text-text-primary">Episode file</span>
+            <span className="text-xs font-semibold text-text-primary">{aspect === "9:16" ? "Reel file (9:16)" : "Episode file"}</span>
             <button onClick={buildEpisode} disabled={!ready.length || episode.status === "building"}
               className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-input text-[11px] font-semibold text-[#07070F] hover:brightness-110 disabled:opacity-50"
               style={{ background: accent }}>
@@ -212,13 +239,14 @@ export function VideoScenes({ script, title, accent }: { script: string; title: 
           </div>
           <p className="text-[11px] text-text-muted">
             {ready.length
-              ? `Title card, ${ready.length} shot${ready.length === 1 ? "" : "s"} with subtitles${Object.values(voices).some((v) => v.status === "done") ? " and voice-over" : ""}, end card — assembled in your browser in real time, so keep this tab in front.${skipped ? ` ${skipped} unrendered shot${skipped === 1 ? " is" : "s are"} left out.` : ""}`
+              ? `Title card, ${ready.length} shot${ready.length === 1 ? "" : "s"} with subtitles${Object.values(voices).some((v) => v.status === "done") ? " and voice-over" : ""}${soundtrack ? ", soundtrack underneath" : ""}, end card — assembled in your browser in real time, so keep this tab in front.${skipped ? ` ${skipped} unrendered shot${skipped === 1 ? " is" : "s are"} left out.` : ""}`
               : "Render at least one shot to assemble an episode."}
           </p>
+          <SoundtrackPicker onChange={setSoundtrack} accent={accent} />
           {episode.status === "error" && <p className="text-[11px] text-accent-red">{episode.msg}</p>}
           {episode.status === "done" && episode.url && (
             <div className="space-y-1.5">
-              <video controls src={episode.url} className="w-full rounded-input bg-black" />
+              <video controls src={episode.url} className={`rounded-input bg-black ${aspect === "9:16" ? "w-full max-w-xs mx-auto block" : "w-full"}`} />
               <a href={episode.url} download={fileName}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold hover:brightness-110" style={{ color: accent }}>
                 <Download size={11} /> Download {fileName}

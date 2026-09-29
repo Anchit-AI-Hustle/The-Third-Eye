@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { planScenes } from "@/lib/videoScenes";
-import { planTimeline } from "@/lib/episodeVideo";
+import { canvasSize, coverFit, planTimeline } from "@/lib/episodeVideo";
 import { videoUrlFrom } from "@/lib/replicate";
 
 vi.mock("@/lib/llmCascade", () => ({
@@ -89,5 +89,16 @@ describe("planTimeline", () => {
     const [, shot, end] = planTimeline([{ clip: 4, voice: 5 }]);
     expect(shot.end - shot.start).toBeCloseTo(5.4);
     expect(end.start).toBeCloseTo(shot.end);
+  });
+});
+
+describe("reel framing", () => {
+  it("records reels upright and crops a landscape clip to fill the frame", () => {
+    expect(canvasSize("9:16")).toEqual({ W: 720, H: 1280 });
+    const f = coverFit(1280, 720, 720, 1280);
+    expect(f.h).toBe(1280);
+    expect(f.w).toBeGreaterThan(720);
+    expect(f.x).toBeCloseTo((720 - f.w) / 2);
+    expect(coverFit(1280, 720, 1280, 720)).toEqual({ x: 0, y: 0, w: 1280, h: 720 });
   });
 });

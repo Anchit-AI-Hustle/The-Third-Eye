@@ -397,6 +397,20 @@ export const geminiTools = [
         },
       },
       {
+        name: "anchor",
+        description: "ANCHOR autopilot — the user's robot that releases one hard-techno track a day to YouTube (video + Short) and Instagram (Reel). action='status' for the last run, next post and recent releases; 'run_drop' to make and publish today's drop now; 'rehearse' to render today's drop without releasing; 'queue_song' to queue one of their Suno songs for the next drop; 'mix' to build the week's or month's continuous mix. Everything except status is confirmed by the user first.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["status", "run_drop", "rehearse", "queue_song", "mix"], description: "What to do" },
+            song: { type: "STRING", description: "Suno song link or id (for queue_song)" },
+            now: { type: "BOOLEAN", description: "Publish immediately instead of the 17:30 UTC slot (run_drop, queue_song)" },
+            period: { type: "STRING", enum: ["week", "month"], description: "Mix length (for mix)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
         name: "deep_research",
         description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons — not for a simple factual lookup, use web_search for that.",
         parameters: {

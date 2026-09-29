@@ -10,6 +10,7 @@ import { useModeTags } from "@/hooks/useModeTags";
 import { dataInsert } from "@/lib/dataClient";
 import { recordGeneration, fieldsFrom } from "@/lib/generations";
 import { VideoScenes } from "@/components/studio/VideoScenes";
+import { BookWriter } from "@/components/studio/BookWriter";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 export function StudioWorkbench({ tool }: { tool: StudioTool }) {
@@ -182,9 +183,11 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
           )}
         </div>
 
-        {tool.id === "video" && output && !loading && (
-          <VideoScenes script={output} title={inputs[tool.fields[0].name]?.slice(0, 60) || "Untitled"} accent={tool.accent} />
+        {(tool.id === "video" || tool.id === "reel") && output && !loading && (
+          <VideoScenes script={output} title={inputs[tool.fields[0].name]?.slice(0, 60) || "Untitled"} accent={tool.accent}
+            aspect={tool.id === "reel" || inputs.format?.startsWith("Short-form") ? "9:16" : "16:9"} />
         )}
+        {tool.id === "book" && output && !loading && <BookWriter outline={output} inputs={inputs} accent={tool.accent} />}
       </div>
     </div>
   );

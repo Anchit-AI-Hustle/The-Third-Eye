@@ -26,6 +26,7 @@ import { normalizePrompt } from "@/lib/promptNormalizer";
 import { randomUUID } from "crypto";
 import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 import { gatherResearchRounds } from "@/lib/deepResearch";
+import { anchorStatus } from "@/lib/anchor";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -678,6 +679,11 @@ async function runTool(
 
     case "create_asset":
       return { result: await createAsset(ctx, input) };
+
+    case "anchor":
+      // Only status reaches here; every other action is confirmed first and
+      // runs from /api/act.
+      return { result: await anchorStatus(ctx.email) };
 
     case "deep_research":
       return { result: await deepResearch(input.topic ?? "", input.depth ?? "standard", input.format ?? "report") };

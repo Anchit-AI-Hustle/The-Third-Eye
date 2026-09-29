@@ -36,6 +36,7 @@ const BASE_LABELS: Record<string, string> = {
   stock_quote: "Checking the stock price",
   multi_agent_run: "Running parallel analysis",
   create_asset: "Creating that asset",
+  anchor: "Checking ANCHOR",
   deep_research: "Researching",
   play_music: "Queuing up music",
   initiate_protocol: "Activating the protocol",

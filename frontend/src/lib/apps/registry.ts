@@ -24,7 +24,10 @@ const P: AppMode = "personal", PR: AppMode = "professional", E: AppMode = "enter
 export const APPS: AppEntry[] = [
   // ── Personal · Music & Media ──
   { id: "music-studio", label: "Music Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/music", icon: "Music", selfBuilt: true, blurb: "Generate & play your own tracks" },
-  { id: "video-studio", label: "Video Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/video", icon: "Clapperboard", selfBuilt: true, blurb: "Scripts & series concepts" },
+  { id: "video-studio", label: "Video Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/video", icon: "Clapperboard", selfBuilt: true, blurb: "Scripts, rendered shots & episode files" },
+  { id: "reel-studio", label: "Reel Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/reel", icon: "Film", selfBuilt: true, blurb: "9:16 reels & Shorts, rendered and cut to a track" },
+  { id: "anchor", label: "ANCHOR Autopilot", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/anchor", icon: "AudioLines", selfBuilt: true, blurb: "Daily song robot — drops, queue, YouTube & Reels" },
+  { id: "book-studio", label: "Book Studio", category: "AI Tools", modes: [P], kind: "internal", href: "/tools/book", icon: "BookOpen", selfBuilt: true, blurb: "Write a book chapter by chapter, export EPUB & KDP listing" },
   { id: "youtube", label: "YouTube", category: "Music & Media", modes: [P], kind: "external", href: "https://www.youtube.com", icon: "Play" },
   { id: "spotify", label: "Spotify", category: "Music & Media", modes: [P], kind: "external", href: "https://open.spotify.com", icon: "Music2" },
   { id: "jiosaavn", label: "JioSaavn", category: "Music & Media", modes: [P], kind: "external", href: "https://www.jiosaavn.com", icon: "Music2" },
