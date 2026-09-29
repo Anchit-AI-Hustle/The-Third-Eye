@@ -1,7 +1,6 @@
 // web/app/api/profile/route.ts — server-validated profile upsert.
-// authN (session) → authZ (own row via RLS) → validate (zod) → act → audit.
-import { supabaseServer } from "@/lib/kolab-studio/supabaseServer";
-import { getSessionUser, getEntitlementContext } from "@/lib/kolab-studio/db";
+// authN (session) → authZ (own row, keyed by the session's user_id) → validate (zod) → act → audit.
+import { getSessionUser, getEntitlementContext, kolabDb } from "@/lib/kolab-studio/db";
 import { profileUpdateSchema } from "@/lib/kolab-studio/validation";
 import { isProfileComplete, canUsePro } from "@/lib/kolab-studio/entitlements";
 import { ok, fail, handleError, clientIp } from "@/lib/kolab-studio/http";
@@ -13,16 +12,17 @@ export async function POST(req: Request) {
     if (!user) return fail("Not authenticated", 401);
 
     const input = profileUpdateSchema.parse(await req.json());
-    const supabase = await supabaseServer();
+    const db = kolabDb();
 
     // website_url is a Pro-only field. The client disables it for non-Pro users, but a direct
     // POST must not bypass the paid gate — enforce entitlement server-side (CLAUDE.md guardrail #2).
     const canPro = canUsePro(await getEntitlementContext());
 
     // Read current values to compute completeness across the merged result.
-    const { data: current } = await supabase
+    const { data: current } = await db
       .from("profiles")
       .select("name, dob, pincode")
+      .eq("user_id", user.id)
       .maybeSingle();
 
     const merged = {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     };
 
     // Only allow-listed, non-sensitive fields. `privileged`/`role`/KYC are NOT client-writable
-    // (also enforced by RLS + column grants). website_url is accepted but Pro-gating is enforced
+    // website_url is accepted but Pro-gating is enforced
     // by the caller/entitlement; here we just persist what was allowed through.
     const patch = {
       user_id: user.id,
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       ...(input.website_url !== undefined && canPro ? { website_url: input.website_url } : {}),
     };
 
-    const { error } = await supabase.from("profiles").upsert(patch, { onConflict: "user_id" });
+    const { error } = await db.from("profiles").upsert(patch, { onConflict: "user_id" });
     if (error) return fail("Could not save profile", 400);
 
     await audit({

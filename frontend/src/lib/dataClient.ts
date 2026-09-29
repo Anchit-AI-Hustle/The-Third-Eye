@@ -4,10 +4,9 @@
  * Thin client for the per-user data API (/api/data/[entity]).
  *
  * The server route authenticates via the NextAuth session and persists with
- * the service-role Supabase client (see the route for why the browser can't
- * hit Supabase directly). Every call reports whether the server actually
- * handled it via `remote`: when false (not signed in, or Supabase not
- * configured → 401/501), the caller falls back to localStorage so the app
+ * lib/db.ts (the browser never talks to the database). Every call reports
+ * whether the server actually handled it via `remote`: when false (not signed
+ * in, or DATABASE_URL not set → 401/501), the caller falls back to localStorage so the app
  * still works offline / unconfigured.
  */
 
@@ -28,7 +27,7 @@ async function req(entity: string, init?: RequestInit): Promise<Response | null>
   }
 }
 
-// 401 (no session) and 501 (Supabase unconfigured) both mean "use local".
+// 401 (no session) and 501 (database unconfigured) both mean "use local".
 function isLocalOnly(res: Response | null): boolean {
   return !res || res.status === 401 || res.status === 501;
 }

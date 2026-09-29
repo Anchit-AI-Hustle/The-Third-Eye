@@ -17,7 +17,7 @@ export async function POST(req: Request) {
           ? new Date(`${input.date}T00:00:00`).toISOString()
           : null;
 
-    const ins = await gate.supabase.from("scheduled_posts").insert({
+    const ins = await gate.db.from("scheduled_posts").insert({
       user_id: gate.user.id,
       title: input.title,
       scheduled_at: scheduledAt,
@@ -37,7 +37,7 @@ export async function DELETE(req: Request) {
     const gate = await requireFeatureAccess();
     if (!gate.ok) return gate.response;
     const { id } = idParamSchema.parse({ id: new URL(req.url).searchParams.get("id") });
-    const del = await gate.supabase.from("scheduled_posts").delete().eq("id", id).eq("user_id", gate.user.id);
+    const del = await gate.db.from("scheduled_posts").delete().eq("id", id).eq("user_id", gate.user.id);
     if (del.error) return fail("Could not delete", 400);
     return ok({ deleted: true });
   } catch (e) {

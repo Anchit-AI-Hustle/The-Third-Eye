@@ -15,7 +15,7 @@ export type PhoneUser = { id: string; phone: string; name: string };
 
 export type EnterResult =
   | { ok: true; user: PhoneUser; created: boolean }
-  /** Supabase is not configured, so there is nowhere to keep a PIN hash. */
+  /** The database is not configured, so there is nowhere to keep a PIN hash. */
   | { ok: false; reason: "unconfigured"; error: string }
   | { ok: false; reason: "bad_phone"; error: string }
   /** Too many attempts from this caller. Nothing was read or written. */

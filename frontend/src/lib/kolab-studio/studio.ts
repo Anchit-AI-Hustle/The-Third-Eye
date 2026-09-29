@@ -1,8 +1,8 @@
 // web/lib/studio.ts
-// SERVER-side Creator Studio reads (RLS-scoped to the signed-in user). Mutations go through
+// SERVER-side Creator Studio reads, scoped to the signed-in user. Mutations go through
 // the /api/studio/* routes which additionally enforce the feature gate.
 import "server-only";
-import { supabaseServer } from "./supabaseServer";
+import { getSessionUser, kolabDb } from "./db";
 
 export interface Pillar {
   id: string;
@@ -51,45 +51,55 @@ export interface Channel {
 }
 
 export async function getPillars(): Promise<Pillar[]> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data } = await kolabDb()
     .from("content_pillars")
     .select("id, name, role, color, sort_order")
+    .eq("user_id", user.id)
     .order("sort_order", { ascending: true });
   return (data as Pillar[] | null) ?? [];
 }
 
 export async function getPlan(): Promise<PlanItem[]> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data } = await kolabDb()
     .from("content_plan")
     .select("id, pillar_id, format, asset_type, date, time, hook, caption, status, done, notes")
+    .eq("user_id", user.id)
     .order("date", { ascending: true, nullsFirst: false });
   return (data as PlanItem[] | null) ?? [];
 }
 
 export async function getDeals(): Promise<Deal[]> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data } = await kolabDb()
     .from("deals")
     .select("id, brand, emoji, product, category, code, discount, price, affiliate_url, active")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
   return (data as Deal[] | null) ?? [];
 }
 
 export async function getSchedule(): Promise<ScheduledPost[]> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data } = await kolabDb()
     .from("scheduled_posts")
     .select("id, title, scheduled_at, channels, publish_status")
+    .eq("user_id", user.id)
     .order("scheduled_at", { ascending: true, nullsFirst: false });
   return (data as ScheduledPost[] | null) ?? [];
 }
 
 export async function getChannels(): Promise<Channel[]> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data } = await kolabDb()
     .from("channels")
-    .select("id, platform, handle, connected");
+    .select("id, platform, handle, connected")
+    .eq("user_id", user.id);
   return (data as Channel[] | null) ?? [];
 }

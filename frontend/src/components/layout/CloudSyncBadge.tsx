@@ -6,7 +6,7 @@ import { Cloud, CloudOff, Loader2 } from "lucide-react";
 type Sync = { remote: boolean; reason: string } | null;
 
 // A small, honest indicator of where the user's data actually lives. Without
-// this, a missing SUPABASE_SERVICE_ROLE_KEY silently drops the whole app into
+// this, a missing DATABASE_URL silently drops the whole app into
 // localStorage-only mode — data looks saved but never syncs across devices.
 export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
   const [sync, setSync] = useState<Sync>(null);

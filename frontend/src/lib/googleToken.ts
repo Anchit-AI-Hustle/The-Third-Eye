@@ -5,7 +5,7 @@ import { decrypt } from "@/lib/crypto";
  * Mint a fresh Google access token for a user from their stored (encrypted)
  * refresh token. Used by server-side jobs (e.g. Gmail/Chat scraping crons) that
  * run without a live session. Returns null when the user hasn't connected
- * Google, Supabase isn't configured, or the refresh fails.
+ * Google, the database isn't configured, or the refresh fails.
  *
  * The refresh token is captured by the opt-in connect flow
  * (`/api/connect/google`), which requests the Gmail/Chat scopes — basic sign-in

@@ -1,10 +1,10 @@
 // web/lib/storefront.ts
 // PUBLIC storefront read (no auth). A follower opening a shared /s/<handle> link must see the
-// CREATOR's active deals, not their own — so this cannot go through the visitor's RLS session.
-// It uses the service-role client but exposes ONLY public, storefront-appropriate columns
-// (display name, handle, and active deals) — never PII, contact, KYC, or private fields.
+// CREATOR's active deals, not their own — so it reads by handle, not by session. It exposes
+// ONLY public, storefront-appropriate columns (display name, handle, and active deals) —
+// never PII, contact, KYC, or private fields.
 import "server-only";
-import { supabaseAdmin } from "./supabaseServer";
+import { kolabDb } from "./db";
 import type { Deal } from "./studio";
 
 export interface PublicStorefront {
@@ -17,7 +17,7 @@ export async function getPublicStorefront(handleInput: string): Promise<PublicSt
   const handle = handleInput.replace(/^@/, "").trim();
   if (!handle) return null;
 
-  const admin = supabaseAdmin();
+  const admin = kolabDb();
   const { data: profile } = await admin
     .from("profiles")
     .select("user_id, name, handle")

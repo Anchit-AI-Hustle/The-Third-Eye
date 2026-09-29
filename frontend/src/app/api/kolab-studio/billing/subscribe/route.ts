@@ -3,8 +3,7 @@
 // subscription state — we must NEVER flip a plan to "active" from a client request in production.
 // So in production this returns 501 (checkout wiring is Phase 2). In KOLAB_DEV_MODE only, it
 // activates the plan server-side so the unlocked-features UX can be exercised locally.
-import { getSessionUser } from "@/lib/kolab-studio/db";
-import { supabaseAdmin } from "@/lib/kolab-studio/supabaseServer";
+import { getSessionUser, kolabDb } from "@/lib/kolab-studio/db";
 import { subscribeSchema } from "@/lib/kolab-studio/validation";
 import { env } from "@/lib/kolab-studio/env";
 import { ok, fail, handleError, clientIp } from "@/lib/kolab-studio/http";
@@ -27,8 +26,7 @@ export async function POST(req: Request) {
     }
 
     // KOLAB_DEV_MODE demo activation — server-side, not client-trusted state.
-    const admin = supabaseAdmin();
-    const { error } = await admin
+    const { error } = await kolabDb()
       .from("subscriptions")
       .upsert({ user_id: user.id, plan, cycle, status: "active" }, { onConflict: "user_id" });
     if (error) return fail("Could not update subscription", 400);

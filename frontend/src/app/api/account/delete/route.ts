@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { revokeGoogleAccess } from "@/lib/googleToken";
+import { eraseKolabUser } from "@/lib/kolab-studio/erase";
 
 export const runtime = "nodejs";
 
@@ -104,6 +105,15 @@ export async function POST(_req: NextRequest) {
 
     failed.push(table);
     if (!SCHEMA_CODES.has(firstCode)) realFailures.push(table);
+  }
+
+  // Kolab Studio keeps its rows in the `kolab` schema, under the same identity.
+  const kolabFailed = await eraseKolabUser(sb, email);
+  if (kolabFailed.length) {
+    failed.push(...kolabFailed);
+    realFailures.push(...kolabFailed);
+  } else {
+    deleted.push("kolab");
   }
 
   // THE SIGN-IN CREDENTIAL GOES LAST, AND ONLY IF EVERYTHING ELSE WENT.

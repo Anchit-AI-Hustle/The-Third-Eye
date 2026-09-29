@@ -1,9 +1,8 @@
 // web/app/api/org/create/route.ts — create an organization + owner membership (spec §2).
 // authN → validate → create org (created_by = user) → add the creator as owner → set active-org cookie.
-// RLS lets any authenticated user create an org and self-insert their owner membership (0003).
+// Any signed-in user may create an org; the creator is the only owner this route ever adds.
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/kolab-studio/db";
-import { supabaseServer } from "@/lib/kolab-studio/supabaseServer";
+import { getSessionUser, kolabDb } from "@/lib/kolab-studio/db";
 import { orgCreateSchema } from "@/lib/kolab-studio/validation";
 import { ACTIVE_ORG_COOKIE } from "@/lib/kolab-studio/org";
 import { fail, handleError, clientIp } from "@/lib/kolab-studio/http";
@@ -15,9 +14,9 @@ export async function POST(req: Request) {
     if (!user) return fail("Not authenticated", 401);
 
     const { type, name, vertical } = orgCreateSchema.parse(await req.json());
-    const supabase = await supabaseServer();
+    const db = kolabDb();
 
-    const { data: org, error: orgErr } = await supabase
+    const { data: org, error: orgErr } = await db
       .from("organizations")
       .insert({ name, type, vertical: vertical ?? null, created_by: user.id, seats: 1 })
       .select("id")
@@ -25,7 +24,7 @@ export async function POST(req: Request) {
     if (orgErr || !org) return fail("Could not create organization", 400);
 
     const orgId = (org as { id: string }).id;
-    const { error: memErr } = await supabase
+    const { error: memErr } = await db
       .from("memberships")
       .insert({ org_id: orgId, user_id: user.id, role: "owner" });
     if (memErr) return fail("Could not create membership", 400);

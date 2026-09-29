@@ -12,8 +12,8 @@ export default async function OnboardingPage(
   }
 ) {
   const searchParams = await props.searchParams;
-  const user = await getSessionUser().catch(() => null);
-  if (!user) redirect("/kolab/studio/auth");
+  const user = await getSessionUser();
+  if (!user) redirect("/auth/signin");
   const memberships = await getMyMemberships();
   const addMode = searchParams?.add === "1";
   if (memberships.length > 0 && !addMode) redirect("/kolab/studio/home"); // already has an org

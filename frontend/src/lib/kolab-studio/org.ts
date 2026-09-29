@@ -1,10 +1,10 @@
 // web/lib/org.ts
-// Server-side tenancy resolution. All reads run under the user's RLS session; a user only ever
-// sees orgs they're a member of (membership-keyed RLS in migration 0003). The active org is
-// selected by a cookie set by the org switcher, defaulting to the first membership.
+// Server-side tenancy resolution. A user only ever sees orgs they're a member of: memberships
+// are read by the session's user_id, and organizations only through those memberships. The
+// active org is selected by a cookie set by the org switcher, defaulting to the first membership.
 import "server-only";
 import { cookies } from "next/headers";
-import { supabaseServer } from "./supabaseServer";
+import { getSessionUser, kolabDb } from "./db";
 import type { PackType } from "./packs";
 
 export const ACTIVE_ORG_COOKIE = "kolab_active_org";
@@ -26,16 +26,26 @@ export interface MembershipWithOrg {
 }
 
 export async function getMyMemberships(): Promise<MembershipWithOrg[]> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase
+  const user = await getSessionUser();
+  if (!user) return [];
+  const db = kolabDb();
+  const { data: mems } = await db
     .from("memberships")
-    .select("role, organizations(id, name, type, vertical, plan, status, seats)")
+    .select("org_id, role")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: true });
+  const rows = (mems as { org_id: string; role: MemberRole }[] | null) ?? [];
+  if (!rows.length) return [];
 
-  const rows = (data as unknown as { role: MemberRole; organizations: Organization | null }[] | null) ?? [];
-  return rows
-    .filter((r) => r.organizations)
-    .map((r) => ({ role: r.role, org: r.organizations as Organization }));
+  const { data: orgs } = await db
+    .from("organizations")
+    .select("id, name, type, vertical, plan, status, seats")
+    .in("id", rows.map((r) => r.org_id));
+  const byId = new Map(((orgs as Organization[] | null) ?? []).map((o) => [o.id, o]));
+  return rows.flatMap((r) => {
+    const org = byId.get(r.org_id);
+    return org ? [{ role: r.role, org }] : [];
+  });
 }
 
 /** The active org for this request: cookie-selected if valid, else the first membership. */

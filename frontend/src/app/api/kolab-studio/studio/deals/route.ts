@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     const gate = await requireFeatureAccess();
     if (!gate.ok) return gate.response;
     const d = dealCreateSchema.parse(await req.json());
-    const ins = await gate.supabase.from("deals").insert({
+    const ins = await gate.db.from("deals").insert({
       user_id: gate.user.id,
       brand: d.brand ?? "",
       emoji: d.emoji ?? "",
@@ -34,7 +34,7 @@ export async function DELETE(req: Request) {
     const gate = await requireFeatureAccess();
     if (!gate.ok) return gate.response;
     const { id } = idParamSchema.parse({ id: new URL(req.url).searchParams.get("id") });
-    const del = await gate.supabase.from("deals").delete().eq("id", id).eq("user_id", gate.user.id);
+    const del = await gate.db.from("deals").delete().eq("id", id).eq("user_id", gate.user.id);
     if (del.error) return fail("Could not delete deal", 400);
     return ok({ deleted: true });
   } catch (e) {

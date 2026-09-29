@@ -1,6 +1,6 @@
 // web/components/GateBanner.tsx
 // Shows WHY features are locked. This is UX only — the actual authorization is enforced
-// server-side and by RLS. `reason` comes from lib/entitlements.gateReason() computed on the server.
+// server-side (lib/kolab-studio/apiGuard.ts). `reason` comes from lib/entitlements.gateReason() computed on the server.
 import Link from "next/link";
 import type { EntitlementContext } from "@/lib/kolab-studio/types";
 import { gateReason } from "@/lib/kolab-studio/entitlements";

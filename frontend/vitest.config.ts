@@ -14,6 +14,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // What Next resolves it to in server bundles; tests run server code directly.
+      "server-only": "next/dist/compiled/server-only/empty.js",
     },
   },
 });

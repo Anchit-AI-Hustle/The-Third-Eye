@@ -1,6 +1,6 @@
 "use client";
 // web/app/(app)/studio/StudioClient.tsx — the 8 Studio modules, DB-backed via /api/kolab-studio/studio/*.
-// Data arrives as server props (RLS-scoped); after each mutation we router.refresh() to reload.
+// Data arrives as server props (scoped to the user); after each mutation we router.refresh() to reload.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/kolab-studio/ui";

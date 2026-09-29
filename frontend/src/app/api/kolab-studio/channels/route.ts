@@ -2,8 +2,7 @@
 // Per PRD §3, linking channels is allowed for signed-in guests (before KYC/subscription),
 // so this route requires only authentication — not the feature gate. Real OAuth token exchange
 // (and writing oauth_token_enc) is Phase 3 and happens server-side only.
-import { getSessionUser } from "@/lib/kolab-studio/db";
-import { supabaseServer } from "@/lib/kolab-studio/supabaseServer";
+import { getSessionUser, kolabDb } from "@/lib/kolab-studio/db";
 import { channelUpsertSchema } from "@/lib/kolab-studio/validation";
 import { ok, fail, handleError, clientIp } from "@/lib/kolab-studio/http";
 import { audit } from "@/lib/kolab-studio/audit";
@@ -14,10 +13,8 @@ export async function PUT(req: Request) {
     if (!user) return fail("Not authenticated", 401);
 
     const { platform, handle } = channelUpsertSchema.parse(await req.json());
-    const supabase = await supabaseServer();
-
     // Manual handle link (not OAuth): mark connected only when a handle is present.
-    const upsert = await supabase.from("channels").upsert(
+    const upsert = await kolabDb().from("channels").upsert(
       {
         user_id: user.id,
         platform,

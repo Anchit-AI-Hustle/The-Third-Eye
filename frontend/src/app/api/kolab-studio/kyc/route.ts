@@ -1,9 +1,8 @@
 // web/app/api/kyc/route.ts — Aadhaar eKYC (server-side, consent-gated, provider-abstracted).
 // The Aadhaar number never leaves this request or gets stored. On success we persist ONLY
-// status + masked last-4 + consent artifact + timestamp with the service-role client, so KYC
+// status + masked last-4 + consent artifact + timestamp, written only here, so KYC
 // state is server-authoritative and cannot be forged by the client (CLAUDE.md guardrails #2,#3).
-import { getSessionUser } from "@/lib/kolab-studio/db";
-import { supabaseAdmin } from "@/lib/kolab-studio/supabaseServer";
+import { getSessionUser, kolabDb } from "@/lib/kolab-studio/db";
 import { kycInitiateSchema, kycVerifySchema } from "@/lib/kolab-studio/validation";
 import { getKycProvider } from "@/lib/kolab-studio/kyc/provider";
 import { rateLimit } from "@/lib/kolab-studio/rateLimit";
@@ -21,7 +20,7 @@ export async function POST(req: Request) {
 
     const raw = await req.json();
     const provider = getKycProvider();
-    const admin = supabaseAdmin();
+    const admin = kolabDb();
 
     if (raw.action === "initiate") {
       const { aadhaar } = kycInitiateSchema.parse(raw); // consent:true enforced by schema

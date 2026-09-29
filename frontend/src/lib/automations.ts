@@ -45,7 +45,7 @@ export async function scheduleAutomation(
   }
 
   const sb = getDb();
-  if (!sb || !ctx.email) return "Automations need cloud sync — ask the user to connect Supabase in settings.";
+  if (!sb || !ctx.email) return "Automations need cloud sync — ask the user to set up the database (DATABASE_URL).";
 
   const limits = limitsFor(ctx.tier);
   if (!limits.recurringReminders) {
