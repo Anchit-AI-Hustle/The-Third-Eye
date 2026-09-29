@@ -14,18 +14,28 @@ export interface Scene {
   title: string;
   seconds: number;
   prompt: string;
+  /** Voice-over spoken over this shot in the assembled episode; "" for none. */
+  narration: string;
 }
+
+// ~2.5 spoken words a second. A line longer than its shot holds the last frame
+// until the voice finishes, so the budget is what keeps the cut on the picture.
+export const narrationBudget = (seconds: number) => Math.floor(seconds * 2.5);
 
 const SYSTEM = `You are a director of photography converting a script into prompts for a text-to-video model.
 
-Return ONLY a JSON array. Each element: { "title": string, "seconds": number, "prompt": string }.
+Return ONLY a JSON array. Each element: { "title": string, "seconds": number, "prompt": string, "narration": string }.
 
 Rules for every "prompt":
 - SELF-CONTAINED. The model renders each clip with no knowledge of the others, so restate the subject's appearance, age, wardrobe, the location, time of day, weather and colour palette in full — every single time. Never write "he", "she", "they", "the same room", "continues", "again", or any other reference to another scene.
 - Describe ONE continuous shot: subject + what they do + camera (angle, lens, movement) + lighting + mood + film-stock/colour grade.
-- Present tense, concrete, visual. No dialogue, no on-screen text, no scene numbers, no cuts, no narration.
+- Present tense, concrete, visual. No dialogue, no on-screen text, no scene numbers, no cuts, no narration (that goes in "narration").
 - 40-70 words.
 - "seconds" is between 4 and 8 — these models cannot render longer in one take.
+
+Rules for every "narration":
+- The voice-over line heard over that shot in the finished episode, taken from or faithful to the script's dialogue/narration for that beat.
+- At most 2.5 words per second of the shot (a 6-second shot gets 15 words at most). Plain spoken English, no stage directions, no speaker names. Use "" when the shot should play in silence.
 
 Cover the script's beats in order. Prefer 4-6 scenes unless the script clearly needs more.
 No markdown fences, no commentary — the raw JSON array only.`;
@@ -45,11 +55,14 @@ function parseScenes(text: string): Scene[] {
       const prompt = typeof o.prompt === "string" ? o.prompt.trim() : "";
       if (!prompt) return null;
       const secs = Number(o.seconds);
+      const seconds = Number.isFinite(secs) ? Math.min(Math.max(Math.round(secs), 4), 8) : 5;
+      const words = typeof o.narration === "string" ? o.narration.trim().split(/\s+/).filter(Boolean) : [];
       return {
         n: i + 1,
         title: typeof o.title === "string" && o.title.trim() ? o.title.trim() : `Scene ${i + 1}`,
-        seconds: Number.isFinite(secs) ? Math.min(Math.max(Math.round(secs), 4), 8) : 5,
+        seconds,
         prompt,
+        narration: words.slice(0, narrationBudget(seconds)).join(" "),
       };
     })
     .filter((s): s is Scene => s !== null)
