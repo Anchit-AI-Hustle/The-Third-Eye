@@ -54,13 +54,17 @@ const PIN_SHAPE = new RegExp(`^[0-9]{${PIN_LEN}}$`);
 
 /**
  * Fixed-window rate limit, counted in the database so it holds across every
- * serverless instance. Returns true when the call is allowed.
+ * serverless instance.
  *
- * Fails OPEN: a limiter that cannot reach the database must not be the thing
- * that stops people signing in, and if the database is unreachable then
- * everything below fails anyway.
+ * FAILS CLOSED. It used to fail open, on the reasoning that a limiter should not
+ * be what stops people signing in — but on this path the limiter IS a security
+ * control, and "the RPC errored" must not read as "no limit applies", or a
+ * missing function or a bad grant quietly removes the cap while the lookups and
+ * the scrypt hashing carry on. Nothing is lost by refusing: sign-in needs this
+ * same database anyway, so if it cannot answer, the attempt could not have
+ * succeeded.
  */
-async function rateLimit(
+async function withinLimit(
   sb: Sb,
   bucket: string,
   key: string,
@@ -72,16 +76,35 @@ async function rateLimit(
     p_key: key,
     p_window_secs: windowSecs,
   });
-  if (error || typeof data !== "number") return true;
+  if (error || typeof data !== "number") return false;
   return data <= limit;
 }
 
-/** The caller's address, as far as the platform will say. A rate-limit key only. */
+/**
+ * The caller's address, for a rate-limit key and nothing else — never stored.
+ *
+ * X-Forwarded-For is a LIST, and the entries a client sent itself come first;
+ * only the ones the trusted proxy appended can be believed. Reading `[0]` meant
+ * a caller could hand over a new address per request and get a fresh window
+ * every time, which is no limit at all. So Vercel's own single-valued
+ * `x-real-ip` is preferred, and X-Forwarded-For is read from the RIGHT, which is
+ * the hop nearest our own edge.
+ *
+ * This is still a hint, not an identity: behind a further CDN the right-hand
+ * entry can be that CDN rather than the visitor. That is why the per-number
+ * window in `enter` — which no header can move — is the control this path relies
+ * on, and this one is defence in depth.
+ */
 export function clientIp(headers: Headers | Record<string, string | undefined> | undefined): string {
   const get = (k: string) =>
     headers instanceof Headers ? headers.get(k) : (headers?.[k] ?? headers?.[k.toLowerCase()]);
-  const fwd = String(get("x-forwarded-for") ?? get("x-real-ip") ?? "").split(",")[0].trim();
-  return fwd || "unknown";
+  const real = String(get("x-real-ip") ?? "").trim();
+  if (real) return real;
+  const hops = String(get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
+  return hops[hops.length - 1] ?? "unknown";
 }
 
 export async function enter(input: {
@@ -104,10 +127,25 @@ export async function enter(input: {
   const np = normPhone(input.phone, input.cc);
   if (!np) return { ok: false, reason: "bad_phone", error: phoneError(input.cc) };
 
-  // Per device, before anything is read. 25 in ten minutes is generous for a
-  // household sharing one connection and useless for walking a number list or
-  // for making the server hash strings all day.
-  if (input.ip && !(await rateLimit(sb, "phone_auth", input.ip, 25, 600))) {
+  // TWO WINDOWS, BEFORE ANYTHING IS READ OR HASHED.
+  //
+  // The per-NUMBER one is the real control: its key comes from the validated
+  // E.164 number in the request body, so no header a caller can set will move
+  // it. Ten in ten minutes sits above the five-try account lockout, so it never
+  // becomes the thing a real person hits first, and it bounds both the scrypt
+  // spent on one number and how often that number can be locked.
+  //
+  // The per-caller one is defence in depth and is best-effort by nature — see
+  // clientIp. It is looser, because a shared or misread address must not be able
+  // to shut a household, or a whole CDN's worth of people, out of signing in.
+  if (!(await withinLimit(sb, "phone_number", np.e164, 10, 600))) {
+    return {
+      ok: false,
+      reason: "rate_limited",
+      error: "Too many attempts for that number — please wait a few minutes.",
+    };
+  }
+  if (input.ip && !(await withinLimit(sb, "phone_ip", input.ip, 60, 600))) {
     return {
       ok: false,
       reason: "rate_limited",

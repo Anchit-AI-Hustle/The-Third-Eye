@@ -114,6 +114,42 @@ describe("POST /api/auth/phone", () => {
   });
 });
 
+describe("the rate limit in front of the path", () => {
+  it("refuses rather than allows when the limiter itself cannot run", async () => {
+    // Failing open here would mean a missing function or a bad grant silently
+    // removes the cap while lookups and scrypt carry on.
+    rpc.mockImplementation(() => Promise.resolve({ data: null, error: { message: "boom" } }));
+    const { enter } = await import("@/lib/phoneAuth");
+    const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
+    expect(res).toMatchObject({ ok: false, reason: "rate_limited" });
+  });
+
+  it("limits on the number itself, which no header can change", async () => {
+    const seen: string[] = [];
+    rpc.mockImplementation((fn: string, args: Record<string, unknown>) => {
+      if (fn !== "auth_rate_limit_hit") return Promise.resolve({ data: [{ tries: 1, locked_until: null }], error: null });
+      seen.push(String(args.p_bucket));
+      return Promise.resolve({ data: 1, error: null });
+    });
+    const { enter } = await import("@/lib/phoneAuth");
+    await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
+    expect(seen).toContain("phone_number");
+  });
+
+  it("keys the caller window on a value the caller cannot choose", async () => {
+    const { clientIp } = await import("@/lib/phoneAuth");
+    // Vercel's own single-valued header wins outright.
+    expect(clientIp(new Headers({ "x-real-ip": "198.51.100.7", "x-forwarded-for": "1.1.1.1" }))).toBe(
+      "198.51.100.7",
+    );
+    // Otherwise the hop nearest our edge — the entries a client sent itself come
+    // first, so reading the left-hand one gave a fresh window per request.
+    expect(clientIp(new Headers({ "x-forwarded-for": "1.1.1.1, 203.0.113.9" }))).toBe("203.0.113.9");
+    expect(clientIp(new Headers({}))).toBe("unknown");
+    expect(clientIp(undefined)).toBe("unknown");
+  });
+});
+
 describe("counting a wrong PIN", () => {
   async function attempt(pin: string) {
     const { enter } = await import("@/lib/phoneAuth");
