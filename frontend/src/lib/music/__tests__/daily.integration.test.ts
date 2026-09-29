@@ -27,6 +27,12 @@ vi.mock("@/lib/music/agents", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth", () => ({ getServerSession: () => Promise.resolve({ user: { email: U } }) }));
+// after() needs a request scope; here the deferred work is collected and awaited.
+const deferred: Promise<unknown>[] = [];
+vi.mock("next/server", async () => ({
+  ...(await vi.importActual<typeof import("next/server")>("next/server")),
+  after: (fn: () => Promise<unknown>) => { deferred.push(fn()); },
+}));
 
 // 2.5 chunks of recognisable bytes.
 const AUDIO = Buffer.from(Array.from({ length: 2.5 * 1024 * 1024 }, (_, i) => i % 251));
@@ -37,6 +43,7 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = url;
     process.env.NEXTAUTH_URL = "https://app.example.com";
+    process.env.CRON_SECRET = "s3cret";
     db = (await import("@/lib/db")).getDb()!;
     await db.from("music_daily").upsert({ user_id: U, enabled: true, preset: { description: "acid rave", genre: "Psytrance", tempo: 200, duration: 600 }, refs: "Project Mayhem" }, { onConflict: "user_id" });
   });
@@ -47,17 +54,34 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
 
   it("starts one render per day, with a webhook back to the app", async () => {
     createPrediction.mockResolvedValue({ id: "pred123", status: "starting" });
-    const { runDaily, runDailyAll } = await import("@/lib/music/daily");
+    const { runDaily, today } = await import("@/lib/music/daily");
     expect(await runDaily(db, U)).toBe("started");
     expect(await runDaily(db, U)).toBe("exists");
-    expect((await runDailyAll(db, 30_000))[U]).toBe("exists");
+    const { data: row } = await db.from("music_daily_tracks").select("day").eq("user_id", U).single();
+    expect(row.day).toBe(today());
     expect(createPrediction).toHaveBeenCalledTimes(1);
     const [, input, , opts] = createPrediction.mock.calls[0];
     expect(input).toMatchObject({ tags: "200 bpm, psytrance", duration: 240 });
     expect(opts.webhook).toMatch(/^https:\/\/app\.example\.com\/api\/tools\/music\/daily\/webhook\?token=[a-f0-9]{48}$/);
   });
 
+  it("lets only one of two overlapping finalizes store the audio", async () => {
+    // A webhook retry racing the listing's fallback used to interleave their
+    // delete-and-insert of the same chunks.
+    const { data: row } = await db.from("music_daily_tracks").select("id, user_id, day, title, status, prediction_id, token, created_at").eq("user_id", U).single();
+    getPrediction.mockResolvedValue({ id: "pred123", status: "succeeded", output: "https://replicate.delivery/x/out.mp3", error: null });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(AUDIO, { headers: { "content-type": "audio/mpeg" } })));
+    const { finalize } = await import("@/lib/music/daily");
+    const results = await Promise.all([finalize(db, row), finalize(db, row)]);
+    vi.unstubAllGlobals();
+    expect(results.sort()).toEqual(["done", "pending"]);
+    const { count } = await db.from("music_daily_chunks").select("n", { count: "exact", head: true }).eq("track_id", row.id);
+    expect(count).toBe(3);
+  });
+
   it("stores the audio when Replicate says it is done, whatever the webhook body says", async () => {
+    // Start again from pending so the webhook path itself is exercised.
+    await db.from("music_daily_tracks").update({ status: "pending", claimed_at: null, size: null }).eq("user_id", U);
     const { data: row } = await db.from("music_daily_tracks").select("token").eq("user_id", U).single();
     getPrediction.mockResolvedValue({ id: "pred123", status: "succeeded", output: "https://replicate.delivery/x/out.mp3", error: null });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(AUDIO, { headers: { "content-type": "audio/mpeg" } })));
@@ -85,6 +109,110 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     const tail = await get("bytes=-10");
     expect(Buffer.from(await tail.arrayBuffer()).equals(AUDIO.subarray(AUDIO.length - 10))).toBe(true);
     expect((await get(`bytes=${AUDIO.length}-`)).status).toBe(416);
+  });
+
+  it("runs at most five workers, however many users are queued", async () => {
+    // Handing each successor on before rendering launched nearly every user at
+    // once, straight into Replicate's creation throttle.
+    const many = Array.from({ length: 12 }, (_, i) => `${U}-q${i}`);
+    for (const u of many) await db.from("music_daily").upsert({ user_id: u, enabled: true, preset: { description: "x" }, refs: "" }, { onConflict: "user_id" });
+    const starts = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", starts);
+    const { dispatchDaily } = await import("@/lib/music/daily");
+    const out = await dispatchDaily(db);
+    vi.unstubAllGlobals();
+    expect(out.workers).toBe(5);
+    expect(starts).toHaveBeenCalledTimes(5);
+    expect(new Headers(starts.mock.calls[0][1].headers).get("authorization")).toBe("Bearer s3cret");
+    const { count } = await db.from("music_daily").select("user_id", { count: "exact", head: true }).in("user_id", many).not("queued_on", "is", null);
+    expect(count).toBe(12);
+    await db.from("music_daily").delete().in("user_id", many);
+  });
+
+  it("a worker claims one user, renders, dequeues, then starts exactly one successor", async () => {
+    const V = `${U}-w`;
+    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "acid rave" }, refs: "", queued_on: (await import("@/lib/music/daily")).today() }, { onConflict: "user_id" });
+    createPrediction.mockClear();
+    const order: string[] = [];
+    createPrediction.mockImplementation(async () => { order.push("render"); return { id: "predW", status: "starting" }; });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => { order.push("successor"); return new Response(null, { status: 202 }); }));
+    const { POST } = await import("@/app/api/tools/music/daily/run/route");
+    expect((await POST(new Request("https://x", { method: "POST", headers: { authorization: "Bearer nope" } }) as never)).status).toBe(401);
+    expect((await POST(new Request("https://x", { method: "POST", headers: { authorization: "Bearer s3cret" } }) as never)).status).toBe(202);
+    await Promise.all(deferred);
+    vi.unstubAllGlobals();
+    expect(order).toEqual(["render", "successor"]);
+    const { data } = await db.from("music_daily").select("queued_on, claimed_at").eq("user_id", V).single();
+    expect(data).toEqual({ queued_on: null, claimed_at: null });
+    await db.from("music_daily_tracks").delete().eq("user_id", V);
+    await db.from("music_daily").delete().eq("user_id", V);
+  });
+
+  it("leaves a live claim alone and takes over one whose worker died", async () => {
+    const { claimNext, today } = await import("@/lib/music/daily");
+    const live = `${U}-live`, dead = `${U}-dead`;
+    await db.from("music_daily").upsert({ user_id: live, enabled: true, preset: {}, refs: "", queued_on: today(), claimed_at: new Date().toISOString() }, { onConflict: "user_id" });
+    await db.from("music_daily").upsert({ user_id: dead, enabled: true, preset: {}, refs: "", queued_on: today(), claimed_at: new Date(Date.now() - 120_000).toISOString() }, { onConflict: "user_id" });
+    expect(await claimNext(db)).toBe(dead);
+    expect(await claimNext(db)).toBeNull();
+    await db.from("music_daily").delete().in("user_id", [live, dead]);
+  });
+
+  it("never lets live claims exceed five, and a sweep only fills the free slots", async () => {
+    // The second daily sweep used to start five more workers beside five live ones.
+    const { claimNext, dispatchDaily, today } = await import("@/lib/music/daily");
+    const users = Array.from({ length: 9 }, (_, i) => `${U}-cap${i}`);
+    for (const [i, u] of users.entries()) {
+      await db.from("music_daily").upsert({ user_id: u, enabled: true, preset: {}, refs: "", queued_on: today(), claimed_at: i < 3 ? new Date().toISOString() : null }, { onConflict: "user_id" });
+    }
+    const starts = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", starts);
+    expect((await dispatchDaily(db)).workers).toBe(2);
+    vi.unstubAllGlobals();
+    const got = await Promise.all(Array.from({ length: 4 }, () => claimNext(db)));
+    expect(got.filter(Boolean)).toHaveLength(2);
+    expect(await claimNext(db)).toBeNull();
+    await db.from("music_daily").delete().in("user_id", users);
+  });
+
+  it("redoes a failure that never reached Replicate, but not a real render", async () => {
+    const { runDaily } = await import("@/lib/music/daily");
+    createPrediction.mockRejectedValueOnce(new Error("Replicate 429: throttled"));
+    const V = `${U}-thr`;
+    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "x" }, refs: "" }, { onConflict: "user_id" });
+    expect(await runDaily(db, V)).toBe("failed");
+    createPrediction.mockResolvedValueOnce({ id: "predR", status: "starting" });
+    expect(await runDaily(db, V)).toBe("started");
+    expect(await runDaily(db, V)).toBe("exists");
+    await db.from("music_daily_tracks").delete().eq("user_id", V);
+    await db.from("music_daily").delete().eq("user_id", V);
+  });
+
+  it("asks Replicate to redeliver a webhook that met a live claim", async () => {
+    // Acknowledging it with 200 left the track to a page load that may never come.
+    await db.from("music_daily_tracks").update({ status: "pending", claimed_at: new Date().toISOString() }).eq("user_id", U);
+    const { data: row } = await db.from("music_daily_tracks").select("token").eq("user_id", U).single();
+    getPrediction.mockResolvedValue({ id: "pred123", status: "succeeded", output: "https://replicate.delivery/x/out.mp3", error: null });
+    const { POST } = await import("@/app/api/tools/music/daily/webhook/route");
+    const res = await POST(new Request(`https://x/api?token=${row.token}`, { method: "POST" }) as never);
+    expect(res.status).toBe(503);
+    await db.from("music_daily_tracks").update({ status: "done", claimed_at: null }).eq("user_id", U);
+  });
+
+  it("retries a worker that fails to start", async () => {
+    const statuses = [503, 0, 202];
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      const st = statuses.shift();
+      if (!st) throw new Error("network");
+      return new Response(null, { status: st });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { startWorker } = await import("@/lib/music/daily");
+    expect(await startWorker([1, 1])).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+    expect(await startWorker([1, 1])).toBe(false);
+    vi.unstubAllGlobals();
   });
 
   it("lists the user's tracks without the webhook token", async () => {

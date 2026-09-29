@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Play, Loader2, Sparkles, Download, Square, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { recordGeneration } from "@/lib/generations";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 interface AvatarState {
   phase: "idle" | "recording" | "generating" | "playing" | "error";
@@ -424,10 +425,15 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
       <div className="p-4 space-y-3">
         {/* Script input */}
         <div>
-          <label className="block text-xs font-mono text-text-secondary mb-1.5">
-            What the avatar says <span className="text-accent-red">*</span>
-          </label>
+          <div className="flex flex-wrap items-center text-xs font-mono text-text-secondary mb-1.5">
+            <label htmlFor="avatar-script">What the avatar says <span className="text-accent-red">&nbsp;*</span></label>
+            <AiFieldBar tool={{ label: "Video Avatar Studio", purpose: "a script an animated avatar speaks aloud" }}
+              field={{ name: "script", label: "What the avatar says", type: "textarea", placeholder: "the spoken script" }}
+              value={state.script} context={{ "Avatar style": styleDef.label }}
+              onChange={(v) => setState((s) => ({ ...s, script: v }))} />
+          </div>
           <textarea
+            id="avatar-script"
             value={state.script}
             onChange={(e) => setState((s) => ({ ...s, script: e.target.value }))}
             placeholder="Type the script for the avatar to speak…"

@@ -5,7 +5,7 @@ import { accessTokenFromRefresh, gmailAddressFor, sendGmail } from "@/lib/google
 import { isEmailIdentity } from "@/lib/serverIdentity";
 import { sendPush } from "@/lib/push";
 import { leadRecommendation } from "@/lib/digest";
-import { runDailyAll } from "@/lib/music/daily";
+import { dispatchDaily } from "@/lib/music/daily";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,7 +15,6 @@ export const maxDuration = 60;
 // daily song (lib/music/daily.ts). No-ops cleanly when the
 // service-role key / Google client / encryption key are unconfigured.
 export async function GET(req: NextRequest) {
-  const started = Date.now();
   if (!authorized(req)) return new Response("Unauthorized", { status: 401 });
   const sb = getDb();
   if (!sb) return json({ error: "Database not configured" }, 501);
@@ -24,9 +23,7 @@ export async function GET(req: NextRequest) {
   const out: Record<string, unknown> = {};
   if (job === "all" || job === "reminders") out.reminders = await runReminders(sb);
   if (job === "all" || job === "digest") out.digest = await runDigest(sb);
-  // Last, on whatever time is left: each song is several LLM calls before its
-  // render is handed to Replicate.
-  if (job === "all" || job === "music") out.music = await runDailyAll(sb, Math.max(0, maxDuration * 1000 - (Date.now() - started) - 20_000));
+  if (job === "all" || job === "music") out.music = await dispatchDaily(sb);
   return json(out);
 }
 

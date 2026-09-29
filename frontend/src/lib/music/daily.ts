@@ -16,6 +16,12 @@ import { SONG_CLIP_MAX, SONG_MODEL } from "./models";
 import type { MusicInput } from "./types";
 
 export const CHUNK = 1024 * 1024;
+// Just past a function's 60s lifetime: a holder can't still be working after
+// this, so a claim this old belongs to an invocation that died.
+const CLAIM_LEASE_MS = 70_000;
+// At most this many daily renders run at once: Replicate throttles prediction
+// creation, and a throttled render used to be recorded as failed for the day.
+const WORKERS = 5;
 export const KEEP_DAYS = 7;
 const MAX_AUDIO = 40 * 1024 * 1024;
 
@@ -24,7 +30,11 @@ export interface DailyTrack {
   prediction_id: string | null; token: string; created_at: string;
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
+// The day a track belongs to, in IST — the timezone the UI promises (the cron
+// fires 07:00 IST). In UTC, a "make it now" between midnight and 05:30 IST
+// landed on yesterday and the morning cron then made a second track for today.
+const IST_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
+export const today = (now = new Date()) => IST_DAY.format(now);
 
 function baseUrl(): string | null {
   const explicit = process.env.NEXTAUTH_URL?.replace(/\/+$/, "");
@@ -71,8 +81,11 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
 
   const { data: saved } = await db.from("music_daily").select("preset, refs").eq("user_id", userId).maybeSingle();
   if (!saved) return "no-preset";
-  const { data: already } = await db.from("music_daily_tracks").select("id").eq("user_id", userId).eq("day", day).maybeSingle();
-  if (already) return "exists";
+  const { data: already } = await db.from("music_daily_tracks").select("id, status, prediction_id").eq("user_id", userId).eq("day", day).maybeSingle();
+  // A failure before Replicate accepted the render cost nothing, so it is redone
+  // rather than counted as today's track.
+  if (already && !(already.status === "failed" && !already.prediction_id)) return "exists";
+  if (already) await db.from("music_daily_tracks").delete().eq("id", already.id);
 
   const preset = saved.preset as MusicInput;
   const refs = String(saved.refs ?? "");
@@ -108,7 +121,7 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
     return "failed";
   }
 
-  const cutoff = new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const cutoff = today(new Date(Date.now() - KEEP_DAYS * 86_400_000));
   await db.from("music_daily_tracks").delete().eq("user_id", userId).lt("day", cutoff);
   return "started";
 }
@@ -134,6 +147,16 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   if (p.status === "failed" || p.status === "canceled") return fail(p.error || `Render ${p.status}`);
   if (p.status !== "succeeded") return "pending";
 
+  // Only one caller stores the audio: a webhook retry and the listing's
+  // fallback can both reach here, and interleaved delete-and-insert of the same
+  // chunks corrupts the file. The lease expires so a crashed claim is retried.
+  const { data: claimed } = await db.from("music_daily_tracks")
+    .update({ claimed_at: new Date().toISOString() })
+    .eq("id", track.id).eq("status", "pending")
+    .or(`claimed_at.is.null,claimed_at.lt.${new Date(Date.now() - CLAIM_LEASE_MS).toISOString()}`)
+    .select("id");
+  if (!claimed?.length) return "pending";
+
   const url = audioUrlFrom(p.output);
   if (!url || !isReplicateDelivery(url)) return fail("The render finished without an audio file.");
   const res = await fetch(url, { redirect: "error" });
@@ -141,8 +164,7 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   const bytes = Buffer.from(await res.arrayBuffer());
   if (!bytes.length || bytes.length > MAX_AUDIO) return fail("The render's audio file was empty or too large.");
 
-  // A webhook retry can arrive while the first delivery is still storing, so
-  // chunks are replaced rather than appended.
+  // A claim whose holder died may have left some chunks behind.
   await db.from("music_daily_chunks").delete().eq("track_id", track.id);
   const rows = [];
   for (let n = 0; n * CHUNK < bytes.length; n++) rows.push({ track_id: track.id, n, data: bytes.subarray(n * CHUNK, (n + 1) * CHUNK) });
@@ -158,14 +180,71 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   return "done";
 }
 
-/** The daily cron: every enabled user without today's track, until the time budget runs out. */
-export async function runDailyAll(db: Db, budgetMs: number): Promise<Record<string, RunResult>> {
-  const stopAt = Date.now() + budgetMs;
-  const { data } = await db.from("music_daily").select("user_id").eq("enabled", true);
-  const out: Record<string, RunResult> = {};
-  for (const { user_id } of (data as { user_id: string }[] | null) ?? []) {
-    if (Date.now() > stopAt) break;
-    out[user_id] = await runDaily(db, user_id).catch(() => "failed" as const);
+// Just past a function's 60s lifetime, like the finalize claim.
+const QUEUE_LEASE_MS = 70_000;
+
+/**
+ * The daily crons' part: queue every enabled user whose day isn't settled, and
+ * start workers (/api/tools/music/daily/run) for the slots that live claims
+ * leave free, up to WORKERS. Each worker claims
+ * one queued user, renders, then starts exactly one successor — so renders are
+ * bounded, and a worker that dies leaves its user's claim to expire and be
+ * picked up. Running it again (the second daily cron) re-queues anyone still
+ * waiting and restarts workers that died, without disturbing live claims.
+ */
+export async function dispatchDaily(db: Db): Promise<{ queued: number; workers: number }> {
+  const day = today();
+  const [{ data: enabled }, { data: tracks }] = await Promise.all([
+    db.from("music_daily").select("user_id, queued_on").eq("enabled", true),
+    db.from("music_daily_tracks").select("user_id, status, prediction_id").eq("day", day),
+  ]);
+  const settled = new Set(
+    ((tracks as { user_id: string; status: string; prediction_id: string | null }[] | null) ?? [])
+      .filter((t) => !(t.status === "failed" && !t.prediction_id))
+      .map((t) => t.user_id),
+  );
+  const waiting = ((enabled as { user_id: string; queued_on: string | null }[] | null) ?? []).filter((u) => !settled.has(u.user_id));
+  const fresh = waiting.filter((u) => u.queued_on !== day).map((u) => u.user_id);
+  if (fresh.length) await db.from("music_daily").update({ queued_on: day, claimed_at: null }).in("user_id", fresh);
+  const { count: live } = await db.from("music_daily").select("user_id", { count: "exact", head: true })
+    .eq("queued_on", day).gte("claimed_at", new Date(Date.now() - QUEUE_LEASE_MS).toISOString());
+  const slots = Math.min(WORKERS - (live ?? 0), waiting.length - (live ?? 0));
+  const started = await Promise.all(Array.from({ length: Math.max(0, slots) }, () => startWorker()));
+  return { queued: waiting.length, workers: started.filter(Boolean).length };
+}
+
+/**
+ * Claim the next queued user for today, skipping live claims. Null when the
+ * queue is drained or WORKERS claims are already live — the cap is enforced
+ * here, atomically, so no mix of sweeps and workers can exceed it.
+ */
+export async function claimNext(db: Db): Promise<string | null> {
+  const { data } = await db.rpc("music_daily_claim", { p_day: today(), p_lease_ms: QUEUE_LEASE_MS, p_max: WORKERS });
+  return (data as string | null) ?? null;
+}
+
+/** One worker's turn: claim a user, render, dequeue, and start the next worker. */
+export async function workOnce(db: Db): Promise<string | null> {
+  const user = await claimNext(db);
+  if (!user) return null;
+  await runDaily(db, user).catch(() => "failed");
+  await db.from("music_daily").update({ queued_on: null, claimed_at: null }).eq("user_id", user);
+  await startWorker();
+  return user;
+}
+
+/** Start a worker, retrying a failed start. Resolves once one has accepted, or false after the last try. */
+export async function startWorker(waits: number[] = [1_000, 3_000]): Promise<boolean> {
+  const base = baseUrl();
+  const secret = process.env.CRON_SECRET;
+  if (!base || !secret) return false;
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${base}/api/tools/music/daily/run`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+    }).catch(() => null);
+    if (res?.status === 202) return true;
+    if (attempt >= waits.length) return false;
+    await new Promise((r) => setTimeout(r, waits[attempt]));
   }
-  return out;
 }
