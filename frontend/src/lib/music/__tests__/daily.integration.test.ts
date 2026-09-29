@@ -188,6 +188,28 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     await db.from("music_daily").delete().eq("user_id", V);
   });
 
+  it("does not redo a creation that may have been accepted before the connection dropped", async () => {
+    // Redoing it paid for a second render and orphaned the first one's webhook.
+    const { runDaily } = await import("@/lib/music/daily");
+    createPrediction.mockClear();
+    createPrediction.mockRejectedValueOnce(new TypeError("fetch failed"));
+    const V = `${U}-net`;
+    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "x" }, refs: "" }, { onConflict: "user_id" });
+    expect(await runDaily(db, V)).toBe("failed");
+    expect(await runDaily(db, V)).toBe("exists");
+    expect(createPrediction).toHaveBeenCalledTimes(1);
+    await db.from("music_daily_tracks").delete().eq("user_id", V);
+    await db.from("music_daily").delete().eq("user_id", V);
+  });
+
+  it("never claims a user who switched the daily drop off after being queued", async () => {
+    const { claimNext, today } = await import("@/lib/music/daily");
+    const off = `${U}-off`;
+    await db.from("music_daily").upsert({ user_id: off, enabled: false, preset: {}, refs: "", queued_on: today(), claimed_at: null }, { onConflict: "user_id" });
+    expect(await claimNext(db)).toBeNull();
+    await db.from("music_daily").delete().eq("user_id", off);
+  });
+
   it("asks Replicate to redeliver a webhook that met a live claim", async () => {
     // Acknowledging it with 200 left the track to a page load that may never come.
     await db.from("music_daily_tracks").update({ status: "pending", claimed_at: new Date().toISOString() }).eq("user_id", U);
