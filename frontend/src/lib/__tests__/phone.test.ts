@@ -104,6 +104,25 @@ describe("hashPin / verifyPin", () => {
   });
 });
 
+describe("isEmailIdentity", () => {
+  // The identity key stopped being an email when sign-in became a number, and
+  // two consumers were still writing to it: Stripe's customer_email (which
+  // rejects a phone number, so nobody signing in by number could subscribe) and
+  // the cron's Gmail `To:` (which produced mail addressed to "+919876543210").
+  it("tells an address apart from a phone number", async () => {
+    const { isEmailIdentity } = await import("@/lib/serverIdentity");
+    expect(isEmailIdentity("anchit@example.com")).toBe(true);
+    expect(isEmailIdentity("+919876543210")).toBe(false);
+    expect(isEmailIdentity("919876543210")).toBe(false);
+    expect(isEmailIdentity(undefined)).toBe(false);
+    expect(isEmailIdentity("")).toBe(false);
+    // Not an email validator — just not fooled by the near misses.
+    expect(isEmailIdentity("no-at-sign.example.com")).toBe(false);
+    expect(isEmailIdentity("two@@example.com")).toBe(false);
+    expect(isEmailIdentity("nodot@example")).toBe(false);
+  });
+});
+
 describe("lockMessage", () => {
   it("says how long is left, rounded up so it never reads as zero", () => {
     expect(lockMessage(new Date(Date.now() + 60_000))).toContain("1 minute");

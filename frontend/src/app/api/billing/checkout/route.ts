@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { getStripe, appUrl, PRICES } from "@/lib/stripe";
 import { getAdminSupabase } from "@/lib/serverSupabase";
+import { isEmailIdentity } from "@/lib/serverIdentity";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,16 @@ export async function POST(req: NextRequest) {
   const checkout = await stripe.checkout.sessions.create({
     mode: "subscription",
     line_items: [{ price, quantity: 1 }],
-    ...(customerId ? { customer: customerId } : { customer_email: email }),
+    // Prefill the email only when the identity IS one. Under phone sign-in it is
+    // an E.164 number, and Stripe rejects that as customer_email — which would
+    // have meant nobody signing in by number could ever subscribe. Left unset,
+    // Stripe Checkout asks for the address on its own page, which is where a
+    // billing email belongs anyway.
+    ...(customerId
+      ? { customer: customerId }
+      : isEmailIdentity(email)
+        ? { customer_email: email }
+        : {}),
     client_reference_id: email,
     metadata: { email },
     subscription_data: { metadata: { email } },

@@ -24,18 +24,19 @@ export type EnterResult =
   | { ok: false; reason: "need_name"; error: null }
   /** Known number: ask for the PIN. */
   | { ok: false; reason: "need_pin"; name: string; error: null }
-  /** Known number with no PIN yet (made before PINs, or just reset): choose one. */
-  | { ok: false; reason: "set_pin"; name: string; error: string | null }
   | { ok: false; reason: "bad_pin"; error: string }
   | { ok: false; reason: "wrong_pin"; error: string; left: number }
   | { ok: false; reason: "locked"; error: string };
 
+// pin_hash and pin_salt are NOT NULL in the schema, deliberately: see the note
+// in 20260928120000_phone_pin_auth.sql. There is no "account without a PIN"
+// state, so there is no branch here that hands one out to whoever asks.
 type Row = {
   id: string;
   phone: string;
   name: string;
-  pin_hash: string | null;
-  pin_salt: string | null;
+  pin_hash: string;
+  pin_salt: string;
   pin_tries: number | null;
   locked_until: string | null;
 };
@@ -156,31 +157,6 @@ export async function enter(input: {
       };
     }
     row = again as Row;
-  }
-
-  if (!row.pin_hash) {
-    const perr = pinError(input.pin);
-    if (perr) {
-      return {
-        ok: false,
-        reason: "set_pin",
-        name: row.name,
-        error: input.pin == null || input.pin === "" ? null : perr,
-      };
-    }
-    const h = hashPin(String(input.pin));
-    await sb
-      .from("phone_users")
-      .update({
-        pin_hash: h.hash,
-        pin_salt: h.salt,
-        pin_set_at: new Date().toISOString(),
-        pin_tries: 0,
-        locked_until: null,
-      })
-      .eq("id", row.id);
-    await touch(sb, row.id);
-    return { ok: true, user: pub(row), created: false };
   }
 
   if (row.locked_until && new Date(row.locked_until) > new Date()) {

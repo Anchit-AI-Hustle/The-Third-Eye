@@ -16,8 +16,13 @@ import { clientIp, enter } from "@/lib/phoneAuth";
  * front door.
  *
  * The identity the rest of the app keys on is `session.user.email`, and it is
- * now the E.164 phone number instead of a Google address. Every consumer treats
- * it as an opaque string (see lib/serverIdentity.ts), so nothing else changes.
+ * now the E.164 phone number instead of a Google address. Almost everything
+ * treats it as an opaque key, which is why so little else changed — but NOT
+ * everything did, and assuming otherwise broke two things quietly: Stripe
+ * prefilled it as `customer_email` (which it rejects, so nobody signing in by
+ * number could subscribe) and the cron addressed reminder mail `To:` it. Both
+ * now ask `isEmailIdentity()` first (lib/serverIdentity.ts). Anything new that
+ * wants to WRITE TO the identity rather than key on it has to do the same.
  * ACCOUNTS CREATED UNDER GOOGLE SIGN-IN KEEP THEIR DATA UNDER THEIR EMAIL KEY:
  * signing in by number is a new identity, not a rename of the old one.
  */

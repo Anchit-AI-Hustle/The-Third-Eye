@@ -43,8 +43,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: res.error }, { status: 429 });
     case "need_name":
       return NextResponse.json({ ok: true, exists: false });
-    case "set_pin":
-      return NextResponse.json({ ok: true, exists: true, setPin: true });
     // A known number, whether it is waiting for a PIN or currently locked out.
     // Same answer either way — see the note above.
     case "need_pin":

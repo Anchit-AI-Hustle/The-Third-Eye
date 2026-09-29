@@ -41,8 +41,11 @@ otherwise undocumented outside this file and the code itself.
   number is registered, never the account holder's name or lock state.
   Deleting an account removes the `phone_users` row too, or the user is signed
   out of an account they can walk straight back into. The identity the whole app keys on,
-  `session.user.email`, is now the E.164 number — an opaque string to every
-  consumer. **Google OAuth is commented out in `lib/auth.ts`, not deleted.**
+  `session.user.email`, is now the E.164 number — an opaque key to almost every
+  consumer, but **anything that writes *to* the identity rather than keying on it
+  must check `isEmailIdentity()`** (`lib/serverIdentity.ts`): Stripe's
+  `customer_email` and the cron's Gmail `To:` both silently assumed an address.
+  **Google OAuth is commented out in `lib/auth.ts`, not deleted.**
   Removing it costs no feature: Gmail/Calendar always ran on the refresh token
   from the separate opt-in "Connect Google" flow (Settings → Connections), never
   on the session's Google token.

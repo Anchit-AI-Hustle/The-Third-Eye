@@ -15,7 +15,7 @@ import { PHONE_CC, PIN_LEN, normPhone } from "@/lib/phone";
 // Google sign-in is commented out (see lib/auth.ts). Connecting Google for Gmail
 // and Calendar still lives in Settings → Connections, where it always did.
 
-type Step = "phone" | "pin" | "signup" | "setpin";
+type Step = "phone" | "pin" | "signup";
 
 const CC_CODES = Object.keys(PHONE_CC);
 
@@ -53,7 +53,6 @@ export default function SignInPage() {
       const body = (await res.json()) as {
         ok?: boolean;
         exists?: boolean;
-        setPin?: boolean;
         error?: string;
       };
       if (!body.ok) {
@@ -62,7 +61,7 @@ export default function SignInPage() {
       }
       // No name comes back from this call on purpose — greeting someone by name
       // before they have proved anything hands it to whoever typed the number.
-      setStep(!body.exists ? "signup" : body.setPin ? "setpin" : "pin");
+      setStep(body.exists ? "pin" : "signup");
     } catch {
       setError("Could not reach the server. Check your connection and try again.");
     } finally {
@@ -148,9 +147,7 @@ export default function SignInPage() {
               ? "Sign in to continue"
               : step === "signup"
                 ? "Create your account"
-                : step === "setpin"
-                  ? "Choose a PIN"
-                  : "Welcome back"}
+                : "Welcome back"}
           </h2>
           <p className="text-text-muted text-xs text-center mb-6">
             {onPhoneStep

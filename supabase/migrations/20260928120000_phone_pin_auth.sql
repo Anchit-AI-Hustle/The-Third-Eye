@@ -18,9 +18,20 @@ create table if not exists public.phone_users (
   phone_local text,
   name text not null,
   -- scrypt, per lib/phonePin.ts. Only the derived key is stored, never the PIN.
-  pin_hash text,
-  pin_salt text,
-  pin_set_at timestamptz,
+  --
+  -- NOT NULL, AND THAT IS A SECURITY PROPERTY, NOT TIDINESS. parwah-hq allows a
+  -- null hash because it had accounts predating PINs and a family-approved reset
+  -- that clears one, and its sign-in lets such a person choose a new PIN on the
+  -- spot. Ported here that became an authentication bypass: any unauthenticated
+  -- caller who knew the number could set a PIN and be let straight in as them.
+  -- This table has no legacy rows — every row is created with a hash by the same
+  -- sign-up that creates it — and no reset flow, so the state has no reason to
+  -- exist. Forbidding it in the schema is stronger than remembering to check for
+  -- it. A reset flow, if one is ever added, must prove who is asking; it must not
+  -- clear these columns and let the next caller claim the account.
+  pin_hash text not null,
+  pin_salt text not null,
+  pin_set_at timestamptz not null default now(),
   -- Four digits is ten thousand possibilities, so the lockout is the real
   -- defence: five wrong tries shuts the account for fifteen minutes. Counted
   -- here rather than per-IP because a household shares one connection.
