@@ -16,6 +16,8 @@ import { SONG_CLIP_MAX, SONG_MODEL } from "./models";
 import type { MusicInput } from "./types";
 
 export const CHUNK = 1024 * 1024;
+const CLAIM_LEASE_MS = 5 * 60_000;
+const CHAINS = 5;
 export const KEEP_DAYS = 7;
 const MAX_AUDIO = 40 * 1024 * 1024;
 
@@ -24,7 +26,11 @@ export interface DailyTrack {
   prediction_id: string | null; token: string; created_at: string;
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
+// The day a track belongs to, in IST — the timezone the UI promises (the cron
+// fires 07:00 IST). In UTC, a "make it now" between midnight and 05:30 IST
+// landed on yesterday and the morning cron then made a second track for today.
+const IST_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
+export const today = (now = new Date()) => IST_DAY.format(now);
 
 function baseUrl(): string | null {
   const explicit = process.env.NEXTAUTH_URL?.replace(/\/+$/, "");
@@ -108,7 +114,7 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
     return "failed";
   }
 
-  const cutoff = new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const cutoff = today(new Date(Date.now() - KEEP_DAYS * 86_400_000));
   await db.from("music_daily_tracks").delete().eq("user_id", userId).lt("day", cutoff);
   return "started";
 }
@@ -134,6 +140,16 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   if (p.status === "failed" || p.status === "canceled") return fail(p.error || `Render ${p.status}`);
   if (p.status !== "succeeded") return "pending";
 
+  // Only one caller stores the audio: a webhook retry and the listing's
+  // fallback can both reach here, and interleaved delete-and-insert of the same
+  // chunks corrupts the file. The lease expires so a crashed claim is retried.
+  const { data: claimed } = await db.from("music_daily_tracks")
+    .update({ claimed_at: new Date().toISOString() })
+    .eq("id", track.id).eq("status", "pending")
+    .or(`claimed_at.is.null,claimed_at.lt.${new Date(Date.now() - CLAIM_LEASE_MS).toISOString()}`)
+    .select("id");
+  if (!claimed?.length) return "pending";
+
   const url = audioUrlFrom(p.output);
   if (!url || !isReplicateDelivery(url)) return fail("The render finished without an audio file.");
   const res = await fetch(url, { redirect: "error" });
@@ -141,8 +157,7 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   const bytes = Buffer.from(await res.arrayBuffer());
   if (!bytes.length || bytes.length > MAX_AUDIO) return fail("The render's audio file was empty or too large.");
 
-  // A webhook retry can arrive while the first delivery is still storing, so
-  // chunks are replaced rather than appended.
+  // A claim whose holder died may have left some chunks behind.
   await db.from("music_daily_chunks").delete().eq("track_id", track.id);
   const rows = [];
   for (let n = 0; n * CHUNK < bytes.length; n++) rows.push({ track_id: track.id, n, data: bytes.subarray(n * CHUNK, (n + 1) * CHUNK) });
@@ -158,14 +173,34 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   return "done";
 }
 
-/** The daily cron: every enabled user without today's track, until the time budget runs out. */
-export async function runDailyAll(db: Db, budgetMs: number): Promise<Record<string, RunResult>> {
-  const stopAt = Date.now() + budgetMs;
-  const { data } = await db.from("music_daily").select("user_id").eq("enabled", true);
-  const out: Record<string, RunResult> = {};
-  for (const { user_id } of (data as { user_id: string }[] | null) ?? []) {
-    if (Date.now() > stopAt) break;
-    out[user_id] = await runDaily(db, user_id).catch(() => "failed" as const);
-  }
-  return out;
+/**
+ * The daily cron's part: split every enabled user still without today's track
+ * into a few chains and start each one. A chain link (`/api/tools/music/daily/run`)
+ * makes one user's track in its own invocation, then starts the next link with
+ * the rest of its list — so no user waits on another's time budget, and there
+ * is no cap on how many get a track.
+ */
+export async function dispatchDaily(db: Db): Promise<{ users: number; chains: number }> {
+  const [{ data: enabled }, { data: done }] = await Promise.all([
+    db.from("music_daily").select("user_id").eq("enabled", true),
+    db.from("music_daily_tracks").select("user_id").eq("day", today()),
+  ]);
+  const have = new Set(((done as { user_id: string }[] | null) ?? []).map((r) => r.user_id));
+  const users = ((enabled as { user_id: string }[] | null) ?? []).map((r) => r.user_id).filter((u) => !have.has(u));
+  const chains = Array.from({ length: Math.min(CHAINS, users.length) }, (_, c) => users.filter((_, i) => i % CHAINS === c));
+  await Promise.all(chains.map(startChain));
+  return { users: users.length, chains: chains.length };
+}
+
+/** Hand a list of users to the next chain link. Resolves once that link has accepted it. */
+export async function startChain(users: string[]): Promise<boolean> {
+  const base = baseUrl();
+  const secret = process.env.CRON_SECRET;
+  if (!users.length || !base || !secret) return false;
+  const res = await fetch(`${base}/api/tools/music/daily/run`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ users }),
+  }).catch(() => null);
+  return res?.status === 202;
 }

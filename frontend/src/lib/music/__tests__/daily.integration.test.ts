@@ -27,6 +27,12 @@ vi.mock("@/lib/music/agents", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("next-auth", () => ({ getServerSession: () => Promise.resolve({ user: { email: U } }) }));
+// after() needs a request scope; here the deferred work is collected and awaited.
+const deferred: Promise<unknown>[] = [];
+vi.mock("next/server", async () => ({
+  ...(await vi.importActual<typeof import("next/server")>("next/server")),
+  after: (fn: () => Promise<unknown>) => { deferred.push(fn()); },
+}));
 
 // 2.5 chunks of recognisable bytes.
 const AUDIO = Buffer.from(Array.from({ length: 2.5 * 1024 * 1024 }, (_, i) => i % 251));
@@ -37,6 +43,7 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = url;
     process.env.NEXTAUTH_URL = "https://app.example.com";
+    process.env.CRON_SECRET = "s3cret";
     db = (await import("@/lib/db")).getDb()!;
     await db.from("music_daily").upsert({ user_id: U, enabled: true, preset: { description: "acid rave", genre: "Psytrance", tempo: 200, duration: 600 }, refs: "Project Mayhem" }, { onConflict: "user_id" });
   });
@@ -47,17 +54,34 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
 
   it("starts one render per day, with a webhook back to the app", async () => {
     createPrediction.mockResolvedValue({ id: "pred123", status: "starting" });
-    const { runDaily, runDailyAll } = await import("@/lib/music/daily");
+    const { runDaily, today } = await import("@/lib/music/daily");
     expect(await runDaily(db, U)).toBe("started");
     expect(await runDaily(db, U)).toBe("exists");
-    expect((await runDailyAll(db, 30_000))[U]).toBe("exists");
+    const { data: row } = await db.from("music_daily_tracks").select("day").eq("user_id", U).single();
+    expect(row.day).toBe(today());
     expect(createPrediction).toHaveBeenCalledTimes(1);
     const [, input, , opts] = createPrediction.mock.calls[0];
     expect(input).toMatchObject({ tags: "200 bpm, psytrance", duration: 240 });
     expect(opts.webhook).toMatch(/^https:\/\/app\.example\.com\/api\/tools\/music\/daily\/webhook\?token=[a-f0-9]{48}$/);
   });
 
+  it("lets only one of two overlapping finalizes store the audio", async () => {
+    // A webhook retry racing the listing's fallback used to interleave their
+    // delete-and-insert of the same chunks.
+    const { data: row } = await db.from("music_daily_tracks").select("id, user_id, day, title, status, prediction_id, token, created_at").eq("user_id", U).single();
+    getPrediction.mockResolvedValue({ id: "pred123", status: "succeeded", output: "https://replicate.delivery/x/out.mp3", error: null });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(AUDIO, { headers: { "content-type": "audio/mpeg" } })));
+    const { finalize } = await import("@/lib/music/daily");
+    const results = await Promise.all([finalize(db, row), finalize(db, row)]);
+    vi.unstubAllGlobals();
+    expect(results.sort()).toEqual(["done", "pending"]);
+    const { count } = await db.from("music_daily_chunks").select("n", { count: "exact", head: true }).eq("track_id", row.id);
+    expect(count).toBe(3);
+  });
+
   it("stores the audio when Replicate says it is done, whatever the webhook body says", async () => {
+    // Start again from pending so the webhook path itself is exercised.
+    await db.from("music_daily_tracks").update({ status: "pending", claimed_at: null, size: null }).eq("user_id", U);
     const { data: row } = await db.from("music_daily_tracks").select("token").eq("user_id", U).single();
     getPrediction.mockResolvedValue({ id: "pred123", status: "succeeded", output: "https://replicate.delivery/x/out.mp3", error: null });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(AUDIO, { headers: { "content-type": "audio/mpeg" } })));
@@ -85,6 +109,25 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     const tail = await get("bytes=-10");
     expect(Buffer.from(await tail.arrayBuffer()).equals(AUDIO.subarray(AUDIO.length - 10))).toBe(true);
     expect((await get(`bytes=${AUDIO.length}-`)).status).toBe(416);
+  });
+
+  it("chains the cron's users, one invocation each, behind the cron secret", async () => {
+    const calls: { users: string[]; auth: string | null }[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (_u: string, init: RequestInit) => {
+      calls.push({ users: JSON.parse(String(init.body)).users, auth: new Headers(init.headers).get("authorization") });
+      return new Response(null, { status: 202 });
+    }));
+    const { POST } = await import("@/app/api/tools/music/daily/run/route");
+    const call = (users: unknown, auth = "Bearer s3cret") => POST(new Request("https://x", { method: "POST", headers: { authorization: auth }, body: JSON.stringify({ users }) }) as never);
+    expect((await call(["a"], "Bearer nope")).status).toBe(401);
+    expect((await call([])).status).toBe(400);
+
+    // U already has today's track, so its link finds it done and passes on the rest.
+    expect((await call([U, "next-user", "last-user"])).status).toBe(202);
+    await Promise.all(deferred);
+    vi.unstubAllGlobals();
+    expect(calls).toEqual([{ users: ["next-user", "last-user"], auth: "Bearer s3cret" }]);
+    expect(createPrediction).toHaveBeenCalledTimes(1);
   });
 
   it("lists the user's tracks without the webhook token", async () => {

@@ -28,6 +28,8 @@ create table if not exists music_daily_tracks (
   audio_type    text,
   size          int,
   error         text,
+  -- Set by whichever finalize() gets to store the audio; see lib/music/daily.ts.
+  claimed_at    timestamptz,
   created_at    timestamptz not null default now(),
   finished_at   timestamptz,
   unique (user_id, day)
