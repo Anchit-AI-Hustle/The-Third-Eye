@@ -110,5 +110,30 @@ export async function POST(_req: NextRequest) {
   }
   deleted.push("phone_users");
 
+  // AND THE NUMBER HELD BY THE RATE LIMITER. auth_rate_limit keys its per-number
+  // bucket on the E.164 number itself, and the limiter only ever resets counters —
+  // it never deletes rows. So the number outlived the account it belonged to,
+  // against a route and a privacy policy that both promise removal. (The sampled
+  // prune in auth_rate_limit_hit would reach it within a day, but "eventually" is
+  // not what erasure on request means.)
+  //
+  // The per-caller bucket is keyed on an address, not on this person, and there is
+  // no mapping from one to the other — so there is nothing here to match it by,
+  // and that row expires on its own.
+  const { error: rlError } = await sb.from("auth_rate_limit").delete().eq("k", email);
+  if (rlError && !SCHEMA_CODES.has((rlError as { code?: string }).code ?? "")) {
+    return Response.json(
+      {
+        error: "Your account was deleted, but one record of your number could not be removed. Please try again.",
+        remote: true,
+        deleted,
+        failed,
+        google,
+      },
+      { status: 500 },
+    );
+  }
+  deleted.push("auth_rate_limit");
+
   return Response.json({ ok: true, remote: true, deleted, failed, google });
 }

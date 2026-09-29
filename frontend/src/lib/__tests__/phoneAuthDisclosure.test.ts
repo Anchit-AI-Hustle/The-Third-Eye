@@ -255,6 +255,26 @@ describe("spending a try", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it("refuses the sign-in if the reset cannot be persisted, rather than leaving the count advanced", async () => {
+    // The attempt has already spent a try. A correct PIN that leaves the counter
+    // advanced means five good sign-ins in a row would lock the account — the
+    // opposite of what a correct PIN should do.
+    let attempts = 0;
+    rpc.mockImplementation((fn: string) => {
+      if (fn === "auth_rate_limit_hit") return Promise.resolve({ data: 1, error: null });
+      if (fn === "phone_pin_ok") {
+        attempts += 1;
+        return Promise.resolve({ error: { message: "cannot reach" } });
+      }
+      return Promise.resolve({ data: [{ allowed: true, tries: 1, locked_until: null }], error: null });
+    });
+    const { enter } = await import("@/lib/phoneAuth");
+    const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
+    expect(res.ok).toBe(false);
+    // Retried once for a transient blip before giving up.
+    expect(attempts).toBe(2);
+  });
+
   it("clears the count, the lock AND the escalation ladder on the right PIN", async () => {
     // Without the ladder reset, one bad afternoon would leave a real person on
     // 24-hour locks for ever.

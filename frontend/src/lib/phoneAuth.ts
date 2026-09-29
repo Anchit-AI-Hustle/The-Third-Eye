@@ -237,7 +237,21 @@ export async function enter(input: {
   // The right PIN clears the count, the lock and the escalation ladder — without
   // the last of those, one bad afternoon would leave someone on 24-hour locks for
   // ever.
-  await sb.rpc("phone_pin_ok", { p_id: row.id });
+  //
+  // AND THE RESULT IS CHECKED, because this attempt has already SPENT a try. If
+  // the reset does not persist, a correct PIN still leaves the counter advanced —
+  // so five good sign-ins in a row would lock the account, which is the opposite
+  // of what a correct PIN should do. Retried once for a transient blip, then the
+  // sign-in is refused rather than handing back a session that has quietly damaged
+  // the account.
+  const cleared = await clearFailures(sb, row.id);
+  if (!cleared) {
+    return {
+      ok: false,
+      reason: "locked",
+      error: "Signed in, but we could not finish updating your account. Please try again.",
+    };
+  }
   return { ok: true, user: pub(row), created: false };
 }
 
@@ -286,6 +300,15 @@ async function beginAttempt(
   }
 
   return { ok: true, tries: state.tries ?? MAX_TRIES };
+}
+
+/** Clear the failure count, lock and escalation ladder. One retry, then give up. */
+async function clearFailures(sb: Sb, id: string): Promise<boolean> {
+  for (let i = 0; i < 2; i++) {
+    const { error } = await sb.rpc("phone_pin_ok", { p_id: id });
+    if (!error) return true;
+  }
+  return false;
 }
 
 function pub(row: Row): PhoneUser {
