@@ -87,13 +87,16 @@ export interface Prediction {
  * on this endpoint too (it uses the model's latest version). Falls back to the
  * version-based endpoint only if the model endpoint is unavailable.
  */
-export async function createPrediction(model: string, input: Record<string, unknown>, fallbackVersion?: string): Promise<Prediction> {
+/** Replicate calls `webhook` when the prediction finishes, so a job can outlive the request that started it. */
+export interface PredictionOptions { webhook?: string }
+
+export async function createPrediction(model: string, input: Record<string, unknown>, fallbackVersion?: string, opts: PredictionOptions = {}): Promise<Prediction> {
   if (!MODEL_RE.test(model)) throw new Error("Invalid model slug");
   const [owner, name] = model.split("/");
   try {
     const p = await rq(`/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/predictions`, {
       method: "POST",
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({ input, ...hook(opts) }),
     });
     return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
   } catch (modelErr) {
@@ -106,10 +109,14 @@ export async function createPrediction(model: string, input: Record<string, unkn
     if (!version) throw modelErr;
     const p = await rq(`/predictions`, {
       method: "POST",
-      body: JSON.stringify({ version, input }),
+      body: JSON.stringify({ version, input, ...hook(opts) }),
     });
     return { id: p.id, status: p.status, output: p.output ?? null, error: p.error ?? null };
   }
+}
+
+function hook(opts: PredictionOptions) {
+  return opts.webhook ? { webhook: opts.webhook, webhook_events_filter: ["completed"] } : {};
 }
 
 export async function getPrediction(id: string): Promise<Prediction> {

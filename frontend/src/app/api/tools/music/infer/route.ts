@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
+import { knowledgeContext } from "@/lib/music/knowledge";
+import { structuresFor } from "@/lib/music/structures";
+import { cleanList, cleanNumber, cleanTempo, cleanValue } from "@/lib/music/normalize";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -12,20 +15,22 @@ export const maxDuration = 30;
 
 const SYSTEM = `You are an expert music producer. From the song description, fill in a COMPLETE set of production parameters.
 CRITICAL RULES:
+- Anything the description states explicitly (a BPM, genre, instrument, language, artist) is used EXACTLY as stated — never "corrected" toward a genre average. "200+ BPM" means a tempo of 200 or more.
 - EVERY field must have a concrete, specific, non-empty value. Never return "", null, "unknown", or "N/A".
-- If the description doesn't state something, INVENT the most fitting choice from genre conventions (a real song title, 4-6 specific instruments, 1-2 real reference artists, a specific sub-genre, etc.).
+- If the description doesn't state something, choose the most fitting value from the genre knowledge provided (a real song title, 4-6 specific instruments, 1-3 real reference artists of that exact scene, a specific sub-genre, etc.).
+- One value per list item, no trailing punctuation.
 Return ONLY a raw JSON object (no prose, no code fences) with EXACTLY these keys:
 {
  "title": string (an evocative 2-5 word song title),
  "genre": string (1-2 genres, comma-separated — if the request blends genres, e.g. "hard techno rap", name both),
  "subgenre": string (a specific sub-genre),
  "mood": string (1-2 moods, comma-separated),
- "tempo": number (60-180),
+ "tempo": number (40-400; the genre's real range — e.g. full-on psytrance 142-148, hi-tech 175-200, psycore 200-260, speedcore 250-400),
  "energy": number (1-10),
  "duration": number (15-120 seconds),
- "structure": string,
+ "structure": string (pick the best fit from STRUCTURE OPTIONS below, or adapt one; sections joined with "–"),
  "instruments": string (comma-separated, 4-6 specific instruments),
- "artistInspiration": string (1-2 real reference artists, comma-separated),
+ "artistInspiration": string (1-3 real reference artists from this exact scene, comma-separated),
  "vocals": boolean,
  "vocalStyle": string (1-2 styles, comma-separated, e.g. "rap verses, powerful"),
  "vocalLanguage": string,
@@ -45,7 +50,11 @@ function inferGenre(text: string): string {
   const has = (...k: string[]) => k.some((x) => g.includes(x));
   const found: string[] = [];
   const add = (name: string) => { if (!found.includes(name)) found.push(name); };
-  if (has("psytrance", "psy trance", "psy-trance", "goa")) add("Psytrance");
+  if (has("psytrance", "psy trance", "psy-trance", "goa", "psychedelic", "full-on", "full on", "darkpsy", "dark psy", "hi-tech", "hitech", "forest psy", "psycore")) add("Psytrance");
+  if (has("acid rave", "acid techno", "hardtek", "tekno", "acid")) add("Acid Rave");
+  if (has("speedcore", "extratone")) add("Speedcore");
+  else if (has("frenchcore")) add("Frenchcore");
+  else if (has("gabber", "hardcore techno")) add("Hardcore");
   if (has("hard techno", "hardtechno")) add("Hard Techno");
   else if (has("techno")) add("Techno");
   if (has("trance") && !has("psytrance", "psy trance")) add("Trance");
@@ -82,7 +91,7 @@ function backfill(desc: string, genre: string): GenreDefaults {
   const g = `${desc} ${genre}`.toLowerCase();
   const has = (...k: string[]) => k.some((x) => g.includes(x));
   let d: GenreDefaults;
-  if (has("psytrance", "psy trance", "goa", "psy", "acid")) d = { subgenre: "psytrance / acid", instruments: "TB-303 acid bassline, psy leads, 909 kick, rolling hi-hats, atmospheric pads", artists: "Astrix, Vini Vici", tempo: 145, mood: "Hypnotic & driving", energy: 9, vocalStyle: "processed chants" };
+  if (has("psytrance", "psy trance", "goa", "psy", "acid")) d = { subgenre: "full-on psytrance", instruments: "rolling triplet bassline, TB-303 acid lead, punchy kick, psy FX, atmospheric pads", artists: "Astrix, Vini Vici, Blastoyz", tempo: 145, mood: "Hypnotic & driving", energy: 9, vocalStyle: "chanted mantras" };
   else if (has("hard techno", "hardtechno")) d = { subgenre: "hard techno", instruments: "distorted 909 kick, acid lead, industrial stabs, rumble bass, hi-hats", artists: "Charlotte de Witte, I Hate Models", tempo: 150, mood: "Dark & relentless", energy: 10, vocalStyle: "vocal stabs" };
   else if (has("techno")) d = { subgenre: "peak-time techno", instruments: "909 drum machine, analog synth bass, acid lead, hi-hats, sub bass", artists: "Charlotte de Witte, Amelie Lens", tempo: 135, mood: "Driving", energy: 8, vocalStyle: "vocal stabs" };
   else if (has("trance")) d = { subgenre: "uplifting trance", instruments: "supersaw lead, plucks, rolling bass, kick, crash risers", artists: "Armin van Buuren, Above & Beyond", tempo: 138, mood: "Euphoric", energy: 8, vocalStyle: "airy female vocal" };
@@ -115,12 +124,25 @@ export async function POST(req: NextRequest) {
   const description = (body.description ?? "").trim();
   if (!description) return Response.json({ error: "A description is required" }, { status: 400 });
 
+  const hint = inferGenre(description);
+  const structures = structuresFor([hint], description);
   let parsed: Record<string, any> = {};
   try {
     const out = await llmCascade({
       system: SYSTEM,
-      messages: [{ role: "user", content: `Song description: "${description}"` }],
-      jsonMode: true, maxTokens: 800, temperature: 0.55,
+      messages: [{
+        role: "user",
+        content: [
+          `Song description: "${description}"`,
+          "",
+          "GENRE KNOWLEDGE:",
+          knowledgeContext({ description, genre: hint }),
+          "",
+          "STRUCTURE OPTIONS:",
+          ...structures.slice(0, 8).map((x) => `- ${x}`),
+        ].join("\n"),
+      }],
+      jsonMode: true, maxTokens: 900, temperature: 0.4, stage: "music:infer",
     });
     try { parsed = JSON.parse(out.text); }
     catch { const m = out.text.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); }
@@ -128,31 +150,30 @@ export async function POST(req: NextRequest) {
 
   // Genre comes from the model, else is inferred from the description — never a
   // hardcoded default that would drag the whole fallback off-genre.
-  const str = (v: any) => (Array.isArray(v) ? v.join(", ") : v == null ? "" : String(v)).trim();
-  const genre = str(parsed.genre) || inferGenre(description);
+  const genre = cleanList(parsed.genre, 3).join(", ") || hint;
   const bf = backfill(description, genre);
   const titleFallback = description.split(/[.,\n]/)[0].split(" ").slice(0, 4).join(" ") || "Untitled Track";
 
   // Guarantee every field non-empty — and genre-appropriate when the model omits it.
   const fields = {
-    title: str(parsed.title) || titleFallback,
+    title: cleanValue(parsed.title) || titleFallback,
     genre,
-    subgenre: str(parsed.subgenre) || bf.subgenre,
-    mood: str(parsed.mood) || bf.mood,
-    tempo: Number(parsed.tempo) >= 60 && Number(parsed.tempo) <= 180 ? Math.round(parsed.tempo) : bf.tempo,
-    energy: Number(parsed.energy) >= 1 && Number(parsed.energy) <= 10 ? Math.round(parsed.energy) : bf.energy,
-    duration: Number(parsed.duration) >= 10 && Number(parsed.duration) <= 120 ? Math.round(parsed.duration) : 30,
-    structure: str(parsed.structure) || "Verse–Chorus–Bridge",
-    instruments: str(parsed.instruments) || bf.instruments,
-    artistInspiration: str(parsed.artistInspiration) || bf.artists,
+    subgenre: cleanList(parsed.subgenre, 2).join(", ") || bf.subgenre,
+    mood: cleanList(parsed.mood, 2).join(", ") || bf.mood,
+    tempo: cleanTempo(parsed.tempo) ?? bf.tempo,
+    energy: cleanNumber(parsed.energy, 1, 10) ?? bf.energy,
+    duration: cleanNumber(parsed.duration, 10, 120) ?? 30,
+    structure: cleanValue(parsed.structure) || structuresFor(genre.split(", "))[0],
+    instruments: cleanList(parsed.instruments, 8).join(", ") || bf.instruments,
+    artistInspiration: cleanList(parsed.artistInspiration, 3).join(", ") || bf.artists,
     vocals: typeof parsed.vocals === "boolean" ? parsed.vocals : true,
-    vocalStyle: str(parsed.vocalStyle) || bf.vocalStyle,
-    vocalLanguage: str(parsed.vocalLanguage) || "English",
+    vocalStyle: cleanList(parsed.vocalStyle, 2).join(", ") || bf.vocalStyle,
+    vocalLanguage: cleanList(parsed.vocalLanguage, 4).join(", ") || "English",
     // No genre-keyed default: an unearned effects list reads as arbitrary. The
     // intensity default tracks the genre's typical energy instead.
-    vocalIntensity: Number(parsed.vocalIntensity) >= 1 && Number(parsed.vocalIntensity) <= 10 ? Math.round(parsed.vocalIntensity) : bf.energy,
-    vocalEffects: str(parsed.vocalEffects),
-    lyricsTheme: str(parsed.lyricsTheme) || description.slice(0, 60),
+    vocalIntensity: cleanNumber(parsed.vocalIntensity, 1, 10) ?? bf.energy,
+    vocalEffects: cleanList(parsed.vocalEffects, 3).join(", "),
+    lyricsTheme: cleanValue(parsed.lyricsTheme) || description.slice(0, 60),
   };
 
   return Response.json({ fields });

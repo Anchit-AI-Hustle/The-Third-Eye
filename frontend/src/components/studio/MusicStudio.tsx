@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X } from "lucide-react";
+import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X, CalendarClock } from "lucide-react";
 import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
 import { generateVisualizerVideo } from "@/lib/musicVideo";
 import { recordGeneration } from "@/lib/generations";
+import { structuresFor } from "@/lib/music/structures";
+import { BPM_MAX, BPM_MIN } from "@/lib/music/types";
+import { DailyDrop, DailyTracks } from "./DailyDrop";
 
 interface SavedTrack {
   id: string; title?: string; description?: string; prompt?: string; lyrics?: string;
@@ -23,6 +24,8 @@ const GENRES = [
   "Country", "Folk", "Bluegrass", "Americana", "Singer-songwriter", "Indie", "Alternative",
   "Metal", "Punk", "Hardcore", "Emo", "Post-rock", "Shoegaze", "Grunge",
   "EDM", "House", "Deep house", "Tech house", "Techno", "Hard Techno", "Trance", "Psytrance",
+  "Full-on psytrance", "Dark psytrance", "Forest psytrance", "Hi-tech psytrance", "Psycore", "Goa trance",
+  "Acid rave", "Acid techno", "Gabber", "Frenchcore", "Speedcore",
   "Dubstep", "Drum & bass", "Jungle", "Garage/UK garage", "Grime", "Hardstyle", "Hyperpop",
   "Trap", "Drill", "Boom bap", "Lo-fi", "Ambient", "Downtempo", "Chillout", "New age", "Vaporwave",
   "Synthwave", "Cinematic", "Orchestral", "Video game/chiptune", "Industrial", "Experimental",
@@ -45,9 +48,10 @@ const VOCAL_STYLES = [
   "Raspy", "Gritty/rock", "Falsetto", "Belting", "Operatic", "Growl/scream", "Auto-tuned",
   "Gospel/soulful", "Nasal", "Robotic/vocoder", "Yodel", "Throat singing", "Beatbox",
   "Harmonized/multi-part", "Call-and-response", "Melodic rap", "Vibrato-heavy", "Deadpan/monotone",
+  "Chanted mantra", "Vocal shots", "Tribal chant", "Shouted MC",
 ];
 const LANGUAGES = [
-  "English", "Hindi", "Punjabi", "Bengali", "Urdu", "Tamil", "Telugu", "Marathi", "Gujarati",
+  "English", "Sanskrit", "Hindi", "Punjabi", "Bengali", "Urdu", "Tamil", "Telugu", "Marathi", "Gujarati",
   "Spanish", "Portuguese", "French", "German", "Italian", "Dutch", "Swedish", "Polish",
   "Russian", "Ukrainian", "Greek", "Turkish", "Romanian", "Hungarian", "Czech",
   "Korean", "Japanese", "Mandarin Chinese", "Cantonese", "Vietnamese", "Thai", "Indonesian", "Tagalog/Filipino",
@@ -58,20 +62,7 @@ const VOCAL_EFFECTS = [
   "Reverb", "Autotune", "Delay/echo", "Distortion", "Harmonizer", "Choir layer", "Whisper layer",
   "Vocoder", "Chorus/doubling", "Telephone filter", "Pitch shift", "Formant shift", "Flanger",
   "Phaser", "Bitcrush/lo-fi", "Radio filter", "Megaphone", "Underwater/muffled", "Stutter/glitch",
-  "Wide stereo double", "Gated reverb", "Tape saturation", "Layered ad-libs",
-];
-const STRUCTURES = [
-  "Verse–Chorus–Verse–Chorus–Bridge–Chorus",
-  "Intro–Verse–Chorus–Verse–Chorus–Bridge–Chorus–Outro",
-  "Intro–Verse–Pre-chorus–Chorus–Verse–Pre-chorus–Chorus–Bridge–Chorus–Outro",
-  "Intro–Build–Drop–Breakdown–Drop–Outro",
-  "Intro–Theme–Solo–Theme–Outro",
-  "AABA",
-  "12-bar blues",
-  "Through-composed (no repeats)",
-  "Call-and-response loop",
-  "Rondo (ABACA)",
-  "Theme and variations",
+  "Wide stereo double", "Gated reverb", "Tape saturation", "Layered ad-libs", "Heavy delay", "Reverse reverb",
 ];
 const INSTRUMENTS = [
   "Acoustic guitar", "Electric guitar", "Bass guitar", "Upright bass", "Synth bass", "808 bass",
@@ -91,6 +82,8 @@ const ARTIST_INSPIRATION = [
   "Hans Zimmer", "Ludwig Göransson", "Brian Eno", "Jon Hopkins", "ODESZA", "Flume",
   "Metallica", "Gojira", "Foo Fighters", "Arctic Monkeys", "Tame Impala", "Fela Kuti",
   "Burna Boy", "Bad Bunny", "Rosalía", "BTS", "A.R. Rahman", "Nusrat Fateh Ali Khan",
+  "Astrix", "Vini Vici", "Blastoyz", "Infected Mushroom", "Ace Ventura", "Neelix", "Space Cat",
+  "Hallucinogen", "Astral Projection", "Man With No Name", "The Prodigy", "Mindfold",
 ];
 
 type Phase = "idle" | "generating" | "queued" | "ready" | "error";
@@ -105,7 +98,7 @@ type Fields = {
 const MAX_DURATION = 18000;
 // Clamp ranges for AI suggestions landing on number fields.
 const NUMBER_RANGES: Partial<Record<keyof Fields, [number, number]>> = {
-  tempo: [60, 200], energy: [1, 10], vocalIntensity: [1, 10], duration: [10, MAX_DURATION],
+  tempo: [BPM_MIN, BPM_MAX], energy: [1, 10], vocalIntensity: [1, 10], duration: [10, MAX_DURATION],
 };
 // What each field resets to on Clear.
 const FIELD_DEFAULTS: Partial<Record<keyof Fields, Fields[keyof Fields]>> = {
@@ -130,6 +123,21 @@ function fmtDuration(s: number): string {
   if (s < 3600) { const m = Math.floor(s / 60), r = s % 60; return r ? `${m}m ${r}s` : `${m}m`; }
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+// The form as the generator (and the daily drop) reads it: lists as comma strings.
+function payloadOf(f: Fields) {
+  const { makeVideoUpfront: _video, ...rest } = f;
+  return {
+    ...rest,
+    genre: f.genres.join(", "),
+    mood: f.moods.join(", "),
+    vocalStyle: f.vocalStyles.join(", "),
+    vocalLanguage: f.vocalLanguages.join(", "),
+    vocalEffects: f.vocalEffects.join(", "),
+    instruments: f.instruments.join(", "),
+    artistInspiration: f.artistInspiration.join(", "),
+  };
 }
 
 // Match a free-text AI value to the closest option in a fixed list.
@@ -266,7 +274,7 @@ export function MusicStudio() {
     title: "", description: "", genres: [GENRES[0]], subgenre: "", moods: [MOODS[0]],
     tempo: 120, duration: 30, vocals: true, vocalStyles: [VOCAL_STYLES[0]], vocalLanguages: [LANGUAGES[0]],
     vocalIntensity: 5, vocalEffects: [],
-    lyricsMode: "auto", lyricsText: "", artistInspiration: [], instruments: [], energy: 6, structure: STRUCTURES[0],
+    lyricsMode: "auto", lyricsText: "", artistInspiration: [], instruments: [], energy: 6, structure: structuresFor([GENRES[0]])[0],
     makeVideoUpfront: false,
   });
   const set = useCallback(<K extends keyof Fields>(k: K, v: Fields[K]) => setF((p) => ({ ...p, [k]: v })), []);
@@ -386,12 +394,12 @@ export function MusicStudio() {
         genres: x.genre ? matchOptions(x.genre, GENRES, 6) : p.genres,
         subgenre: x.subgenre || p.subgenre,
         moods: x.mood ? matchOptions(x.mood, MOODS, 5) : p.moods,
-        tempo: Number(x.tempo) >= 60 && Number(x.tempo) <= 200 ? Math.round(x.tempo) : p.tempo,
+        tempo: Number(x.tempo) >= BPM_MIN && Number(x.tempo) <= BPM_MAX ? Math.round(x.tempo) : p.tempo,
         energy: Number(x.energy) >= 1 && Number(x.energy) <= 10 ? Math.round(x.energy) : p.energy,
         duration: Number(x.duration) >= 10 && Number(x.duration) <= 120 ? Math.round(x.duration) : p.duration,
         structure: x.structure || p.structure,
         instruments: x.instruments ? matchOptions(x.instruments, INSTRUMENTS, 10) : p.instruments,
-        artistInspiration: x.artistInspiration ? String(x.artistInspiration).split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 4) : p.artistInspiration,
+        artistInspiration: x.artistInspiration ? matchOptions(x.artistInspiration, ARTIST_INSPIRATION, 4) : p.artistInspiration,
         vocals: typeof x.vocals === "boolean" ? x.vocals : p.vocals,
         vocalStyles: x.vocalStyle ? matchOptions(x.vocalStyle, VOCAL_STYLES, 4) : p.vocalStyles,
         vocalLanguages: x.vocalLanguage ? matchOptions(x.vocalLanguage, LANGUAGES, 5) : p.vocalLanguages,
@@ -407,10 +415,17 @@ export function MusicStudio() {
   // only knows singular field vocabulary, so the plural array fields (genres,
   // vocalLanguages) reuse their singular instructions and the response is split
   // back into a list.
+  // A list suggestion is snapped onto the same options, and capped at the same
+  // size, as the picker it lands in — it was a flat 4 for every list.
+  const LIST_FIELDS: Partial<Record<keyof Fields, [string[], number]>> = {
+    genres: [GENRES, 6], moods: [MOODS, 5], instruments: [INSTRUMENTS, 10], artistInspiration: [ARTIST_INSPIRATION, 4],
+    vocalStyles: [VOCAL_STYLES, 4], vocalLanguages: [LANGUAGES, 5], vocalEffects: [VOCAL_EFFECTS, 6],
+  };
   function applySuggestion(name: keyof Fields, suggestion: string) {
     const current = f[name];
     if (Array.isArray(current)) {
-      const items = suggestion.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 4);
+      const [opts, max] = LIST_FIELDS[name] ?? [[], 4];
+      const items = matchOptions(suggestion, opts, max);
       if (items.length) set(name, items as never);
       return;
     }
@@ -446,6 +461,8 @@ export function MusicStudio() {
             genre: f.genres.join(", "), subgenre: f.subgenre, mood: f.moods.join(", "), tempo: f.tempo, energy: f.energy,
             instruments: f.instruments.join(", "), artistInspiration: f.artistInspiration.join(", "),
             vocals: f.vocals, vocalStyle: f.vocalStyles.join(", "), description: f.description,
+            title: f.title, structure: f.structure, vocalLanguage: f.vocalLanguages.join(", "),
+            vocalEffects: f.vocalEffects.join(", "), vocalIntensity: f.vocalIntensity,
           },
         }),
       });
@@ -467,18 +484,8 @@ export function MusicStudio() {
     stopPoll();
     setPhase("generating"); setError(null); setNote(null); setAudioUrl(null); setVideoUrl(null); setStatus("Writing the track…");
     try {
-      const payload = {
-        ...f,
-        genre: f.genres.join(", "),
-        mood: f.moods.join(", "),
-        vocalStyle: f.vocalStyles.join(", "),
-        vocalLanguage: f.vocalLanguages.join(", "),
-        vocalEffects: f.vocalEffects.join(", "),
-        instruments: f.instruments.join(", "),
-        artistInspiration: f.artistInspiration.join(", "),
-      };
       const res = await fetch("/api/tools/music", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payloadOf(f)),
       });
       const d = await res.json();
       if (!res.ok) { setPhase("error"); setError(d.error ?? `HTTP ${res.status}`); setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); return; }
@@ -553,6 +560,8 @@ export function MusicStudio() {
       </div>
 
       {tab === "library" ? (
+        <div className="space-y-4">
+        <DailyTracks />
         <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="hud-label text-[#34D399]">Your tracks ({tracks.length})</span>
@@ -587,6 +596,7 @@ export function MusicStudio() {
               ))}
             </div>
           )}
+        </div>
         </div>
       ) : (
       /* The form was capped at 400px while the output panel — empty until
@@ -628,13 +638,14 @@ export function MusicStudio() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={lbl}>Tempo (BPM): {f.tempo} <AiBar name="tempo" /></label><input type="range" min={60} max={200} value={f.tempo} onChange={(e) => set("tempo", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
+          <div><label className={lbl}>Tempo (BPM): {f.tempo} <AiBar name="tempo" /></label><input type="range" min={BPM_MIN} max={BPM_MAX} value={f.tempo} onChange={(e) => set("tempo", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
           <div><label className={lbl}>Energy: {f.energy}/10 <AiBar name="energy" /></label><input type="range" min={1} max={10} value={f.energy} onChange={(e) => set("energy", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
         </div>
 
         <div>
           <label className={lbl}>Song structure <AiBar name="structure" /></label>
-          <ChipInput value={f.structure} onChange={(v) => set("structure", v)} options={STRUCTURES} placeholder="e.g. Intro → Verse → Chorus → Outro" />
+          <ChipInput value={f.structure} onChange={(v) => set("structure", v)} options={structuresFor(f.genres, f.subgenre).slice(0, 9)} placeholder="e.g. Intro–Build–Drop–Breakdown–Drop–Outro" />
+          <p className="text-[10px] text-text-muted mt-1">Sections become the lyric's section tags, in order — options follow the genres above.</p>
         </div>
 
         <div>
@@ -711,6 +722,8 @@ export function MusicStudio() {
         </button>
         {note && <p className="text-xs text-[#F0C94E] flex items-start gap-1.5"><AlertTriangle size={12} className="flex-none mt-0.5" />{note}</p>}
         {error && <p className="text-xs text-accent-red">{error}</p>}
+
+        <DailyDrop preset={() => payloadOf(fFor.current)} />
       </div>
 
       <div className="rounded-card border border-border-default bg-background-surface/40 p-5 min-h-[420px]">
@@ -758,7 +771,9 @@ export function MusicStudio() {
                 <p className="text-sm text-text-secondary">{prompt}</p>
               </div>
             )}
-            {lyrics && (<div><span className="hud-label text-text-muted">Lyrics</span><div className="prose-jarvis max-w-none text-sm text-text-secondary mt-1"><ReactMarkdown remarkPlugins={[remarkGfm]}>{lyrics}</ReactMarkdown></div></div>)}
+            {/* Plain text, not Markdown: Markdown folded every line of a verse into
+                one paragraph and read the [section] tags as link syntax. */}
+            {lyrics && (<div><span className="hud-label text-text-muted">Lyrics</span><pre className="mt-1 whitespace-pre-wrap font-sans text-sm leading-relaxed text-text-secondary">{lyrics}</pre></div>)}
           </div>
         )}
       </div>
