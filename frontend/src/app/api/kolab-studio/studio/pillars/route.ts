@@ -17,7 +17,7 @@ export async function PUT(req: Request) {
     const keptIds = pillars.map((p) => p.id).filter((id): id is string => Boolean(id));
 
     // 1) Delete only the pillars the user removed (never touch the ones being kept).
-    let del = gate.supabase.from("content_pillars").delete().eq("user_id", gate.user.id);
+    let del = gate.db.from("content_pillars").delete().eq("user_id", gate.user.id);
     if (keptIds.length) del = del.not("id", "in", `(${keptIds.join(",")})`);
     const delRes = await del;
     if (delRes.error) return fail("Could not save pillars", 400);
@@ -26,7 +26,7 @@ export async function PUT(req: Request) {
     for (let i = 0; i < pillars.length; i++) {
       const p = pillars[i];
       if (!p.id) continue;
-      const upd = await gate.supabase
+      const upd = await gate.db
         .from("content_pillars")
         .update({ name: p.name, role: p.role ?? "", color: pillarColor(i), sort_order: i })
         .eq("id", p.id)
@@ -46,7 +46,7 @@ export async function PUT(req: Request) {
         sort_order: i,
       }));
     if (newRows.length) {
-      const ins = await gate.supabase.from("content_pillars").insert(newRows);
+      const ins = await gate.db.from("content_pillars").insert(newRows);
       if (ins.error) return fail("Could not save pillars", 400);
     }
 

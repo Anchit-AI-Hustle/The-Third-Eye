@@ -1,6 +1,6 @@
-// web/app/(app)/layout.tsx — authenticated, org-aware shell. Server component: enforces a
-// Kolab session (Supabase Auth — separate from the outer NextAuth gate in
-// app/kolab/studio/layout.tsx), resolves the active org (→ onboarding if the user has none),
+// web/app/(app)/layout.tsx — authenticated, org-aware shell. Server component: requires the
+// app's own session (the outer gate in app/kolab/studio/layout.tsx already does; this narrows
+// the type), resolves the active org (→ onboarding if the user has none),
 // and renders the pack-specific menu, org switcher, and top bar. Pack routing/vocabulary comes
 // from lib/packs + lib/copy.
 import { redirect } from "next/navigation";
@@ -11,11 +11,11 @@ import { PACK_NAV } from "@/lib/kolab-studio/packs";
 import { Logo } from "@/components/kolab-studio/Logo";
 import { AppMenu } from "./AppMenu";
 import { OrgSwitcher } from "./OrgSwitcher";
-import { SignOutButton } from "./SignOutButton";
+import { ExitButton } from "./ExitButton";
 
 export default async function KolabAppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getSessionUser().catch(() => null);
-  if (!user) redirect("/kolab/studio/auth");
+  const user = await getSessionUser();
+  if (!user) redirect("/auth/signin");
 
   const active = await getActiveOrg();
   if (!active) redirect("/kolab/studio/onboarding");
@@ -24,8 +24,8 @@ export default async function KolabAppLayout({ children }: { children: React.Rea
   if (active.org.type === "creator") await ensureProvisioned(user);
 
   const memberships = await getMyMemberships();
-  const label = user.email || user.phone || "New member";
-  const initials = (label || "?").slice(0, 2).toUpperCase();
+  const label = user.id;
+  const initials = label.slice(0, 2).toUpperCase();
 
   return (
     <div>
@@ -43,7 +43,7 @@ export default async function KolabAppLayout({ children }: { children: React.Rea
                 {initials}
               </span>
             </div>
-            <SignOutButton />
+            <ExitButton />
           </div>
         </div>
       </div>

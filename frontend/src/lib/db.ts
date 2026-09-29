@@ -53,17 +53,18 @@ function pool(): Pool | null {
 // Column udt names per table, so values bound for json/jsonb/vector columns are
 // serialised as JSON rather than as Postgres array literals.
 const columnTypes = new Map<string, Promise<Map<string, string>>>();
-function typesOf(c: PoolClient | Pool, table: string): Promise<Map<string, string>> {
-  let p = columnTypes.get(table);
+function typesOf(c: PoolClient | Pool, schema: string, table: string): Promise<Map<string, string>> {
+  const key = `${schema}.${table}`;
+  let p = columnTypes.get(key);
   if (!p) {
     p = c
       .query<{ column_name: string; udt_name: string }>(
-        "select column_name, udt_name from information_schema.columns where table_schema = 'public' and table_name = $1",
-        [table],
+        "select column_name, udt_name from information_schema.columns where table_schema = $1 and table_name = $2",
+        [schema, table],
       )
       .then((r) => new Map(r.rows.map((x) => [x.column_name, x.udt_name])));
-    p.catch(() => columnTypes.delete(table));
-    columnTypes.set(table, p);
+    p.catch(() => columnTypes.delete(key));
+    columnTypes.set(key, p);
   }
   return p;
 }
@@ -127,7 +128,10 @@ class Query<D = any[]> implements PromiseLike<DbResult<D>> {
   private ignoreDuplicates = false;
   private bad: unknown = null;
 
-  constructor(private readonly table: string) {}
+  constructor(
+    private readonly schema: string,
+    private readonly table: string,
+  ) {}
 
   // Errors while chaining surface in the result, like every other failure.
   private add(f: () => Cond) {
@@ -245,7 +249,7 @@ class Query<D = any[]> implements PromiseLike<DbResult<D>> {
   }
 
   private async exec(p: Pool): Promise<DbResult> {
-    const t = ident(this.table);
+    const t = `${ident(this.schema)}.${ident(this.table)}`;
     const params: unknown[] = [];
     let sql: string;
 
@@ -266,7 +270,7 @@ class Query<D = any[]> implements PromiseLike<DbResult<D>> {
     if (this.mode === "delete") {
       sql = `delete from ${t}${this.whereSql(params)}`;
     } else if (this.mode === "update") {
-      const udt = await typesOf(p, this.table);
+      const udt = await typesOf(p, this.schema, this.table);
       const set = Object.entries(this.values[0])
         .filter(([, v]) => v !== undefined)
         .map(([k, v]) => {
@@ -277,7 +281,7 @@ class Query<D = any[]> implements PromiseLike<DbResult<D>> {
       sql = `update ${t} set ${set.join(", ")}${this.whereSql(params)}`;
     } else {
       if (!this.values.length) return { data: this.returning === null ? null : [], error: null, count: null };
-      const udt = await typesOf(p, this.table);
+      const udt = await typesOf(p, this.schema, this.table);
       const keys = [...new Set(this.values.flatMap((r) => Object.keys(r).filter((k) => r[k] !== undefined)))];
       const cols = keys.map(ident);
       const rows = this.values.map(
@@ -326,36 +330,37 @@ class Query<D = any[]> implements PromiseLike<DbResult<D>> {
 // Function shapes, so rpc() returns what PostgREST did: the rows of a
 // set-returning function, the value of a scalar one, null for void.
 const fnShapes = new Map<string, Promise<{ set: boolean; isVoid: boolean; argTypes: Map<string, string> }>>();
-function shapeOf(p: Pool, fn: string) {
-  let s = fnShapes.get(fn);
+function shapeOf(p: Pool, schema: string, fn: string) {
+  const key = `${schema}.${fn}`;
+  let s = fnShapes.get(key);
   if (!s) {
     s = p
       .query<{ set: boolean; ret: string; names: string[] | null; argtypes: string[] }>(
         `select p.proretset as set, format_type(p.prorettype, null) as ret, p.proargnames as names,
                 array(select format_type(t, null) from unnest(p.proargtypes) t) as argtypes
            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where n.nspname = 'public' and p.proname = $1
+          where n.nspname = $1 and p.proname = $2
           limit 1`,
-        [fn],
+        [schema, fn],
       )
       .then((r) => {
         const row = r.rows[0];
-        if (!row) throw Object.assign(new Error(`function public.${fn} does not exist`), { code: "42883" });
+        if (!row) throw Object.assign(new Error(`function ${schema}.${fn} does not exist`), { code: "42883" });
         const argTypes = new Map((row.names ?? []).map((n, i) => [n, row.argtypes[i]]));
         return { set: row.set, isVoid: row.ret === "void", argTypes };
       });
-    s.catch(() => fnShapes.delete(fn));
-    fnShapes.set(fn, s);
+    s.catch(() => fnShapes.delete(key));
+    fnShapes.set(key, s);
   }
   return s;
 }
 
-async function rpc(fn: string, args: Row = {}): Promise<DbResult> {
+async function rpc(schema: string, fn: string, args: Row = {}): Promise<DbResult> {
   const p = pool();
   if (!p) return { data: null, error: { message: "DATABASE_URL is not set", code: "08001" }, count: null };
   try {
-    const name = ident(fn);
-    const shape = await shapeOf(p, fn);
+    const name = `${ident(schema)}.${ident(fn)}`;
+    const shape = await shapeOf(p, schema, fn);
     const params: unknown[] = [];
     const named = Object.entries(args)
       .filter(([, v]) => v !== undefined)
@@ -373,7 +378,12 @@ async function rpc(fn: string, args: Row = {}): Promise<DbResult> {
   }
 }
 
-const db = { from: (table: string) => new Query(table), rpc };
+// `schema` mirrors supabase-js's .schema(): Kolab Studio's tables live in `kolab`.
+const inSchema = (schema: string) => ({
+  from: (table: string) => new Query(schema, table),
+  rpc: (fn: string, args?: Row) => rpc(schema, fn, args),
+});
+const db = { ...inSchema("public"), schema: inSchema };
 export type Db = typeof db;
 
 export function getDb(): Db | null {

@@ -3,7 +3,7 @@ import { signOut } from "next-auth/react";
 // Tasks, notes, goals, expenses, knowledge, chat history and the assistant
 // "memory" are cached in localStorage under the `jarvis_` prefix, keyed by
 // email. On a shared machine that data would outlive the session, so we clear
-// every `jarvis_`-prefixed key on sign-out. (Server/Supabase remains the source
+// every `jarvis_`-prefixed key on sign-out. (The server database remains the source
 // of truth — nothing is lost, only the local plaintext copy.)
 export function clearSensitiveLocalData(): void {
   if (typeof window === "undefined") return;

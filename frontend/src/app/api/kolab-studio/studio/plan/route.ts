@@ -16,9 +16,10 @@ export async function POST(req: Request) {
     // Generate a starter week from the user's pillars (server-built, deterministic).
     if (body?.generate === "week") {
       planGenerateWeekSchema.parse(body);
-      const { data: pillars } = await gate.supabase
+      const { data: pillars } = await gate.db
         .from("content_pillars")
         .select("id")
+        .eq("user_id", gate.user.id)
         .order("sort_order", { ascending: true });
       const pids = ((pillars as { id: string }[] | null) ?? []).map((p) => p.id);
       const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -41,14 +42,14 @@ export async function POST(req: Request) {
           done: false,
         };
       });
-      const ins = await gate.supabase.from("content_plan").insert(rows);
+      const ins = await gate.db.from("content_plan").insert(rows);
       if (ins.error) return fail("Could not generate week", 400);
       await audit({ actorId: gate.user.id, action: "studio.plan.generate_week", ip: clientIp(req) });
       return ok({ added: rows.length });
     }
 
     const input = planCreateSchema.parse(body);
-    const ins = await gate.supabase.from("content_plan").insert({
+    const ins = await gate.db.from("content_plan").insert({
       user_id: gate.user.id,
       pillar_id: input.pillar_id ?? null,
       format: input.format ?? "",
@@ -90,8 +91,8 @@ export async function PATCH(req: Request) {
     if (input.notes !== undefined) patch.notes = input.notes;
     if (Object.keys(patch).length === 0) return fail("Nothing to update", 400);
 
-    // RLS restricts to the owner; scoping by id is also IDOR-safe.
-    const upd = await gate.supabase.from("content_plan").update(patch).eq("id", input.id).eq("user_id", gate.user.id);
+    // Scoped by id AND owner, so a guessed id can't touch another user's row.
+    const upd = await gate.db.from("content_plan").update(patch).eq("id", input.id).eq("user_id", gate.user.id);
     if (upd.error) return fail("Could not update item", 400);
     return ok({ updated: true });
   } catch (e) {
@@ -104,7 +105,7 @@ export async function DELETE(req: Request) {
     const gate = await requireFeatureAccess();
     if (!gate.ok) return gate.response;
     const { id } = idParamSchema.parse({ id: new URL(req.url).searchParams.get("id") });
-    const del = await gate.supabase.from("content_plan").delete().eq("id", id).eq("user_id", gate.user.id);
+    const del = await gate.db.from("content_plan").delete().eq("id", id).eq("user_id", gate.user.id);
     if (del.error) return fail("Could not delete item", 400);
     return ok({ deleted: true });
   } catch (e) {

@@ -1,6 +1,6 @@
 // web/lib/kyc/provider.ts
 // KYC provider ABSTRACTION so Phase 2 can drop in a UIDAI-licensed provider (Digio/Signzy/
-// Cashfree/IDfy) — via supabase/functions/aadhaar-kyc — without touching call sites.
+// Cashfree/IDfy) without touching call sites.
 //
 // HARD RULES (SECURITY.md §4): the Aadhaar number is used ONLY transiently to initiate the
 // provider OTP; it is NEVER returned by, or stored from, these functions. We keep only:

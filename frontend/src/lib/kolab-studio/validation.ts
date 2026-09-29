@@ -4,14 +4,6 @@
 
 import { z } from "zod";
 
-/** E.164-ish phone: + and 8–15 digits. */
-export const phoneSchema = z
-  .string()
-  .trim()
-  .regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number");
-
-export const emailSchema = z.string().trim().toLowerCase().email("Invalid email").max(254);
-
 export const otpSchema = z
   .string()
   .trim()
@@ -124,17 +116,6 @@ export const orgCreateSchema = z.object({
   type: z.enum(["creator", "commerce", "local", "agency"]),
   name: z.string().trim().min(1, "Add a name").max(80),
   vertical: z.string().trim().max(60).optional(),
-});
-
-export const otpRequestSchema = z.object({
-  channel: z.enum(["sms", "email"]),
-  to: z.string().trim().min(3).max(254),
-});
-
-export const otpVerifySchema = z.object({
-  channel: z.enum(["sms", "email"]),
-  to: z.string().trim().min(3).max(254),
-  code: otpSchema,
 });
 
 export const subscribeSchema = z.object({

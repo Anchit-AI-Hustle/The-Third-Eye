@@ -1,4 +1,4 @@
-// web/app/(app)/studio/page.tsx — Creator Studio. Loads the user's studio data (RLS-scoped)
+// web/app/(app)/studio/page.tsx — Creator Studio. Loads the user's studio data (scoped to them)
 // on the server and hands it to the client module UI. Mutations go through /api/kolab-studio/studio/*.
 import { Eyebrow } from "@/components/kolab-studio/ui";
 import { GateBanner } from "@/components/kolab-studio/GateBanner";
@@ -11,7 +11,7 @@ export default async function StudioPage() {
   const ctx = await getEntitlementContext();
   const unlocked = canUseFeatures(ctx);
 
-  // Only load data once the gate is open (RLS would return the user's rows regardless, but
+  // Only load data once the gate is open (the reads would return the user's rows regardless, but
   // there's nothing to show a locked user).
   const [pillars, plan, deals, schedule, channels] = unlocked
     ? await Promise.all([getPillars(), getPlan(), getDeals(), getSchedule(), getChannels()])

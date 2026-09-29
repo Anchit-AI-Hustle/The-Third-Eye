@@ -28,7 +28,7 @@ export interface ConsumeResult {
 
 // Atomically increment a daily counter and decide whether the action is allowed.
 // When billing is unconfigured we allow everything (unlimited-free) so the live
-// app is never blocked before the operator wires Supabase + Stripe.
+// app is never blocked before the operator wires the database + Stripe.
 export async function consume(
   email: string | undefined,
   metric: keyof Pick<TierLimits, "chatPerDay" | "webSearchPerDay">,

@@ -1,7 +1,7 @@
 // web/lib/audit.ts
 // Append-only audit trail writer (SECURITY.md §6, §10). Records security-relevant events;
 // NEVER logs secrets or PII in `meta` — only ids, action names, and safe flags.
-import { supabaseAdmin } from "./supabaseServer";
+import { kolabDb } from "./db";
 
 export interface AuditEvent {
   actorId: string | null;
@@ -15,8 +15,7 @@ export interface AuditEvent {
 
 export async function audit(ev: AuditEvent): Promise<void> {
   try {
-    const admin = supabaseAdmin();
-    await admin.from("audit_log").insert({
+    const { error } = await kolabDb().from("audit_log").insert({
       actor_id: ev.actorId,
       action: ev.action,
       entity: ev.entity ?? null,
@@ -25,6 +24,7 @@ export async function audit(ev: AuditEvent): Promise<void> {
       ua: ev.ua ?? null,
       meta: ev.meta ?? {},
     });
+    if (error) throw error;
   } catch {
     // Auditing must never break the request path; surface via server logs only.
     // (In production, forward to a durable log pipeline here.)

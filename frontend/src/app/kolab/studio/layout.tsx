@@ -29,11 +29,11 @@ const kolabMono = JetBrains_Mono({
 
 export const metadata = { title: "Kolab Studio — The Third Eye" };
 
-// Outer gate: the app's own NextAuth session (matches every other protected route — see
-// middleware.ts matcher). Kolab Studio then runs its OWN session/org resolution on top of
-// this, in `(app)/layout.tsx`, `auth/layout.tsx` and `onboarding/layout.tsx` — it has a
-// dedicated Supabase project and Aadhaar-KYC/subscription entitlement model (CLAUDE.md
-// guardrail #4 in the Kolab repo) that must not be conflated with this app's own auth.
+// The gate: the app's own NextAuth session (matches every other protected route — see
+// middleware.ts matcher). Kolab Studio has no sign-in of its own; `(app)/layout.tsx` and
+// `onboarding/page.tsx` resolve the user's orgs on top of this session. Its Aadhaar-KYC /
+// subscription entitlement model (CLAUDE.md guardrail #4 in the Kolab repo) is its own and
+// must not be conflated with this app's billing.
 export default async function KolabStudioLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/auth/signin");
