@@ -5,6 +5,7 @@ import { ExternalLink, Plus, Trash2, CalendarClock, MapPin, Wifi, Bell } from "l
 import { EVENT_PLATFORMS, ACTIVITY_LABELS, describeSchedule, type ActivityType, type EventFormat, type Frequency, type SubscribedEvent } from "@/lib/health/events";
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
 import { recordSignal } from "@/lib/personalization";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 const APP = "health-events";
 const ACTIVITIES: (ActivityType | "all")[] = ["all", "yoga", "running", "gym", "cycling", "badminton", "pickleball", "football", "cricket", "swimming", "meditation"];
@@ -108,7 +109,14 @@ function AddEvent({ onAdd, onCancel }: { onAdd: (e: SubscribedEvent) => void; on
   return (
     <div className="rounded-card border border-border-default bg-background-surface/40 p-4 space-y-2.5 mb-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event name (e.g. Morning yoga)" className={inp} />
+        <div>
+          <label className="flex items-center text-[11px] text-text-secondary mb-1">Event name
+            <AiFieldBar tool={{ label: "Health events", purpose: "a recurring fitness or wellness event to schedule" }}
+              field={{ name: "title", label: "Event name", type: "text", placeholder: "e.g. Morning yoga" }} value={title}
+              context={{ Activity: ACTIVITY_LABELS[activity], Format: fmt === "online" ? "Online" : "In-person", Frequency: frequency }} onChange={setTitle} />
+          </label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event name (e.g. Morning yoga)" className={inp} />
+        </div>
         <select value={activity} onChange={(e) => setActivity(e.target.value as ActivityType)} className={inp}>{Object.entries(ACTIVITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         <select value={fmt} onChange={(e) => setFmt(e.target.value as EventFormat)} className={inp}><option value="in_person">In-person</option><option value="online">Online</option></select>
         <select value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)} className={inp}><option value="once">One-time</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select>

@@ -8,6 +8,7 @@ import { computeTargets } from "@/lib/health/calc";
 import type { ActivityLevel, Focus, Goal, HealthInput, Pace, Sex } from "@/lib/health/types";
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
 import { recordSignal, personalizationContext, topValue } from "@/lib/personalization";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 const APP = "health";
 
@@ -43,6 +44,19 @@ export function HealthEngine() {
   }, []);
 
   const set = (k: keyof HealthInput) => (v: any) => setF((p) => ({ ...p, [k]: v }));
+  // AI help for the preference fields only. Body measurements, allergies,
+  // injuries and conditions are facts about the user, not choices to suggest —
+  // and they are not sent along as context either.
+  const aiBar = (k: "dietaryPreference" | "cuisine" | "equipment", label: string, placeholder: string) => (
+    <AiFieldBar
+      tool={{ label: "Health Engine", purpose: "a personal nutrition and exercise plan" }}
+      field={{ name: k, label, type: "text", placeholder }}
+      value={f[k] ?? ""}
+      context={Object.fromEntries(Object.entries({ Goal: f.goal, Focus: f.focus, "Activity level": f.activity, Experience: f.experience, "Dietary preference": f.dietaryPreference, Cuisine: f.cuisine, Equipment: f.equipment })
+        .filter(([key, v]) => key !== label && v).map(([key, v]) => [key, String(v)]))}
+      onChange={set(k)}
+    />
+  );
   const targets = useMemo(() => {
     try { return computeTargets(f); } catch { return null; }
   }, [f]);
@@ -102,10 +116,10 @@ export function HealthEngine() {
                 {f.goal !== "maintain" && <Field label="Pace"><select value={f.pace} onChange={(e) => set("pace")(e.target.value as Pace)} className={inp}><option value="relaxed">Relaxed</option><option value="steady">Steady</option><option value="aggressive">Aggressive</option></select></Field>}
               </div>
               {(f.focus === "nutrition" || f.focus === "both") && <>
-                <Field label="Dietary preference"><input value={f.dietaryPreference ?? ""} onChange={(e) => set("dietaryPreference")(e.target.value)} placeholder="veg, vegan, keto, jain, halal…" className={inp} /></Field>
+                <Field label="Dietary preference" ai={aiBar("dietaryPreference", "Dietary preference", "veg, vegan, keto, jain, halal…")}><input value={f.dietaryPreference ?? ""} onChange={(e) => set("dietaryPreference")(e.target.value)} placeholder="veg, vegan, keto, jain, halal…" className={inp} /></Field>
                 <Field label="Allergies (comma-sep)"><input value={(f.allergies || []).join(", ")} onChange={(e) => set("allergies")(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))} className={inp} /></Field>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Cuisine"><input value={f.cuisine ?? ""} onChange={(e) => set("cuisine")(e.target.value)} placeholder="e.g. North Indian" className={inp} /></Field>
+                  <Field label="Cuisine" ai={aiBar("cuisine", "Cuisine", "e.g. North Indian")}><input value={f.cuisine ?? ""} onChange={(e) => set("cuisine")(e.target.value)} placeholder="e.g. North Indian" className={inp} /></Field>
                   <Field label="Meals/day"><input type="number" value={f.mealsPerDay ?? ""} onChange={(e) => set("mealsPerDay")(e.target.value ? Number(e.target.value) : undefined)} className={inp} /></Field>
                 </div>
               </>}
@@ -116,7 +130,7 @@ export function HealthEngine() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="Experience"><select value={f.experience ?? ""} onChange={(e) => set("experience")((e.target.value || undefined) as any)} className={inp}><option value="">—</option><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></Field>
-                  <Field label="Equipment"><input value={f.equipment ?? ""} onChange={(e) => set("equipment")(e.target.value)} placeholder="home / gym / bodyweight" className={inp} /></Field>
+                  <Field label="Equipment" ai={aiBar("equipment", "Equipment", "home / gym / bodyweight")}><input value={f.equipment ?? ""} onChange={(e) => set("equipment")(e.target.value)} placeholder="home / gym / bodyweight" className={inp} /></Field>
                 </div>
                 <Field label="Injuries / cautions"><input value={f.injuries ?? ""} onChange={(e) => set("injuries")(e.target.value)} className={inp} /></Field>
               </>}
@@ -174,8 +188,8 @@ export function HealthEngine() {
 function Pill({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} className={`px-2.5 py-2 rounded-input border text-xs font-medium transition-colors ${on ? "border-[#34D399] text-[#34D399] bg-[#34D399]/10" : "border-border-default text-text-muted hover:text-text-secondary"}`}>{children}</button>;
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><label className="block text-[11px] text-text-secondary mb-1">{label}</label>{children}</div>;
+function Field({ label, ai, children }: { label: string; ai?: React.ReactNode; children: React.ReactNode }) {
+  return <div><label className="flex flex-wrap items-center text-[11px] text-text-secondary mb-1">{label}{ai}</label>{children}</div>;
 }
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return <div><div className="text-lg font-bold" style={{ color: color || "var(--text-primary)" }}>{value}</div><div className="text-[10px] font-mono text-text-muted uppercase">{label}</div>{sub && <div className="text-[10px] text-text-muted">{sub}</div>}</div>;

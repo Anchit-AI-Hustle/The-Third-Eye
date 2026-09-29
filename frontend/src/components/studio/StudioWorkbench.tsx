@@ -10,6 +10,7 @@ import { useModeTags } from "@/hooks/useModeTags";
 import { dataInsert } from "@/lib/dataClient";
 import { recordGeneration, fieldsFrom } from "@/lib/generations";
 import { VideoScenes } from "@/components/studio/VideoScenes";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const { modeId } = useMode();
@@ -26,6 +27,9 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const [view, setView] = useState<"preview" | "code">("preview");
 
   const set = (name: string) => (v: string) => setInputs((p) => ({ ...p, [name]: v }));
+  // What the rest of the form says, for a field's AI suggestion to fit.
+  const contextFor = (name: string) =>
+    Object.fromEntries(tool.fields.filter((x) => x.name !== name && inputs[x.name]?.trim()).map((x) => [x.label, inputs[x.name]]));
 
   async function generate() {
     setLoading(true); setError(null); setSaved(false);
@@ -86,8 +90,10 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-4 self-start">
         {tool.fields.map((f) => (
           <div key={f.name}>
-            <label className="block text-xs font-mono text-text-secondary mb-1.5">
+            <label className="flex flex-wrap items-center text-xs font-mono text-text-secondary mb-1.5">
               {f.label}{f.required && <span className="text-accent-red"> *</span>}
+              <AiFieldBar tool={{ label: tool.label, purpose: tool.blurb }} field={f} value={inputs[f.name] ?? ""}
+                context={contextFor(f.name)} onChange={set(f.name)} clearTo={f.type === "select" ? f.options?.[0] ?? "" : ""} />
             </label>
             {f.type === "textarea" ? (
               <textarea value={inputs[f.name]} onChange={(e) => set(f.name)(e.target.value)}

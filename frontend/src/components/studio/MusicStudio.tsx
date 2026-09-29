@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X, CalendarClock } from "lucide-react";
 import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
 import { generateVisualizerVideo } from "@/lib/musicVideo";
@@ -8,6 +8,7 @@ import { recordGeneration } from "@/lib/generations";
 import { structuresFor } from "@/lib/music/structures";
 import { BPM_MAX, BPM_MIN } from "@/lib/music/types";
 import { DailyDrop, DailyTracks } from "./DailyDrop";
+import { IconBtn } from "./AiFieldBar";
 
 interface SavedTrack {
   id: string; title?: string; description?: string; prompt?: string; lyrics?: string;
@@ -227,25 +228,6 @@ function TagPicker({ values, onChange, options, placeholder, max = 6 }: {
         </div>
       )}
     </div>
-  );
-}
-
-// An icon button with a fast CSS hover label, rather than the browser's own
-// `title` tooltip — used for the per-field AI toolbar, where four
-// similar-looking icons in a row need to be told apart at a glance.
-function IconBtn({ label, onClick, disabled, danger, children }: {
-  label: string; onClick: () => void; disabled?: boolean; danger?: boolean; children: ReactNode;
-}) {
-  return (
-    <span className="relative inline-flex group/icon">
-      <button type="button" onClick={onClick} disabled={disabled}
-        className={`p-1 rounded transition-colors disabled:opacity-40 ${danger ? "text-text-muted hover:text-accent-red" : "text-text-muted hover:text-[#34D399]"}`}>
-        {children}
-      </button>
-      <span className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded border border-border-default bg-background-base px-1.5 py-0.5 text-[10px] font-mono text-text-secondary opacity-0 shadow-lg transition-opacity group-hover/icon:opacity-100">
-        {label}
-      </span>
-    </span>
   );
 }
 
