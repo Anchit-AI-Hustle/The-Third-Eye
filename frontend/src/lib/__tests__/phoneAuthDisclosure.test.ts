@@ -165,8 +165,25 @@ describe("the rate limit in front of the path", () => {
     // Otherwise the hop nearest our edge — the entries a client sent itself come
     // first, so reading the left-hand one gave a fresh window per request.
     expect(clientIp(new Headers({ "x-forwarded-for": "1.1.1.1, 203.0.113.9" }))).toBe("203.0.113.9");
-    expect(clientIp(new Headers({}))).toBe("unknown");
-    expect(clientIp(undefined)).toBe("unknown");
+    // NULL, not a placeholder. "unknown" is a perfectly good bucket key, so on a
+    // deployment whose proxy sets neither header every caller shared one window and
+    // the sixtieth request in ten minutes locked everybody out.
+    expect(clientIp(new Headers({}))).toBeNull();
+    expect(clientIp(undefined)).toBeNull();
+  });
+
+  it("applies no caller window at all when there is no address, rather than one shared bucket", async () => {
+    const buckets: string[] = [];
+    rpc.mockImplementation((fn: string, args: Record<string, unknown>) => {
+      if (fn !== "auth_rate_limit_hit") {
+        return Promise.resolve({ data: [{ allowed: true, tries: 1, locked_until: null }], error: null });
+      }
+      buckets.push(String(args.p_bucket));
+      return Promise.resolve({ data: 1, error: null });
+    });
+    const { clientIp, enter } = await import("@/lib/phoneAuth");
+    await enter({ phone: PHONE, pin: PIN, ip: clientIp(new Headers({})) });
+    expect(buckets).toEqual(["phone_number"]);
   });
 });
 
@@ -273,6 +290,38 @@ describe("spending a try", () => {
     expect(res.ok).toBe(false);
     // Retried once for a transient blip before giving up.
     expect(attempts).toBe(2);
+  });
+
+  it("reports the lock, not '0 tries left', when the last allowed attempt is wrong", async () => {
+    // The fifth failure now persists the lock in the same statement that allows
+    // the attempt, dated from the guessing rather than from whoever tries next.
+    const until = new Date(Date.now() + 9e5).toISOString();
+    rpc.mockImplementation((fn: string) =>
+      fn === "auth_rate_limit_hit"
+        ? Promise.resolve({ data: 1, error: null })
+        : Promise.resolve({ data: [{ allowed: true, tries: 5, locked_until: until }], error: null }),
+    );
+    const { enter } = await import("@/lib/phoneAuth");
+    const res = await enter({ phone: PHONE, pin: "8306", ip: "203.0.113.9" });
+    expect(res).toMatchObject({ ok: false, reason: "locked" });
+    expect((res as { error: string }).error).toMatch(/minutes/);
+  });
+
+  it("still lets the last allowed attempt succeed if that PIN is the right one", async () => {
+    // Allowed-and-locked must not mean refused: the fifth PIN may be correct, and
+    // phone_pin_ok is what clears the lock it arrived with.
+    const until = new Date(Date.now() + 9e5).toISOString();
+    rpc.mockImplementation((fn: string) =>
+      fn === "auth_rate_limit_hit"
+        ? Promise.resolve({ data: 1, error: null })
+        : fn === "phone_pin_ok"
+          ? Promise.resolve({ error: null })
+          : Promise.resolve({ data: [{ allowed: true, tries: 5, locked_until: until }], error: null }),
+    );
+    const { enter } = await import("@/lib/phoneAuth");
+    const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
+    expect(res.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("phone_pin_ok", { p_id: expect.any(String) });
   });
 
   it("clears the count, the lock AND the escalation ladder on the right PIN", async () => {

@@ -23,6 +23,10 @@ const TABLES = [
   "saved_jobs", "job_matches", "resume_documents", "cover_letters", "answer_library",
   "applications", "application_answers", "application_events", "agent_runs",
   "job_agent_settings", "job_agent_audit",
+  // jarvis_memory is the assistant's persistent memory (lib/memoryStore.ts),
+  // usage_counters its metering history. Both were missing while Settings promised
+  // to delete "memory and all cloud data".
+  "jarvis_memory", "usage_counters",
   "cortex_memories", "cortex_doc_chunks", "reminders", "push_subscriptions",
   "notification_log", "processed_messages", "chat_watermarks", "activity_log", "device_logs",
   "profiles", "google_tokens",
@@ -65,17 +69,41 @@ export async function POST(_req: NextRequest) {
   const SCHEMA_CODES = new Set(["42P01", "42703", "PGRST204", "PGRST205"]);
   const realFailures: string[] = [];
 
+  // THE FALLBACK USED TO HIDE REAL FAILURES, TWO WAYS.
+  //
+  // It tried `user_id` then `email` and kept only the LAST error, so a genuine
+  // failure on `user_id` was masked by a schema error on `email`, and the route
+  // went on to delete the credential while the rows were still there.
+  //
+  // Worse since this PR added `google_tokens.email` for the connected mailbox: on
+  // that table the fallback now SUCCEEDS, deleting nothing (the column holds a
+  // Google address, not the identity), and reported the table as cleared whatever
+  // the first attempt did.
+  //
+  // So `email` is tried only when `user_id` does not exist on the table, and the
+  // error that decides the outcome is the FIRST one, never the fallback's.
+  const UNDEFINED_COLUMN = "42703";
   for (const table of TABLES) {
-    let ok = false;
-    let lastCode: string | undefined;
-    for (const col of ["user_id", "email"]) {
-      const { error } = await sb.from(table).delete().eq(col, email);
-      if (!error) { ok = true; break; }
-      lastCode = (error as { code?: string }).code;
-      // Column-missing / relation-missing → try the other column / skip table.
+    const first = await sb.from(table).delete().eq("user_id", email);
+    if (!first.error) {
+      deleted.push(table);
+      continue;
     }
-    (ok ? deleted : failed).push(table);
-    if (!ok && !SCHEMA_CODES.has(lastCode ?? "")) realFailures.push(table);
+    const firstCode = (first.error as { code?: string }).code ?? "";
+
+    if (firstCode === UNDEFINED_COLUMN) {
+      const byEmail = await sb.from(table).delete().eq("email", email);
+      if (!byEmail.error) {
+        deleted.push(table);
+        continue;
+      }
+      failed.push(table);
+      if (!SCHEMA_CODES.has((byEmail.error as { code?: string }).code ?? "")) realFailures.push(table);
+      continue;
+    }
+
+    failed.push(table);
+    if (!SCHEMA_CODES.has(firstCode)) realFailures.push(table);
   }
 
   // THE SIGN-IN CREDENTIAL GOES LAST, AND ONLY IF EVERYTHING ELSE WENT.

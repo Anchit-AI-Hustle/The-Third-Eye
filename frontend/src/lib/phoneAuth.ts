@@ -94,8 +94,17 @@ async function withinLimit(
  * entry can be that CDN rather than the visitor. That is why the per-number
  * window in `enter` — which no header can move — is the control this path relies
  * on, and this one is defence in depth.
+ *
+ * RETURNS NULL RATHER THAN A PLACEHOLDER when there is no address to be had. It
+ * used to return "unknown", which is a perfectly good bucket key — so on a
+ * deployment whose proxy sets neither header, every caller in the world shared one
+ * window and the sixtieth request in ten minutes locked everybody out. A limit
+ * keyed on nothing is not a limit on anyone; better to have no caller window and
+ * leave the per-number one, which still applies.
  */
-export function clientIp(headers: Headers | Record<string, string | undefined> | undefined): string {
+export function clientIp(
+  headers: Headers | Record<string, string | undefined> | undefined,
+): string | null {
   const get = (k: string) =>
     headers instanceof Headers ? headers.get(k) : (headers?.[k] ?? headers?.[k.toLowerCase()]);
   const real = String(get("x-real-ip") ?? "").trim();
@@ -104,7 +113,7 @@ export function clientIp(headers: Headers | Record<string, string | undefined> |
     .split(",")
     .map((h) => h.trim())
     .filter(Boolean);
-  return hops[hops.length - 1] ?? "unknown";
+  return hops[hops.length - 1] ?? null;
 }
 
 export async function enter(input: {
@@ -112,8 +121,8 @@ export async function enter(input: {
   cc?: unknown;
   name?: unknown;
   pin?: unknown;
-  /** For the rate limit only — never stored. */
-  ip?: string;
+  /** For the rate limit only — never stored. Null when the platform gave no address. */
+  ip?: string | null;
 }): Promise<EnterResult> {
   const sb = getAdminSupabase();
   if (!sb) {
@@ -225,6 +234,11 @@ export async function enter(input: {
   // A PIN of the wrong shape cannot be right, so it never reaches scrypt — but it
   // has already cost a try, so this is not a way to probe for free.
   if (!PIN_SHAPE.test(pin) || !verifyPin(pin, row.pin_salt, row.pin_hash)) {
+    // The last allowed attempt comes back already locked, dated from the guessing
+    // rather than from whoever tries next. Saying how long beats "0 tries left".
+    if (attempt.lockedUntil) {
+      return { ok: false, reason: "locked", error: lockMessage(attempt.lockedUntil) };
+    }
     const left = Math.max(0, MAX_TRIES - attempt.tries);
     return {
       ok: false,
@@ -266,7 +280,9 @@ export async function enter(input: {
 async function beginAttempt(
   sb: Sb,
   id: string,
-): Promise<{ ok: true; tries: number } | { ok: false; result: EnterResult }> {
+): Promise<
+  { ok: true; tries: number; lockedUntil: string | null } | { ok: false; result: EnterResult }
+> {
   const { data, error } = await sb.rpc("phone_pin_attempt", { p_id: id, p_max: MAX_TRIES });
   const state = (Array.isArray(data) ? data[0] : data) as
     | { allowed: boolean | null; tries: number | null; locked_until: string | null }
@@ -299,7 +315,7 @@ async function beginAttempt(
     };
   }
 
-  return { ok: true, tries: state.tries ?? MAX_TRIES };
+  return { ok: true, tries: state.tries ?? MAX_TRIES, lockedUntil: state.locked_until ?? null };
 }
 
 /** Clear the failure count, lock and escalation ladder. One retry, then give up. */
