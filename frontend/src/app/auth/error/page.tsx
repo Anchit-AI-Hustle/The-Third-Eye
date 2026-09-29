@@ -17,7 +17,7 @@ const ERRORS: Record<string, { title: string; detail: string }> = {
   Configuration: {
     title: "Server isn't configured for sign-in",
     detail:
-      "Sign-in needs NEXTAUTH_SECRET and NEXTAUTH_URL, and a Supabase service-role key to keep accounts in (NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY). Set them in the deployment environment.",
+      "Sign-in needs NEXTAUTH_SECRET and NEXTAUTH_URL, and DATABASE_URL (Neon Postgres) to keep accounts in. Set them in the deployment environment.",
   },
   CredentialsSignin: {
     title: "That number and PIN didn’t match",

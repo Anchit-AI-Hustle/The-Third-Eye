@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return Response.json({ error: "Not authenticated" }, { status: 401 });
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return Response.json({ error: "Storage not configured" }, { status: 501 });
 
   const { data: rows, error } = await sb

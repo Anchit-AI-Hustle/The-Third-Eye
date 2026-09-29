@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { scrapeChatForUser } from "@/lib/ingest";
 import { cronAuthorized, connectedGoogleUsers } from "@/lib/cron";
 
@@ -11,8 +11,8 @@ export const maxDuration = 60;
 // only runs for users who granted the Chat scopes via /api/connect/google.
 export async function GET(req: NextRequest) {
   if (!cronAuthorized(req)) return new Response("Unauthorized", { status: 401 });
-  const sb = getAdminSupabase();
-  if (!sb) return Response.json({ error: "Supabase not configured" }, { status: 501 });
+  const sb = getDb();
+  if (!sb) return Response.json({ error: "Database not configured" }, { status: 501 });
 
   const users = await connectedGoogleUsers(sb);
   const summary: Record<string, unknown> = {};

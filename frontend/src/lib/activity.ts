@@ -1,4 +1,4 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 // Ported from Personal-AI-OS database/db.py log_activity / activities_for_day.
 // A human-readable, day-wise trail of what the assistant did on the user's
@@ -22,7 +22,7 @@ export async function logActivity(
   title: string,
   opts: { detail?: string | null; status?: string; context?: unknown } = {},
 ): Promise<void> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return;
   const now = new Date();
   await sb.from("activity_log").insert({
@@ -38,7 +38,7 @@ export async function logActivity(
 }
 
 export async function activitiesForDay(userId: string, day?: string): Promise<ActivityRow[]> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return [];
   const d = day ?? new Date().toISOString().slice(0, 10);
   const { data } = await sb

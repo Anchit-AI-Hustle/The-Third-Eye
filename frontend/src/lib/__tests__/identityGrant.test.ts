@@ -29,8 +29,8 @@ let row: { scope?: string; updated_at?: string } | null = null;
 
 const upsert = vi.fn().mockResolvedValue({ error: null });
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => ({
+vi.mock("@/lib/db", () => ({
+  getDb: () => ({
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: row }) }) }),
       upsert: (...a: unknown[]) => upsert(...a),

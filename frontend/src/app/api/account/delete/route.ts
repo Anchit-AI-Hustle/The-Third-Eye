@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { revokeGoogleAccess } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 // device vault) and signs out. Auth is via the NextAuth session — a user can
 // only ever delete their own data (all rows are keyed by user_id = email).
 //
-// If Supabase isn't configured, there's no server-side data to remove — the
+// If the database isn't configured, there's no server-side data to remove — the
 // client still wipes local data and signs out, so the account is gone locally.
 
 // Every user-owned table. We attempt user_id first, then email, so tables that
@@ -48,7 +48,7 @@ export async function POST(_req: NextRequest) {
   const email = session?.user?.email;
   if (!email) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) {
     // Nothing stored server-side — the client will still wipe local + sign out.
     return Response.json({ ok: true, remote: false, deleted: [] });

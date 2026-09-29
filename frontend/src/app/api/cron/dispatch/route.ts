@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb, type Db } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { accessTokenFromRefresh, gmailAddressFor, sendGmail } from "@/lib/google";
 import { isEmailIdentity } from "@/lib/serverIdentity";
@@ -14,8 +14,8 @@ export const maxDuration = 60;
 // service-role key / Google client / encryption key are unconfigured.
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return new Response("Unauthorized", { status: 401 });
-  const sb = getAdminSupabase();
-  if (!sb) return json({ error: "Supabase not configured" }, 501);
+  const sb = getDb();
+  if (!sb) return json({ error: "Database not configured" }, 501);
 
   const job = new URL(req.url).searchParams.get("job") ?? "all";
   const out: Record<string, unknown> = {};
@@ -33,7 +33,7 @@ function authorized(req: NextRequest): boolean {
 }
 
 // Cache one access token, and one delivery address, per user across a run.
-type Sb = NonNullable<ReturnType<typeof getAdminSupabase>>;
+type Sb = Db;
 type Mailbox = { token: string | null; to: string | null };
 type Cache = Map<string, Mailbox>;
 

@@ -1,4 +1,4 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb, type Db } from "@/lib/db";
 import { PIN_LEN, normPhone, phoneError, pinError } from "@/lib/phone";
 import { MAX_TRIES, hashPin, lockMessage, verifyPin } from "@/lib/phonePin";
 
@@ -41,7 +41,7 @@ type Row = {
   locked_until: string | null;
 };
 
-type Sb = NonNullable<ReturnType<typeof getAdminSupabase>>;
+type Sb = Db;
 
 const COLUMNS = "id, phone, name, pin_hash, pin_salt, pin_tries, locked_until";
 
@@ -124,7 +124,7 @@ export async function enter(input: {
   /** For the rate limit only — never stored. Null when the platform gave no address. */
   ip?: string | null;
 }): Promise<EnterResult> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) {
     return {
       ok: false,

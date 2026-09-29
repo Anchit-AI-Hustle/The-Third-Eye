@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { summarizeDeviceLogs } from "@/lib/deviceLogs";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ export async function GET() {
   const email = session?.user?.email;
   if (!email) return Response.json({ error: "unauthenticated" }, { status: 401 });
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return Response.json({ pending: 0, lastSummary: null, configured: false });
 
   const [{ count }, { data: last }] = await Promise.all([

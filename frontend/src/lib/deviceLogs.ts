@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { llmCascade } from "@/lib/llmCascade";
 import { parseJsonBlock } from "@/lib/extract";
 import { saveExtractedTasks, type ExtractedTask, type TaskWorkspace } from "@/lib/tasks";
@@ -86,7 +86,7 @@ export interface LogSyncResult {
 }
 
 export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return { processed: 0, updated: 0, inserted: 0, merged: 0, summary: null, skipped: "not configured" };
 
   const { data: logData } = await sb

@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 let configured = false;
 
@@ -17,7 +17,7 @@ function ensureConfigured(): boolean {
 
 export async function sendPush(userId: string, title: string, body: string, url = "/assistant"): Promise<boolean> {
   if (!ensureConfigured()) return false;
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return false;
   const { data } = await sb.from("push_subscriptions").select("*").eq("user_id", userId);
   if (!data?.length) return false;

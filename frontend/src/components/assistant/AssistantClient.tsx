@@ -92,7 +92,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [liveBubble, setLiveBubble] = useState<LiveBubble | null>(null);
   const [micOn, setMicOn] = useState(false);
-  const [serviceStatus, setServiceStatus] = useState<{ ai: boolean; openai: boolean; supabase: boolean; serper: boolean } | null>(null);
+  const [serviceStatus, setServiceStatus] = useState<{ ai: boolean; openai: boolean; database: boolean; serper: boolean } | null>(null);
   const [systemOnline, setSystemOnline] = useState(false);
   const [killed, setKilled] = useState(false);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { listConversations, setIncluded } from "@/lib/conversationSources";
 import { discoverChatSpaces } from "@/lib/ingest";
 import { byId, type ConnectorId } from "@/lib/connectors";
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
   const connector = parseConnector(req.nextUrl.searchParams.get("connector"));
   if (!connector) return json({ error: "Unknown connector" }, 400);
 
-  const sb = getAdminSupabase();
-  if (!sb) return json({ error: "Supabase not configured" }, 501);
+  const sb = getDb();
+  if (!sb) return json({ error: "Database not configured" }, 501);
 
   // Best-effort: a provider hiccup shouldn't blank out the list we already have.
   // Only a boolean crosses the wire — the upstream message can carry request URLs
@@ -69,8 +69,8 @@ export async function PATCH(req: NextRequest) {
   if (!ids.length) return json({ error: "No conversations given" }, 400);
   if (typeof body.included !== "boolean") return json({ error: "`included` must be a boolean" }, 400);
 
-  const sb = getAdminSupabase();
-  if (!sb) return json({ error: "Supabase not configured" }, 501);
+  const sb = getDb();
+  if (!sb) return json({ error: "Database not configured" }, 501);
 
   const { updated } = await setIncluded(sb, email, connector, ids, body.included);
   return json({ updated });

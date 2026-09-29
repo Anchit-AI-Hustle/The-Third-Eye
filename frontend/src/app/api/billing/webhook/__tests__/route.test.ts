@@ -22,9 +22,9 @@ const fakeSupabase = {
   },
 };
 
-let supabaseConfigured = true;
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => (supabaseConfigured ? fakeSupabase : null),
+let dbConfigured = true;
+vi.mock("@/lib/db", () => ({
+  getDb: () => (dbConfigured ? fakeSupabase : null),
 }));
 
 // A real Stripe client — only the customer lookup is stubbed, because that is
@@ -92,7 +92,7 @@ beforeEach(() => {
   vi.resetModules();
   upserts.length = 0;
   upsertThrows = false;
-  supabaseConfigured = true;
+  dbConfigured = true;
   stripeConfigured = true;
   retrieveCustomer.mockReset();
   process.env.STRIPE_WEBHOOK_SECRET = SECRET;
@@ -151,7 +151,7 @@ describe("refusing anything it cannot trust", () => {
   });
 
   it("does not claim success when the database is unreachable", async () => {
-    supabaseConfigured = false;
+    dbConfigured = false;
     const { payload, header } = signed(checkoutEvent());
     const res = await callWebhook(payload, header);
     expect(res.status).toBe(501);

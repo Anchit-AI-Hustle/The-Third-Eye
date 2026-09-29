@@ -6,7 +6,7 @@ let control: { killed: boolean } | null = null;
 let auditRows: Array<Record<string, unknown>> = [];
 const inserted: Array<Record<string, unknown>> = [];
 const upserted: Array<Record<string, unknown>> = [];
-let supabaseConfigured = true;
+let dbConfigured = true;
 let insertThrows = false;
 
 const sb = {
@@ -33,8 +33,8 @@ const sb = {
   },
 };
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => (supabaseConfigured ? sb : null),
+vi.mock("@/lib/db", () => ({
+  getDb: () => (dbConfigured ? sb : null),
 }));
 
 beforeEach(() => {
@@ -42,7 +42,7 @@ beforeEach(() => {
   auditRows = [];
   inserted.length = 0;
   upserted.length = 0;
-  supabaseConfigured = true;
+  dbConfigured = true;
   insertThrows = false;
 });
 
@@ -65,7 +65,7 @@ describe("the kill switch", () => {
     // Failing closed here would mean an outage silently disables the assistant
     // with no way to turn it back on. The switch is a user control, not a
     // security boundary — authorisation is enforced separately.
-    supabaseConfigured = false;
+    dbConfigured = false;
     expect(await isAgentKilled("user@example.com")).toBe(false);
   });
 
@@ -107,7 +107,7 @@ describe("the audit trail", () => {
   });
 
   it("is a no-op rather than an error with no database", async () => {
-    supabaseConfigured = false;
+    dbConfigured = false;
     await expect(logAgentAction("user@example.com", { type: "x", label: "y", outcome: "applied" })).resolves.toBeUndefined();
     expect(inserted).toEqual([]);
   });
@@ -119,7 +119,7 @@ describe("the audit trail", () => {
   });
 
   it("returns nothing rather than throwing when storage is unavailable", async () => {
-    supabaseConfigured = false;
+    dbConfigured = false;
     expect(await recentAgentLog("user@example.com")).toEqual([]);
   });
 });

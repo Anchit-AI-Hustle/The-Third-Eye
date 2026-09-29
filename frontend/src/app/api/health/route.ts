@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest) {
   const services = {
     serper:        !!clean(env.SERPER_API_KEY),
     openweather:   !!clean(env.OPENWEATHER_API_KEY),
-    supabase:      !!(clean(env.NEXT_PUBLIC_SUPABASE_URL) && clean(env.NEXT_PUBLIC_SUPABASE_ANON_KEY)),
+    database:      !!clean(env.DATABASE_URL),
     google_oauth:  !!(clean(env.GOOGLE_CLIENT_ID) && clean(env.GOOGLE_CLIENT_SECRET)),
   };
 

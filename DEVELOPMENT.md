@@ -56,8 +56,8 @@ otherwise undocumented outside this file and the code itself.
   Removing it costs no feature: Gmail/Calendar always ran on the refresh token
   from the separate opt-in "Connect Google" flow (Settings → Connections), never
   on the session's Google token.
-- **Data:** Supabase (Postgres) with **pgvector** for memory/RAG. The browser never
-  talks to Supabase directly (see §4).
+- **Data:** Neon Postgres with **pgvector** for memory/RAG, reached server-side
+  through `lib/db.ts` (`pg`). The browser never talks to the database (see §4).
 - **LLM:** a 7-provider server-side cascade (`lib/llmCascade.ts`) — openai →
   anthropic → gemini → grok → groq → cerebras → ollama — with quota fallback. The
   assistant loop uses Gemini function-calling and falls back to the cascade.
@@ -107,22 +107,33 @@ can merge into one function-calling declaration.
 
 ## 4. Data layer — RLS-safe by construction
 
-The browser has only the public anon key, and there's no NextAuth→Supabase JWT
-bridge, so a direct client would be blocked by RLS. Instead **all reads/writes go
-through one server route**, `app/api/data/[entity]/route.ts`:
+The browser never talks to the database. **All client reads/writes go through one
+server route**, `app/api/data/[entity]/route.ts`:
 
-- Authenticates via the NextAuth session; uses the **service-role** client scoped to
+- Authenticates via the NextAuth session; queries scoped to
   `user_id = <session email>`; scrubs any client-supplied `user_id`.
+- `lib/db.ts` (`getDb()`) is a `pg` pool on `DATABASE_URL` behind the same
+  `from().select().eq()` / `rpc()` builder surface the code was written against
+  (it was supabase-js), returning `{ data, error, count }` with Postgres SQLSTATE
+  codes and never throwing. It connects as the table owner, so RLS policies do
+  not apply to it — every query must filter by `user_id` itself.
 - Entity allowlist: `tasks`, `team_members`, `notes`, `goals`, `knowledge_docs`,
   `expenses`.
 - Client hooks (`useLocalTasks/Notes/Goals/Knowledge/Expenses`) go through
   `lib/dataClient.ts`, which falls back to **localStorage** when not signed in (401)
-  or Supabase is unconfigured (501) — so the app still works offline/unconfigured.
-- **RLS is enforced** via a tracked migration (`supabase/migrations/*_rls_hardening`)
-  with a `WITH CHECK` owner policy per table; token/ingestion tables are
-  service-role-only. A **Cloud synced / Local only** badge
-  (`components/layout/CloudSyncBadge.tsx` + `/api/sync-status`) surfaces which mode
-  you're in so a missing service key isn't a silent data-loss trap.
+  or `DATABASE_URL` is unset (501) — so the app still works offline/unconfigured.
+- **Schema** is applied by `frontend/scripts/migrate.mjs`, the first step of
+  `npm run build`: `supabase/neon-compat.sql` (stand-ins for the Supabase
+  roles/`auth.jwt()` the files reference), then `supabase-schema*.sql`, then
+  `supabase/migrations/*.sql` in order, each once, tracked in
+  `public.app_migrations`. It runs only on production builds (previews share the
+  production database) and is skipped without `DATABASE_URL`. The RLS policies in
+  those files are kept but inert under the owner connection. A **Cloud synced /
+  Local only** badge (`components/layout/CloudSyncBadge.tsx` + `/api/sync-status`)
+  surfaces which mode you're in so a missing `DATABASE_URL` isn't a silent
+  data-loss trap.
+- Integration test: `TEST_DATABASE_URL=postgres://… npm test` runs
+  `lib/__tests__/db.integration.test.ts` against a migrated database.
 
 ### 4a. Moving an existing workspace onto a phone identity
 
@@ -137,7 +148,7 @@ the email identity again either.
 
 There is no automatic link, on purpose: silently merging two identities is a
 worse failure than an obvious empty workspace. Re-key deliberately instead, once,
-with the service role (Supabase SQL editor), **before** putting anything into the
+against the database (Neon SQL editor), **before** putting anything into the
 new account so nothing collides:
 
 ```sql
@@ -170,7 +181,7 @@ since this was written. Two things to know:
 ## 5. Cortex — RAG + memory (pgvector)
 
 `lib/cortex.ts` + `/api/cortex/*`: uploaded docs and past exchanges are embedded into
-Supabase pgvector. The chat route does semantic recall (`retrieveMemories`) and
+Postgres pgvector. The chat route does semantic recall (`retrieveMemories`) and
 document search (`searchChunks`), and persists each exchange (`rememberExchange`,
 best-effort/non-blocking). The Knowledge page does real semantic search with a
 relevance % and falls back to keyword search when embeddings aren't configured.
@@ -249,7 +260,7 @@ the self-built ones so they don't get buried in the third-party directory.
   `tasks` table (`dedupe_hash` + `normalize_heading` + owner match; owner-less tasks
   match on `spoc IS NULL`). The Chat watermark only advances after a message is fully
   processed, so a mid-run failure never skips messages.
-- Requires the "Connect Google" opt-in (Gmail/Chat scopes) + `SUPABASE_SERVICE_ROLE_KEY`
+- Requires the "Connect Google" opt-in (Gmail/Chat scopes) + `DATABASE_URL`
   + `TOKEN_ENCRYPTION_KEY`; the Live Capture page surfaces connection status + a
   Scan-now with a result count so silent no-ops are visible.
 
@@ -285,24 +296,23 @@ the self-built ones so they don't get buried in the third-party directory.
 
 `lib/entitlements.ts` — tiers, `PREMIUM_TOOLS`, per-day limits, `PAYWALL_MESSAGE`.
 Launch mode treats everyone as premium (badged, not gated). Reminders/usage persist
-to Supabase.
+to the database.
 
 ---
 
 ## 13. Build / deploy / CI
 
-- **Build:** `npm run build` (Next.js) in `frontend/`.
+- **Build:** `npm run build` in `frontend/` — `scripts/migrate.mjs`, then `next build`.
 - **Deploy:** Vercel, Root Directory `frontend`, auto-deploy on `main`
   (`vercel.json`). Env: `GEMINI_API_KEY` (+ other provider keys),
   `GOOGLE_CLIENT_ID/SECRET`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`,
-  `NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `DATABASE_URL` + `DATABASE_URL_UNPOOLED` (Neon, from the Vercel integration),
   `TOKEN_ENCRYPTION_KEY`, `SERPER_API_KEY`.
 - **OAuth redirect URIs** to whitelist in Google Console:
   `…/api/auth/callback/google` (sign-in) and `…/api/connect/google/callback`
   (Gmail/Chat connect).
 - **CI:** CodeQL + a Strix security scan (pinned install, not `curl | bash`) on every
-  PR. `.github/workflows/supabase-deploy.yml` runs `supabase db push` on
-  migration changes (needs `SUPABASE_ACCESS_TOKEN` + `SUPABASE_DB_PASSWORD` secrets).
+  PR. Migrations are applied by the production build, not by CI.
 - **Rollback.** No automated rollback pipeline exists — this is the manual procedure:
   - **Bad app deploy (frontend code).** Vercel keeps every deployment. In the
     Vercel dashboard → Deployments, find the last known-good one and use
@@ -314,20 +324,17 @@ to Supabase.
     are forward-only by convention — there are no paired `down` scripts.
     Write and commit a new migration that reverses the specific change (drop
     the column/table/policy just added), rather than editing or deleting the
-    original file; `supabase_migrations.schema_migrations` tracks applied
-    versions by filename, and removing a file that already ran desyncs the
-    ledger from the live database (this exact class of drift is what
-    AUDIT.md F-02 and the `20260822040332_reconcile_duplicate_migration_history.sql`
-    migration had to clean up after). If the change is destructive (dropped
-    a column with data in it), restore from a Supabase point-in-time backup
-    instead — see the project's Database → Backups tab for available restore
-    points — then reapply migrations up to (not including) the bad one.
+    original file; `public.app_migrations` tracks applied files by path, and
+    removing a file that already ran desyncs the ledger from the live
+    database. If the change is destructive (dropped a column with data in
+    it), restore from a Neon point-in-time branch instead, then reapply
+    migrations up to (not including) the bad one.
   - **Bad env var / secret rotation.** Vercel → Settings → Environment
     Variables keeps no built-in history; before changing a production value,
     copy the current one somewhere safe first. A deploy always reads env vars
     at build time, so reverting a value still needs a redeploy (or use
     "Redeploy" on the last-good deployment after fixing the variable).
-  - **Verify after any rollback:** hit `/api/status` (`ai`, `supabase`,
+  - **Verify after any rollback:** hit `/api/status` (`ai`, `database`,
     `google_oauth`, and the per-provider `cascade` booleans should read
     `true` for whatever's configured) and confirm sign-in + one chat message
     round-trip in production before considering the incident closed.

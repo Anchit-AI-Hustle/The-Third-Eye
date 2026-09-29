@@ -1,10 +1,10 @@
 // Cortex — native memory & knowledge engine. Ports the backend's memory/ +
 // knowledge/ RAG into the app: semantic recall over past interactions and
-// document chunks via Supabase pgvector + Gemini embeddings. Every function is
+// document chunks via Postgres pgvector + Gemini embeddings. Every function is
 // degrade-safe: with no service-role key or no embeddings, callers fall back to
 // the app's existing behavior.
 
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { embed, embedBatch, cortexEnabled } from "@/lib/cortex/embed";
 
 export { cortexEnabled };
@@ -13,7 +13,7 @@ export interface MemoryHit { content: string; kind: string; similarity: number }
 export interface ChunkHit { doc_id: string; doc_title: string; chunk_index: number; content: string; similarity: number }
 
 export async function retrieveMemories(email: string, query: string, k = 5): Promise<MemoryHit[]> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !email) return [];
   const vec = await embed(query);
   if (!vec) return [];
@@ -22,7 +22,7 @@ export async function retrieveMemories(email: string, query: string, k = 5): Pro
 }
 
 export async function rememberExchange(email: string, userMsg: string, assistantMsg: string): Promise<void> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !email) return;
   const content = `User: ${userMsg}\nJARVIS: ${assistantMsg}`.slice(0, 4000);
   const vec = await embed(content);
@@ -31,7 +31,7 @@ export async function rememberExchange(email: string, userMsg: string, assistant
 }
 
 export async function searchChunks(email: string, query: string, k = 5): Promise<ChunkHit[]> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !email) return [];
   const vec = await embed(query);
   if (!vec) return [];
@@ -56,7 +56,7 @@ function chunk(text: string): string[] {
 export async function ingestDocument(
   email: string, docId: string, title: string, content: string,
 ): Promise<{ chunks: number }> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !email || !cortexEnabled()) return { chunks: 0 };
   await sb.from("cortex_doc_chunks").delete().eq("user_id", email).eq("doc_id", docId);
   const pieces = chunk(content);
@@ -69,7 +69,7 @@ export async function ingestDocument(
 }
 
 export async function deleteDocument(email: string, docId: string): Promise<void> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !email) return;
   await sb.from("cortex_doc_chunks").delete().eq("user_id", email).eq("doc_id", docId);
 }

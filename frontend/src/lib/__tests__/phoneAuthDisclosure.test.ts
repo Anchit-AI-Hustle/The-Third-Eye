@@ -32,8 +32,8 @@ const chain = (table: string) => ({
   insert: () => ({ select: () => ({ maybeSingle: () => Promise.resolve({ data: row }) }) }),
 });
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => ({ from: (t: string) => chain(t), rpc: (...a: unknown[]) => rpc(...a) }),
+vi.mock("@/lib/db", () => ({
+  getDb: () => ({ from: (t: string) => chain(t), rpc: (...a: unknown[]) => rpc(...a) }),
 }));
 
 const PHONE = "+919876543210";

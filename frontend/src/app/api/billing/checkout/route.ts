@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { getStripe, appUrl, PRICES } from "@/lib/stripe";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { isEmailIdentity } from "@/lib/serverIdentity";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!price) return json({ error: "Price not configured" }, 501);
 
   // Reuse an existing Stripe customer if we've seen this user before.
-  const sb = getAdminSupabase();
+  const sb = getDb();
   let customerId: string | undefined;
   if (sb) {
     const { data } = await sb.from("profiles").select("stripe_customer_id").eq("user_id", email).maybeSingle();

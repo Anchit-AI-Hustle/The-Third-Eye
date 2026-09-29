@@ -5,7 +5,7 @@ import type { ModeId } from "./useMode";
 
 // Mode-scoping as a client-side tag overlay (ported from Mirror, where every
 // knowledge item carried a `mode`). Rather than add a `mode` column to every
-// Supabase table — which would need a migration and could break inserts until
+// database table — which would need a migration and could break inserts until
 // applied — we keep a lightweight itemId → mode map in localStorage. It works
 // identically for local and cloud-backed data, and legacy/untagged items are
 // treated as belonging to ALL modes, so nothing ever disappears from a view.

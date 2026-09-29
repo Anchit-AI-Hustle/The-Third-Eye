@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-const getAdminSupabase = vi.fn();
-vi.mock("@/lib/serverSupabase", () => ({ getAdminSupabase: () => getAdminSupabase() }));
+const getDb = vi.fn();
+vi.mock("@/lib/db", () => ({ getDb: () => getDb() }));
 
 import { getTier, consume } from "../usage";
 
@@ -26,7 +26,7 @@ function fakeSupabase(opts: {
 }
 
 beforeEach(() => {
-  getAdminSupabase.mockReset();
+  getDb.mockReset();
   process.env.ENFORCE_PREMIUM = "1";
 });
 
@@ -37,22 +37,22 @@ afterEach(() => {
 
 describe("getTier", () => {
   it("is free without an email", async () => {
-    getAdminSupabase.mockReturnValue(fakeSupabase({}));
+    getDb.mockReturnValue(fakeSupabase({}));
     expect(await getTier(undefined)).toBe("free");
   });
 
   it("is free when Supabase is unconfigured", async () => {
-    getAdminSupabase.mockReturnValue(null);
+    getDb.mockReturnValue(null);
     expect(await getTier("a@b.com")).toBe("free");
   });
 
   it("is free when the user has no profile row", async () => {
-    getAdminSupabase.mockReturnValue(fakeSupabase({ profile: null }));
+    getDb.mockReturnValue(fakeSupabase({ profile: null }));
     expect(await getTier("a@b.com")).toBe("free");
   });
 
   it("is premium only when the tier is premium AND the status is active", async () => {
-    getAdminSupabase.mockReturnValue(
+    getDb.mockReturnValue(
       fakeSupabase({ profile: { subscription_tier: "premium", subscription_status: "active" } }),
     );
     expect(await getTier("a@b.com")).toBe("premium");
@@ -60,7 +60,7 @@ describe("getTier", () => {
 
   it("is free for a premium tier whose subscription lapsed", async () => {
     for (const status of ["canceled", "past_due", "unpaid", "incomplete", "paused"]) {
-      getAdminSupabase.mockReturnValue(
+      getDb.mockReturnValue(
         fakeSupabase({ profile: { subscription_tier: "premium", subscription_status: status } }),
       );
       expect(await getTier("a@b.com")).toBe("free");
@@ -68,14 +68,14 @@ describe("getTier", () => {
   });
 
   it("is free for an active subscription that is not the premium tier", async () => {
-    getAdminSupabase.mockReturnValue(
+    getDb.mockReturnValue(
       fakeSupabase({ profile: { subscription_tier: "free", subscription_status: "active" } }),
     );
     expect(await getTier("a@b.com")).toBe("free");
   });
 
   it("fails closed on an unrecognised tier value", async () => {
-    getAdminSupabase.mockReturnValue(
+    getDb.mockReturnValue(
       fakeSupabase({ profile: { subscription_tier: "enterprise", subscription_status: "active" } }),
     );
     expect(await getTier("a@b.com")).toBe("free");
@@ -85,25 +85,25 @@ describe("getTier", () => {
 describe("consume", () => {
   it("allows everything when enforcement is off, regardless of usage", async () => {
     process.env.ENFORCE_PREMIUM = "0";
-    getAdminSupabase.mockReturnValue(fakeSupabase({ rpcValue: 9999 }));
+    getDb.mockReturnValue(fakeSupabase({ rpcValue: 9999 }));
     const res = await consume("a@b.com", "chatPerDay");
     expect(res.allowed).toBe(true);
   });
 
   it("allows everything when Supabase is unconfigured", async () => {
-    getAdminSupabase.mockReturnValue(null);
+    getDb.mockReturnValue(null);
     const res = await consume("a@b.com", "chatPerDay");
     expect(res.allowed).toBe(true);
   });
 
   it("allows an anonymous caller through rather than blocking", async () => {
-    getAdminSupabase.mockReturnValue(fakeSupabase({}));
+    getDb.mockReturnValue(fakeSupabase({}));
     const res = await consume(undefined, "chatPerDay");
     expect(res.allowed).toBe(true);
   });
 
   it("skips metering entirely for an unlimited premium user", async () => {
-    getAdminSupabase.mockReturnValue(
+    getDb.mockReturnValue(
       fakeSupabase({
         profile: { subscription_tier: "premium", subscription_status: "active" },
         rpcValue: 100000,
@@ -116,7 +116,7 @@ describe("consume", () => {
 
   it("allows a free user up to and including the limit", async () => {
     const limit = 20; // free chatPerDay
-    getAdminSupabase.mockReturnValue(fakeSupabase({ profile: null, rpcValue: limit }));
+    getDb.mockReturnValue(fakeSupabase({ profile: null, rpcValue: limit }));
     const res = await consume("a@b.com", "chatPerDay");
     expect(res.limit).toBe(limit);
     expect(res.used).toBe(limit);
@@ -124,13 +124,13 @@ describe("consume", () => {
   });
 
   it("blocks a free user one past the limit", async () => {
-    getAdminSupabase.mockReturnValue(fakeSupabase({ profile: null, rpcValue: 21 }));
+    getDb.mockReturnValue(fakeSupabase({ profile: null, rpcValue: 21 }));
     const res = await consume("a@b.com", "chatPerDay");
     expect(res.allowed).toBe(false);
   });
 
   it("fails open when the counter errors — availability over strict metering", async () => {
-    getAdminSupabase.mockReturnValue(
+    getDb.mockReturnValue(
       fakeSupabase({ profile: null, rpcValue: 9999, rpcError: { message: "boom" } }),
     );
     const res = await consume("a@b.com", "chatPerDay");
@@ -138,14 +138,14 @@ describe("consume", () => {
   });
 
   it("meters web search on its own smaller limit", async () => {
-    getAdminSupabase.mockReturnValue(fakeSupabase({ profile: null, rpcValue: 11 }));
+    getDb.mockReturnValue(fakeSupabase({ profile: null, rpcValue: 11 }));
     const res = await consume("a@b.com", "webSearchPerDay");
     expect(res.limit).toBe(10);
     expect(res.allowed).toBe(false);
   });
 
   it("always reports the resolved tier and limits back to the caller", async () => {
-    getAdminSupabase.mockReturnValue(fakeSupabase({ profile: null, rpcValue: 1 }));
+    getDb.mockReturnValue(fakeSupabase({ profile: null, rpcValue: 1 }));
     const res = await consume("a@b.com", "chatPerDay");
     expect(res.tier).toBe("free");
     expect(res.limits.canSendEmail).toBe(false);

@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 **The live product is `frontend/`.** Next.js 14 App Router + TypeScript,
-NextAuth (Google OAuth, JWT sessions), Supabase (Postgres + pgvector) as the
+NextAuth (phone + PIN, JWT sessions), Neon Postgres (+ pgvector, via `lib/db.ts`) as the
 data layer, Tailwind + Radix UI, a 7-provider server-side LLM cascade
 (`lib/llmCascade.ts`), deployed on Vercel with auto-deploy on `main`. Full
 detail, updated as things ship: **[DEVELOPMENT.md](DEVELOPMENT.md) — read
@@ -36,7 +36,7 @@ itself but should not be assumed to describe the live app.
 
 `docker-compose.yml` orchestrates Postgres 16, Redis 7, Nginx, n8n,
 backend, frontend for a hypothetical full local stack — not how the live
-product actually runs (that's Vercel + Supabase, no Docker).
+product actually runs (that's Vercel + Neon, no Docker).
 
 ## Common Commands
 
@@ -68,14 +68,14 @@ alembic revision --autogenerate -m "msg"
   `app/api/chat/route.ts` (the real assistant entrypoint — a Gemini
   function-calling tool loop, ~25 tools, streaming SSE) and
   `app/api/data/[entity]/route.ts` (the one server route all persisted
-  reads/writes go through — service-role Supabase client, identity from
+  reads/writes go through — `lib/db.ts` Postgres client, identity from
   the session, never the request body).
 - `components/` — 27 component directories: UI primitives (Radix +
   Tailwind), feature surfaces (Assistant, Studio incl. Music Studio,
   App Hub, Knowledge, dashboard widgets, capture/vision).
 - `lib/` — `llmCascade.ts` (provider cascade), `cortex.ts` (RAG/memory),
   `mcp/client.ts` (external MCP tool integration), `agentControl.ts`
-  (kill switch + audit log), `dataClient.ts` (Supabase-or-localStorage
+  (kill switch + audit log), `dataClient.ts` (database-or-localStorage
   fallback), `apps/registry.ts` (App Hub entries).
 - **Design tokens: `frontend/DESIGN.md`** is the source of truth for colours, type, spacing, radius, and motion. Follow it for all UI styling. `tailwind.config.ts` and `globals.css :root` define the same 13 colour values — keep them in step when changing either.
 - Full architecture, request flow, and "where to make common changes" table: **[DEVELOPMENT.md](DEVELOPMENT.md)**.

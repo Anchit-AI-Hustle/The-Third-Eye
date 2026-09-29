@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getStripe, appUrl } from "@/lib/stripe";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,7 @@ export async function POST() {
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   const { data } = sb
     ? await sb.from("profiles").select("stripe_customer_id").eq("user_id", email).maybeSingle()
     : { data: null };

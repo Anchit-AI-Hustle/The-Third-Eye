@@ -13,7 +13,7 @@ interface Props {
 interface ServiceStatus {
   ai: boolean;
   openai: boolean;
-  supabase: boolean;
+  database: boolean;
   google_oauth: boolean;
   serper: boolean;
 }
@@ -132,7 +132,7 @@ export function SettingsClient({ user }: Props) {
           <Row label="Session duration" sub="JWT token lifetime">
             <span className="text-xs text-text-muted font-mono">24 hours</span>
           </Row>
-          <Row label="Data storage" sub="Your tasks/notes/goals/expenses sync to your private Supabase when configured; otherwise this device only">
+          <Row label="Data storage" sub="Your tasks/notes/goals/expenses sync to the cloud database when configured; otherwise this device only">
             <span className="text-xs text-text-muted font-mono">Private / per-user</span>
           </Row>
         </div>
@@ -150,7 +150,7 @@ export function SettingsClient({ user }: Props) {
               <StatusRow label="Gemini AI" ok={status?.ai} hint="Required — GEMINI_API_KEY" />
               <StatusRow label="OpenAI (Whisper)" ok={status?.openai} hint="Optional — OPENAI_API_KEY" />
               <StatusRow label="Web Search" ok={status?.serper} hint="Optional — SERPER_API_KEY" />
-              <StatusRow label="Supabase" ok={status?.supabase} hint="Optional — cross-device sync" />
+              <StatusRow label="Database" ok={status?.database} hint="Optional — cross-device sync" />
               <StatusRow label="Google OAuth" ok={status?.google_oauth} hint="Required — sign-in + calendar/email" />
             </>
           )}

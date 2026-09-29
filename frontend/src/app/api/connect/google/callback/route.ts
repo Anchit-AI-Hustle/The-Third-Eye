@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { encrypt } from "@/lib/crypto";
 import { INGESTION_SCOPE_LIST, hasGoogleScope, originFromRequest } from "@/lib/googleToken";
 
@@ -102,7 +102,7 @@ export async function GET(req: Request) {
     return denied;
   }
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (tok.refresh_token && sb) {
     const enc = encrypt(tok.refresh_token);
     if (enc) {

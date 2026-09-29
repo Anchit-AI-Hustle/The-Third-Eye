@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { INGESTION_SCOPE_LIST, googleCapabilities, hasGoogleScope } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
@@ -26,7 +26,7 @@ export async function GET() {
   const email = session?.user?.email;
   if (!email) return Response.json({ connected: false }, { status: 200 });
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return Response.json({ connected: false, configured: false });
 
   const { data } = await sb
