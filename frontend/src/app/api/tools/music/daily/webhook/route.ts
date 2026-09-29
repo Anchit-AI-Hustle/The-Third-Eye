@@ -17,5 +17,8 @@ export async function POST(req: NextRequest) {
   const { data } = await db.from("music_daily_tracks").select("id, user_id, day, title, status, prediction_id, token, created_at").eq("token", token).maybeSingle();
   if (!data) return new Response("Not found", { status: 404 });
   const status = await finalize(db, data as DailyTrack);
-  return Response.json({ status });
+  // Still pending means another finalize holds the track, or the render isn't
+  // done: answer non-2xx so Replicate delivers the webhook again, rather than
+  // acknowledging a track that nothing may ever store.
+  return Response.json({ status }, { status: status === "pending" ? 503 : 200 });
 }

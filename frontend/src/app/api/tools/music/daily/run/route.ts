@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
   }
   const [head, ...rest] = users as string[];
   after(async () => {
-    await startChain(rest);
+    if (rest.length && !(await startChain(rest))) {
+      // The second daily cron (/api/cron/scrape-gmail) re-sweeps everyone still without today's track.
+      console.error(`daily drop: could not hand ${rest.length} user(s) on; the next sweep will retry them`);
+    }
     await runDaily(db, head).catch(() => "failed");
   });
   return new Response(null, { status: 202 });

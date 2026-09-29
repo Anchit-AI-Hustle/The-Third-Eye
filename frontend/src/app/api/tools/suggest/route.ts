@@ -25,6 +25,7 @@ interface Body {
   previous?: unknown;
 }
 
+const VALUE_MAX = 12_000;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 function instruction(type: FieldType, options: string[]): string {
@@ -46,7 +47,13 @@ export async function POST(req: NextRequest) {
   const options = Array.isArray(body.field?.options) ? body.field.options.map((o) => str(o, 120)).filter(Boolean).slice(0, 40) : [];
   if (!label || (type === "select" && !options.length)) return Response.json({ error: "A field label (and options, for a choice) is required" }, { status: 400 });
 
-  const value = str(body.value, 4000);
+  // Enhance replaces the whole field, so it must see the whole field: past the
+  // limit it is refused rather than truncated (which silently dropped the rest).
+  const raw = typeof body.value === "string" ? body.value.trim() : "";
+  if (action === "enhance" && raw.length > VALUE_MAX) {
+    return Response.json({ error: `Too long to enhance in one go (over ${VALUE_MAX.toLocaleString("en-IN")} characters) — enhance a part of it instead.` }, { status: 400 });
+  }
+  const value = raw.slice(0, VALUE_MAX);
   if (action === "enhance" && !value) return Response.json({ error: "Nothing to enhance yet — type something or use Suggest." }, { status: 400 });
 
   const context = body.context && typeof body.context === "object"
@@ -74,7 +81,7 @@ export async function POST(req: NextRequest) {
   try {
     const out = await llmCascade({
       system, messages: [{ role: "user", content: user }],
-      maxTokens: type === "textarea" ? 700 : 120,
+      maxTokens: type === "textarea" ? Math.min(4000, 700 + Math.ceil(value.length / 3)) : 120,
       temperature: action === "enhance" ? 0.5 : action === "new" ? 0.95 : 0.7,
       stage: "studio:suggest",
     });

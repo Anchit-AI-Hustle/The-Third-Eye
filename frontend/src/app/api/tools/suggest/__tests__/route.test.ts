@@ -41,6 +41,18 @@ describe("/api/tools/suggest — the Studio's AI toolbar for any field", () => {
     expect((await suggest({ tool, field, action: "enhance", value: "" })).status).toBe(400);
   });
 
+  it("enhances a long field whole, and refuses one too long to see whole", async () => {
+    // It used to send the first 4,000 characters and replace the whole field with the result.
+    const field = { name: "transcript", label: "Transcript", type: "textarea" };
+    const long = "word ".repeat(1500).trim();
+    reply("enhanced");
+    await suggest({ tool, field, action: "enhance", value: long });
+    expect(cascade.mock.calls[0][0].messages[0].content).toContain(long);
+    const res = await suggest({ tool, field, action: "enhance", value: "x".repeat(12_001) });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/Too long to enhance/);
+  });
+
   it("rejects malformed requests without calling a model", async () => {
     for (const body of [null, {}, { field: { label: "" } }, { field: { label: "Budget", type: "select", options: [] } }]) {
       expect((await suggest(body as never)).status).toBe(400);

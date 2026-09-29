@@ -147,6 +147,33 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     await db.from("music_daily").delete().eq("user_id", V);
   });
 
+  it("asks Replicate to redeliver a webhook that met a live claim", async () => {
+    // Acknowledging it with 200 left the track to a page load that may never come.
+    await db.from("music_daily_tracks").update({ status: "pending", claimed_at: new Date().toISOString() }).eq("user_id", U);
+    const { data: row } = await db.from("music_daily_tracks").select("token").eq("user_id", U).single();
+    getPrediction.mockResolvedValue({ id: "pred123", status: "succeeded", output: "https://replicate.delivery/x/out.mp3", error: null });
+    const { POST } = await import("@/app/api/tools/music/daily/webhook/route");
+    const res = await POST(new Request(`https://x/api?token=${row.token}`, { method: "POST" }) as never);
+    expect(res.status).toBe(503);
+    await db.from("music_daily_tracks").update({ status: "done", claimed_at: null }).eq("user_id", U);
+  });
+
+  it("retries a failed hand-off instead of dropping the rest of the chain", async () => {
+    const statuses = [503, 0, 202];
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      const s = statuses.shift();
+      if (!s) throw new Error("network");
+      return new Response(null, { status: s });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { startChain } = await import("@/lib/music/daily");
+    expect(await startChain(["a", "b"], [1, 1])).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+    expect(await startChain(["a"], [1, 1])).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
   it("lists the user's tracks without the webhook token", async () => {
     const { GET } = await import("@/app/api/tools/music/daily/route");
     const d = await (await GET()).json();

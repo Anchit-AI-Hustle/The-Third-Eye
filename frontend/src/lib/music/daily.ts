@@ -16,7 +16,9 @@ import { SONG_CLIP_MAX, SONG_MODEL } from "./models";
 import type { MusicInput } from "./types";
 
 export const CHUNK = 1024 * 1024;
-const CLAIM_LEASE_MS = 5 * 60_000;
+// Just past a function's 60s lifetime: a holder can't still be working after
+// this, so a claim this old belongs to an invocation that died.
+const CLAIM_LEASE_MS = 70_000;
 const CHAINS = 5;
 /** The most user ids one chain link accepts. */
 export const CHAIN_MAX = 1000;
@@ -196,21 +198,29 @@ export async function dispatchDaily(db: Db): Promise<{ users: number; chains: nu
   const have = new Set(((done as { user_id: string }[] | null) ?? []).map((r) => r.user_id));
   const users = ((enabled as { user_id: string }[] | null) ?? []).map((r) => r.user_id).filter((u) => !have.has(u));
   const chains = splitChains(users);
-  const ok = await Promise.all(chains.map(startChain));
+  const ok = await Promise.all(chains.map((c) => startChain(c)));
   // Reported, not swallowed: a chain that didn't start is users without today's track.
   const unstarted = chains.filter((_, i) => !ok[i]).reduce((n, c) => n + c.length, 0);
   return { users: users.length, chains: chains.length, started: ok.filter(Boolean).length, unstarted };
 }
 
-/** Hand a list of users to the next chain link. Resolves once that link has accepted it. */
-export async function startChain(users: string[]): Promise<boolean> {
+/**
+ * Hand a list of users to the next chain link, retrying a failed hand-off —
+ * a dropped hand-off would leave everyone in `users` without today's track.
+ * Resolves once a link has accepted the list, or false after the last try.
+ */
+export async function startChain(users: string[], waits: number[] = [1_000, 3_000]): Promise<boolean> {
   const base = baseUrl();
   const secret = process.env.CRON_SECRET;
   if (!users.length || !base || !secret) return false;
-  const res = await fetch(`${base}/api/tools/music/daily/run`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ users }),
-  }).catch(() => null);
-  return res?.status === 202;
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${base}/api/tools/music/daily/run`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ users }),
+    }).catch(() => null);
+    if (res?.status === 202) return true;
+    if (attempt >= waits.length) return false;
+    await new Promise((r) => setTimeout(r, waits[attempt]));
+  }
 }
