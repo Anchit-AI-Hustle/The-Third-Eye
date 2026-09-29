@@ -47,11 +47,12 @@ export async function POST(req: NextRequest) {
   const options = Array.isArray(body.field?.options) ? body.field.options.map((o) => str(o, 120)).filter(Boolean).slice(0, 40) : [];
   if (!label || (type === "select" && !options.length)) return Response.json({ error: "A field label (and options, for a choice) is required" }, { status: 400 });
 
-  // Enhance replaces the whole field, so it must see the whole field: past the
-  // limit it is refused rather than truncated (which silently dropped the rest).
+  // Enhance and Suggest rewrite the value, and the result replaces the whole
+  // field, so they must see all of it: past the limit they are refused rather
+  // than truncated (which silently dropped the rest). New only needs a gist.
   const raw = typeof body.value === "string" ? body.value.trim() : "";
-  if (action === "enhance" && raw.length > VALUE_MAX) {
-    return Response.json({ error: `Too long to enhance in one go (over ${VALUE_MAX.toLocaleString("en-IN")} characters) — enhance a part of it instead.` }, { status: 400 });
+  if (action !== "new" && raw.length > VALUE_MAX) {
+    return Response.json({ error: `Too long to ${action} in one go (over ${VALUE_MAX.toLocaleString("en-IN")} characters) — work on a part of it instead.` }, { status: 400 });
   }
   const value = raw.slice(0, VALUE_MAX);
   if (action === "enhance" && !value) return Response.json({ error: "Nothing to enhance yet — type something or use Suggest." }, { status: 400 });

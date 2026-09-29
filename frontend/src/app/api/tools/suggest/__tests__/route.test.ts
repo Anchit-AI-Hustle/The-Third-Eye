@@ -51,6 +51,11 @@ describe("/api/tools/suggest — the Studio's AI toolbar for any field", () => {
     const res = await suggest({ tool, field, action: "enhance", value: "x".repeat(12_001) });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/Too long to enhance/);
+    const sug = await suggest({ tool, field, action: "suggest", value: "x".repeat(12_001) });
+    expect(sug.status).toBe(400);
+    expect(cascade).toHaveBeenCalledTimes(1);
+    reply("fresh");
+    expect((await suggest({ tool, field, action: "new", value: "x".repeat(12_001) })).status).toBe(200);
   });
 
   it("rejects malformed requests without calling a model", async () => {
