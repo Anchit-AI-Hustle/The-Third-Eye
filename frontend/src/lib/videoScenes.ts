@@ -73,13 +73,40 @@ function parseScenes(text: string): Scene[] {
   return scenes;
 }
 
-export async function planScenes(script: string): Promise<{ scenes: Scene[]; provider: string }> {
+/**
+ * Fit a shot list to an exact running time — a reel is 15, 30, 45 or 60 seconds.
+ * Each shot stays within what the model renders (4-8 s); shots past what the
+ * time can hold are dropped from the end, and each voice-over is re-cut to its
+ * shot's new length.
+ */
+export function fitScenes(scenes: Scene[], target: number): Scene[] {
+  const kept = scenes.slice(0, Math.max(1, Math.floor(target / 4)));
+  const sum = kept.reduce((t, s) => t + s.seconds, 0);
+  const secs = kept.map((s) => Math.min(8, Math.max(4, Math.round((s.seconds * target) / sum))));
+  let diff = target - secs.reduce((t, x) => t + x, 0);
+  for (let pass = 0; diff !== 0 && pass < 8; pass++) {
+    for (let i = 0; i < secs.length && diff !== 0; i++) {
+      if (diff > 0 && secs[i] < 8) { secs[i]++; diff--; }
+      else if (diff < 0 && secs[i] > 4) { secs[i]--; diff++; }
+    }
+  }
+  return kept.map((s, i) => ({
+    ...s,
+    seconds: secs[i],
+    narration: s.narration.split(/\s+/).filter(Boolean).slice(0, narrationBudget(secs[i])).join(" "),
+  }));
+}
+
+export async function planScenes(script: string, seconds?: number): Promise<{ scenes: Scene[]; provider: string }> {
   const out = await llmCascade({
-    system: SYSTEM,
+    system: seconds
+      ? `${SYSTEM}\n\nThis is a ${seconds}-second reel: the shots' "seconds" must add up to exactly ${seconds}, so use ${Math.ceil(seconds / 8)}-${Math.floor(seconds / 4)} shots, framed vertically (9:16).`
+      : SYSTEM,
     messages: [{ role: "user", content: script.slice(0, 12000) }],
     maxTokens: 2000,
     temperature: 0.6,
     stage: "video:scenes",
   });
-  return { scenes: parseScenes(out.text), provider: out.provider };
+  const scenes = parseScenes(out.text);
+  return { scenes: seconds ? fitScenes(scenes, seconds) : scenes, provider: out.provider };
 }
