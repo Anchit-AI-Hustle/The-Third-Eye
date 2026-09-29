@@ -130,6 +130,23 @@ describe.skipIf(!url)("daily drop on Postgres", () => {
     expect(createPrediction).toHaveBeenCalledTimes(1);
   });
 
+  it("hands the chain on before rendering, so a hung render strands no one", async () => {
+    const V = `${U}-hang`;
+    await db.from("music_daily").upsert({ user_id: V, enabled: true, preset: { description: "acid rave" }, refs: "" }, { onConflict: "user_id" });
+    const { planSong } = await import("@/lib/music/agents");
+    vi.mocked(planSong).mockImplementationOnce(() => new Promise(() => {}));
+    const calls: string[][] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (_u: string, init: RequestInit) => {
+      calls.push(JSON.parse(String(init.body)).users);
+      return new Response(null, { status: 202 });
+    }));
+    const { POST } = await import("@/app/api/tools/music/daily/run/route");
+    await POST(new Request("https://x", { method: "POST", headers: { authorization: "Bearer s3cret" }, body: JSON.stringify({ users: [V, "after-hang"] }) }) as never);
+    await vi.waitFor(() => expect(calls).toEqual([["after-hang"]]));
+    vi.unstubAllGlobals();
+    await db.from("music_daily").delete().eq("user_id", V);
+  });
+
   it("lists the user's tracks without the webhook token", async () => {
     const { GET } = await import("@/app/api/tools/music/daily/route");
     const d = await (await GET()).json();

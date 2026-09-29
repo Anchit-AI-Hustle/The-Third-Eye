@@ -5,8 +5,10 @@ import { runDaily, startChain } from "@/lib/music/daily";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// One link of a daily-drop chain (see dispatchDaily): accept the list, make the
-// first user's track after responding, then pass the rest to the next link.
+// One link of a daily-drop chain (see dispatchDaily): accept the list, hand the
+// rest to the next link, then make the first user's track. The hand-off comes
+// first so a render that hangs or outlives this invocation can't strand the
+// users behind it.
 // Server-to-server only — the cron secret is the credential.
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -21,8 +23,8 @@ export async function POST(req: NextRequest) {
   }
   const [head, ...rest] = users as string[];
   after(async () => {
-    await runDaily(db, head).catch(() => "failed");
     await startChain(rest);
+    await runDaily(db, head).catch(() => "failed");
   });
   return new Response(null, { status: 202 });
 }
