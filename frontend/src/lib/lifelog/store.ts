@@ -3,7 +3,7 @@
 // the music library). Audio blobs live in audioStore.ts (IndexedDB); this only
 // holds transcript / events / diary / summary, which are small.
 
-import { dataInsert, dataList } from "@/lib/dataClient";
+import { dataDelete, dataInsert, dataList } from "@/lib/dataClient";
 import { deleteAudio } from "./audioStore";
 import { emptyDay, type DayLog } from "./types";
 
@@ -68,4 +68,6 @@ export async function deleteDay(date: string): Promise<void> {
   await deleteAudio(day.segments.map((s) => s.id));
   try { localStorage.removeItem(KEY(date)); } catch { /* noop */ }
   writeIndex(readIndex().filter((d) => d !== date));
+  // Or syncFromCloud brings it straight back on the next mount.
+  await dataDelete(ENTITY, date).catch(() => {});
 }

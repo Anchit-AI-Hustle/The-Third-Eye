@@ -1,12 +1,12 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 // Server-side durable memory. The client also mirrors this into localStorage so
 // a signed-out or offline session still has context, but that copy is per-device
 // and dies with the cache — this is the one that survives and follows the user
-// between devices. No-ops cleanly when Supabase isn't configured.
+// between devices. No-ops cleanly when the database isn't configured.
 
 export async function loadMemory(email: string): Promise<Record<string, string>> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return {};
   const { data } = await sb.from("jarvis_memory").select("key, value").eq("user_id", email).limit(500);
   const out: Record<string, string> = {};
@@ -31,7 +31,7 @@ export async function saveMemory(
   before: Record<string, string>,
   after: Record<string, string>,
 ): Promise<number> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return 0;
 
   const changed = changedEntries(before, after);

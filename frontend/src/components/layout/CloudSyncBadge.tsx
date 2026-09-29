@@ -28,7 +28,7 @@ export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
   const remote = sync?.remote ?? false;
   const label = loading ? "Checking sync…" : remote ? "Cloud synced" : "Local only";
   const tip = remote
-    ? "Your data syncs to your private Supabase and is available across devices."
+    ? "Your data syncs to the cloud database and is available across devices."
     : sync?.reason === "unconfigured"
       ? "Cloud storage isn't configured (service key missing) — data is saved only in this browser."
       : sync?.reason === "signed-out"

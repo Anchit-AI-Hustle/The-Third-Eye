@@ -1,4 +1,4 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 // Server-side counterpart to lib/agentControl.ts. That module keeps the kill
 // switch and audit log in localStorage, which binds only the browser tab that
@@ -14,7 +14,7 @@ export interface AuditEntry {
 }
 
 export async function isAgentKilled(email: string): Promise<boolean> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return false;
   const { data } = await sb
     .from("agent_control")
@@ -25,7 +25,7 @@ export async function isAgentKilled(email: string): Promise<boolean> {
 }
 
 export async function setAgentKilled(email: string, killed: boolean): Promise<void> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return;
   await sb
     .from("agent_control")
@@ -39,7 +39,7 @@ export async function logAgentAction(
   entry: AuditEntry,
   source: AgentSource = "browser",
 ): Promise<void> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return;
   try {
     await sb.from("agent_audit").insert({ user_id: email, source, ...entry });
@@ -49,7 +49,7 @@ export async function logAgentAction(
 }
 
 export async function recentAgentLog(email: string, limit = 100) {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return [];
   const { data } = await sb
     .from("agent_audit")

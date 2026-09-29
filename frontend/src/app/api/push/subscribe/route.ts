@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return json({ error: "Sync not configured" }, 501);
 
   const sub = (await req.json().catch(() => null)) as

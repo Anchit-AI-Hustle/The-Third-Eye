@@ -44,8 +44,8 @@ const sb = {
   },
 };
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => (sbConfigured ? sb : null),
+vi.mock("@/lib/db", () => ({
+  getDb: () => (sbConfigured ? sb : null),
 }));
 
 async function get() {

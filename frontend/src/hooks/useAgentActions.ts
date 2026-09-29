@@ -19,7 +19,7 @@ export interface AgentSideEffect {
  * Single source of truth for applying the assistant's actions to the user's
  * data. Both the full-page assistant and the floating VoiceOverlay use this so
  * the agent has identical powers everywhere — and so writes go through the
- * real hooks (Supabase-backed when signed in) instead of drifting per-caller.
+ * real hooks (database-backed when signed in) instead of drifting per-caller.
  *
  * Returns an `apply(sideEffects)` function; call it with `parsed.sideEffects`
  * from the chat stream's `done` event.

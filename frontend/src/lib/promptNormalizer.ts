@@ -468,7 +468,7 @@ const CAPABILITY_LABEL: Record<string, string> = {
   gmailSend: "Gmail send — Google account not connected with send access",
   gmailRead: "Gmail read — Google account not connected",
   calendar: "Google Calendar — not connected",
-  reminders: "Reminders — cloud sync (Supabase) not configured",
+  reminders: "Reminders — cloud sync (database) not configured",
   webSearch: "Web search / news / nearby — SERPER_API_KEY not set",
   health: "Health data — no health service connected",
   smartHome: "Smart home control — no Matter/HomeKit hub connected",

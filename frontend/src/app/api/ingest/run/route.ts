@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { scrapeGmailForUser, scrapeChatForUser } from "@/lib/ingest";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export async function POST() {
   const email = session?.user?.email;
   if (!email) return Response.json({ error: "unauthenticated" }, { status: 401 });
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return Response.json({ skipped: "not configured" }, { status: 200 });
 
   const now = Date.now();

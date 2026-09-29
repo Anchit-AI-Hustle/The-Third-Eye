@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GATEWAY_SCOPES, bearerFrom, emailForToken, hashToken, mintToken } from "@/lib/gatewayAuth";
 
 let row: Record<string, unknown> | null = null;
-let supabaseConfigured = true;
+let dbConfigured = true;
 const updates: Array<Record<string, unknown>> = [];
 
 const sb = {
@@ -20,14 +20,14 @@ const sb = {
   },
 };
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => (supabaseConfigured ? sb : null),
+vi.mock("@/lib/db", () => ({
+  getDb: () => (dbConfigured ? sb : null),
 }));
 
 beforeEach(() => {
   row = null;
   updates.length = 0;
-  supabaseConfigured = true;
+  dbConfigured = true;
 });
 
 describe("minting", () => {
@@ -95,7 +95,7 @@ describe("resolving a token to a user", () => {
   });
 
   it("refuses everything when there is no database to check against", async () => {
-    supabaseConfigured = false;
+    dbConfigured = false;
     expect(await emailForToken(token, "chat")).toBeNull();
   });
 

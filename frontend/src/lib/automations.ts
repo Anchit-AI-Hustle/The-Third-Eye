@@ -1,4 +1,4 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 
 // Recurrences the reminders cron (api/cron/dispatch) knows how to advance.
@@ -44,7 +44,7 @@ export async function scheduleAutomation(
     return `I can run automations daily, weekly or monthly — not "${schedule}". Event triggers aren't wired to anything that would fire them, so I'd be promising something that never runs. Pick one of those three and I'll schedule it.`;
   }
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !ctx.email) return "Automations need cloud sync — ask the user to connect Supabase in settings.";
 
   const limits = limitsFor(ctx.tier);

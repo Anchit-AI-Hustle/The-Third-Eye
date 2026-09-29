@@ -1,11 +1,11 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { limitsFor, isUnlimited, premiumEnforced, type Tier, type TierLimits } from "@/lib/entitlements";
 
 // Resolve a user's tier from the profiles table. Unknown / unconfigured → free,
 // but callers treat "billing not configured" as unlimited (see consume()).
 export async function getTier(email: string | undefined): Promise<Tier> {
   if (!email) return "free";
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return "free";
   const { data } = await sb
     .from("profiles")
@@ -33,7 +33,7 @@ export async function consume(
   email: string | undefined,
   metric: keyof Pick<TierLimits, "chatPerDay" | "webSearchPerDay">,
 ): Promise<ConsumeResult> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   const tier = await getTier(email);
   const limits = limitsFor(tier);
   const limit = limits[metric] as number;

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "crypto";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 // Ported from Personal-AI-OS services/task_service.py + database/db.py.
 // The "same task" rule (normalizeHeading) and two-line dedup are load-bearing:
@@ -141,7 +141,7 @@ export async function saveExtractedTasks(
   ctx: SaveContext,
   tasks: ExtractedTask[],
 ): Promise<{ inserted: number; merged: number; skipped: number }> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return { inserted: 0, merged: 0, skipped: tasks.length };
 
   let inserted = 0, merged = 0, skipped = 0;

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb, type Db } from "@/lib/db";
 
-export type Sb = NonNullable<ReturnType<typeof getAdminSupabase>>;
+export type Sb = Db;
 
 /**
  * Cron auth via the Authorization header only (Bearer CRON_SECRET). Vercel Cron

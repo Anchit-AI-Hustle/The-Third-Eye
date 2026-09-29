@@ -7,7 +7,7 @@ import { revokeGoogleAccess } from "@/lib/googleToken";
 // apps with account access" at Google, holding gmail.readonly and gmail.send.
 
 let row: Record<string, unknown> | null = null;
-let supabaseConfigured = true;
+let dbConfigured = true;
 let deleteError: { message: string } | null = null;
 const deletes: string[] = [];
 
@@ -29,8 +29,8 @@ const sb = {
   },
 };
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => (supabaseConfigured ? sb : null),
+vi.mock("@/lib/db", () => ({
+  getDb: () => (dbConfigured ? sb : null),
 }));
 
 vi.mock("@/lib/crypto", () => ({
@@ -41,7 +41,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   row = { refresh_token_enc: "enc:1//refresh-token" };
-  supabaseConfigured = true;
+  dbConfigured = true;
   deleteError = null;
   deletes.length = 0;
   fetchMock.mockReset();
@@ -129,7 +129,7 @@ describe("nothing to revoke", () => {
   });
 
   it("does nothing when there is no database configured", async () => {
-    supabaseConfigured = false;
+    dbConfigured = false;
     expect(await revokeGoogleAccess("user@example.com")).toEqual({
       revoked: false,
       cleared: false,

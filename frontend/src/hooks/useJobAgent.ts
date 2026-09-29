@@ -7,7 +7,7 @@ import type { CandidateFact, CareerProfile, NormalizedJob } from "@/lib/jobAgent
 
 // Single source of truth for the client: career profile, verified fact vault,
 // saved jobs, and applications. Persists through the per-user data API when
-// Supabase is configured, and falls back to localStorage otherwise — mirroring
+// the database is configured, and falls back to localStorage otherwise — mirroring
 // the pattern used by useLocalTasks so Job Agent works offline/unconfigured.
 
 const K = {

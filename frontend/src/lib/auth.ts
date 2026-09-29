@@ -75,7 +75,7 @@ export const authOptions: NextAuthOptions = {
     // ── GOOGLE SIGN-IN — COMMENTED OUT, KEPT FOR RESTORATION ────────────────
     // Uncommenting this block also needs, at the top of this file:
     //   import GoogleProvider from "next-auth/providers/google";
-    //   import { getAdminSupabase } from "@/lib/serverSupabase";
+    //   import { getDb } from "@/lib/db";
     //   import { encrypt } from "@/lib/crypto";
     //   import { BASIC_SCOPE_LIST, INGESTION_SCOPE_LIST, hasGoogleScope } from "@/lib/googleToken";
     // and the `persistRefreshToken` / `refreshAccessToken` helpers, the `jwt`

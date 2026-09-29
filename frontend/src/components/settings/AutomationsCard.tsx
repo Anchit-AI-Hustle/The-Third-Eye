@@ -25,7 +25,7 @@ export function AutomationsCard() {
       const r = await fetch("/api/automations");
       if (r.status === 401 || r.status === 501) {
         setRows([]);
-        setError("Automations need cloud sync — connect Supabase to see and manage them here.");
+        setError("Automations need cloud sync — set up the database to see and manage them here.");
         return;
       }
       const d = (await r.json()) as { automations?: Automation[]; error?: string };

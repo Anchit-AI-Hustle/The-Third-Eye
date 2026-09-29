@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 // Bearer credentials for clients that have no browser session — the always-on
 // gateway process, and anything else that needs to act as one user without a
@@ -33,7 +33,7 @@ export function bearerFrom(headers: Headers): string | null {
  * token itself is never compared against a stored value.
  */
 export async function emailForToken(token: string, scope: GatewayScope): Promise<string | null> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return null;
 
   const hash = hashToken(token);

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const email = session?.user?.email;
   if (!email) return Response.json({ error: "unauthenticated" }, { status: 401 });
 
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return Response.json({ stored: 0, skipped: "not configured" });
 
   let body: unknown;

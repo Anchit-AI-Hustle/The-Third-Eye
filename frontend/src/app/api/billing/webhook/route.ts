@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb, type Db } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     return new Response("Invalid signature", { status: 400 });
   }
 
-  const sb = getAdminSupabase();
-  if (!sb) return new Response("Supabase not configured", { status: 501 });
+  const sb = getDb();
+  if (!sb) return new Response("Database not configured", { status: 501 });
 
   try {
     switch (event.type) {
@@ -85,7 +85,7 @@ async function emailForCustomer(stripe: Stripe, customer: string | Stripe.Custom
   }
 }
 
-async function upsert(sb: NonNullable<ReturnType<typeof getAdminSupabase>>, email: string, patch: Record<string, unknown>) {
+async function upsert(sb: Db, email: string, patch: Record<string, unknown>) {
   const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   await sb.from("profiles").upsert(
     { user_id: email, updated_at: new Date().toISOString(), ...clean },

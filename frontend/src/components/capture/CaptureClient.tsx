@@ -209,7 +209,7 @@ function IngestStatusPanel() {
     try {
       const res = await fetch("/api/ingest/run", { method: "POST" });
       const d = await res.json();
-      if (d.skipped === "not configured") { setResult("Server storage isn't configured (Supabase). Scraping can't run."); return; }
+      if (d.skipped === "not configured") { setResult("Server storage isn't configured (DATABASE_URL). Scraping can't run."); return; }
       if (d.skipped === "cooldown") { setResult("Just scanned — try again in a moment."); return; }
       const parts: string[] = [];
       for (const [label, r] of [["Gmail", d.gmail], ["Chat", d.chat]] as const) {

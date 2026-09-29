@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
@@ -809,14 +809,14 @@ async function translateText(text: string, targetLang: string, sourceLang?: stri
   }
 }
 
-// ─── Reminder tools (persisted to Supabase; delivery/firing is a later phase) ──
+// ─── Reminder tools (persisted to the database; delivery/firing is a later phase) ──
 
 async function setReminder(
   ctx: RunContext,
   input: { title?: string; fire_at?: string; recurrence?: string },
 ): Promise<string> {
-  const sb = getAdminSupabase();
-  if (!sb || !ctx.email) return "Reminders need cloud sync — ask the user to connect Supabase in settings.";
+  const sb = getDb();
+  if (!sb || !ctx.email) return "Reminders need cloud sync — ask the user to set up the database (DATABASE_URL).";
   if (!input.title || !input.fire_at) return "I need both what to remind you about and when.";
 
   const recurrence = input.recurrence && input.recurrence !== "none" ? input.recurrence : null;
@@ -846,7 +846,7 @@ async function setReminder(
 }
 
 async function listReminders(ctx: RunContext): Promise<string> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !ctx.email) return "Reminders need cloud sync configured.";
   const { data } = await sb
     .from("reminders")
@@ -861,7 +861,7 @@ async function listReminders(ctx: RunContext): Promise<string> {
 }
 
 async function cancelReminder(ctx: RunContext, id: string): Promise<string> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb || !ctx.email) return "Reminders need cloud sync configured.";
   if (!id) return "Which reminder? Give me its id from list_reminders.";
   const { error } = await sb
@@ -905,7 +905,7 @@ async function createAsset(
   }
 
   // Persist to Knowledge (best-effort). Requires cloud storage configured.
-  const sb = getAdminSupabase();
+  const sb = getDb();
   let saved = false;
   if (sb && ctx.email) {
     const { error } = await sb.from("knowledge_docs").insert({
@@ -1614,7 +1614,7 @@ export async function POST(req: NextRequest) {
       gmailSend: !!accessToken && google.gmailSend,
       gmailRead: !!accessToken && google.gmailRead,
       calendar: !!accessToken && google.calendarRead,
-      reminders: !!getAdminSupabase(),
+      reminders: !!getDb(),
       webSearch: !!process.env.SERPER_API_KEY,
     },
   });

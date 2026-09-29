@@ -1,4 +1,4 @@
-import { getAdminSupabase } from "@/lib/serverSupabase";
+import { getDb } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 
 /**
@@ -14,7 +14,7 @@ import { decrypt } from "@/lib/crypto";
 export async function getGoogleAccessToken(
   email: string,
 ): Promise<{ accessToken: string; scope?: string } | null> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return null;
 
   const { data } = await sb
@@ -61,7 +61,7 @@ export async function getGoogleAccessToken(
 export async function revokeGoogleAccess(
   email: string,
 ): Promise<{ revoked: boolean; cleared: boolean; hadToken: boolean }> {
-  const sb = getAdminSupabase();
+  const sb = getDb();
   if (!sb) return { revoked: false, cleared: false, hadToken: false };
 
   const { data } = await sb

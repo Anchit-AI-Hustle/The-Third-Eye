@@ -5,7 +5,7 @@ import { firstFireAt, scheduleAutomation } from "@/lib/automations";
 const inserted: Array<Record<string, unknown>> = [];
 let pendingCount = 0;
 let insertError: string | null = null;
-let supabaseConfigured = true;
+let dbConfigured = true;
 
 const sb = {
   from() {
@@ -34,8 +34,8 @@ const sb = {
   },
 };
 
-vi.mock("@/lib/serverSupabase", () => ({
-  getAdminSupabase: () => (supabaseConfigured ? sb : null),
+vi.mock("@/lib/db", () => ({
+  getDb: () => (dbConfigured ? sb : null),
 }));
 
 const premium = { email: "user@example.com", tier: "premium" as const };
@@ -44,7 +44,7 @@ beforeEach(() => {
   inserted.length = 0;
   pendingCount = 0;
   insertError = null;
-  supabaseConfigured = true;
+  dbConfigured = true;
 });
 
 const valid = { name: "Morning brief", automation_action: "Summarise my day", schedule: "daily" };
@@ -69,7 +69,7 @@ describe("what it refuses to promise", () => {
   });
 
   it("says so when there is no database to persist into", async () => {
-    supabaseConfigured = false;
+    dbConfigured = false;
     expect(await scheduleAutomation(premium, valid)).toContain("cloud sync");
   });
 
