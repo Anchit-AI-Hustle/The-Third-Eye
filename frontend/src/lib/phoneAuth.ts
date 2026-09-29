@@ -1,6 +1,6 @@
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { PIN_LEN, normPhone, phoneError, pinError } from "@/lib/phone";
-import { LOCK_MINUTES, MAX_TRIES, hashPin, lockMessage, verifyPin } from "@/lib/phonePin";
+import { MAX_TRIES, hashPin, lockMessage, verifyPin } from "@/lib/phonePin";
 
 // One door, both directions — the shape parwah-hq uses.
 //
@@ -197,71 +197,88 @@ export async function enter(input: {
     row = again as Row;
   }
 
-  if (row.locked_until && new Date(row.locked_until) > new Date()) {
-    return { ok: false, reason: "locked", error: lockMessage(row.locked_until) };
-  }
-
   if (input.pin == null || input.pin === "") {
+    // No try is spent asking which question to put to the person.
+    if (row.locked_until && new Date(row.locked_until) > new Date()) {
+      return { ok: false, reason: "locked", error: lockMessage(row.locked_until) };
+    }
     return { ok: false, reason: "need_pin", name: row.name, error: null };
   }
 
+  // SPEND THE TRY BEFORE CHECKING THE PIN, not after. The row we read above is a
+  // snapshot, and acting on its `locked_until` is what let a burst of concurrent
+  // requests all see an unlocked account, all verify, and only then increment.
+  // This takes the row lock, tests the lock and spends one try in a single
+  // statement, so overlapping attempts queue behind each other and five means
+  // five.
+  const attempt = await beginAttempt(sb, row.id);
+  if (!attempt.ok) return attempt.result;
+
   const pin = String(input.pin);
-  // A PIN of the wrong shape cannot be right, so it is counted as a failure but
-  // never hashed. Counting it costs an attacker the same as a well-formed guess
-  // and costs this server nothing.
+  // A PIN of the wrong shape cannot be right, so it never reaches scrypt — but it
+  // has already cost a try, so this is not a way to probe for free.
   if (!PIN_SHAPE.test(pin) || !verifyPin(pin, row.pin_salt, row.pin_hash)) {
-    return await countFailure(sb, row.id);
+    const left = Math.max(0, MAX_TRIES - attempt.tries);
+    return {
+      ok: false,
+      reason: "wrong_pin",
+      left,
+      error: `That PIN is not right. ${left} ${left === 1 ? "try" : "tries"} left.`,
+    };
   }
 
-  if (row.pin_tries) {
-    await sb.from("phone_users").update({ pin_tries: 0, locked_until: null }).eq("id", row.id);
-  }
-  await touch(sb, row.id);
+  // The right PIN clears the count, the lock and the escalation ladder — without
+  // the last of those, one bad afternoon would leave someone on 24-hour locks for
+  // ever.
+  await sb.rpc("phone_pin_ok", { p_id: row.id });
   return { ok: true, user: pub(row), created: false };
 }
 
 /**
- * Count a wrong PIN, and lock the account if that was the last try.
+ * Claim one attempt against this account, atomically, before any hashing.
  *
- * ONE STATEMENT, IN THE DATABASE. Read-then-write in application code let
- * parallel guesses all read the same counter and write the same value back, so
- * N simultaneous attempts advanced it by one and the lock never arrived — which
- * is the difference between five guesses per fifteen minutes and as many as the
- * attacker can open at once, against a secret that is one of ten thousand.
+ * Returns `{ok: true, tries}` when the caller may go on to check the PIN, or the
+ * refusal to hand straight back. The whole test-and-spend happens inside
+ * phone_pin_attempt under a row lock, which is what makes five mean five even
+ * when requests arrive together.
  */
-async function countFailure(sb: Sb, id: string): Promise<EnterResult> {
-  const { data, error } = await sb.rpc("phone_pin_fail", {
-    p_id: id,
-    p_max: MAX_TRIES,
-    p_lock_minutes: LOCK_MINUTES,
-  });
+async function beginAttempt(
+  sb: Sb,
+  id: string,
+): Promise<{ ok: true; tries: number } | { ok: false; result: EnterResult }> {
+  const { data, error } = await sb.rpc("phone_pin_attempt", { p_id: id, p_max: MAX_TRIES });
   const state = (Array.isArray(data) ? data[0] : data) as
-    | { tries: number | null; locked_until: string | null }
+    | { allowed: boolean | null; tries: number | null; locked_until: string | null }
     | null
     | undefined;
 
-  // The counter is the gate, so a counter that did not move must not read as a
-  // free guess. If the function is missing or errored, refuse the attempt and
-  // say so rather than inviting another one.
+  // The counter is the gate, so a counter that could not move must not read as a
+  // free guess. A missing function or a wrong grant refuses the attempt.
   if (error || !state) {
     return {
       ok: false,
-      reason: "locked",
-      error: "Sign-in is temporarily unavailable. Please try again in a few minutes.",
+      result: {
+        ok: false,
+        reason: "locked",
+        error: "Sign-in is temporarily unavailable. Please try again in a few minutes.",
+      },
     };
   }
 
-  if (state.locked_until && new Date(state.locked_until) > new Date()) {
-    return { ok: false, reason: "locked", error: lockMessage(state.locked_until) };
+  if (!state.allowed) {
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        reason: "locked",
+        error: state.locked_until
+          ? lockMessage(state.locked_until)
+          : "Sign-in is temporarily unavailable. Please try again in a few minutes.",
+      },
+    };
   }
 
-  const left = Math.max(0, MAX_TRIES - (state.tries ?? 0));
-  return {
-    ok: false,
-    reason: "wrong_pin",
-    left,
-    error: `That PIN is not right. ${left} ${left === 1 ? "try" : "tries"} left.`,
-  };
+  return { ok: true, tries: state.tries ?? MAX_TRIES };
 }
 
 function pub(row: Row): PhoneUser {

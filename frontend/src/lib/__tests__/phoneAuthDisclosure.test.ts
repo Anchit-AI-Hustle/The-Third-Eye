@@ -64,7 +64,7 @@ beforeEach(async () => {
   rpc.mockImplementation((fn: string) =>
     fn === "auth_rate_limit_hit"
       ? Promise.resolve({ data: 1, error: null })
-      : Promise.resolve({ data: [{ tries: 1, locked_until: null }], error: null }),
+      : Promise.resolve({ data: [{ allowed: true, tries: 1, locked_until: null }], error: null }),
   );
   await seedRow();
 });
@@ -127,7 +127,7 @@ describe("the rate limit in front of the path", () => {
   it("limits on the number itself, which no header can change", async () => {
     const seen: string[] = [];
     rpc.mockImplementation((fn: string, args: Record<string, unknown>) => {
-      if (fn !== "auth_rate_limit_hit") return Promise.resolve({ data: [{ tries: 1, locked_until: null }], error: null });
+      if (fn !== "auth_rate_limit_hit") return Promise.resolve({ data: [{ allowed: true, tries: 1, locked_until: null }], error: null });
       seen.push(String(args.p_bucket));
       return Promise.resolve({ data: 1, error: null });
     });
@@ -150,26 +150,48 @@ describe("the rate limit in front of the path", () => {
   });
 });
 
-describe("counting a wrong PIN", () => {
+describe("spending a try", () => {
   async function attempt(pin: string) {
     const { enter } = await import("@/lib/phoneAuth");
     return enter({ phone: PHONE, pin, ip: "203.0.113.9" });
   }
 
-  it("delegates the increment to one database statement, not a read-then-write", async () => {
-    const res = await attempt("8306");
-    expect(res.ok).toBe(false);
-    expect(rpc).toHaveBeenCalledWith("phone_pin_fail", expect.objectContaining({ p_max: 5 }));
-    // The row must not be updated with a locally computed count.
+  const order = () => rpc.mock.calls.map((c) => String(c[0]));
+
+  it("claims the try in the database BEFORE hashing, so a burst cannot outrun it", async () => {
+    // The row read earlier is a snapshot; acting on its locked_until let
+    // concurrent requests all see an unlocked account and all spend a guess. A
+    // shared timeline, because the ordering IS the property — asserting only
+    // that both happened would pass for the broken order too.
+    const timeline: string[] = [];
+    rpc.mockImplementation((fn: string) => {
+      timeline.push(`rpc:${fn}`);
+      return fn === "auth_rate_limit_hit"
+        ? Promise.resolve({ data: 1, error: null })
+        : Promise.resolve({ data: [{ allowed: true, tries: 1, locked_until: null }], error: null });
+    });
+    const phonePin = await import("@/lib/phonePin");
+    const real = phonePin.verifyPin;
+    const spy = vi.spyOn(phonePin, "verifyPin").mockImplementation((...args) => {
+      timeline.push("verifyPin");
+      return real(...args);
+    });
+
+    await attempt("8306");
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(timeline.indexOf("rpc:phone_pin_attempt")).toBeGreaterThan(-1);
+    expect(timeline.indexOf("rpc:phone_pin_attempt")).toBeLessThan(timeline.indexOf("verifyPin"));
+    // Never a locally computed count written to the row.
     expect(updates.filter((u) => "pin_tries" in u)).toHaveLength(0);
   });
 
-  it("reports the lock when that statement says this attempt locked the account", async () => {
+  it("hands back the lock when the database refuses the attempt", async () => {
     rpc.mockImplementation((fn: string) =>
       fn === "auth_rate_limit_hit"
         ? Promise.resolve({ data: 1, error: null })
         : Promise.resolve({
-            data: [{ tries: 0, locked_until: new Date(Date.now() + 9e5).toISOString() }],
+            data: [{ allowed: false, tries: 0, locked_until: new Date(Date.now() + 9e5).toISOString() }],
             error: null,
           }),
     );
@@ -177,25 +199,35 @@ describe("counting a wrong PIN", () => {
     expect(res).toMatchObject({ ok: false, reason: "locked" });
   });
 
-  it("refuses the attempt rather than granting a free guess if the counter cannot move", async () => {
+  it("does not check the PIN at all once the attempt is refused", async () => {
+    const phonePin = await import("@/lib/phonePin");
+    const spy = vi.spyOn(phonePin, "verifyPin");
+    rpc.mockImplementation((fn: string) =>
+      fn === "auth_rate_limit_hit"
+        ? Promise.resolve({ data: 1, error: null })
+        : Promise.resolve({ data: [{ allowed: false, tries: 0, locked_until: null }], error: null }),
+    );
+    await attempt(PIN);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("refuses rather than granting a free guess if the counter cannot move", async () => {
     rpc.mockImplementation((fn: string) =>
       fn === "auth_rate_limit_hit"
         ? Promise.resolve({ data: 1, error: null })
         : Promise.resolve({ data: null, error: { message: "function does not exist" } }),
     );
     const res = await attempt("8306");
-    expect(res.ok).toBe(false);
-    expect(res).toMatchObject({ reason: "locked" });
+    expect(res).toMatchObject({ ok: false, reason: "locked" });
   });
 
-  it("does not pay for scrypt on a PIN that cannot be right", async () => {
+  it("does not pay for scrypt on a PIN that cannot be right, but still spends the try", async () => {
     const phonePin = await import("@/lib/phonePin");
     const spy = vi.spyOn(phonePin, "verifyPin");
 
     await attempt("83");
     expect(spy).not.toHaveBeenCalled();
-    // Still counted, so malformed guesses are not a way around the lockout.
-    expect(rpc).toHaveBeenCalledWith("phone_pin_fail", expect.anything());
+    expect(order()).toContain("phone_pin_attempt");
 
     // And the spy really does observe this call site — without this the
     // assertion above would pass for a spy that was never wired up at all.
@@ -203,10 +235,12 @@ describe("counting a wrong PIN", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it("lets the right PIN through and clears nothing it should not", async () => {
+  it("clears the count, the lock AND the escalation ladder on the right PIN", async () => {
+    // Without the ladder reset, one bad afternoon would leave a real person on
+    // 24-hour locks for ever.
     const { enter } = await import("@/lib/phoneAuth");
     const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
     expect(res.ok).toBe(true);
-    expect(rpc).not.toHaveBeenCalledWith("phone_pin_fail", expect.anything());
+    expect(rpc).toHaveBeenCalledWith("phone_pin_ok", { p_id: expect.any(String) });
   });
 });

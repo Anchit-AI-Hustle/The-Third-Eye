@@ -1,9 +1,11 @@
 -- The Third Eye — make the phone/PIN lockout and rate limit hold under
 -- concurrency. Run in Supabase Dashboard → SQL Editor. Safe to re-run.
 --
--- WHY THIS EXISTS. The lockout is the whole defence for a 4-digit PIN: the PIN
--- is one of ten thousand, and five tries per fifteen minutes is what turns a
--- sweep of all of them from minutes into years. Counting the tries in
+-- WHY THIS EXISTS. The lockout is the whole defence for a 4-digit PIN, since the
+-- PIN is one of ten thousand. (This file first claimed five tries per fifteen
+-- minutes put a full sweep "out of reach by years". That was wrong — it is about
+-- 21 days. 20260929010000_phone_pin_escalating_lock.sql has the arithmetic and
+-- the fix, and supersedes the function below.) Counting the tries in
 -- application code broke that, and broke it silently. Every concurrent attempt
 -- read the same pin_tries, added one to it, and wrote the same absolute value
 -- back, so N guesses in parallel advanced the counter by one. The lock never
