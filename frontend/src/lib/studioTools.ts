@@ -128,13 +128,38 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "video", label: "OTT / Video Studio", mode: "personal", icon: "Clapperboard", accent: "#F0C94E",
-    blurb: "Video scripts and outlines — short-form reels, YouTube episodes, or an OTT series concept.",
+    blurb: "Scripts for reels, YouTube episodes or an OTT series — then every shot rendered as a real clip, voiced, and assembled into one episode file.",
     format: "markdown", downloadExt: "md", cta: "Write script",
     fields: [
       { name: "concept", label: "Concept", type: "textarea", placeholder: "The story, topic, or hook…", required: true },
       { name: "format", label: "Format", type: "select", options: ["Short-form reel (15-60s)", "YouTube video (5-10 min)", "OTT / series concept", "Explainer"] },
       { name: "audience", label: "Audience", type: "text", placeholder: "who it's for" },
       { name: "tone", label: "Tone / style", type: "text", placeholder: "e.g. cinematic, casual, dramatic" },
+    ],
+  },
+  {
+    id: "reel", label: "Reel Studio", mode: "personal", icon: "Film", accent: "#F472B6",
+    blurb: "Vertical 9:16 reels, Shorts and TikToks — hook, shots and captions, rendered into real clips and cut to your track.",
+    format: "markdown", downloadExt: "md", cta: "Write reel",
+    fields: [
+      { name: "concept", label: "What the reel is about", type: "textarea", placeholder: "the hook, the story, the drop it's cut to…", required: true },
+      { name: "platform", label: "Platform", type: "select", options: ["Instagram Reel", "YouTube Short", "TikTok", "All three"] },
+      { name: "length", label: "Length", type: "select", options: ["15 seconds", "30 seconds", "45 seconds", "60 seconds"] },
+      { name: "vibe", label: "Look & energy", type: "text", placeholder: "e.g. dark warehouse strobe, neon rain, hand-held grit" },
+      { name: "sound", label: "Sound", type: "text", placeholder: "the track it's cut to, or the voice-over style" },
+    ],
+  },
+  {
+    id: "book", label: "Book Studio", mode: "personal", icon: "BookOpen", accent: "#F0C94E",
+    blurb: "Write a whole book — premise to outline to every chapter — then export an EPUB and the KDP listing to publish it.",
+    format: "markdown", downloadExt: "md", cta: "Plan book",
+    fields: [
+      { name: "premise", label: "Premise", type: "textarea", placeholder: "what the book is about, who it's for, the promise it makes…", required: true },
+      { name: "title", label: "Working title", type: "text", placeholder: "optional" },
+      { name: "genre", label: "Genre", type: "select", options: ["Non-fiction — self-help", "Non-fiction — business", "Non-fiction — memoir", "Fiction — thriller", "Fiction — sci-fi", "Fiction — fantasy", "Fiction — romance", "Fiction — literary", "Children's", "Poetry"] },
+      { name: "chapters", label: "Chapters", type: "select", options: ["8", "10", "12", "15", "20"] },
+      { name: "length", label: "Words per chapter", type: "select", options: ["1500", "2500", "3500", "5000"] },
+      { name: "voice", label: "Voice & tone", type: "text", placeholder: "e.g. warm and direct, dry wit, lyrical" },
     ],
   },
   {
@@ -344,6 +369,15 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
 ];
 
+// Hub cards for studio surfaces that run something rather than write an asset,
+// so they stay out of STUDIO_TOOLS (and out of create_asset's kinds).
+export const STUDIO_LINKS: Pick<StudioTool, "id" | "label" | "mode" | "icon" | "accent" | "blurb">[] = [
+  {
+    id: "anchor", label: "ANCHOR Autopilot", mode: "personal", icon: "AudioLines", accent: "#FF3B1F",
+    blurb: "The daily hard-techno robot: today's drop, the queue, the Short and Reel, YouTube — status and controls.",
+  },
+];
+
 export function getTool(id: string): StudioTool | undefined {
   return STUDIO_TOOLS.find((t) => t.id === id);
 }
@@ -354,9 +388,9 @@ export function getTool(id: string): StudioTool | undefined {
 // Enterprise: programs / docs / ops / people & deals).
 export const TOOL_CATEGORY: Record<string, string> = {
   // Hobby (personal)
-  music: "Music & Audio",
-  "social-media": "Social & Video", video: "Social & Video",
-  creative: "Writing",
+  music: "Music & Audio", anchor: "Music & Audio",
+  "social-media": "Social & Video", video: "Social & Video", reel: "Social & Video",
+  creative: "Writing", book: "Writing",
   health: "Health & Fitness",
   travel: "Life & Plans", study: "Life & Plans", journal: "Life & Plans", budget: "Life & Plans", "how-to": "Life & Plans",
   // Startup (professional)

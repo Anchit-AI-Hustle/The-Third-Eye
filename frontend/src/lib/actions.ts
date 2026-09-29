@@ -36,6 +36,8 @@ export const SENSITIVE_ACTIONS = new Set<string>([
  */
 function isSensitiveWithArgs(tool: string, args: any): boolean {
   if (tool === "communicate") return (args?.action ?? "email") === "email";
+  // ANCHOR publishes to the user's public channels; only reading its status is free.
+  if (tool === "anchor") return (args?.action ?? "status") !== "status";
   return false;
 }
 
@@ -56,6 +58,11 @@ export function summarizeAction(tool: string, args: any): string {
       return `Pay ${args?.amount ?? "?"} to ${args?.name ?? args?.vpa ?? "?"}${args?.note ? ` — "${args.note}"` : ""}`;
     case "send_whatsapp":
       return `WhatsApp ${args?.to ?? "a contact"}: "${args?.message ?? ""}"`;
+    case "anchor":
+      return args?.action === "queue_song" ? `Queue Suno song ${args?.song ?? "?"} on ANCHOR${args?.now ? " and release it now" : ""}`
+        : args?.action === "mix" ? `Build and publish ANCHOR's ${args?.period === "month" ? "monthly" : "weekly"} mix`
+        : args?.action === "rehearse" ? "Rehearse today's ANCHOR drop (render only, nothing posted)"
+        : `Run today's ANCHOR drop${args?.now ? " and publish immediately" : " (posts at 17:30 UTC)"}`;
     case "make_call":
       return `Call ${args?.number ?? "?"}`;
     case "send_sms":

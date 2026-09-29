@@ -73,6 +73,16 @@ export async function variation(preset: MusicInput, refs: string, recent: string
   }
 }
 
+/**
+ * Whether a failed creation certainly created nothing: Replicate answered 4xx
+ * (lib/replicate throws "Replicate <status>: …"), or the call never went out.
+ * A timeout or dropped connection is not — the render may be running anyway.
+ */
+export function refusedBeforeCreation(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : "";
+  return /^Replicate 4\d\d\b/.test(m) || /^(REPLICATE_API_TOKEN not set|Invalid model slug)/.test(m);
+}
+
 export type RunResult = "started" | "exists" | "no-preset" | "unconfigured" | "failed";
 
 export async function runDaily(db: Db, userId: string, day = today()): Promise<RunResult> {
@@ -81,10 +91,10 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
 
   const { data: saved } = await db.from("music_daily").select("preset, refs").eq("user_id", userId).maybeSingle();
   if (!saved) return "no-preset";
-  const { data: already } = await db.from("music_daily_tracks").select("id, status, prediction_id").eq("user_id", userId).eq("day", day).maybeSingle();
-  // A failure before Replicate accepted the render cost nothing, so it is redone
-  // rather than counted as today's track.
-  if (already && !(already.status === "failed" && !already.prediction_id)) return "exists";
+  const { data: already } = await db.from("music_daily_tracks").select("id, status, retryable").eq("user_id", userId).eq("day", day).maybeSingle();
+  // A render Replicate refused cost nothing, so it is redone rather than counted
+  // as today's track.
+  if (already && !(already.status === "failed" && already.retryable)) return "exists";
   if (already) await db.from("music_daily_tracks").delete().eq("id", already.id);
 
   const preset = saved.preset as MusicInput;
@@ -117,7 +127,10 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
     );
     await db.from("music_daily_tracks").update({ prediction_id: p.id }).eq("id", row.id);
   } catch (e) {
-    await db.from("music_daily_tracks").update({ status: "failed", error: e instanceof Error ? e.message.slice(0, 300) : "render failed", finished_at: new Date().toISOString() }).eq("id", row.id);
+    await db.from("music_daily_tracks").update({
+      status: "failed", error: e instanceof Error ? e.message.slice(0, 300) : "render failed",
+      retryable: refusedBeforeCreation(e), finished_at: new Date().toISOString(),
+    }).eq("id", row.id);
     return "failed";
   }
 
@@ -196,11 +209,11 @@ export async function dispatchDaily(db: Db): Promise<{ queued: number; workers: 
   const day = today();
   const [{ data: enabled }, { data: tracks }] = await Promise.all([
     db.from("music_daily").select("user_id, queued_on").eq("enabled", true),
-    db.from("music_daily_tracks").select("user_id, status, prediction_id").eq("day", day),
+    db.from("music_daily_tracks").select("user_id, status, retryable").eq("day", day),
   ]);
   const settled = new Set(
-    ((tracks as { user_id: string; status: string; prediction_id: string | null }[] | null) ?? [])
-      .filter((t) => !(t.status === "failed" && !t.prediction_id))
+    ((tracks as { user_id: string; status: string; retryable: boolean }[] | null) ?? [])
+      .filter((t) => !(t.status === "failed" && t.retryable))
       .map((t) => t.user_id),
   );
   const waiting = ((enabled as { user_id: string; queued_on: string | null }[] | null) ?? []).filter((u) => !settled.has(u.user_id));

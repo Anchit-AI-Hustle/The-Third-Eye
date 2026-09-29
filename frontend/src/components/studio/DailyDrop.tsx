@@ -104,9 +104,9 @@ export function DailyDrop({ preset }: { preset: () => Record<string, unknown> })
   );
 }
 
-/** Reassemble the audio from byte ranges — no single response may carry the whole file. */
-async function download(t: Track) {
-  const url = `${API}/${t.id}`;
+/** Reassemble a daily track from byte ranges — no single response may carry the whole file. */
+export async function fetchDailyAudio(id: string): Promise<Blob> {
+  const url = `${API}/${id}`;
   const parts: ArrayBuffer[] = [];
   let start = 0, total = Infinity, type = "audio/mpeg";
   while (start < total) {
@@ -119,8 +119,14 @@ async function download(t: Track) {
     parts.push(b);
     start += b.byteLength;
   }
+  return new Blob(parts, { type });
+}
+
+async function download(t: Track) {
+  const blob = await fetchDailyAudio(t.id);
+  const type = blob.type;
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(parts, { type }));
+  a.href = URL.createObjectURL(blob);
   a.download = `${t.title}.${type.includes("wav") ? "wav" : type.includes("flac") ? "flac" : "mp3"}`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);

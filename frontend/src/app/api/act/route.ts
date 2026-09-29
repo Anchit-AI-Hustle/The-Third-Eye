@@ -6,6 +6,7 @@ import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
 import { getGoogleAccessToken } from "@/lib/googleToken";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
+import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
 
 export const runtime = "nodejs";
 
@@ -53,6 +54,10 @@ export async function POST(req: NextRequest) {
       if (sent.status === 401 || sent.status === 403)
         return json({ ok: false, result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access)." });
       return json({ ok: false, result: "Gmail rejected the send." });
+    }
+    case "anchor": {
+      const out = await runAnchor(email, anchorRequestFrom(args));
+      return json({ ok: out.ok, result: out.message });
     }
     default:
       // Confirmed connector (MCP) write. `isSensitive` above already classified

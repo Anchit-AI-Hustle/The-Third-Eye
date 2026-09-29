@@ -119,6 +119,23 @@ Produce ready-to-post content as Markdown for the requested platform(s): each po
     case "video":
       return `You are a video scriptwriter and story editor. ${BRAND}${modeLine}
 For the requested format, produce a Markdown script/outline: a strong hook in the first 3 seconds, a beat-by-beat structure (or scene list), spoken lines / narration, on-screen text and B-roll notes, and a closing CTA. Match the runtime and tone. For an OTT / series concept: logline, premise, main characters, and a 3-5 episode arc. Concrete and producible.`;
+    case "reel":
+      return `You are a short-form video director who cuts vertical reels to music.${modeLine}
+Write a producible 9:16 reel as Markdown for the requested platform and length:
+- The hook: what is on screen and heard in the first 1-2 seconds, built to stop the scroll.
+- A shot list timed to the length (and to the beat, when a track is named): for each shot its seconds, what the camera sees (subject, action, framing — vertical, subject centred, close and dynamic), and the on-screen caption, 3-7 words.
+- Any voice-over line per shot, at most 2.5 words per second of the shot, or silence.
+- The loop: how the last frame leads back into the first so it replays.
+- The post: caption (2-3 lines), 5-8 hashtags, and the best cover frame.
+Concrete and visual — no generic advice, no invented statistics.`;
+    case "book":
+      return `You are a book-development editor.${modeLine}
+Plan the book as Markdown, ready to be written chapter by chapter:
+- # Title and a one-line subtitle, then the logline and who the reader is.
+- ## The promise (non-fiction: the transformation; fiction: the central conflict and what is at stake).
+- ## Outline: exactly the requested number of chapters, each as "### Chapter N: Title" followed by 3-5 bullets of what happens or what is taught, and how it ends so the next chapter pulls.
+- ## Voice: 3-4 bullets on style, point of view and tense.
+Specific to this premise — no placeholder chapters.`;
     case "campaign":
       return `You are a senior growth / brand marketing strategist. ${BRAND}${modeLine}
 Design a complete campaign plan as Markdown: objective + primary KPI, audience & core insight, the big idea / positioning, 2-3 creative angles, a channel plan table (channel · role · message · format), a week-by-week timeline, a rough budget-split table, and success metrics with a measurement plan. Ground everything in the brief; do not invent specific numbers — mark assumptions clearly.`;
@@ -160,7 +177,11 @@ export async function generateStudio(
 
   // Long-form markdown tools need more room than a short snippet tool.
   const LONG_FORM = new Set(["blog", "proposal", "prd", "report", "pitch", "lifecycle", "social", "study", "campaign", "video"]);
-  const maxTokens = tool.format === "html" ? 4000 : LONG_FORM.has(tool.id) ? 3600 : 2000;
+  // A book outline grows with its chapter count (3-5 beats each); cut short, it
+  // would quietly plan fewer chapters than were asked for.
+  const maxTokens = tool.format === "html" ? 4000
+    : tool.id === "book" ? 800 + 220 * (Number(inputs.chapters) || 12)
+    : LONG_FORM.has(tool.id) ? 3600 : 2000;
 
   const out = await llmCascade({
     system: studioSystemPrompt(tool.id, mode),

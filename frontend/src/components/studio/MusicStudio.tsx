@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X, CalendarClock } from "lucide-react";
 import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
 import { generateVisualizerVideo } from "@/lib/musicVideo";
@@ -176,8 +176,8 @@ export function matchOptions(val: string | undefined, opts: string[], max: numbe
 // Search-to-add chip picker — used for Genres, Vocal Effects, Vocal Language(s).
 // Typing a value not in `options` and pressing Enter still adds it, so an AI
 // suggestion or anything genuinely custom is never rejected.
-function TagPicker({ values, onChange, options, placeholder, max = 6 }: {
-  values: string[]; onChange: (v: string[]) => void; options: string[]; placeholder: string; max?: number;
+function TagPicker({ id, values, onChange, options, placeholder, max = 6 }: {
+  id: string; values: string[]; onChange: (v: string[]) => void; options: string[]; placeholder: string; max?: number;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -195,6 +195,7 @@ function TagPicker({ values, onChange, options, placeholder, max = 6 }: {
     <div>
       <div className="relative">
         <input
+          id={id}
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
@@ -233,12 +234,12 @@ function TagPicker({ values, onChange, options, placeholder, max = 6 }: {
 
 // Free-text field with quick-pick chips below it — used for Mood and Structure,
 // which need to accept a custom/AI value while still offering the fixed list.
-function ChipInput({ value, onChange, options, placeholder }: {
-  value: string; onChange: (v: string) => void; options: string[]; placeholder: string;
+function ChipInput({ id, value, onChange, options, placeholder }: {
+  id: string; value: string; onChange: (v: string) => void; options: string[]; placeholder: string;
 }) {
   return (
     <div>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={field} />
+      <input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={field} />
       <div className="flex flex-wrap gap-1.5 mt-1.5">
         {options.map((o) => (
           <button key={o} type="button" onClick={() => onChange(o)}
@@ -530,6 +531,12 @@ export function MusicStudio() {
     </span>
   );
 
+  // The toolbar sits beside the label, not in it (a label's first button becomes
+  // its control); htmlFor keeps the field's accessible name.
+  const Label = ({ name, children }: { name: keyof Fields; children: ReactNode }) => (
+    <div className={lbl}><label htmlFor={`music-${String(name)}`}>{children}</label><AiBar name={name} /></div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-1">
@@ -588,8 +595,8 @@ export function MusicStudio() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(420px,640px)_minmax(320px,1fr)] gap-5">
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-3.5 self-start">
         <div>
-          <div className={lbl}>Music prompt <span className="text-accent-red">*</span> <AiBar name="description" /></div>
-          <textarea value={f.description} onChange={(e) => set("description", e.target.value)} rows={3}
+          <Label name="description">Music prompt <span className="text-accent-red">*</span></Label>
+          <textarea id="music-description" value={f.description} onChange={(e) => set("description", e.target.value)} rows={3}
             placeholder="e.g. a driving hardtechno track with pulsing bass for a late-night set" className={`${field} resize-y`} />
           <button onClick={autoFill} disabled={filling || !f.description.trim()}
             className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-input border border-[#34D399]/40 bg-[#34D399]/10 text-[#34D399] text-xs font-semibold hover:bg-[#34D399]/20 disabled:opacity-40 transition-all">
@@ -597,42 +604,42 @@ export function MusicStudio() {
           </button>
         </div>
 
-        <div><div className={lbl}>Track name <AiBar name="title" /></div><input value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="optional" className={field} /></div>
+        <div><Label name="title">Track name</Label><input id="music-title" value={f.title} onChange={(e) => set("title", e.target.value)} placeholder="optional" className={field} /></div>
         <div>
-          <div className={lbl}>Artist inspiration <AiBar name="artistInspiration" /></div>
-          <TagPicker values={f.artistInspiration} onChange={(v) => set("artistInspiration", v)} options={ARTIST_INSPIRATION} placeholder="Search artists…" max={4} />
+          <Label name="artistInspiration">Artist inspiration</Label>
+          <TagPicker id="music-artistInspiration" values={f.artistInspiration} onChange={(v) => set("artistInspiration", v)} options={ARTIST_INSPIRATION} placeholder="Search artists…" max={4} />
         </div>
 
         <div>
-          <div className={lbl}>Genres <AiBar name="genres" /></div>
-          <TagPicker values={f.genres} onChange={(v) => set("genres", v)} options={GENRES} placeholder="Search genres…" max={6} />
+          <Label name="genres">Genres</Label>
+          <TagPicker id="music-genres" values={f.genres} onChange={(v) => set("genres", v)} options={GENRES} placeholder="Search genres…" max={6} />
         </div>
-        <div><div className={lbl}>Sub-genre <AiBar name="subgenre" /></div><input value={f.subgenre} onChange={(e) => set("subgenre", e.target.value)} placeholder="optional" className={field} /></div>
+        <div><Label name="subgenre">Sub-genre</Label><input id="music-subgenre" value={f.subgenre} onChange={(e) => set("subgenre", e.target.value)} placeholder="optional" className={field} /></div>
 
         <div>
-          <div className={lbl}>Moods <AiBar name="moods" /></div>
-          <TagPicker values={f.moods} onChange={(v) => set("moods", v)} options={MOODS} placeholder="Search moods…" max={5} />
+          <Label name="moods">Moods</Label>
+          <TagPicker id="music-moods" values={f.moods} onChange={(v) => set("moods", v)} options={MOODS} placeholder="Search moods…" max={5} />
         </div>
 
         <div>
-          <div className={lbl}>Instruments <AiBar name="instruments" /></div>
-          <TagPicker values={f.instruments} onChange={(v) => set("instruments", v)} options={INSTRUMENTS} placeholder="Search instruments…" max={10} />
+          <Label name="instruments">Instruments</Label>
+          <TagPicker id="music-instruments" values={f.instruments} onChange={(v) => set("instruments", v)} options={INSTRUMENTS} placeholder="Search instruments…" max={10} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div><div className={lbl}>Tempo (BPM): {f.tempo} <AiBar name="tempo" /></div><input type="range" min={BPM_MIN} max={BPM_MAX} value={f.tempo} onChange={(e) => set("tempo", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
-          <div><div className={lbl}>Energy: {f.energy}/10 <AiBar name="energy" /></div><input type="range" min={1} max={10} value={f.energy} onChange={(e) => set("energy", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
+          <div><Label name="tempo">Tempo (BPM): {f.tempo}</Label><input id="music-tempo" type="range" min={BPM_MIN} max={BPM_MAX} value={f.tempo} onChange={(e) => set("tempo", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
+          <div><Label name="energy">Energy: {f.energy}/10</Label><input id="music-energy" type="range" min={1} max={10} value={f.energy} onChange={(e) => set("energy", Number(e.target.value))} className="w-full accent-[#34D399]" /></div>
         </div>
 
         <div>
-          <div className={lbl}>Song structure <AiBar name="structure" /></div>
-          <ChipInput value={f.structure} onChange={(v) => set("structure", v)} options={structuresFor(f.genres, f.subgenre).slice(0, 9)} placeholder="e.g. Intro–Build–Drop–Breakdown–Drop–Outro" />
+          <Label name="structure">Song structure</Label>
+          <ChipInput id="music-structure" value={f.structure} onChange={(v) => set("structure", v)} options={structuresFor(f.genres, f.subgenre).slice(0, 9)} placeholder="e.g. Intro–Build–Drop–Breakdown–Drop–Outro" />
           <p className="text-[10px] text-text-muted mt-1">Sections become the lyric's section tags, in order — options follow the genres above.</p>
         </div>
 
         <div>
-          <div className={lbl}>Session length: {fmtDuration(f.duration)} <AiBar name="duration" /></div>
-          <input type="range" min={10} max={MAX_DURATION} step={10} value={f.duration} onChange={(e) => set("duration", Number(e.target.value))} className="w-full accent-[#34D399]" />
+          <Label name="duration">Session length: {fmtDuration(f.duration)}</Label>
+          <input id="music-duration" type="range" min={10} max={MAX_DURATION} step={10} value={f.duration} onChange={(e) => set("duration", Number(e.target.value))} className="w-full accent-[#34D399]" />
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             {[30, 60, 180, 600, 1800, 3600, 10800, 18000].map((s) => (
               <button key={s} type="button" onClick={() => set("duration", s)}
@@ -655,26 +662,26 @@ export function MusicStudio() {
         {f.vocals && (
           <>
             <div>
-              <div className={lbl}>Vocal style(s) <AiBar name="vocalStyles" /></div>
-              <TagPicker values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Search vocal styles…" max={4} />
+              <Label name="vocalStyles">Vocal style(s)</Label>
+              <TagPicker id="music-vocalStyles" values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Search vocal styles…" max={4} />
             </div>
             <div>
-              <div className={lbl}>Vocal language(s) <AiBar name="vocalLanguages" /></div>
-              <TagPicker values={f.vocalLanguages} onChange={(v) => set("vocalLanguages", v)} options={LANGUAGES} placeholder="Select languages…" max={5} />
+              <Label name="vocalLanguages">Vocal language(s)</Label>
+              <TagPicker id="music-vocalLanguages" values={f.vocalLanguages} onChange={(v) => set("vocalLanguages", v)} options={LANGUAGES} placeholder="Select languages…" max={5} />
             </div>
             <div>
-              <div className={lbl}>Vocal intensity: {f.vocalIntensity}/10 <AiBar name="vocalIntensity" /></div>
-              <input type="range" min={1} max={10} value={f.vocalIntensity} onChange={(e) => set("vocalIntensity", Number(e.target.value))} className="w-full accent-[#34D399]" />
+              <Label name="vocalIntensity">Vocal intensity: {f.vocalIntensity}/10</Label>
+              <input id="music-vocalIntensity" type="range" min={1} max={10} value={f.vocalIntensity} onChange={(e) => set("vocalIntensity", Number(e.target.value))} className="w-full accent-[#34D399]" />
               <div className="flex justify-between text-[10px] text-text-muted mt-1">
                 <span>1 — Soft whisper</span><span>10 — Powerful performance</span>
               </div>
             </div>
             <div>
-              <div className={lbl}>Vocal effects <AiBar name="vocalEffects" /></div>
-              <TagPicker values={f.vocalEffects} onChange={(v) => set("vocalEffects", v)} options={VOCAL_EFFECTS} placeholder="Select effects…" max={6} />
+              <Label name="vocalEffects">Vocal effects</Label>
+              <TagPicker id="music-vocalEffects" values={f.vocalEffects} onChange={(v) => set("vocalEffects", v)} options={VOCAL_EFFECTS} placeholder="Select effects…" max={6} />
             </div>
             <div>
-              <div className={lbl}>Lyrics {f.lyricsMode === "manual" && <AiBar name="lyricsText" />}</div>
+              <div className={lbl}><label htmlFor="music-lyricsText">Lyrics</label>{f.lyricsMode === "manual" && <AiBar name="lyricsText" />}</div>
               <div className="flex gap-1 mb-2">
                 {(["auto", "manual", "none"] as const).map((m) => (
                   <button key={m} onClick={() => set("lyricsMode", m)}
@@ -684,7 +691,7 @@ export function MusicStudio() {
                 ))}
               </div>
               {f.lyricsMode === "manual" && (
-                <textarea value={f.lyricsText} onChange={(e) => set("lyricsText", e.target.value)} rows={4} placeholder="[Verse]\n…\n[Chorus]\n…" className={`${field} resize-y`} />
+                <textarea id="music-lyricsText" value={f.lyricsText} onChange={(e) => set("lyricsText", e.target.value)} rows={4} placeholder="[Verse]\n…\n[Chorus]\n…" className={`${field} resize-y`} />
               )}
             </div>
           </>
