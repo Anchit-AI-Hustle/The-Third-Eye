@@ -1,9 +1,18 @@
 # Google Sign-In & OAuth runbook
 
-Sign-in requests **identity only** — `openid email profile`
-(`lib/googleToken.ts` → `BASIC_SCOPE_LIST`). Gmail, Calendar and Chat are **not**
-granted by signing in. They are opt-in, through *Settings → Connections →
-Connect Google*, which requests `INGESTION_SCOPES` on its own consent screen.
+**Google is no longer a sign-in provider at all.** Signing in is a mobile number
+and a 4-digit PIN (`lib/auth.ts`, a NextAuth credentials provider; the Google
+provider is commented out in the same file). Google is only ever a *connection*,
+through *Settings → Connections → Connect Google*, which requests
+`INGESTION_SCOPES` on its own consent screen.
+
+So everything below about **signing in** now describes the commented-out
+provider, and matters when restoring it. Everything about **connecting** —
+sections 1 to 5, the redirect URI, the consent screen, verification — is live and
+unchanged: it is how Gmail, Calendar and Chat are granted, and always was.
+
+Before it was commented out, sign-in requested **identity only** —
+`openid email profile` (`lib/googleToken.ts` → `BASIC_SCOPE_LIST`).
 
 This document described the opposite until now, and kept doing so after the
 change shipped. Two code comments and `/api/connect/google/status` were written

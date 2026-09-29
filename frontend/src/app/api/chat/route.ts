@@ -1442,11 +1442,10 @@ export async function POST(req: NextRequest) {
   // (service-role bypasses RLS).
   const identity = await identify(req.headers, "chat");
   const email = identity.email;
-  // Sign-in only grants basic scopes, so the session token can't touch
-  // Gmail/Calendar — using it just yields a 403 with misleading "sign back in"
-  // guidance. Only the token minted from the opt-in "Connect Google" flow
-  // (Settings → Connections) carries the gmail/calendar scopes, so use that
-  // alone; absent it the Google tools report "not connected" accurately.
+  // Sign-in is a phone number and a PIN and involves no Google token at all.
+  // Only the token minted from the opt-in "Connect Google" flow (Settings →
+  // Connections) can touch Gmail/Calendar, so use that alone; absent it the
+  // Google tools report "not connected" accurately.
   let accessToken: string | undefined;
 
   // /api/chat isn't covered by the middleware matcher, so guard here: no session
@@ -1467,11 +1466,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Use the stored Google grant (gmail/calendar scopes) when available. Sign-in
-  // does NOT grant these - it asks for identity only, because the Gmail scopes
-  // are restricted and requesting them at sign-in gates login on Google's
-  // verification review. So this is absent for most signed-in users until they
-  // go through /api/connect/google, and the capability check below is what the
-  // assistant must act on rather than the presence of a token.
+  // grants nothing from Google at all - it is a mobile number and a PIN - so
+  // this is absent until the user goes through /api/connect/google, and the
+  // capability check below is what the assistant must act on rather than the
+  // presence of a token.
   let googleScope: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);

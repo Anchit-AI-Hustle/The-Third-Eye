@@ -165,8 +165,8 @@ async function handleCall(req: NextRequest, id: string | number | null, params: 
   if (!grant?.accessToken) {
     return toolText(
       id,
-      "Google isn't connected for this account. Signing in with Google normally grants it — sign out and back in, " +
-        'or use Settings → Connections → "Connect Google".',
+      'Google isn\'t connected for this account. Sign-in is a mobile number and a PIN and grants no ' +
+        'mail access, so this is a one-time step: Settings → Connections → "Connect Google".',
       true,
     );
   }

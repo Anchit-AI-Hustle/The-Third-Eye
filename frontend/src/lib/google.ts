@@ -24,6 +24,28 @@ export async function accessTokenFromRefresh(refreshToken: string): Promise<stri
   }
 }
 
+/**
+ * The address of the mailbox this token belongs to.
+ *
+ * Needed because the app's identity key is not always an email: under phone
+ * sign-in it is an E.164 number, and the cron used it directly as the `To:` for
+ * reminders and the daily digest, which produced messages addressed to
+ * `+919876543210`. The recipient in those cases is the user's own mailbox, and we
+ * are already holding a token for it, so the mailbox can say what it is called.
+ */
+export async function gmailAddressFor(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { emailAddress?: string };
+    return json.emailAddress ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sendGmail(
   accessToken: string,
   to: string,

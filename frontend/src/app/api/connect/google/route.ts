@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { INGESTION_SCOPES, originFromRequest, revokeGoogleAccess } from "@/lib/googleToken";
+import { CONNECT_SCOPES, originFromRequest, revokeGoogleAccess } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -22,7 +22,9 @@ export async function GET(req: Request) {
     client_id: clientId,
     redirect_uri: `${originFromRequest(req)}/api/connect/google/callback`,
     response_type: "code",
-    scope: INGESTION_SCOPES,
+    // Feature scopes plus identity — see CONNECT_SCOPES for why identity is in
+    // there and why it does not change what "connected" means.
+    scope: CONNECT_SCOPES,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",

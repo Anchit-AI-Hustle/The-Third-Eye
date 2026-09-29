@@ -1,186 +1,136 @@
 import { NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
-import { getAdminSupabase } from "@/lib/serverSupabase";
-import { encrypt } from "@/lib/crypto";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { resolveAuthSecret } from "@/lib/authSecret";
-import { BASIC_SCOPE_LIST, INGESTION_SCOPE_LIST, hasGoogleScope } from "@/lib/googleToken";
+import { clientIp, enter } from "@/lib/phoneAuth";
 
 /**
- * The FastAPI backend, when one is reachable.
+ * SIGN-IN IS A MOBILE NUMBER AND A 4-DIGIT PIN, ported from parwah-hq.
  *
- * Deliberately no default. The old fallback was `http://backend:8000` — a
- * docker-compose service name that resolves only inside that network. On Vercel
- * it resolves nowhere, so every single sign-in fired a doomed request and paid
- * the connection failure before finishing. docker-compose sets BACKEND_URL
- * explicitly, so treating "unset" as "no backend" keeps local development
- * working and makes the hosted deployment stop calling into the void.
+ * Google sign-in is commented out below rather than deleted, so restoring it is
+ * uncommenting a block. Nothing was lost by taking it out of the login path:
+ * Gmail and Calendar never ran on the session's Google token. They run on the
+ * refresh token stored by the opt-in connect flow (`/api/connect/google`,
+ * Settings → Connections), and both /api/chat and /api/act read that store and
+ * ignore the session token entirely — the comment at chat/route.ts:1445 says so
+ * in as many words. So Google remains a CONNECTION; it is simply no longer the
+ * front door.
+ *
+ * The identity the rest of the app keys on is `session.user.email`, and it is
+ * now the E.164 phone number instead of a Google address. Almost everything
+ * treats it as an opaque key, which is why so little else changed — but NOT
+ * everything did, and assuming otherwise broke two things quietly: Stripe
+ * prefilled it as `customer_email` (which it rejects, so nobody signing in by
+ * number could subscribe) and the cron addressed reminder mail `To:` it. Both
+ * now ask `isEmailIdentity()` first (lib/serverIdentity.ts). Anything new that
+ * wants to WRITE TO the identity rather than key on it has to do the same.
+ * ACCOUNTS CREATED UNDER GOOGLE SIGN-IN KEEP THEIR DATA UNDER THEIR EMAIL KEY.
+ * Signing in by number is a new identity, not a rename, and that has a
+ * consequence worth stating plainly rather than in passing: with Google no longer
+ * a provider, once an existing session's 24-hour JWT expires there is nothing
+ * left that can produce the email identity, so its tasks, notes, billing row and
+ * stored Google grant are no longer reachable from any sign-in. Nothing is
+ * deleted, but on a deployment with real data somebody must re-key it —
+ * DEVELOPMENT.md §4a has the one-off statement and the order to run it in.
+ *
+ * Deliberately not automatic. Linking two identities on a guess, on a path where
+ * possession of the number is not yet proved, would hand one person's workspace
+ * to whoever registered a number first; an obviously empty account is the safer
+ * failure.
  */
-const BACKEND_URL = process.env.BACKEND_URL?.trim();
-
-/**
- * Store a refresh token for the background jobs - but only one that can do
- * something for them.
- *
- * THE BUG THIS FIXES
- *   Sign-in asks for identity only (see the provider config below). The refresh
- *   token it yields can mint nothing but identity, and this function used to
- *   store it anyway.
- *
- *   google_tokens holds ONE row per user, upserted on user_id, and it is the row
- *   the Gmail/Chat crons, /api/chat and /api/act all read. So a user who
- *   connected Google through /api/connect/google and then signed in again had
- *   their feature-scoped grant overwritten by an identity-only one: Gmail stops
- *   working, and the row looks healthier than ever because updated_at is fresh.
- *
- *   The same write drove the "Connected" badge in Settings, which read row
- *   presence. Every sign-in created a row, so every user was told Google was
- *   connected when no feature scope had ever been granted. (That endpoint now
- *   reads the scopes as well - two independent defects, one cause.)
- *
- *   Nothing needs an identity-only refresh token. Sessions are JWTs, and the
- *   only readers of this row want Gmail, Calendar or Chat. So the rule is: a
- *   grant that carries no feature scope does not belong in that row, and must
- *   not be allowed to displace one that does.
- */
-async function persistRefreshToken(email: string | undefined, refreshToken: string | undefined, scope: string | undefined) {
-  if (!email || !refreshToken) return;
-  if (!INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(scope, s))) return;
-  const sb = getAdminSupabase();
-  const enc = encrypt(refreshToken);
-  if (!sb || !enc) return;
-  await sb.from("google_tokens").upsert(
-    { user_id: email, refresh_token_enc: enc, scope, updated_at: new Date().toISOString() },
-    { onConflict: "user_id" },
-  );
-}
-
-async function refreshAccessToken(token: any) {
-  try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        grant_type: "refresh_token",
-        refresh_token: token.refreshToken,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw data;
-    return {
-      ...token,
-      accessToken: data.access_token,
-      accessTokenExpires: Date.now() + data.expires_in * 1000,
-      refreshToken: data.refresh_token ?? token.refreshToken,
-    };
-  } catch {
-    return { ...token, error: "RefreshAccessTokenError" };
-  }
-}
-
 export const authOptions: NextAuthOptions = {
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          // IDENTITY ONLY AT SIGN-IN. This is the rollback documented in
-          // docs/GOOGLE_OAUTH.md, taken because the cost described below was
-          // being paid in full.
-          //
-          // Sign-in used to request SIGNIN_SCOPES — identity plus Gmail,
-          // Calendar and Chat — so that signing in with Google also connected
-          // it, in one consent screen. gmail.readonly and gmail.send are
-          // *restricted* scopes, and requesting them AT SIGN-IN makes Google's
-          // verification review a gate on logging in at all: while the consent
-          // screen is unverified, only accounts on the test-user list can get
-          // in and everybody else is refused with AccessDenied.
-          //
-          // That is exactly what was happening. It worked for the owner, who is
-          // a test user, and failed for every other person who tried — the same
-          // shape as a link that opens for whoever is already signed in and
-          // shows a wall to everyone else.
-          //
-          // Restricted-scope review needs a CASA assessment and takes weeks, so
-          // until it clears, identity-only is the difference between an app
-          // anyone can use and an app only its author can use.
-          //
-          // Gmail, Calendar and Chat are not lost. /api/connect/google requests
-          // INGESTION_SCOPES on its own, and googleCapabilities() reads what was
-          // actually granted, so a user without them is told the feature is not
-          // connected rather than watching it fail. Restoring the one-screen
-          // flow after verification is this line going back to SIGNIN_SCOPES.
-          scope: BASIC_SCOPE_LIST.join(" "),
-          // offline + a forced consent are what actually yield a refresh token.
-          // Without prompt=consent Google omits it for anyone who authorized
-          // before, and the crons (reminders, Gmail scrape) can only act while
-          // the user is away if a refresh token was stored.
-          access_type: "offline",
-          prompt: "consent",
-          include_granted_scopes: "true",
-        },
+    CredentialsProvider({
+      id: "phone",
+      name: "Mobile number",
+      credentials: {
+        phone: { label: "Mobile number", type: "tel" },
+        cc: { label: "Country code", type: "text" },
+        pin: { label: "PIN", type: "password" },
+        // Present only on sign-up: an unknown number that arrives with a name
+        // creates the account, so signing up and signing in are one flow.
+        name: { label: "Name", type: "text" },
+      },
+      // `req` is here for the caller's address alone, which `enter` uses as a
+      // rate-limit key and never stores. This endpoint is unauthenticated and
+      // does real work per call — a scrypt hash — so without a limit in front of
+      // it anyone can spend the deployment's CPU, walk a list of numbers, or
+      // re-lock somebody's account every fifteen minutes indefinitely.
+      async authorize(credentials, req) {
+        const res = await enter({
+          phone: credentials?.phone,
+          cc: credentials?.cc,
+          pin: credentials?.pin,
+          name: credentials?.name,
+          ip: clientIp(req?.headers),
+        });
+        if (res.ok) {
+          // `email` is the app's identity key, not an address. See the note above.
+          return { id: res.user.id, name: res.user.name, email: res.user.phone };
+        }
+        // Thrown so the message reaches the form: a wrong PIN has to be able to
+        // say how many tries are left, and a locked account how long for.
+        throw new Error(res.error ?? "Could not sign you in.");
       },
     }),
+    // ── GOOGLE SIGN-IN — COMMENTED OUT, KEPT FOR RESTORATION ────────────────
+    // Uncommenting this block also needs, at the top of this file:
+    //   import GoogleProvider from "next-auth/providers/google";
+    //   import { getAdminSupabase } from "@/lib/serverSupabase";
+    //   import { encrypt } from "@/lib/crypto";
+    //   import { BASIC_SCOPE_LIST, INGESTION_SCOPE_LIST, hasGoogleScope } from "@/lib/googleToken";
+    // and the `persistRefreshToken` / `refreshAccessToken` helpers, the `jwt`
+    // callback that used them, the `session` callback that copied accessToken /
+    // backendToken onto the session, the module augmentations that typed them,
+    // and the two suites that covered all of it —
+    // lib/__tests__/signinScopes.test.ts and authBackendExchange.test.ts — which
+    // were deleted with the code they pinned rather than left asserting against
+    // a comment.
+    //
+    // ONE OF THOSE HELPERS CARRIED A FIX THAT MUST COME BACK WITH IT (#313).
+    // `persistRefreshToken` has to begin:
+    //
+    //   if (!INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(scope, s))) return;
+    //
+    // google_tokens holds one row per user, upserted on user_id, and it is the
+    // row the Gmail/Chat crons, /api/chat and /api/act all read. Sign-in asks
+    // for identity only, so without that line a user who had connected Google
+    // properly and then signed in again had their feature-scoped grant
+    // overwritten by an identity-only one: Gmail stops working, and the row
+    // looks healthier than ever because updated_at is fresh.
+    //
+    // GoogleProvider({
+    //   clientId: process.env.GOOGLE_CLIENT_ID!,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    //   authorization: {
+    //     params: {
+    //       // IDENTITY ONLY AT SIGN-IN, per docs/GOOGLE_OAUTH.md. Sign-in used
+    //       // to request identity plus Gmail, Calendar and Chat so that one
+    //       // consent screen did both jobs. gmail.readonly and gmail.send are
+    //       // *restricted* scopes, and asking for them AT SIGN-IN makes
+    //       // Google's verification review a gate on logging in at all: while
+    //       // the screen is unverified only accounts on the test-user list get
+    //       // in, and everyone else is refused with AccessDenied. It worked for
+    //       // the owner, who is a test user, and refused every other person who
+    //       // tried. Restricted-scope review needs a CASA assessment and takes
+    //       // weeks, so identity-only was the difference between an app anyone
+    //       // can use and an app only its author can use.
+    //       scope: BASIC_SCOPE_LIST.join(" "),
+    //       // offline + a forced consent are what actually yield a refresh
+    //       // token. Without prompt=consent Google omits it for anyone who
+    //       // authorized before, and the crons (reminders, Gmail scrape) can
+    //       // only act while the user is away if one was stored.
+    //       access_type: "offline",
+    //       prompt: "consent",
+    //       include_granted_scopes: "true",
+    //     },
+    //   },
+    // }),
   ],
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60,
   },
   callbacks: {
-    async jwt({ token, account, profile }) {
-      if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
-        token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : 0;
-        await persistRefreshToken(
-          (profile as { email?: string } | undefined)?.email ?? token.email ?? undefined,
-          account.refresh_token,
-          account.scope,
-        );
-        // No BACKEND_URL means no backend is deployed for this environment, so
-        // there is nothing to exchange the token with. Skipping keeps sign-in
-        // off a request that can only fail, and keeps the log honest: an error
-        // per login for an absent optional service is noise that buries real
-        // failures.
-        if (account.id_token && BACKEND_URL) {
-          // Sign-in must not fail just because the backend is unreachable, so
-          // this stays non-fatal — but it is logged. It used to be swallowed by
-          // a bare `catch {}`, which hid that the backend was rejecting every
-          // one of these tokens (it decoded them HS256 with NEXTAUTH_SECRET,
-          // while Google signs them RS256), so `backendToken` was never set for
-          // anyone and nothing surfaced.
-          try {
-            const res = await fetch(`${BACKEND_URL}/api/v1/auth/session`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: account.id_token }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              token.backendToken = data.access_token;
-            } else {
-              const detail = await res.text().catch(() => "");
-              console.error(
-                `auth: backend session exchange failed (HTTP ${res.status}). ` +
-                  `Backend features will be unavailable. ${detail.slice(0, 500)}`,
-              );
-            }
-          } catch (err) {
-            console.error("auth: backend session exchange unreachable:", err);
-          }
-        }
-        return token;
-      }
-      if (Date.now() < ((token.accessTokenExpires as number) ?? 0)) return token;
-      return refreshAccessToken(token);
-    },
-    async session({ session, token }) {
-      if (token.backendToken) (session as any).backendToken = token.backendToken;
-      if (token.accessToken) (session as any).accessToken = token.accessToken;
-      return session;
-    },
     // Post-auth landing: always resolve to a proper in-app page. A bare
     // base-url redirect (which would otherwise show the marketing landing) goes
     // to the dashboard; same-origin callback URLs are preserved.
@@ -197,20 +147,3 @@ export const authOptions: NextAuthOptions = {
   },
   secret: resolveAuthSecret(),
 };
-
-declare module "next-auth" {
-  interface Session {
-    backendToken?: string;
-    accessToken?: string;
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
-    backendToken?: string;
-    accessToken?: string;
-    refreshToken?: string;
-    accessTokenExpires?: number;
-    error?: string;
-  }
-}

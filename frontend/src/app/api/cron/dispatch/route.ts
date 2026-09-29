@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { getAdminSupabase } from "@/lib/serverSupabase";
 import { decrypt } from "@/lib/crypto";
-import { accessTokenFromRefresh, sendGmail } from "@/lib/google";
+import { accessTokenFromRefresh, gmailAddressFor, sendGmail } from "@/lib/google";
+import { isEmailIdentity } from "@/lib/serverIdentity";
 import { sendPush } from "@/lib/push";
 import { leadRecommendation } from "@/lib/digest";
 
@@ -31,16 +32,36 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-// Cache one access token per user across a run.
+// Cache one access token, and one delivery address, per user across a run.
 type Sb = NonNullable<ReturnType<typeof getAdminSupabase>>;
+type Mailbox = { token: string | null; to: string | null };
+type Cache = Map<string, Mailbox>;
 
-async function accessTokenFor(sb: Sb, cache: Map<string, string | null>, email: string): Promise<string | null> {
-  if (cache.has(email)) return cache.get(email)!;
-  const { data } = await sb.from("google_tokens").select("refresh_token_enc").eq("user_id", email).maybeSingle();
+// THE USER ID IS NOT ALWAYS AN ADDRESS. It is whatever sign-in put in
+// session.user.email, and under phone sign-in that is an E.164 number — so
+// addressing mail To: it produced messages to "+919876543210" that Gmail
+// refused. The recipient here is always the user's own mailbox and we hold a
+// token for it, so when the id is not an email the mailbox is asked its name.
+async function mailboxFor(sb: Sb, cache: Cache, userId: string): Promise<Mailbox> {
+  const hit = cache.get(userId);
+  if (hit) return hit;
+  const { data } = await sb
+    .from("google_tokens")
+    .select("refresh_token_enc, email")
+    .eq("user_id", userId)
+    .maybeSingle();
   const refresh = data?.refresh_token_enc ? decrypt(data.refresh_token_enc) : null;
   const token = refresh ? await accessTokenFromRefresh(refresh) : null;
-  cache.set(email, token);
-  return token;
+  // The address recorded when they connected is the reliable one. Asking Gmail
+  // is the fallback for grants stored before that column existed, and it only
+  // works on a scope that can read the mailbox — getProfile refuses a send-only
+  // grant, which is why the stored value comes first.
+  const to = isEmailIdentity(userId)
+    ? userId
+    : (data?.email as string | undefined) || (token ? await gmailAddressFor(token) : null);
+  const box: Mailbox = { token, to };
+  cache.set(userId, box);
+  return box;
 }
 
 async function runReminders(sb: Sb) {
@@ -53,16 +74,16 @@ async function runReminders(sb: Sb) {
     .limit(200);
   if (!due?.length) return { fired: 0 };
 
-  const cache = new Map<string, string | null>();
+  const cache: Cache = new Map();
   let fired = 0;
 
   for (const r of due) {
     const subject = `⏰ Reminder: ${r.title}`;
     const html = `<div style="font-family:system-ui,sans-serif"><h2>${escapeHtml(r.title)}</h2>${r.body ? `<p>${escapeHtml(r.body)}</p>` : ""}<p style="color:#888;font-size:12px">— JARVIS</p></div>`;
 
-    const token = await accessTokenFor(sb, cache, r.user_id);
+    const { token, to } = await mailboxFor(sb, cache, r.user_id);
     let emailed = false;
-    if (token) emailed = await sendGmail(token, r.user_id, subject, html);
+    if (token && to) emailed = await sendGmail(token, to, subject, html);
     const pushed = await sendPush(r.user_id, r.title, r.body ?? "Reminder", "/assistant");
 
     await logNotification(sb, r.user_id, "reminder", r.id, "email", emailed ? "sent" : "failed");
@@ -88,7 +109,7 @@ async function runDigest(sb: Sb) {
   const { data: users } = await sb.from("google_tokens").select("user_id").limit(500);
   if (!users?.length) return { sent: 0 };
 
-  const cache = new Map<string, string | null>();
+  const cache: Cache = new Map();
   let sent = 0;
 
   for (const u of users) {
@@ -111,8 +132,10 @@ async function runDigest(sb: Sb) {
     const { data: goals } = await sb.from("goals").select("title, current, target, unit").eq("user_id", email).limit(20);
 
     const html = digestHtml(tasks ?? [], goals ?? [], today);
-    const token = await accessTokenFor(sb, cache, email);
-    const ok = token ? await sendGmail(token, email, `🗓️ Your JARVIS daily briefing — ${today}`, html) : false;
+    const { token, to } = await mailboxFor(sb, cache, email);
+    const ok = token && to
+      ? await sendGmail(token, to, `🗓️ Your JARVIS daily briefing — ${today}`, html)
+      : false;
     // The push is what actually reaches them, so lead with the recommendation
     // rather than a count they'd have to open the app to act on.
     const lead = leadRecommendation(tasks ?? [], goals ?? [], today);

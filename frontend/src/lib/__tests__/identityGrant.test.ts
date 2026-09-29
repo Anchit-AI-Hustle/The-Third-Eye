@@ -3,38 +3,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * An identity-only Google grant is not a connection.
  *
- * THE TWO DEFECTS THIS PINS
- *   Sign-in was rolled back to identity-only scopes because the Gmail scopes are
- *   restricted and asking for them on the login screen gated login on Google's
- *   verification review. Two places had been written on the assumption that
- *   sign-in grants everything, and neither was updated:
+ * THE DEFECT THIS PINS
+ *   /api/connect/google/status reported `connected: !!row`. A row in
+ *   google_tokens was created for everyone who signed in, so Settings told every
+ *   signed-in user "Connected" above a list of zero permissions. It is invisible
+ *   from the code — nothing throws — and the owner, who had connected Google
+ *   properly, would see a working app either way.
  *
- *   1. lib/auth.ts stored the refresh token from sign-in in google_tokens. That
- *      table holds ONE row per user, upserted on user_id, and it is the row the
- *      Gmail/Chat crons read. A user who connected Google through
- *      /api/connect/google and then signed in again had their working grant
- *      overwritten with one that can mint nothing but identity - Gmail stops,
- *      and the row looks fine because updated_at is fresh.
+ *   Being connected means holding a scope that can DO something: read mail, read
+ *   the calendar. Identity is not one of those.
  *
- *   2. /api/connect/google/status reported `connected: !!row`. Since sign-in
- *      created a row for everyone, Settings told every signed-in user "Connected"
- *      above a list of zero permissions.
- *
- *   Both are invisible from the code: nothing throws, and the owner - who had
- *   connected Google before the rollback and is a Google test user - would see a
- *   working app either way.
+ * WHAT USED TO BE HERE TOO
+ *   The other half of this suite drove the `jwt` callback, which stored the
+ *   sign-in refresh token in that same one-row-per-user table and could
+ *   overwrite a feature-scoped grant with an identity-only one. Sign-in is now a
+ *   mobile number and a 4-digit PIN and asks Google for nothing, so there is no
+ *   sign-in write left to test. The guard that fixed it is quoted in lib/auth.ts
+ *   inside the commented-out Google provider, so restoring that provider
+ *   restores the fix with it.
  */
 
 const USER = "user@example.com";
 
-const upsert = vi.fn().mockResolvedValue({ error: null });
 let row: { scope?: string; updated_at?: string } | null = null;
+
+const upsert = vi.fn().mockResolvedValue({ error: null });
 
 vi.mock("@/lib/serverSupabase", () => ({
   getAdminSupabase: () => ({
     from: () => ({
-      upsert: (...a: unknown[]) => upsert(...a),
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: row }) }) }),
+      upsert: (...a: unknown[]) => upsert(...a),
     }),
   }),
 }));
@@ -45,8 +44,9 @@ vi.mock("next-auth", () => ({
 
 const OLD_ENV = process.env;
 beforeEach(() => {
-  process.env = { ...OLD_ENV, GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "secret", BACKEND_URL: "" };
+  process.env = { ...OLD_ENV, GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "secret" };
   vi.resetModules();
+  vi.unstubAllGlobals();
   upsert.mockClear();
   row = null;
 });
@@ -54,57 +54,8 @@ afterEach(() => {
   process.env = OLD_ENV;
 });
 
-/** Drive the real jwt callback the way NextAuth does on a fresh sign-in. */
-async function signIn(scope: string) {
-  const { authOptions } = await import("@/lib/auth");
-  const jwt = authOptions.callbacks!.jwt!;
-  return jwt({
-    token: {},
-    account: { refresh_token: "1//rt", scope, expires_at: 0, provider: "google", type: "oauth", providerAccountId: "1" },
-    profile: { email: USER },
-  } as never);
-}
-
 const IDENTITY = "openid email profile";
 const WITH_GMAIL = "openid email profile https://www.googleapis.com/auth/gmail.readonly";
-
-describe("what gets written to google_tokens at sign-in", () => {
-  it("does not store an identity-only refresh token", async () => {
-    await signIn(IDENTITY);
-    expect(upsert).not.toHaveBeenCalled();
-  });
-
-  it("cannot overwrite a feature-scoped grant, which is the data loss", async () => {
-    // The row the connect flow wrote. Signing in again must leave it alone.
-    row = { scope: WITH_GMAIL };
-    await signIn(IDENTITY);
-    expect(upsert).not.toHaveBeenCalled();
-  });
-
-  it("still stores a grant that carries a feature scope", async () => {
-    await signIn(WITH_GMAIL);
-    expect(upsert).toHaveBeenCalledTimes(1);
-    const written = upsert.mock.calls[0][0] as { user_id: string; scope: string };
-    expect(written.user_id).toBe(USER);
-    expect(written.scope).toBe(WITH_GMAIL);
-  });
-
-  it("stores nothing when Google returned no refresh token at all", async () => {
-    const { authOptions } = await import("@/lib/auth");
-    await authOptions.callbacks!.jwt!({
-      token: {},
-      account: { scope: WITH_GMAIL, provider: "google", type: "oauth", providerAccountId: "1" },
-      profile: { email: USER },
-    } as never);
-    expect(upsert).not.toHaveBeenCalled();
-  });
-
-  it("keeps the access token on the session regardless", async () => {
-    // Refusing to PERSIST an identity grant must not break signing in with it.
-    const token = (await signIn(IDENTITY)) as { refreshToken?: string };
-    expect(token.refreshToken).toBe("1//rt");
-  });
-});
 
 describe('what Settings is told "connected" means', () => {
   async function status() {
@@ -137,5 +88,42 @@ describe('what Settings is told "connected" means', () => {
     const body = await status();
     expect(body.connected).toBe(true);
     expect(body.capabilities).toMatchObject({ gmailRead: false, gmailSend: false, calendarRead: true });
+  });
+});
+
+describe("what the connect callback is allowed to store", () => {
+  // #313's fix lived in the sign-in helper and went with it. The connect callback
+  // never had it, and this PR made the bad outcome ORDINARY by adding openid/email
+  // to CONNECT_SCOPES: "declined Gmail and Calendar" now still comes back holding
+  // identity scopes, and writing that row replaced a working grant with a useless
+  // one while updated_at looked healthy.
+  async function callback(scope: string) {
+    vi.doMock("@/lib/googleToken", async () => {
+      const real = await vi.importActual<typeof import("@/lib/googleToken")>("@/lib/googleToken");
+      return { ...real, originFromRequest: () => "https://example.com" };
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ refresh_token: "1//rt", scope }),
+      text: () => Promise.resolve(""),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { GET } = await import("@/app/api/connect/google/callback/route");
+    const req = new Request("https://example.com/api/connect/google/callback?code=c&state=s", {
+      headers: { cookie: "g_connect_state=s" },
+    });
+    return GET(req);
+  }
+
+  it("stores nothing when no feature scope was granted", async () => {
+    const res = await callback(IDENTITY);
+    expect(res.headers.get("location")).toContain("connect=google_no_scopes");
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("stores the grant when a feature scope was granted", async () => {
+    const res = await callback(WITH_GMAIL);
+    expect(res.headers.get("location")).toContain("connect=google_connected");
+    expect(upsert).toHaveBeenCalledTimes(1);
   });
 });

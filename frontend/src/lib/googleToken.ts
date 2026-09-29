@@ -96,11 +96,16 @@ export async function revokeGoogleAccess(
 /**
  * Google scopes the Gmail/Calendar/Chat features need.
  *
- * NOT requested at sign-in. gmail.readonly and gmail.send are restricted
- * scopes, and asking for them on the login consent screen makes Google's
- * verification review a gate on logging in at all - while the screen is
- * unverified, only test users get in. lib/auth.ts therefore asks for identity
- * only, and these are requested separately by /api/connect/google.
+ * NOT requested at sign-in — and now sign-in could not request them if it
+ * wanted to: signing in is a mobile number and a 4-digit PIN (see lib/auth.ts)
+ * and asks Google for nothing at all. These are requested only by
+ * /api/connect/google, i.e. Settings → Connections, so connecting Google is
+ * always a separate, explicit step.
+ *
+ * They were kept off the login screen even while Google WAS the login, because
+ * gmail.readonly and gmail.send are restricted scopes and asking for them there
+ * makes Google's verification review a gate on logging in at all - while the
+ * screen is unverified, only test users get in.
  *
  * This comment used to say the opposite, and said it after the rollback had
  * already shipped. Two call sites read it and repeated the claim, and
@@ -121,13 +126,25 @@ export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/chat.messages.readonly",
 ] as const;
 
-export const INGESTION_SCOPES = INGESTION_SCOPE_LIST.join(" ");
-
-/** Identity scopes every sign-in needs regardless of feature access. */
+/** Identity scopes. Requested by the connect flow, and by sign-in if Google is
+ * ever restored as a provider (see lib/auth.ts). */
 export const BASIC_SCOPE_LIST = ["openid", "email", "profile"] as const;
 
-/** The full set requested at sign-in: identity plus every feature scope. */
-export const SIGNIN_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].join(" ");
+/**
+ * Everything /api/connect/google asks for: the feature scopes plus identity.
+ *
+ * Identity is in there so the callback can record WHICH mailbox the grant belongs
+ * to — the cron needs that to send someone their own reminders, and it can be
+ * neither inferred from the identity key (a phone number since sign-in changed)
+ * nor always read back from Gmail, because users/me/profile refuses a send-only
+ * grant. openid/email are not restricted, so including them does not put this
+ * screen behind OAuth verification.
+ *
+ * "connected" still means holding a FEATURE scope (see
+ * /api/connect/google/status), so adding identity here cannot make an
+ * identity-only grant look like a connection — the defect #313 fixed.
+ */
+export const CONNECT_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].join(" ");
 
 /**
  * Whether a granted scope string actually carries a scope.

@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Data We Collect</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Google account name, email address, and profile photo (via Google Sign-In)</li>
+              <li>Your mobile number and the name you give when you sign up, plus a one-way hash of your 4-digit PIN (never the PIN itself)</li>
               <li>Messages and queries you send to the assistant, and its replies</li>
               <li>Documents and files you upload to the knowledge base</li>
               <li>Tasks, notes, goals, reminders, and expense records you create</li>
@@ -44,8 +44,10 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Google User Data</h2>
             <p className="mb-3">
-              Connecting Google is optional and separate from signing in. Signing in requests only
-              your basic profile. Gmail and Calendar access is granted only if you complete the
+              Connecting Google is optional and entirely separate from signing in. Signing in uses
+              your mobile number and PIN and requests nothing at all from Google — we receive no
+              Google profile, name, email address or photo unless you connect. Gmail and Calendar
+              access is granted only if you complete the
               &ldquo;Connect Google&rdquo; step in Settings, and can be revoked at any time from
               that screen or from your{" "}
               <a

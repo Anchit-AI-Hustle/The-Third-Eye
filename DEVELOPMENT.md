@@ -30,9 +30,32 @@ otherwise undocumented outside this file and the code itself.
 ## 2. Tech stack & platform
 
 - **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
-- **Auth:** NextAuth v4, Google OAuth, **JWT** sessions. Basic sign-in requests only
-  `openid email profile`; the sensitive Gmail/Chat scopes are gated behind a
-  separate opt-in "Connect Google" flow so login never trips OAuth-verification.
+- **Auth:** NextAuth v4 with a **credentials** provider — a **mobile number and a
+  4-digit PIN**, ported from parwah-hq. **JWT** sessions. Accounts live in
+  `phone_users` (scrypt PIN hash; 5 wrong tries then an **escalating** lock — 15
+  min, 1 h, 6 h, 24 h — because a *fixed* 15-minute lock allows 480 guesses a day
+  and a 4-digit space is only 10,000, i.e. ~21 days, not years). `phone_pin_attempt`
+  tests the lock and spends the try in one statement **before** any hashing, so a
+  burst of concurrent requests cannot test more than five in a window;
+  `phone_pin_ok` clears the count, lock and ladder on success. `auth_rate_limit` +
+  `auth_rate_limit_hit` cap attempts per caller (60/10 min, best-effort — checked
+  first, so an abusive caller cannot seed number buckets) then per number (10/10
+  min, unforgeable); both fail **closed**, and the function prunes expired rows so
+  the limiter's own table cannot be grown without bound. The sign-in form
+  pre-flights the number against `POST /api/auth/phone` to decide whether to ask
+  for a name (sign-up) or the PIN — that route returns **only** whether the
+  number is registered, never the account holder's name or lock state.
+  Deleting an account removes the `phone_users` row too — **last**, and only once
+  every other table succeeded, so a partial failure can still be retried rather
+  than signing someone out of an account they can no longer reach. The identity the whole app keys on,
+  `session.user.email`, is now the E.164 number — an opaque key to almost every
+  consumer, but **anything that writes *to* the identity rather than keying on it
+  must check `isEmailIdentity()`** (`lib/serverIdentity.ts`): Stripe's
+  `customer_email` and the cron's Gmail `To:` both silently assumed an address.
+  **Google OAuth is commented out in `lib/auth.ts`, not deleted.**
+  Removing it costs no feature: Gmail/Calendar always ran on the refresh token
+  from the separate opt-in "Connect Google" flow (Settings → Connections), never
+  on the session's Google token.
 - **Data:** Supabase (Postgres) with **pgvector** for memory/RAG. The browser never
   talks to Supabase directly (see §4).
 - **LLM:** a 7-provider server-side cascade (`lib/llmCascade.ts`) — openai →
@@ -100,6 +123,47 @@ through one server route**, `app/api/data/[entity]/route.ts`:
   service-role-only. A **Cloud synced / Local only** badge
   (`components/layout/CloudSyncBadge.tsx` + `/api/sync-status`) surfaces which mode
   you're in so a missing service key isn't a silent data-loss trap.
+
+### 4a. Moving an existing workspace onto a phone identity
+
+**Read this before signing in by number on a deployment that has real data.**
+
+`user_id` is whatever sign-in put in `session.user.email`. Under Google that was
+an email address; under phone sign-in it is an E.164 number. They are *different
+identities*, so a phone account starts empty and **the data keyed by the old
+email is not reachable from it** — and since Google is no longer a sign-in
+provider, once the existing 24-hour JWT expires there is nothing that can produce
+the email identity again either.
+
+There is no automatic link, on purpose: silently merging two identities is a
+worse failure than an obvious empty workspace. Re-key deliberately instead, once,
+with the service role (Supabase SQL editor), **before** putting anything into the
+new account so nothing collides:
+
+```sql
+-- Substitute your own two values. Run once.
+DO $$
+DECLARE t text;
+BEGIN
+  FOR t IN
+    SELECT table_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND column_name = 'user_id'
+  LOOP
+    EXECUTE format('update public.%I set user_id = $1 where user_id = $2', t)
+      USING '+919876543210', 'you@example.com';
+  END LOOP;
+END $$;
+```
+
+It walks every `public` table with a `user_id` column, so it covers tables added
+since this was written. Two things to know:
+
+- **Order matters.** `google_tokens.user_id` is a primary key and several tables
+  are unique on `(user_id, …)`, so if the phone identity already has rows the
+  update raises a conflict. Re-key first, use the account after.
+- **Stripe.** `profiles.stripe_customer_id` moves with the row, so an existing
+  subscription follows; but the `metadata.email` on the Stripe subscription
+  itself still holds the old address, which only matters if you reconcile by it.
 
 ---
 
