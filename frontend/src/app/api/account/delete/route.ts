@@ -26,6 +26,17 @@ const TABLES = [
   "cortex_memories", "cortex_doc_chunks", "reminders", "push_subscriptions",
   "notification_log", "processed_messages", "chat_watermarks", "activity_log", "device_logs",
   "profiles", "google_tokens",
+  // GATEWAY CREDENTIALS, AND THEY MATTER MORE THAN THE REST OF THIS LIST.
+  // gateway_tokens holds long-lived bearer tokens, and emailForToken()
+  // authenticates from that row alone — /api/chat never re-checks phone_users. So
+  // a surviving token went on acting as the deleted account, with a session the
+  // person could not see or revoke because their account was gone.
+  "gateway_tokens", "agent_control", "conversation_sources",
+  // agent_audit is documented append-only, and the app never deletes from it. This
+  // is the one exception, stated so it does not read as a mistake: erasure on
+  // request outranks keeping a record of what the agent did for an account that no
+  // longer exists.
+  "agent_audit",
 ];
 
 export async function POST(_req: NextRequest) {
@@ -95,6 +106,41 @@ export async function POST(_req: NextRequest) {
     );
   }
 
+  // THE NUMBER HELD BY THE RATE LIMITER, still before the credential.
+  //
+  // auth_rate_limit keys its per-number bucket on the E.164 number itself, and the
+  // limiter only ever resets counters — it never deletes rows. So the number
+  // outlived the account it belonged to, against a route and a privacy policy that
+  // both promise removal. (The sampled prune in auth_rate_limit_hit would reach it
+  // within a day, but "eventually" is not what erasure on request means.)
+  //
+  // It is here rather than after the credential because I put it after on the
+  // first attempt and walked straight back into the hazard the ordering above
+  // exists to avoid: the credential gone, this row left, a 500 asking the person
+  // to retry, and no way to authenticate for that retry once the JWT expired.
+  // Anything that needs the identity to find its rows has to run BEFORE the thing
+  // that proves the identity.
+  //
+  // The per-caller bucket is keyed on an address, not on this person, and there is
+  // no mapping from one to the other — so there is nothing here to match it by,
+  // and that row expires on its own.
+  const { error: rlError } = await sb.from("auth_rate_limit").delete().eq("k", email);
+  if (rlError && !SCHEMA_CODES.has((rlError as { code?: string }).code ?? "")) {
+    return Response.json(
+      {
+        error:
+          "Some of your data could not be deleted, so your sign-in has been left intact — " +
+          "you are still signed in and can try again.",
+        remote: true,
+        deleted,
+        failed: [...realFailures, "auth_rate_limit"],
+        google,
+      },
+      { status: 500 },
+    );
+  }
+  deleted.push("auth_rate_limit");
+
   const { error: credError } = await sb.from("phone_users").delete().eq("phone", email);
   if (credError) {
     return Response.json(
@@ -109,31 +155,6 @@ export async function POST(_req: NextRequest) {
     );
   }
   deleted.push("phone_users");
-
-  // AND THE NUMBER HELD BY THE RATE LIMITER. auth_rate_limit keys its per-number
-  // bucket on the E.164 number itself, and the limiter only ever resets counters —
-  // it never deletes rows. So the number outlived the account it belonged to,
-  // against a route and a privacy policy that both promise removal. (The sampled
-  // prune in auth_rate_limit_hit would reach it within a day, but "eventually" is
-  // not what erasure on request means.)
-  //
-  // The per-caller bucket is keyed on an address, not on this person, and there is
-  // no mapping from one to the other — so there is nothing here to match it by,
-  // and that row expires on its own.
-  const { error: rlError } = await sb.from("auth_rate_limit").delete().eq("k", email);
-  if (rlError && !SCHEMA_CODES.has((rlError as { code?: string }).code ?? "")) {
-    return Response.json(
-      {
-        error: "Your account was deleted, but one record of your number could not be removed. Please try again.",
-        remote: true,
-        deleted,
-        failed,
-        google,
-      },
-      { status: 500 },
-    );
-  }
-  deleted.push("auth_rate_limit");
 
   return Response.json({ ok: true, remote: true, deleted, failed, google });
 }
