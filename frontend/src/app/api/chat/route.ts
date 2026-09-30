@@ -5,7 +5,8 @@ import { getDb } from "@/lib/db";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
-import { directTurn } from "@/lib/liveActions";
+import { directTurn, type DirectTurn } from "@/lib/liveActions";
+import { usableGeminiKey } from "@/lib/providerReady";
 import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
@@ -1463,12 +1464,36 @@ function generatePdf(title: string, content: string, format: string): string {
   return `**Document Generated**\n\nTitle: ${title}\nFormat: ${format}\n\n[Open in new tab](data:text/html;base64,${Buffer.from(html).toString("base64")})\n\nClick the link to view and print as PDF (use browser Print → Save as PDF).`;
 }
 
+const SSE_HEADERS = {
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+};
+
+async function directResponse(direct: DirectTurn, ctx: RunContext): Promise<Response> {
+  const lines = [direct.text];
+  for (const reminder of direct.reminders) {
+    lines.push(await setReminder(ctx, reminder));
+  }
+  const chunks = [`event: text\ndata: ${JSON.stringify({ text: lines.filter(Boolean).join("\n") })}\n\n`];
+  for (const confirm of direct.confirms) {
+    chunks.push(`event: confirm\ndata: ${JSON.stringify({ id: randomUUID(), ...confirm })}\n\n`);
+  }
+  // Omit memory. An empty object would replace the client's saved memory.
+  chunks.push(`event: done\ndata: ${JSON.stringify({
+    stop_reason: "direct",
+    model: "direct",
+    sideEffects: direct.sideEffects,
+  })}\n\n`);
+  return new Response(chunks.join(""), { headers: SSE_HEADERS });
+}
+
 export async function POST(req: NextRequest) {
   // Gemini is the primary (it has native function-calling for tools). When its
   // key is absent, we DON'T hard-fail — we fall through to the multi-provider
   // cascade (Groq/OpenAI/etc.) for a plain-text answer, so the assistant stays
   // usable on free keys alone. The cascade path is in the stream's catch below.
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = usableGeminiKey();
 
   const body = (await req.json()) as ChatRequest;
   const {
@@ -1510,25 +1535,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Use the stored Google grant (gmail/calendar scopes) when available. Sign-in
-  // grants nothing from Google at all - it is a mobile number and a PIN - so
-  // this is absent until the user goes through /api/connect/google, and the
-  // capability check below is what the assistant must act on rather than the
-  // presence of a token.
-  let googleScope: string | undefined;
-  try {
-    const connected = await getGoogleAccessToken(email);
-    if (connected?.accessToken) {
-      accessToken = connected.accessToken;
-      googleScope = connected.scope;
-    }
-  } catch { /* not connected — Google tools will say so */ }
-
-  // Holding a token is not the same as being allowed to use it: the consent
-  // screen lets people untick individual boxes. Report what was actually
-  // granted so the assistant offers to send mail only when it really can.
-  const google = googleCapabilities(googleScope);
-
   const enforced = premiumEnforced();
   const gate = await consume(email, "chatPerDay");
   if (enforced && !gate.allowed) {
@@ -1545,6 +1551,12 @@ export async function POST(req: NextRequest) {
   // Launch mode: everyone gets full capabilities; premium is badged, not gated.
   const effectiveTier: Tier = enforced ? gate.tier : "premium";
   const MODEL = enforced ? gate.limits.chatModel : "gemini-2.5-flash";
+
+  const zone = timezone || req.headers.get("x-vercel-ip-timezone") || "UTC";
+  const direct = directTurn(message, { tasks, now: new Date(), timezone: zone });
+  if (direct) {
+    return directResponse(direct, { memoryStore: {}, tasks, docs, notes, goals, expenses, tier: effectiveTier, email });
+  }
 
   const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
@@ -1567,10 +1579,19 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n## Device context\nCurrent device/system info for the operator, gathered client-side via standard web APIs (storage quota, memory, CPU, battery, network, screen, platform):\n${JSON.stringify(deviceInfo)}\nAnswer questions about their storage/memory/battery/network/screen/platform directly and specifically from this data — including "how much storage/space is left". Never reply that you cannot access device information when it is provided here. If a particular field is absent, say that one value isn't available rather than refusing wholesale.`;
   }
 
-  // Durable memory lives server-side; the request body carries the client's
-  // localStorage mirror, which is newer for keys set earlier this session but
-  // absent entirely on a fresh device. Server first, client overrides.
-  const storedMemory = await loadMemory(email);
+  // Memory, recall, connector discovery, and the Google grant are only needed
+  // when a model has to answer. Clear commands already returned above.
+  const [storedMemory, recall, mcpDeclarations, connected] = await Promise.all([
+    loadMemory(email),
+    email ? retrieveMemories(email, message, 5) : Promise.resolve([]),
+    mcpToolDeclarations(),
+    getGoogleAccessToken(email).catch(() => null),
+  ]);
+  if (connected?.accessToken) {
+    accessToken = connected.accessToken;
+  }
+  const google = googleCapabilities(connected?.scope);
+
   const memory = { ...storedMemory, ...clientMemory };
 
   const memoryEntries = Object.entries(memory);
@@ -1578,8 +1599,6 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Persistent memory about this user:**\n${memoryEntries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}`;
   }
 
-  // Cortex: semantic recall from past conversations (native pgvector memory).
-  const recall = email ? await retrieveMemories(email, message, 5) : [];
   if (recall.length > 0) {
     systemInstruction += `\n\n**Relevant recall from earlier conversations:**\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
   }
@@ -1631,7 +1650,6 @@ export async function POST(req: NextRequest) {
   // Built-in declarations plus whatever the configured MCP servers publish.
   // Discovery is cached and failure-tolerant, so an unreachable server costs
   // its own tools rather than the request.
-  const mcpDeclarations = await mcpToolDeclarations();
   const tools = mcpDeclarations.length
     ? [{ functionDeclarations: [...geminiTools[0].functionDeclarations, ...mcpDeclarations] }]
     : geminiTools;
@@ -1682,31 +1700,6 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        // "Open X" and "email person@x …" must not depend on a model round-trip.
-        // When Gemini is down the fallback path is text-only and tells the user
-        // it cannot open or send anything.
-        const direct = directTurn(message);
-        if (direct?.kind === "open") {
-          send("text", { text: direct.text });
-          send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: direct.sideEffects });
-          controller.close();
-          return;
-        }
-        if (direct?.kind === "email") {
-          const summary = summarizeAction("communicate", direct.args);
-          send("text", { text: direct.text });
-          send("confirm", {
-            id: crypto.randomUUID(),
-            tool: "communicate",
-            args: direct.args,
-            summary,
-            clientAction: false,
-          });
-          send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: [] });
-          controller.close();
-          return;
-        }
-
         // No Gemini key → skip the tool-calling path and use the cascade below.
         if (!model) throw new Error("Gemini not configured — using fallback provider.");
         let loopGuard = 0;
@@ -1941,11 +1934,5 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+  return new Response(stream, { headers: SSE_HEADERS });
 }

@@ -6,33 +6,33 @@ import { systemStatus, usableGeminiKey } from "@/lib/providerReady";
 describe("direct open", () => {
   it("opens an in-app page without a model", () => {
     const turn = directTurn("open my tasks");
-    expect(turn?.kind).toBe("open");
-    if (turn?.kind !== "open") return;
-    expect(turn.sideEffects[0].data.url).toBe("/tasks");
+    expect(turn?.sideEffects[0].data.url).toBe("/tasks");
+    expect(turn?.confirms).toEqual([]);
   });
 
   it("strips a spoken lead-in", () => {
     const turn = directTurn("hey jarvis please go to kolab");
-    expect(turn?.kind).toBe("open");
-    if (turn?.kind !== "open") return;
-    expect(turn.sideEffects[0].data.url).toBe("/kolab");
+    expect(turn?.sideEffects[0].data.url).toBe("/kolab");
   });
 
   it("opens an external site", () => {
     const turn = directTurn("open youtube");
-    expect(turn?.kind).toBe("open");
-    if (turn?.kind !== "open") return;
-    expect(turn.sideEffects[0].data.url).toContain("youtube.com");
+    expect(turn?.sideEffects[0].data.url).toContain("youtube.com");
   });
 
   it("passes a search through to the site", () => {
     const turn = directTurn("open youtube for lo-fi beats");
-    expect(turn?.kind).toBe("open");
-    if (turn?.kind !== "open") return;
-    expect(turn.sideEffects[0].data.url).toContain("search_query=");
+    expect(turn?.sideEffects[0].data.url).toContain("search_query=");
   });
 
-  it("leaves a compound request to the model", () => {
+  it("opens a second named app in the same breath", () => {
+    const turn = directTurn("open youtube and spotify");
+    const urls = turn?.sideEffects.map((s) => s.data.url) ?? [];
+    expect(urls.some((u) => String(u).includes("youtube.com"))).toBe(true);
+    expect(urls.some((u) => String(u).includes("spotify.com"))).toBe(true);
+  });
+
+  it("leaves a half-formed compound to the model", () => {
     expect(directTurn("open my tasks and add milk")).toBeNull();
   });
 
@@ -48,12 +48,13 @@ describe("direct open", () => {
 describe("direct email", () => {
   it("builds a confirmable send from a spoken command", () => {
     const turn = directTurn("send an email to ada@example.com about the deck saying it is ready");
-    expect(turn?.kind).toBe("email");
-    if (turn?.kind !== "email") return;
-    expect(turn.args.to).toBe("ada@example.com");
-    expect(turn.args.subject).toMatch(/deck/i);
-    expect(turn.args.body).toMatch(/ready/i);
-    expect(turn.args.action).toBe("email");
+    const email = turn?.confirms[0];
+    expect(email?.tool).toBe("communicate");
+    expect(email?.args.to).toBe("ada@example.com");
+    expect(email?.args.subject).toMatch(/deck/i);
+    expect(email?.args.body).toMatch(/ready/i);
+    expect(email?.args.action).toBe("email");
+    expect(email?.clientAction).toBe(false);
   });
 
   it("does not send when the user is only reading mail", () => {
@@ -66,9 +67,82 @@ describe("direct email", () => {
 
   it("strips header injection out of the subject", () => {
     const turn = directTurn("email ada@example.com subject Hello\r\nBcc: evil@x.com");
-    expect(turn?.kind).toBe("email");
-    if (turn?.kind !== "email") return;
-    expect(turn.args.subject).not.toMatch(/[\r\n]/);
+    expect(String(turn?.confirms[0]?.args.subject)).not.toMatch(/[\r\n]/);
+  });
+
+  it("keeps an and inside the body when the rest is not a command", () => {
+    const turn = directTurn("email ada@example.com about the deck and the budget saying both are ready");
+    expect(turn?.confirms).toHaveLength(1);
+    expect(turn?.confirms[0].args.subject).toMatch(/deck and the budget/i);
+    expect(turn?.sideEffects).toEqual([]);
+  });
+});
+
+describe("direct live actions", () => {
+  const now = new Date("2026-09-30T09:00:00Z");
+
+  it("creates a task and opens the page in one turn", () => {
+    const turn = directTurn("open my tasks and add a task to buy milk");
+    expect(turn?.sideEffects.map((s) => s.type)).toEqual(["task_create", "open_url"]);
+    expect(turn?.sideEffects[0].data).toMatchObject({ title: "buy milk", priority: "medium", status: "todo" });
+    expect(turn?.sideEffects[1].data.url).toBe("/tasks");
+  });
+
+  it("marks a matching task done and refuses a miss", () => {
+    const tasks = [{ id: "t1", title: "Buy milk", status: "todo" }];
+    const done = directTurn("mark buy milk done", { tasks });
+    expect(done?.sideEffects[0]).toMatchObject({ type: "task_update", data: { id: "t1", patch: { status: "done" } } });
+    const miss = directTurn("mark the gym task done", { tasks });
+    expect(miss?.sideEffects).toEqual([]);
+    expect(miss?.text).toMatch(/wasn't|nothing was changed/i);
+  });
+
+  it("saves a note, a goal, and an expense", () => {
+    expect(directTurn("make a note about the vendor call")?.sideEffects[0]).toMatchObject({
+      type: "note_create",
+      data: { content: "the vendor call" },
+    });
+    expect(directTurn("set a goal to run a 5k")?.sideEffects[0].type).toBe("goal_create");
+    const expense = directTurn("log an expense of ₹250 for coffee");
+    expect(expense?.sideEffects[0]).toMatchObject({ type: "expense_create", data: { amount: 250 } });
+  });
+
+  it("opens whatsapp, sms, and the dialer without a confirm card", () => {
+    const wa = directTurn("whatsapp 919876543210 saying on my way");
+    expect(String(wa?.sideEffects[0].data.url)).toContain("wa.me/919876543210");
+    expect(wa?.confirms).toEqual([]);
+    expect(String(directTurn("text 5551234567 saying hello")?.sideEffects[0].data.url)).toMatch(/^sms:/);
+    expect(String(directTurn("call 5551234567")?.sideEffects[0].data.url)).toBe("tel:5551234567");
+  });
+
+  it("asks before paying", () => {
+    const turn = directTurn("pay 500 to ravi@oksbi for lunch");
+    expect(turn?.sideEffects).toEqual([]);
+    expect(turn?.confirms[0]).toMatchObject({ tool: "pay", clientAction: true });
+    expect(turn?.confirms[0].url).toMatch(/^upi:\/\/pay/);
+  });
+
+  it("opens directions, music, and a calendar draft", () => {
+    expect(String(directTurn("directions to the airport")?.sideEffects[0].data.url)).toContain("google.com/maps");
+    expect(String(directTurn("play lo-fi beats on spotify")?.sideEffects[0].data.url)).toContain("open.spotify.com/search/");
+    expect(String(directTurn("add standup to my calendar")?.sideEffects[0].data.url)).toContain("calendar.google.com");
+  });
+
+  it("queues a device change and a sleep protocol", () => {
+    expect(directTurn("turn on the flashlight")?.sideEffects[0]).toMatchObject({
+      type: "device_action",
+      data: { action: "flashlight_on" },
+    });
+    const night = directTurn("good night");
+    expect(night?.text).toMatch(/sleep/i);
+    expect(night?.sideEffects.some((s) => s.type === "home_action" || s.type === "device_action")).toBe(true);
+  });
+
+  it("sets a reminder only when the time is explicit", () => {
+    const turn = directTurn("remind me in 20 minutes to stretch", { now, timezone: "UTC" });
+    expect(turn?.reminders[0].title).toBe("stretch");
+    expect(turn?.reminders[0].fire_at).toBe("2026-09-30T09:20:00+00:00");
+    expect(directTurn("remind me to stretch")).toBeNull();
   });
 });
 

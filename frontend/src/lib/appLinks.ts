@@ -241,6 +241,16 @@ function aliasMatches(target: string, alias: string): boolean {
   return false;
 }
 
+/** The whole phrase is an app or page name, not a sentence that merely contains one. */
+export function isKnownAppName(targetRaw: string): boolean {
+  const t = norm(targetRaw).replace(/^(?:my|the)\s+/, "");
+  if (!t) return false;
+  for (const app of [...INTERNAL, ...APPS]) {
+    if (app.aliases.some((a) => a === t)) return true;
+  }
+  return false;
+}
+
 /** True when the resolved link is a route inside this app rather than the web. */
 export function isInternalLink(url: string): boolean {
   return url.startsWith("/") && !url.startsWith("//");
