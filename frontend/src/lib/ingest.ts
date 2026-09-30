@@ -144,7 +144,8 @@ async function setWatermark(sb: Sb, email: string, space: string, ts: string): P
  */
 export async function discoverChatSpaces(sb: Sb, email: string) {
   const tok = await getGoogleAccessToken(email);
-  if (!tok || !(tok.scope ?? "").includes("chat.messages.readonly")) return { skipped: "chat not connected" as const };
+  // spaces.list accepts chat.spaces.readonly / chat.spaces, not messages.readonly.
+  if (!tok || !(tok.scope ?? "").includes("chat.spaces.readonly")) return { skipped: "chat not connected" as const };
 
   const spacesRes = (await gget(tok.accessToken, "https://chat.googleapis.com/v1/spaces?pageSize=100")) as {
     spaces?: { name?: string; displayName?: string; spaceType?: string }[];

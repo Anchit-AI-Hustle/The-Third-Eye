@@ -22,9 +22,10 @@ change.
 
 ## Read this before deploying
 
-`gmail.readonly` and `gmail.send` are **restricted** scopes. Requesting them *at
-sign-in* makes Google's verification review a gate on **logging in at all**, not
-just on the Gmail features:
+`gmail.readonly` and `chat.messages.readonly` are **restricted** scopes;
+`gmail.send`, `calendar.readonly` and `chat.spaces.readonly` are **sensitive**.
+Requesting any of them *at sign-in* makes Google's verification review a gate on
+**logging in at all**, not just on the Gmail features:
 
 | Consent screen status | Who can sign in, if sign-in asks for restricted scopes |
 |---|---|
