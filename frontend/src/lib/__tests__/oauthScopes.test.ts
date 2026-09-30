@@ -23,11 +23,11 @@ describe("OAuth scopes requested of Google", () => {
   });
 
   it("does not request write/calendar.events or Chat-app bot scopes", () => {
-    const set = new Set(INGESTION_SCOPE_LIST);
-    expect(set.has("https://www.googleapis.com/auth/calendar.events")).toBe(false);
-    expect(set.has("https://www.googleapis.com/auth/gmail.modify")).toBe(false);
-    expect(set.has("https://www.googleapis.com/auth/chat.messages")).toBe(false);
-    expect(set.has("https://www.googleapis.com/auth/chat.bot")).toBe(false);
+    const scopes = [...INGESTION_SCOPE_LIST] as string[];
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/calendar.events");
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/gmail.modify");
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/chat.messages");
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/chat.bot");
   });
 
   it("groups those five the way Data Access boxes them", () => {
