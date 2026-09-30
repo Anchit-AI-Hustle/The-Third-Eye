@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { classifyOpenUrl } from "@/lib/liveActions";
 
 // A sensitive action the agent proposed (send_email / pay / whatsapp / call /
 // sms). It is NEVER executed automatically — the user confirms it first, either
@@ -41,22 +42,30 @@ export function useAgentConfirm() {
     setPendingOpens((p) => p.filter((x) => x.url !== url));
   }, []);
 
-  // open_app / navigate_maps / add_calendar_event → open each http(s) link now;
-  // any the browser blocks become tappable chips (one tap = a real gesture).
+  // Web links open in a new tab. A popup fired from the SSE handler is not a
+  // user gesture, so a blocked one becomes a chip. tel/sms/mailto/upi cannot
+  // be window.open'd; they wait for that same tap. In-app routes are
+  // navigated by useAgentActions (router.push) and are not opened here.
   const openLinks = useCallback((sideEffects?: { type: string; data?: any }[]) => {
     const opens = (sideEffects ?? []).filter((fx) => fx.type === "open_url" && fx.data?.url);
     if (!opens.length) return;
     const blocked: { url: string; label: string }[] = [];
     for (const fx of opens) {
       const url = String(fx.data.url);
-      if (!/^https?:\/\//i.test(url)) continue; // only ever open http(s)
+      const label = fx.data.label || url;
+      const kind = classifyOpenUrl(url);
+      if (kind === "scheme") {
+        blocked.push({ url, label });
+        continue;
+      }
+      if (kind !== "web") continue;
       let win: Window | null = null;
       try {
         win = window.open(url, "_blank", "noopener,noreferrer");
       } catch {
         win = null;
       }
-      if (!win) blocked.push({ url, label: fx.data.label || url });
+      if (!win) blocked.push({ url, label });
     }
     setPendingOpens(blocked);
   }, []);
@@ -89,6 +98,11 @@ export function useAgentConfirm() {
         body: JSON.stringify({ tool: action.tool, args: action.args }),
       });
       const data = await res.json().catch(() => ({}));
+      const openUrl = typeof data.openUrl === "string" ? data.openUrl : "";
+      // Confirm click is a user gesture, so this tab is allowed to open.
+      if (classifyOpenUrl(openUrl) === "web") {
+        try { window.open(openUrl, "_blank", "noopener,noreferrer"); } catch { /* shown in the result text */ }
+      }
       const succeeded = res.ok && data.ok !== false && !data.error;
       const result = data.result ?? data.error ?? (succeeded ? "Done." : "The action was rejected.");
       setPendingActions((prev) =>

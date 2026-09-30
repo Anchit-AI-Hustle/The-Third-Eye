@@ -13,6 +13,8 @@
 // function calling — this cascade is for translate / multi-agent reasoning /
 // other plain-text generations where any model will do.
 
+import { usableGeminiKey } from "@/lib/providerReady";
+
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
 
@@ -543,6 +545,66 @@ async function transcribeOne(base: string, key: string, model: string, audio: Bl
   finally { clear(); }
 }
 
+export async function geminiGroundedSearch(query: string): Promise<string | null> {
+  const key = usableGeminiKey();
+  const q = query.trim();
+  if (!key || !q) return null;
+  const { signal, clear } = withTimeout(20_000);
+  try {
+    const r = await fetch(`${GEMINI_BASE}/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: `Answer from a web search. Include the source URLs you used. Query: ${q}` }] }],
+        tools: [{ google_search: {} }],
+      }),
+      signal,
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.map((p: { text?: string }) => p.text ?? "").join("\n").trim();
+    return text || null;
+  } catch {
+    return null;
+  } finally {
+    clear();
+  }
+}
+
+async function transcribeGemini(key: string, audio: Blob, lang?: string): Promise<{ ok: boolean; text?: string; status?: number }> {
+  const { signal, clear } = withTimeout(30_000);
+  try {
+    const buf = Buffer.from(await audio.arrayBuffer());
+    if (buf.length < 1000) return { ok: false, status: 0 };
+    const prompt = lang
+      ? `Transcribe this audio (${lang}). Return only the transcript.`
+      : "Transcribe this audio. Return only the transcript.";
+    const r = await fetch(`${GEMINI_BASE}/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: audio.type || "audio/webm", data: buf.toString("base64") } },
+          ],
+        }],
+      }),
+      signal,
+    });
+    if (!r.ok) return { ok: false, status: r.status };
+    const data = await r.json();
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.map((p: { text?: string }) => p.text ?? "").join("\n").trim();
+    return text ? { ok: true, text } : { ok: false, status: r.status };
+  } catch {
+    return { ok: false, status: 0 };
+  } finally {
+    clear();
+  }
+}
+
 export async function transcribeCascade(audio: Blob, lang?: string): Promise<TranscribeCascadeResult> {
   const keys = loadKeys();
   const errors: string[] = [];
@@ -556,6 +618,12 @@ export async function transcribeCascade(audio: Blob, lang?: string): Promise<Tra
     if (res.ok) return { text: res.text ?? "", provider: "openai", model: "whisper-1" };
     errors.push(`openai:${res.status}`);
     if (!res.quota) break;
+  }
+  const gemini = usableGeminiKey();
+  if (gemini) {
+    const res = await transcribeGemini(gemini, audio, lang);
+    if (res.ok) return { text: res.text ?? "", provider: "gemini", model: "gemini-2.5-flash" };
+    errors.push(`gemini:${res.status}`);
   }
   throw new Error(`All transcription providers failed (${errors.join(", ") || "no keys configured"}).`);
 }

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { transcribeCascade } from "@/lib/llmCascade";
+import { usableGeminiKey } from "@/lib/providerReady";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -18,8 +19,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
-    return Response.json({ error: "No transcription provider configured (set GROQ_API_KEY or OPENAI_API_KEY)" }, { status: 503 });
+  if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY && !usableGeminiKey()) {
+    return Response.json({ error: "No transcription provider configured (set GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY)" }, { status: 503 });
   }
 
   try {

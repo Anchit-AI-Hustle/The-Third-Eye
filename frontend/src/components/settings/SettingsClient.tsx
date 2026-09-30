@@ -148,8 +148,8 @@ export function SettingsClient({ user }: Props) {
           ) : (
             <>
               <StatusRow label="Gemini AI" ok={status?.ai} hint="Required — GEMINI_API_KEY" />
-              <StatusRow label="OpenAI (Whisper)" ok={status?.openai} hint="Optional — OPENAI_API_KEY" />
-              <StatusRow label="Web Search" ok={status?.serper} hint="Optional — SERPER_API_KEY" />
+              <StatusRow label="OpenAI (Whisper)" ok={status?.openai} hint="Optional — OPENAI_API_KEY, Groq, or Gemini" />
+              <StatusRow label="Web Search" ok={status?.serper} hint="Optional — SERPER_API_KEY, or Gemini search" />
               <StatusRow label="Database" ok={status?.database} hint="Optional — cross-device sync" />
               <StatusRow label="Google OAuth" ok={status?.google_oauth} hint="Required — sign-in + calendar/email" />
             </>

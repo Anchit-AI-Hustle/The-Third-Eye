@@ -99,7 +99,15 @@ describe("isInternalLink", () => {
     expect(isInternalLink("/tasks")).toBe(true);
   });
 
+  it("rejects a protocol-relative URL", () => {
+    expect(isInternalLink("//evil.example")).toBe(false);
+  });
+
   it("rejects an external URL", () => {
     expect(isInternalLink("https://youtube.com")).toBe(false);
+  });
+
+  it("passes an in-app path through", () => {
+    expect(resolveAppLink("/tasks").url).toBe("/tasks");
   });
 });

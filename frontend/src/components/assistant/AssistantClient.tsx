@@ -17,6 +17,7 @@ import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentConfirm } from "@/hooks/useAgentConfirm";
+import { classifyOpenUrl } from "@/lib/liveActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
@@ -836,7 +837,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           <div className="flex items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-input bg-success/10 border border-success/25 animate-fade-in">
             <span className="text-xs text-text-secondary flex-none">Tap to open:</span>
             {pendingOpens.map((o) => (
-              <a key={o.url} href={o.url} target="_blank" rel="noopener noreferrer"
+              <a key={o.url} href={o.url} {...(classifyOpenUrl(o.url) === "web" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                 onClick={() => dismissOpen(o.url)}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-success border border-success/30 rounded-input px-2.5 py-1 hover:bg-success/15 transition-colors">
                 <Globe size={12} /> {o.label}
