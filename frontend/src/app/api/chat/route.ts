@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
+import { directTurn } from "@/lib/liveActions";
 import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
@@ -148,6 +149,31 @@ function simpleNoteSearch(notes: Array<{ id: string; title: string; content: str
   ).join("\n\n---\n\n");
 }
 
+async function grounded(query: string): Promise<string | null> {
+  const { geminiGroundedSearch } = await import("@/lib/llmCascade");
+  return geminiGroundedSearch(query);
+}
+
+async function wikiSnippets(query: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=3&namespace=0&format=json`,
+      { headers: { "User-Agent": "JARVIS-OS/1.0" } },
+    );
+    if (!res.ok) return "";
+    const data = await res.json();
+    const titles: string[] = data?.[1] ?? [];
+    const blurbs: string[] = data?.[2] ?? [];
+    const links: string[] = data?.[3] ?? [];
+    return titles
+      .map((title, i) => (blurbs[i] ? `• **${title}**\n  ${blurbs[i]}\n  ${links[i] ?? ""}` : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  } catch {
+    return "";
+  }
+}
+
 async function webSearch(query: string): Promise<string> {
   const serperKey = process.env.SERPER_API_KEY;
   if (serperKey) {
@@ -174,10 +200,12 @@ async function webSearch(query: string): Promise<string> {
     const data = await res.json();
     const text = data.AbstractText || data.Answer || "";
     if (text) return `${text}\nSource: ${data.AbstractURL || "DuckDuckGo"}`;
-    return `No instant answer found for "${query}". Set SERPER_API_KEY for full web search results.`;
-  } catch {
-    return `Web search unavailable. Set SERPER_API_KEY in environment variables.`;
-  }
+  } catch { /* try the next source */ }
+  const fromGemini = await grounded(query);
+  if (fromGemini) return fromGemini;
+  const wiki = await wikiSnippets(query);
+  if (wiki) return wiki;
+  return `No instant answer found for "${query}". Set SERPER_API_KEY for full web search results.`;
 }
 
 async function getWeather(location: string): Promise<string> {
@@ -631,8 +659,15 @@ async function runTool(
     case "web_search":
       return { result: await webSearch(input.query ?? "") };
 
+    case "open_url":
     case "open_app": {
-      const link = resolveAppLink(input.target ?? "", input.query);
+      const explicit = String(input.url ?? input.href ?? "").trim();
+      const target = String(input.target ?? input.app ?? input.name ?? explicit).trim();
+      const passthrough = explicit.startsWith("/") || /^https?:\/\//i.test(explicit);
+      const link = passthrough
+        ? resolveAppLink(explicit, input.query)
+        : resolveAppLink(target, input.query);
+      if (!link.url || link.url.startsWith("//")) return { result: "Couldn't resolve a page to open." };
       return {
         result: `Opening ${link.label} for the user (${link.url}).`,
         sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
@@ -735,7 +770,7 @@ async function runTool(
 
 async function getNews(query: string): Promise<string> {
   const key = process.env.SERPER_API_KEY;
-  if (!key) return "[News unavailable — SERPER_API_KEY not set.]";
+  if (!key) return (await grounded(query ? `${query} news` : "top news today")) ?? "[News unavailable — SERPER_API_KEY not set.]";
   try {
     const res = await fetch("https://google.serper.dev/news", {
       method: "POST",
@@ -755,7 +790,7 @@ async function getNews(query: string): Promise<string> {
 
 async function getStockQuote(symbol: string): Promise<string> {
   const key = process.env.SERPER_API_KEY;
-  if (!key) return "[Stock lookup unavailable — SERPER_API_KEY not set.]";
+  if (!key) return (await grounded(`${symbol} stock price`)) ?? "[Stock lookup unavailable — SERPER_API_KEY not set.]";
   try {
     const res = await fetch("https://google.serper.dev/search", {
       method: "POST",
@@ -776,7 +811,10 @@ async function getStockQuote(symbol: string): Promise<string> {
 
 async function getNearby(query: string, location?: { latitude: number; longitude: number }): Promise<string> {
   const key = process.env.SERPER_API_KEY;
-  if (!key) return "[Nearby unavailable — SERPER_API_KEY not set.]";
+  if (!key) {
+    const where = location ? ` near ${location.latitude.toFixed(3)},${location.longitude.toFixed(3)}` : "";
+    return (await grounded(`${query}${where}`)) ?? "[Nearby unavailable — SERPER_API_KEY not set.]";
+  }
   if (!location) return "[Nearby: grant location access first.]";
   try {
     const res = await fetch("https://google.serper.dev/places", {
@@ -1644,6 +1682,31 @@ export async function POST(req: NextRequest) {
       };
 
       try {
+        // "Open X" and "email person@x …" must not depend on a model round-trip.
+        // When Gemini is down the fallback path is text-only and tells the user
+        // it cannot open or send anything.
+        const direct = directTurn(message);
+        if (direct?.kind === "open") {
+          send("text", { text: direct.text });
+          send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: direct.sideEffects });
+          controller.close();
+          return;
+        }
+        if (direct?.kind === "email") {
+          const summary = summarizeAction("communicate", direct.args);
+          send("text", { text: direct.text });
+          send("confirm", {
+            id: crypto.randomUUID(),
+            tool: "communicate",
+            args: direct.args,
+            summary,
+            clientAction: false,
+          });
+          send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: [] });
+          controller.close();
+          return;
+        }
+
         // No Gemini key → skip the tool-calling path and use the cascade below.
         if (!model) throw new Error("Gemini not configured — using fallback provider.");
         let loopGuard = 0;

@@ -18,6 +18,7 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { ActionCard } from "@/components/assistant/ActionCard";
 import { toolLabel } from "@/lib/toolLabels";
+import { classifyOpenUrl } from "@/lib/liveActions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -544,7 +545,7 @@ export function VoiceOverlay() {
             {/* Links the browser blocked — one tap opens them (a real gesture) */}
             {pendingOpens.map((o) => (
               <div key={o.url} className="flex items-center gap-2">
-                <a href={o.url} target="_blank" rel="noopener noreferrer"
+                <a href={o.url} {...(classifyOpenUrl(o.url) === "web" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                   onClick={() => dismissOpen(o.url)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/25 text-xs font-medium hover:bg-[#4FC3F7]/20 transition-colors max-w-full truncate">
                   Open {o.label}

@@ -243,7 +243,7 @@ function aliasMatches(target: string, alias: string): boolean {
 
 /** True when the resolved link is a route inside this app rather than the web. */
 export function isInternalLink(url: string): boolean {
-  return url.startsWith("/");
+  return url.startsWith("/") && !url.startsWith("//");
 }
 
 /**
@@ -257,6 +257,10 @@ export function resolveAppLink(targetRaw: string, query?: string): ResolvedLink 
 
   // Already a full URL → open as-is.
   if (/^https?:\/\//i.test(raw)) return { url: raw, label: raw.replace(/^https?:\/\//, "").replace(/\/$/, "") };
+
+  // A route the model (or a direct command) already resolved. Protocol-relative
+  // URLs ("//host") are not in-app routes and must not be followed.
+  if (raw.startsWith("/") && !raw.startsWith("//")) return { url: raw, label: raw };
 
   const t = norm(raw);
 

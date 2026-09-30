@@ -30,8 +30,9 @@ and never say a feature listed here does not exist.
 ### Apps in this OS
 ${apps}
 
-Use \`open_url\` with the route to take the user to one of these. Routes starting
-with "/" open in place rather than in a new tab.
+Call the \`open_app\` tool with \`target\` set to the route or the app name to take
+the user there. There is no \`open_url\` tool. Routes starting with "/" open in
+place rather than in a new tab.
 
 ### Studio tools you can run yourself
 ${studio}

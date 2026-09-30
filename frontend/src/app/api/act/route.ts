@@ -5,6 +5,7 @@ import { isSensitive } from "@/lib/actions";
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
 import { getGoogleAccessToken } from "@/lib/googleToken";
+import { gmailComposeUrl } from "@/lib/liveActions";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
 
@@ -48,12 +49,30 @@ export async function POST(req: NextRequest) {
       if (premiumEnforced() && (await getTier(email)) !== "premium") {
         return json({ ok: false, result: "Sending email needs JARVIS Premium. Upgrade in Settings → Upgrade." });
       }
-      if (!accessToken) return json({ ok: false, result: "Gmail isn't connected. Signing in grants no mail access, so this is a one-time step: Settings → Connections → \"Connect Google\", and allow Gmail access." });
-      const sent = await sendGmail(accessToken, args?.to, args?.subject ?? "", args?.body ?? "");
-      if (sent.ok) return json({ ok: true, result: `Email sent to ${args?.to}.` });
-      if (sent.status === 401 || sent.status === 403)
-        return json({ ok: false, result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access)." });
-      return json({ ok: false, result: "Gmail rejected the send." });
+      const to = String(args?.to ?? "");
+      const subject = String(args?.subject ?? "");
+      const body = String(args?.body ?? "");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
+        return json({ ok: false, result: "Need a valid email address to send." });
+      }
+      const compose = gmailComposeUrl(to, subject, body);
+      if (!accessToken) {
+        return json({
+          ok: true,
+          openUrl: compose,
+          result: `Gmail isn't connected for a direct send. Opening a prefilled compose to ${to} — press Send there. To send from here next time: Settings → Connections → "Connect Google".`,
+        });
+      }
+      const sent = await sendGmail(accessToken, to, subject, body);
+      if (sent.ok) return json({ ok: true, result: `Email sent to ${to}.` });
+      if (sent.status === 401 || sent.status === 403) {
+        return json({
+          ok: false,
+          openUrl: compose,
+          result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access). A prefilled compose is open if the browser allowed it.",
+        });
+      }
+      return json({ ok: false, openUrl: compose, result: "Gmail rejected the send. A prefilled compose is open if the browser allowed it." });
     }
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));
@@ -76,7 +95,8 @@ export async function POST(req: NextRequest) {
 }
 
 async function sendGmail(accessToken: string, to: string, subject: string, body: string): Promise<{ ok: boolean; status?: number }> {
-  const raw = [`To: ${to}`, `Subject: ${subject}`, "Content-Type: text/plain; charset=utf-8", "", body].join("\r\n");
+  const header = (s: string) => s.replace(/[\r\n]/g, " ").trim();
+  const raw = [`To: ${header(to)}`, `Subject: ${header(subject)}`, "Content-Type: text/plain; charset=utf-8", "", body].join("\r\n");
   const encoded = Buffer.from(raw).toString("base64url");
   try {
     const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {

@@ -7,7 +7,7 @@ import { useLocalGoals } from "./useLocalGoals";
 import { useLocalNotes } from "./useLocalNotes";
 import { useLocalExpenses } from "./useLocalExpenses";
 import { isAgentKilled, logAgentAction, describeSideEffect } from "@/lib/agentControl";
-import { isInternalLink } from "@/lib/appLinks";
+import { classifyOpenUrl } from "@/lib/liveActions";
 
 // A side-effect emitted by the /api/chat agent loop when it runs a write tool.
 export interface AgentSideEffect {
@@ -41,8 +41,10 @@ export function useAgentActions() {
   // own tab so the user does not lose the conversation they are having.
   const openResolved = useCallback(
     (url: string) => {
-      if (isInternalLink(url)) router.push(url);
-      else window.open(url, "_blank");
+      const kind = classifyOpenUrl(url);
+      if (kind === "internal") router.push(url);
+      else if (kind === "scheme") window.location.href = url;
+      else if (kind === "web") window.open(url, "_blank", "noopener,noreferrer");
     },
     [router],
   );

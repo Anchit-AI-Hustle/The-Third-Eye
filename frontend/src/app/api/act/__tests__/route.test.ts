@@ -122,11 +122,15 @@ describe("what the endpoint accepts", () => {
     }
   });
 
-  it("reports a missing Gmail grant instead of claiming success", async () => {
+  it("opens a prefilled compose when Gmail is not connected, and does not claim the mail was sent", async () => {
     googleToken = null;
     const { body } = await post({ tool: "communicate", args: EMAIL_ARGS });
-    expect(body.ok).toBe(false);
+    expect(body.ok).toBe(true);
     expect(String(body.result)).toMatch(/isn't connected/i);
+    expect(String(body.result)).not.toMatch(/Email sent/i);
+    expect(String(body.openUrl)).toContain("mail.google.com");
+    expect(String(body.openUrl)).toContain(encodeURIComponent("v@x.com"));
+    expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });
 
   it("reports a revoked scope distinctly from a generic rejection", async () => {
@@ -134,6 +138,7 @@ describe("what the endpoint accepts", () => {
     const { body } = await post({ tool: "communicate", args: EMAIL_ARGS });
     expect(body.ok).toBe(false);
     expect(String(body.result)).toMatch(/permission isn't granted/i);
+    expect(String(body.openUrl)).toContain("mail.google.com");
   });
 });
 
