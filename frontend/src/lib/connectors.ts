@@ -69,7 +69,7 @@ export const CONNECTORS: Connector[] = [
     groups: true,
     live: true,
     api: "Google Chat API — spaces.messages.list",
-    scopes: ["chat.messages.readonly"],
+    scopes: ["chat.spaces.readonly", "chat.messages.readonly"],
     note: "Every space you're a member of, polled incrementally per space.",
   },
 

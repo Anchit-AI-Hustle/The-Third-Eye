@@ -103,9 +103,9 @@ export async function revokeGoogleAccess(
  * always a separate, explicit step.
  *
  * They were kept off the login screen even while Google WAS the login, because
- * gmail.readonly and gmail.send are restricted scopes and asking for them there
- * makes Google's verification review a gate on logging in at all - while the
- * screen is unverified, only test users get in.
+ * gmail.readonly (restricted) and gmail.send (sensitive) both trigger Google's
+ * verification review, and asking for them there makes that review a gate on
+ * logging in at all — while the screen is unverified, only test users get in.
  *
  * This comment used to say the opposite, and said it after the rollback had
  * already shipped. Two call sites read it and repeated the claim, and
@@ -117,6 +117,13 @@ export async function revokeGoogleAccess(
  * to write ("add event" opens a calendar.google.com deep link, which needs no
  * OAuth scope at all). An unused restricted scope is exactly what a
  * verification reviewer flags, and there is nothing to demo it doing.
+ *
+ * Console grouping (one justification box per group, see oauthJustifications.ts):
+ *   Sensitive  — gmail.send, calendar.readonly, chat.spaces.readonly
+ *   Restricted — gmail.readonly
+ *   Restricted — chat.messages.readonly
+ * chat.spaces.readonly is not redundant: spaces.list does not accept
+ * chat.messages.readonly. Both Chat scopes stay.
  */
 export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.readonly",
