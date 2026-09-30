@@ -18,6 +18,7 @@ const ALLOWED_HOSTS = new Set([
   "replicate.delivery",
   "pbxt.replicate.delivery",
   "replicate.com",
+  "hlcjghpzxzatgjfwcoav.supabase.co",
   "cnbxarfuyicyjbtvbmtv.supabase.co",
   "storage.googleapis.com",
 ]);
