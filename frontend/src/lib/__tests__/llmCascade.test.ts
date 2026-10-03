@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { geminiToolsToOpenAI, llmCascade, resetCooldowns, toolCallCascade } from "@/lib/llmCascade";
+import { generationFailure, geminiToolsToOpenAI, llmCascade, resetCooldowns, toolCallCascade } from "@/lib/llmCascade";
 
 // A provider that just failed on quota grounds should be skipped on the next
 // call within the cooldown window, instead of paying for another failed
@@ -190,5 +190,39 @@ describe("toolCallCascade: tool-capable fallback (Groq/Cerebras/Mistral)", () =>
 
   it("throws when no tool-capable provider is configured", async () => {
     await expect(toolCallCascade({ messages: [{ role: "user", content: "hi" }], tools: [] })).rejects.toThrow(/no key/);
+  });
+});
+
+describe("llmCascade: when every provider fails", () => {
+  afterEach(() => { delete process.env.GEMINI_MODEL; });
+
+  it("says which provider failed and why, instead of 'all providers unavailable'", async () => {
+    process.env.GEMINI_API_KEY = "k1";
+    process.env.GROQ_API_KEY = "k2";
+    fetchStub([
+      { match: (u) => hostIs(u, GEMINI_HOST), status: 404, body: { error: { message: "models/gemini-x is not found" } } },
+      { match: (u) => hostIs(u, GROQ_HOST), status: 401, body: { error: { message: "Invalid API Key" } } },
+    ]);
+    const err = await llmCascade({ messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
+    const msg = generationFailure(err);
+    expect(msg).toContain("gemini 404 model not found");
+    expect(msg).toContain("groq 401 key rejected");
+    // Provider bodies can echo part of the key; only the category reaches the user.
+    expect(msg).not.toContain("Invalid API Key");
+    expect(msg).not.toContain("gemini-x");
+  });
+
+  it("uses the model named in the environment, so a retired model is a settings change", async () => {
+    process.env.GEMINI_API_KEY = "k1";
+    process.env.GEMINI_MODEL = "gemini-flash-latest";
+    const { calls } = fetchStub([{ match: (u) => hostIs(u, GEMINI_HOST), status: 200, body: { candidates: [{ content: { parts: [{ text: "ok" }] } }] } }]);
+    const out = await llmCascade({ messages: [{ role: "user", content: "hi" }] });
+    expect(calls[0]).toContain("/models/gemini-flash-latest:");
+    expect(out.model).toBe("gemini-flash-latest");
+  });
+
+  it("says so when no provider key is configured at all", async () => {
+    const err = await llmCascade({ messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
+    expect(generationFailure(err)).toContain("no AI provider key is configured");
   });
 });

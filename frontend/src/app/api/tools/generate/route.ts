@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { generateStudio } from "@/lib/studioGenerate";
+import { generationFailure } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -31,6 +32,6 @@ export async function POST(req: NextRequest) {
     if (msg.startsWith("Unknown tool")) return Response.json({ error: msg }, { status: 400 });
     if (msg.startsWith("Missing:")) return Response.json({ error: msg }, { status: 400 });
     console.error("studio generate:", msg);
-    return Response.json({ error: "Generation failed — all providers unavailable. Check provider keys." }, { status: 503 });
+    return Response.json({ error: generationFailure(e) }, { status: 503 });
   }
 }

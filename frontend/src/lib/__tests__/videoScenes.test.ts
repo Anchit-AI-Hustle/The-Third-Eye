@@ -138,3 +138,24 @@ describe("reel length", () => {
     expect(scenes.reduce((t, s) => t + s.seconds, 0)).toBe(15);
   });
 });
+
+describe("undersized reel plans", () => {
+  const list = (n: number) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ title: `S${i}`, seconds: 8, prompt: "a vertical shot", narration: "" })));
+
+  it("asks again when the shots can't fill the reel, and fits the second answer", async () => {
+    // Six 8-second shots top out at 48 seconds; a 60-second reel came back short
+    // and only showed it after every clip was paid for.
+    mockCascade
+      .mockResolvedValueOnce({ text: list(6), provider: "groq" } as Awaited<ReturnType<typeof llmCascade>>)
+      .mockResolvedValueOnce({ text: list(9), provider: "groq" } as Awaited<ReturnType<typeof llmCascade>>);
+    const { scenes } = await planScenes("# Reel", 60);
+    expect(mockCascade).toHaveBeenCalledTimes(2);
+    expect(mockCascade.mock.calls[1][0].messages[0].content).toContain("needs at least 8 shots");
+    expect(scenes.reduce((t, s) => t + s.seconds, 0)).toBe(60);
+  });
+
+  it("refuses instead of returning a reel shorter than the one chosen", async () => {
+    reply(list(5));
+    await expect(planScenes("# Reel", 60)).rejects.toThrow(/too few to fill a 60-second reel/);
+  });
+});

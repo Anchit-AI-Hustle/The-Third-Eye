@@ -2,6 +2,7 @@
 
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
 import { logAgentAction } from "@/lib/agentControl";
+import { STUDIO_TOOLS } from "@/lib/studioTools";
 
 // Unified generations log. Every app that produces an output records it here, so
 // the /generations dashboard can list every input→output across the whole app
@@ -14,6 +15,7 @@ export interface GenInputField { label: string; value: string }
 export interface GenerationRecord {
   id: string;
   app: string;        // stable app id, e.g. "studio", "kolab", "music"
+  tool?: string;      // the Studio feature that made it (its /tools/<id>), for that feature's own history
   appLabel: string;   // human label, e.g. "Studio · Ad Copy"
   title: string;      // short title for the card
   kind: GenKind;      // how `output` should be rendered
@@ -37,6 +39,7 @@ export const GEN_APPS: Record<string, { label: string; color: string; icon: stri
   jobagent: { label: "Job Agent", color: "#F5C451", icon: "Briefcase" },
   health: { label: "Health", color: "#F472B6", icon: "HeartPulse" },
   assistant: { label: "Assistant", color: "#5EEAD4", icon: "MessageSquare" },
+  book: { label: "Book Studio", color: "#F0C94E", icon: "BookOpen" },
 };
 
 let _seq = 0;
@@ -67,9 +70,35 @@ export function recordGeneration(rec: Omit<GenerationRecord, "id" | "createdAt">
   return full.id;
 }
 
+/**
+ * Which Studio feature a record belongs to. Records made before `tool` was
+ * kept are matched the way they were labelled: a Studio tool by its label
+ * ("Studio · Ad Copy Studio"), the others by their app id.
+ */
+export function featureOf(g: GenerationRecord): string {
+  if (g.tool) return g.tool;
+  if (g.app === "studio") return STUDIO_TOOLS.find((t) => g.appLabel === `Studio · ${t.label}`)?.id ?? "studio";
+  return g.app;
+}
+
+/** One feature's own history, newest first. */
+export function featureHistory(tool: string): GenerationRecord[] {
+  return listGenerations().filter((g) => featureOf(g) === tool);
+}
+
 export function deleteGeneration(id: string): void {
   vaultSet(APP, KEY, listGenerations().filter((g) => g.id !== id));
   try { window.dispatchEvent(new CustomEvent("te:generations-updated")); } catch { /* noop */ }
+}
+
+export function timeAgo(iso: string): string {
+  const d = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(d / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 /** Convenience: turn a Record<string,string> of inputs into GenInputField[]. */
