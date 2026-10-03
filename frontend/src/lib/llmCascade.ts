@@ -75,6 +75,7 @@ const DEFAULT_MODELS = {
   openai: "gpt-4o-mini",
   anthropic: "claude-haiku-4-5-20251001",
   gemini: "gemini-2.5-flash",
+  geminiPro: "gemini-2.5-pro",
   grok: "grok-2-latest",
   groq: "llama-3.3-70b-versatile",
   cerebras: "llama-3.3-70b",
@@ -83,7 +84,7 @@ const DEFAULT_MODELS = {
 } as const;
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
-  openai: "OPENAI_MODEL", anthropic: "ANTHROPIC_MODEL", gemini: "GEMINI_MODEL", grok: "XAI_MODEL",
+  openai: "OPENAI_MODEL", anthropic: "ANTHROPIC_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
   groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", ollama: "OLLAMA_MODEL",
 };
 export function modelFor(provider: ModelProvider): string {

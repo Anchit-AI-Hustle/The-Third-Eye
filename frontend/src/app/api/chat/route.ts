@@ -1545,7 +1545,7 @@ export async function POST(req: NextRequest) {
   }
   // Launch mode: everyone gets full capabilities; premium is badged, not gated.
   const effectiveTier: Tier = enforced ? gate.tier : "premium";
-  const MODEL = enforced ? gate.limits.chatModel : modelFor("gemini");
+  const MODEL = modelFor(enforced ? gate.limits.chatModel : "gemini");
 
   const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
