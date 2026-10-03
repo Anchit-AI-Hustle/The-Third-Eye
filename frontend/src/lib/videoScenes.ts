@@ -9,6 +9,11 @@ import { llmCascade } from "@/lib/llmCascade";
 // different person. The system prompt below enforces that self-containment,
 // which is most of what separates a usable shot list from a useless one.
 
+// A shot list is capped at 12 shots of at most 8 seconds, so no reel can be
+// planned past 96 seconds.
+const MAX_SCENES = 12;
+export const MAX_REEL_SECONDS = MAX_SCENES * 8;
+
 export interface Scene {
   n: number;
   title: string;
@@ -66,7 +71,7 @@ function parseScenes(text: string): Scene[] {
       };
     })
     .filter((s): s is Scene => s !== null)
-    .slice(0, 12)
+    .slice(0, MAX_SCENES)
     .map((s, i) => ({ ...s, n: i + 1 }));
 
   if (!scenes.length) throw new Error("Could not read a shot list from the script");

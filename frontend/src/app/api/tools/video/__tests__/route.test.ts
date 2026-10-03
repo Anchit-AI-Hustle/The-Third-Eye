@@ -5,7 +5,7 @@ const planScenes = vi.fn();
 
 vi.mock("next-auth", () => ({ getServerSession: () => Promise.resolve({ user: { email: "+919999999999" } }) }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("@/lib/videoScenes", () => ({ planScenes: (...a: unknown[]) => planScenes(...a) }));
+vi.mock("@/lib/videoScenes", () => ({ MAX_REEL_SECONDS: 96, planScenes: (...a: unknown[]) => planScenes(...a) }));
 vi.mock("@/lib/replicate", async () => ({
   ...(await vi.importActual<typeof import("@/lib/replicate")>("@/lib/replicate")),
   replicateConfigured: () => true,
@@ -58,6 +58,16 @@ describe("/api/tools/video", () => {
     expect(res.status).toBe(200);
     expect(createPrediction).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ text: "The city never sleeps." }));
     expect((await post({ narration: "x".repeat(401) })).status).toBe(400);
+  });
+
+  it("refuses a reel longer than a shot list can fill, instead of failing after planning", async () => {
+    // Up to 120 s was accepted, but a plan holds at most 12 shots of 8 s.
+    planScenes.mockResolvedValue({ scenes: [] });
+    expect((await post({ script: "# Reel", seconds: 120 })).status).toBe(400);
+    expect((await post({ script: "# Reel", seconds: 4 })).status).toBe(400);
+    expect(planScenes).not.toHaveBeenCalled();
+    await post({ script: "# Reel", seconds: 96 });
+    expect(planScenes).toHaveBeenCalledWith("# Reel", 96);
   });
 
   it("plans for free when only a script is sent", async () => {
