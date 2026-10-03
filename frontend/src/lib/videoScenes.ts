@@ -98,15 +98,25 @@ export function fitScenes(scenes: Scene[], target: number): Scene[] {
 }
 
 export async function planScenes(script: string, seconds?: number): Promise<{ scenes: Scene[]; provider: string }> {
-  const out = await llmCascade({
-    system: seconds
-      ? `${SYSTEM}\n\nThis is a ${seconds}-second reel: the shots' "seconds" must add up to exactly ${seconds}, so use ${Math.ceil(seconds / 8)}-${Math.floor(seconds / 4)} shots, framed vertically (9:16).`
-      : SYSTEM,
-    messages: [{ role: "user", content: script.slice(0, 12000) }],
-    maxTokens: 2000,
-    temperature: 0.6,
-    stage: "video:scenes",
-  });
-  const scenes = parseScenes(out.text);
-  return { scenes: seconds ? fitScenes(scenes, seconds) : scenes, provider: out.provider };
+  const system = seconds
+    ? `${SYSTEM}\n\nThis is a ${seconds}-second reel, which overrides the 4-6 scene guidance: the shots' "seconds" must add up to exactly ${seconds}, so use ${Math.ceil(seconds / 8)}-${Math.floor(seconds / 4)} shots, framed vertically (9:16).`
+    : SYSTEM;
+  const plan = (content: string) => llmCascade({ system, messages: [{ role: "user", content }], maxTokens: 2000, temperature: 0.6, stage: "video:scenes" });
+
+  let out = await plan(script.slice(0, 12000));
+  let scenes = parseScenes(out.text);
+  if (!seconds) return { scenes, provider: out.provider };
+
+  // Even at 8 seconds a shot, too few shots can't fill the reel, and rendering
+  // them would only show that after paying for every clip — so ask once more,
+  // then refuse rather than hand back a reel shorter than the one chosen.
+  const need = Math.ceil(seconds / 8);
+  if (scenes.length < need) {
+    out = await plan(`${script.slice(0, 12000)}\n\n(Your last shot list had ${scenes.length} shots. A ${seconds}-second reel needs at least ${need} shots of at most 8 seconds each.)`);
+    scenes = parseScenes(out.text);
+  }
+  if (scenes.length < need) {
+    throw new Error(`The shot list came back with ${scenes.length} shots, too few to fill a ${seconds}-second reel. Try again, or pick a shorter length.`);
+  }
+  return { scenes: fitScenes(scenes, seconds), provider: out.provider };
 }

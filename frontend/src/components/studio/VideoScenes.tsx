@@ -14,7 +14,7 @@ type Episode = { status: "idle" | "building" | "done" | "error"; progress?: numb
 // file. Clips are paid renders, so nothing starts on its own: each shot has its
 // own Render button, and "Render all" says how many paid jobs it is about to
 // start and asks first. Assembling the episode is free — it happens in the browser.
-export function VideoScenes({ script, title, accent, aspect = "16:9", seconds }: { script: string; title: string; accent: string; aspect?: Aspect; seconds?: number }) {
+export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, tool = "video" }: { script: string; title: string; accent: string; aspect?: Aspect; seconds?: number; tool?: string }) {
   const [scenes, setScenes] = useState<Scene[] | null>(null);
   const [planning, setPlanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds }:
   const renderClip = (scene: Scene) =>
     submit("clip", scene, setClips, (url, jobId) =>
       recordGeneration({
-        app: "video", appLabel: "Video Studio · Clip",
+        app: "video", appLabel: tool === "reel" ? "Reel Studio · Clip" : "Video Studio · Clip", tool,
         title: `${title} — ${scene.n}. ${scene.title}`,
         kind: "video",
         inputs: [{ label: "Shot prompt", value: scene.prompt }, { label: "Length", value: `${scene.seconds}s` }],
