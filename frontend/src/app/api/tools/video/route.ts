@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { replicateConfigured, createPrediction, getPrediction, videoUrlFrom, audioUrlFrom } from "@/lib/replicate";
-import { planScenes } from "@/lib/videoScenes";
+import { MAX_REEL_SECONDS, planScenes } from "@/lib/videoScenes";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,9 +44,12 @@ export async function POST(req: NextRequest) {
     const script = typeof body.script === "string" ? body.script.trim() : "";
     if (!script) return Response.json({ error: "A script is required" }, { status: 400 });
     // A reel's running time; the shots are fitted to add up to exactly it.
-    const seconds = Number(body.seconds);
+    const seconds = body.seconds === undefined ? undefined : Number(body.seconds);
+    if (seconds !== undefined && !(Number.isInteger(seconds) && seconds >= 8 && seconds <= MAX_REEL_SECONDS)) {
+      return Response.json({ error: `A reel can be 8–${MAX_REEL_SECONDS} seconds.` }, { status: 400 });
+    }
     try {
-      const { scenes } = await planScenes(script, Number.isInteger(seconds) && seconds >= 8 && seconds <= 120 ? seconds : undefined);
+      const { scenes } = await planScenes(script, seconds);
       return Response.json({ scenes, configured: replicateConfigured() });
     } catch (e) {
       return Response.json({ error: e instanceof Error ? e.message : "Shot list failed" }, { status: 502 });

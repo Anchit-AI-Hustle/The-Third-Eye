@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { modelFor } from "@/lib/llmCascade";
 import {
   TIERS,
   PREMIUM_TOOLS,
@@ -58,9 +59,16 @@ describe("tier limits", () => {
     expect(TIERS.premium.canScheduleEvents).toBe(true);
   });
 
-  it("gives premium the stronger chat model", () => {
-    expect(TIERS.free.chatModel).toBe("gemini-2.5-flash");
-    expect(TIERS.premium.chatModel).toBe("gemini-2.5-pro");
+  it("gives premium the stronger chat model, and either can be moved by env", () => {
+    expect(modelFor(TIERS.free.chatModel)).toBe("gemini-2.5-flash");
+    expect(modelFor(TIERS.premium.chatModel)).toBe("gemini-2.5-pro");
+    // With premium enforced, chat used the tier's hard-coded model and ignored the override.
+    process.env.GEMINI_PRO_MODEL = "gemini-pro-latest";
+    process.env.GEMINI_MODEL = "gemini-flash-latest";
+    try {
+      expect(modelFor(TIERS.premium.chatModel)).toBe("gemini-pro-latest");
+      expect(modelFor(TIERS.free.chatModel)).toBe("gemini-flash-latest");
+    } finally { delete process.env.GEMINI_PRO_MODEL; delete process.env.GEMINI_MODEL; }
   });
 });
 

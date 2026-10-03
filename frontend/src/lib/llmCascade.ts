@@ -67,6 +67,64 @@ function loadKeys() {
   };
 }
 
+// One model per provider, each overridable by env (ANTHROPIC_MODEL, GEMINI_MODEL,
+// …): when a provider retires a model every call to it 404s, and with every
+// provider on a retired model the whole cascade fails — that should be a
+// settings change, not a code release.
+const DEFAULT_MODELS = {
+  openai: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001",
+  gemini: "gemini-2.5-flash",
+  geminiPro: "gemini-2.5-pro",
+  grok: "grok-2-latest",
+  groq: "llama-3.3-70b-versatile",
+  cerebras: "llama-3.3-70b",
+  mistral: "mistral-small-latest",
+  ollama: "llama3.1:8b",
+} as const;
+type ModelProvider = keyof typeof DEFAULT_MODELS;
+const MODEL_ENV: Record<ModelProvider, string> = {
+  openai: "OPENAI_MODEL", anthropic: "ANTHROPIC_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
+  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", ollama: "OLLAMA_MODEL",
+};
+export function modelFor(provider: ModelProvider): string {
+  return process.env[MODEL_ENV[provider]]?.trim() || DEFAULT_MODELS[provider];
+}
+
+/** Thrown when every provider failed; carries what each one said. */
+export class LlmCascadeError extends Error {
+  constructor(readonly attempts: LlmCascadeResult["attempts"]) {
+    super(`All LLM providers failed. Attempts: ${JSON.stringify(attempts)}`);
+  }
+}
+
+/**
+ * "anthropic 404 model not found · gemini 429 quota or rate limit" — what to fix,
+ * in one line. Only a category per status: provider error bodies can echo part
+ * of the key or account details, so they stay in the server log.
+ */
+export function summarizeAttempts(attempts: LlmCascadeResult["attempts"]): string {
+  if (!attempts.length) return "no AI provider key is configured";
+  return attempts.map((a) => `${a.provider}${a.status ? ` ${a.status}` : ""} ${failureKind(a)}`).join(" · ");
+}
+
+function failureKind(a: LlmCascadeResult["attempts"][number]): string {
+  if (a.reason?.startsWith("skipped:")) return "cooling down after a quota error";
+  const s = a.status ?? 0;
+  if (s === 401 || s === 403) return "key rejected";
+  if (s === 404) return "model not found";
+  if (s === 402 || s === 429 || /quota|billing|credit/i.test(a.reason ?? "")) return "quota or rate limit";
+  if (s === 0) return "unreachable or timed out";
+  if (s >= 500) return "provider error";
+  return "request refused";
+}
+
+/** The user-facing reason a generation failed — which provider said what, not "all unavailable". */
+export function generationFailure(e: unknown): string {
+  if (e instanceof LlmCascadeError) return `No AI provider answered — ${summarizeAttempts(e.attempts)}.`;
+  return "Generation failed — please try again.";
+}
+
 function isQuotaError(status: number, body: string): boolean {
   if (status === 429 || status === 402) return true;
   // OpenAI / Anthropic both return 400 with billing language when out of credit
@@ -284,36 +342,42 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     }
     if (provider === "openai" && keys.openai.length > 0) {
       for (const key of keys.openai) {
-        const res = await callOpenAI(key, "gpt-4o-mini", opts);
-        attempts.push({ provider: "openai", model: "gpt-4o-mini", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-        if (res.ok) return { text: res.text, provider: "openai", model: "gpt-4o-mini", attempts };
+        const model = modelFor("openai");
+        const res = await callOpenAI(key, model, opts);
+        attempts.push({ provider: "openai", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+        if (res.ok) return { text: res.text, provider: "openai", model, attempts };
         if (!res.quota) break; // non-quota error → try next provider, not next key
         startCooldown("openai");
       }
     } else if (provider === "anthropic" && keys.anthropic) {
-      const res = await callAnthropic(keys.anthropic, "claude-3-5-haiku-latest", opts);
-      attempts.push({ provider: "anthropic", model: "claude-3-5-haiku", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "anthropic", model: "claude-3-5-haiku-latest", attempts };
+      const model = modelFor("anthropic");
+      const res = await callAnthropic(keys.anthropic, model, opts);
+      attempts.push({ provider: "anthropic", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "anthropic", model, attempts };
       if (res.quota) startCooldown("anthropic");
     } else if (provider === "gemini" && keys.gemini) {
-      const res = await callGemini(keys.gemini, "gemini-2.5-flash", opts);
-      attempts.push({ provider: "gemini", model: "gemini-2.5-flash", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "gemini", model: "gemini-2.5-flash", attempts };
+      const model = modelFor("gemini");
+      const res = await callGemini(keys.gemini, model, opts);
+      attempts.push({ provider: "gemini", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "gemini", model, attempts };
       if (res.quota) startCooldown("gemini");
     } else if (provider === "grok" && keys.grok) {
-      const res = await callOpenAICompatible(GROK_BASE, keys.grok, "grok-2-latest", opts);
-      attempts.push({ provider: "grok", model: "grok-2-latest", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "grok", model: "grok-2-latest", attempts };
+      const model = modelFor("grok");
+      const res = await callOpenAICompatible(GROK_BASE, keys.grok, model, opts);
+      attempts.push({ provider: "grok", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "grok", model, attempts };
       if (res.quota) startCooldown("grok");
     } else if (provider === "groq" && keys.groq) {
-      const res = await callOpenAICompatible(GROQ_BASE, keys.groq, "llama-3.3-70b-versatile", opts);
-      attempts.push({ provider: "groq", model: "llama-3.3-70b-versatile", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "groq", model: "llama-3.3-70b-versatile", attempts };
+      const model = modelFor("groq");
+      const res = await callOpenAICompatible(GROQ_BASE, keys.groq, model, opts);
+      attempts.push({ provider: "groq", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "groq", model, attempts };
       if (res.quota) startCooldown("groq");
     } else if (provider === "cerebras" && keys.cerebras) {
-      const res = await callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, "llama-3.3-70b", opts);
-      attempts.push({ provider: "cerebras", model: "llama-3.3-70b", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "cerebras", model: "llama-3.3-70b", attempts };
+      const model = modelFor("cerebras");
+      const res = await callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, model, opts);
+      attempts.push({ provider: "cerebras", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "cerebras", model, attempts };
       if (res.quota) startCooldown("cerebras");
     } else if (provider === "openrouter" && keys.openrouter) {
       const model = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
@@ -322,18 +386,20 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       if (res.ok) return { text: res.text, provider: "openrouter", model, attempts };
       if (res.quota) startCooldown("openrouter");
     } else if (provider === "mistral" && keys.mistral) {
-      const res = await callOpenAICompatible(MISTRAL_BASE, keys.mistral, "mistral-small-latest", opts);
-      attempts.push({ provider: "mistral", model: "mistral-small-latest", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "mistral", model: "mistral-small-latest", attempts };
+      const model = modelFor("mistral");
+      const res = await callOpenAICompatible(MISTRAL_BASE, keys.mistral, model, opts);
+      attempts.push({ provider: "mistral", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "mistral", model, attempts };
       if (res.quota) startCooldown("mistral");
     } else if (provider === "ollama" && keys.ollama) {
-      const res = await callOllama("llama3.1:8b", opts);
-      attempts.push({ provider: "ollama", model: "llama3.1:8b", ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "ollama", model: "llama3.1:8b", attempts };
+      const model = modelFor("ollama");
+      const res = await callOllama(model, opts);
+      attempts.push({ provider: "ollama", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) return { text: res.text, provider: "ollama", model, attempts };
     }
   }
 
-  throw new Error(`All ${order.length} LLM provider(s) failed. Attempts: ${JSON.stringify(attempts)}`);
+  throw new LlmCascadeError(attempts);
 }
 
 // ─── Vision cascade (multimodal image → text) ────────────────────────────
@@ -395,8 +461,9 @@ export async function visionCascade(o: VisionCascadeOptions): Promise<VisionCasc
   const keys = loadKeys();
   const errors: string[] = [];
   if (keys.gemini) {
-    const res = await visionGemini(keys.gemini, "gemini-2.5-flash", o);
-    if (res.ok) return { text: res.text, provider: "gemini", model: "gemini-2.5-flash" };
+    const model = modelFor("gemini");
+    const res = await visionGemini(keys.gemini, model, o);
+    if (res.ok) return { text: res.text, provider: "gemini", model };
     errors.push(`gemini:${res.status}`);
   }
   for (const key of keys.openai) {
@@ -473,17 +540,17 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
 
 // Only providers verified to support tool calling on their free-tier models —
 // deliberately smaller than the full text-only cascade order above.
-const TOOL_CAPABLE_ORDER: { provider: "groq" | "cerebras" | "mistral"; base: string; model: string }[] = [
-  { provider: "groq", base: GROQ_BASE, model: "llama-3.3-70b-versatile" },
-  { provider: "cerebras", base: CEREBRAS_BASE, model: "llama-3.3-70b" },
-  { provider: "mistral", base: MISTRAL_BASE, model: "mistral-small-latest" },
+const toolCapableOrder = (): { provider: "groq" | "cerebras" | "mistral"; base: string; model: string }[] => [
+  { provider: "groq", base: GROQ_BASE, model: modelFor("groq") },
+  { provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras") },
+  { provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral") },
 ];
 
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
   const keys = loadKeys();
   const byProvider: Record<string, string> = { groq: keys.groq, cerebras: keys.cerebras, mistral: keys.mistral };
   const attempts: string[] = [];
-  for (const { provider, base, model } of TOOL_CAPABLE_ORDER) {
+  for (const { provider, base, model } of toolCapableOrder()) {
     const key = byProvider[provider];
     if (!key) { attempts.push(`${provider}:no key`); continue; }
     if (inCooldown(provider)) { attempts.push(`${provider}:cooling down`); continue; }
@@ -551,7 +618,7 @@ export async function geminiGroundedSearch(query: string): Promise<string | null
   if (!key || !q) return null;
   const { signal, clear } = withTimeout(20_000);
   try {
-    const r = await fetch(`${GEMINI_BASE}/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+    const r = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(modelFor("gemini"))}:generateContent?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -580,7 +647,7 @@ async function transcribeGemini(key: string, audio: Blob, lang?: string): Promis
     const prompt = lang
       ? `Transcribe this audio (${lang}). Return only the transcript.`
       : "Transcribe this audio. Return only the transcript.";
-    const r = await fetch(`${GEMINI_BASE}/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+    const r = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(modelFor("gemini"))}:generateContent?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -622,7 +689,7 @@ export async function transcribeCascade(audio: Blob, lang?: string): Promise<Tra
   const gemini = usableGeminiKey();
   if (gemini) {
     const res = await transcribeGemini(gemini, audio, lang);
-    if (res.ok) return { text: res.text ?? "", provider: "gemini", model: "gemini-2.5-flash" };
+    if (res.ok) return { text: res.text ?? "", provider: "gemini", model: modelFor("gemini") };
     errors.push(`gemini:${res.status}`);
   }
   throw new Error(`All transcription providers failed (${errors.join(", ") || "no keys configured"}).`);

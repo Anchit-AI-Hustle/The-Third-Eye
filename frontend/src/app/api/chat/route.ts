@@ -28,6 +28,7 @@ import { randomUUID } from "crypto";
 import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 import { gatherResearchRounds } from "@/lib/deepResearch";
 import { anchorStatus } from "@/lib/anchor";
+import { modelFor } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1544,7 +1545,7 @@ export async function POST(req: NextRequest) {
   }
   // Launch mode: everyone gets full capabilities; premium is badged, not gated.
   const effectiveTier: Tier = enforced ? gate.tier : "premium";
-  const MODEL = enforced ? gate.limits.chatModel : "gemini-2.5-flash";
+  const MODEL = modelFor(enforced ? gate.limits.chatModel : "gemini");
 
   const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
