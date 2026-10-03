@@ -98,19 +98,31 @@ export class LlmCascadeError extends Error {
   }
 }
 
-/** "anthropic 404 model not found · gemini 429 quota …" — what to fix, in one line. */
+/**
+ * "anthropic 404 model not found · gemini 429 quota or rate limit" — what to fix,
+ * in one line. Only a category per status: provider error bodies can echo part
+ * of the key or account details, so they stay in the server log.
+ */
 export function summarizeAttempts(attempts: LlmCascadeResult["attempts"]): string {
   if (!attempts.length) return "no AI provider key is configured";
-  return attempts.map((a) => {
-    const why = (a.reason ?? "").replace(/\s+/g, " ").replace(/[{}"]/g, "").slice(0, 80);
-    return `${a.provider}${a.status ? ` ${a.status}` : ""}${why ? ` (${why})` : ""}`;
-  }).join(" · ");
+  return attempts.map((a) => `${a.provider}${a.status ? ` ${a.status}` : ""} ${failureKind(a)}`).join(" · ");
+}
+
+function failureKind(a: LlmCascadeResult["attempts"][number]): string {
+  if (a.reason?.startsWith("skipped:")) return "cooling down after a quota error";
+  const s = a.status ?? 0;
+  if (s === 401 || s === 403) return "key rejected";
+  if (s === 404) return "model not found";
+  if (s === 402 || s === 429 || /quota|billing|credit/i.test(a.reason ?? "")) return "quota or rate limit";
+  if (s === 0) return "unreachable or timed out";
+  if (s >= 500) return "provider error";
+  return "request refused";
 }
 
 /** The user-facing reason a generation failed — which provider said what, not "all unavailable". */
 export function generationFailure(e: unknown): string {
   if (e instanceof LlmCascadeError) return `No AI provider answered — ${summarizeAttempts(e.attempts)}.`;
-  return `Generation failed: ${e instanceof Error ? e.message.slice(0, 200) : "unknown error"}.`;
+  return "Generation failed — please try again.";
 }
 
 function isQuotaError(status: number, body: string): boolean {

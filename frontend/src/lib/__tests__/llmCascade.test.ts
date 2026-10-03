@@ -205,8 +205,11 @@ describe("llmCascade: when every provider fails", () => {
     ]);
     const err = await llmCascade({ messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
     const msg = generationFailure(err);
-    expect(msg).toMatch(/gemini 404 \(.*not found/);
-    expect(msg).toMatch(/groq 401 \(.*Invalid API Key/);
+    expect(msg).toContain("gemini 404 model not found");
+    expect(msg).toContain("groq 401 key rejected");
+    // Provider bodies can echo part of the key; only the category reaches the user.
+    expect(msg).not.toContain("Invalid API Key");
+    expect(msg).not.toContain("gemini-x");
   });
 
   it("uses the model named in the environment, so a retired model is a settings change", async () => {
