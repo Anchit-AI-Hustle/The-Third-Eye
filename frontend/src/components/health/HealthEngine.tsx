@@ -75,7 +75,9 @@ export function HealthEngine() {
       const d = await res.json();
       if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
       setPlan(d.plan); setProvider(d.provider || "");
-      recordGeneration({
+      // With no AI available the route still answers 200 (the targets stand on
+      // their own) but with no plan — nothing worth keeping in the history.
+      if (typeof d.plan === "string" && d.plan.trim()) recordGeneration({
         app: "health", appLabel: "Health Engine", tool: "health",
         title: `Health plan: ${f.goal}${f.focus ? ` · ${f.focus}` : ""}`,
         kind: "markdown", inputs: fieldsFrom({ goal: f.goal, focus: f.focus, activity: f.activity, diet: f.dietaryPreference }),
