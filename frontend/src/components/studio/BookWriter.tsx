@@ -115,7 +115,7 @@ export function BookWriter({ outline, inputs, accent }: { outline: string; input
     const epub = buildEpub(bookMeta(), written.map((c) => ({ title: `Chapter ${c.n}: ${c.title}`, text: texts[c.n] })), `urn:uuid:${crypto.randomUUID()}`);
     download(`${slug}.epub`, epub.slice().buffer, "application/epub+zip");
     recordGeneration({
-      app: "book", appLabel: "Book Studio", title: meta.title, kind: "markdown",
+      app: "book", appLabel: "Book Studio", tool: "book", title: meta.title, kind: "markdown",
       inputs: [{ label: "Premise", value: inputs.premise ?? "" }, { label: "Chapters", value: `${written.length} of ${chapters.length}` }],
       output: manuscript(), meta: { words: total },
     });

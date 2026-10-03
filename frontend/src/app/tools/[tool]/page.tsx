@@ -9,6 +9,7 @@ import { MusicStudio } from "@/components/studio/MusicStudio";
 import { HealthStudio } from "@/components/health/HealthStudio";
 import { VideoAvatar } from "@/components/avatar/VideoAvatar";
 import { AnchorPanel } from "@/components/studio/AnchorPanel";
+import { FeatureHistory } from "@/components/studio/FeatureHistory";
 
 export default function StudioToolPage() {
   const params = useParams();
@@ -42,6 +43,7 @@ export default function StudioToolPage() {
         : tool.id === "health" ? <HealthStudio />
         : tool.id === "avatar" ? <VideoAvatar />
         : <StudioWorkbench tool={tool} />}
+      {tool && <FeatureHistory tool={tool.id} accent={tool.accent} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { llmCascade } from "@/lib/llmCascade";
+import { generationFailure, llmCascade } from "@/lib/llmCascade";
 import type { BrandProfile, KolabMode } from "@/lib/kolab/types";
 
 export const runtime = "nodejs";
@@ -81,6 +81,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ output: out.text.trim(), provider: out.provider });
   } catch (e) {
     console.error("kolab generate:", e instanceof Error ? e.message : e);
-    return Response.json({ error: "Generation failed — all providers unavailable." }, { status: 503 });
+    return Response.json({ error: generationFailure(e) }, { status: 503 });
   }
 }

@@ -45,7 +45,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
       if (d.output) {
         const labels = Object.fromEntries(tool.fields.map((fl) => [fl.name, fl.label]));
         recordGeneration({
-          app: "studio", appLabel: `Studio · ${tool.label}`,
+          app: "studio", appLabel: `Studio · ${tool.label}`, tool: tool.id,
           title: `${tool.label}: ${inputs[tool.fields[0].name]?.slice(0, 60) || "untitled"}`,
           kind: tool.format === "html" ? "html" : "markdown",
           inputs: fieldsFrom(inputs, labels), output: d.output, meta: { provider: d.provider, tool: tool.id },
@@ -186,7 +186,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
         {(tool.id === "video" || tool.id === "reel") && output && !loading && (
           <VideoScenes script={output} title={inputs[tool.fields[0].name]?.slice(0, 60) || "Untitled"} accent={tool.accent}
             aspect={tool.id === "reel" || inputs.format?.startsWith("Short-form") ? "9:16" : "16:9"}
-            seconds={tool.id === "reel" ? parseInt(inputs.length, 10) || undefined : undefined} />
+            seconds={tool.id === "reel" ? parseInt(inputs.length, 10) || undefined : undefined} tool={tool.id} />
         )}
         {tool.id === "book" && output && !loading && <BookWriter outline={output} inputs={inputs} accent={tool.accent} />}
       </div>

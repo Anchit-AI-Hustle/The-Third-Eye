@@ -13,7 +13,7 @@ export interface TierLimits {
   dailyBriefing: boolean;
   recurringReminders: boolean;
   multiAgent: boolean;
-  chatModel: "gemini-2.5-flash" | "gemini-2.5-pro";
+  chatModel: "gemini" | "geminiPro"; // a model role; lib/llmCascade modelFor() names the model
 }
 
 export const TIERS: Record<Tier, TierLimits> = {
@@ -27,7 +27,7 @@ export const TIERS: Record<Tier, TierLimits> = {
     dailyBriefing: false,
     recurringReminders: false,
     multiAgent: false,
-    chatModel: "gemini-2.5-flash",
+    chatModel: "gemini",
   },
   premium: {
     chatPerDay: -1,
@@ -39,7 +39,7 @@ export const TIERS: Record<Tier, TierLimits> = {
     dailyBriefing: true,
     recurringReminders: true,
     multiAgent: true,
-    chatModel: "gemini-2.5-pro",
+    chatModel: "geminiPro",
   },
 };
 
