@@ -3,12 +3,12 @@ import { decrypt } from "@/lib/crypto";
 
 /**
  * Mint a fresh Google access token for a user from their stored (encrypted)
- * refresh token. Used by server-side jobs (e.g. Gmail/Chat scraping crons) that
+ * refresh token. Used by server-side jobs (e.g. Gmail scraping crons) that
  * run without a live session. Returns null when the user hasn't connected
  * Google, the database isn't configured, or the refresh fails.
  *
  * The refresh token is captured by the opt-in connect flow
- * (`/api/connect/google`), which requests the Gmail/Chat scopes — basic sign-in
+ * (`/api/connect/google`), which requests the Gmail scopes — basic sign-in
  * does not grant them.
  */
 export async function getGoogleAccessToken(
@@ -94,7 +94,9 @@ export async function revokeGoogleAccess(
 }
 
 /**
- * Google scopes the Gmail/Calendar/Chat features need.
+ * Google scopes the Gmail and Calendar features need — exactly these, and the
+ * same three must be the only scopes listed in Google Cloud Console → Data
+ * Access, or verification fails on "scope discrepancy".
  *
  * NOT requested at sign-in — and now sign-in could not request them if it
  * wanted to: signing in is a mobile number and a 4-digit PIN (see lib/auth.ts)
@@ -118,19 +120,20 @@ export async function revokeGoogleAccess(
  * OAuth scope at all). An unused restricted scope is exactly what a
  * verification reviewer flags, and there is nothing to demo it doing.
  *
+ * Least privilege: calendar.events.readonly, not calendar.readonly — the app
+ * only lists events on the primary calendar, never calendars or settings. The
+ * Google Chat scopes are gone with Chat ingestion: they were needed only to
+ * pull tasks from Chat spaces, which consumer Google accounts can't use, and
+ * one of them was a second restricted scope.
+ *
  * Console grouping (one justification box per group, see oauthJustifications.ts):
- *   Sensitive  — gmail.send, calendar.readonly, chat.spaces.readonly
+ *   Sensitive  — gmail.send, calendar.events.readonly
  *   Restricted — gmail.readonly
- *   Restricted — chat.messages.readonly
- * chat.spaces.readonly is not redundant: spaces.list does not accept
- * chat.messages.readonly. Both Chat scopes stay.
  */
 export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/chat.spaces.readonly",
-  "https://www.googleapis.com/auth/chat.messages.readonly",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
 ] as const;
 
 /** Identity scopes. Requested by the connect flow, and by sign-in if Google is
@@ -171,7 +174,6 @@ export interface GoogleCapabilities {
   gmailRead: boolean;
   gmailSend: boolean;
   calendarRead: boolean;
-  chatRead: boolean;
 }
 
 /** What a granted scope string actually permits. */
@@ -179,8 +181,9 @@ export function googleCapabilities(granted: string | undefined): GoogleCapabilit
   return {
     gmailRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/gmail.readonly"),
     gmailSend: hasGoogleScope(granted, "https://www.googleapis.com/auth/gmail.send"),
-    calendarRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.readonly"),
-    chatRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/chat.messages.readonly"),
+    // Grants made before the narrowing still carry calendar.readonly, which also reads events.
+    calendarRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.events.readonly")
+      || hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.readonly"),
   };
 }
 

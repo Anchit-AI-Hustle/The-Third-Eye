@@ -1,13 +1,13 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { scrapeGmailForUser, scrapeChatForUser } from "@/lib/ingest";
+import { scrapeGmailForUser } from "@/lib/ingest";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // Foreground ingestion: the signed-in app triggers this on open / focus so new
-// Gmail + Chat messages are analysed and integrated into the Task Tracker in
+// Gmail messages are analysed and integrated into the Task Tracker in
 // near-real-time, without waiting for the 15-minute cron. Idempotent — the
 // dedup ledger makes repeat runs cheap. A short per-user cooldown stops focus
 // churn from hammering the Google APIs.
@@ -29,15 +29,8 @@ export async function POST() {
   }
   lastRun.set(email, now);
 
-  const [gmail, chat] = await Promise.all([
-    scrapeGmailForUser(sb, email).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
-    scrapeChatForUser(sb, email).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
-  ]);
+  const gmail = await scrapeGmailForUser(sb, email).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  const { inserted = 0, merged = 0 } = gmail as { inserted?: number; merged?: number };
 
-  const inserted =
-    ((gmail as { inserted?: number }).inserted ?? 0) + ((chat as { inserted?: number }).inserted ?? 0);
-  const merged =
-    ((gmail as { merged?: number }).merged ?? 0) + ((chat as { merged?: number }).merged ?? 0);
-
-  return Response.json({ gmail, chat, changed: inserted + merged > 0 });
+  return Response.json({ gmail, changed: inserted + merged > 0 });
 }

@@ -11,7 +11,7 @@ import { TeamOS } from "@/components/team/TeamOS";
 
 // The unified Task Tracker workspace. One feature, two intake paths:
 //   1. Live Capture — the mic listens and auto-extracts action items.
-//   2. Ingestion    — Gmail + Google Chat of the linked account are scraped
+//   2. Ingestion    — Gmail of the linked account is scraped
 //                     (headless via IngestBridge, or on-demand "Scan now").
 // Both write into the same task store that the Tracker below reads, so a task
 // is a task no matter where it came from. The capture/sources panel is
@@ -42,7 +42,7 @@ export function TrackerWorkspace() {
 
   return (
     <div className="space-y-6">
-      {/* Auto-capture requires the Gmail/Chat scopes — prompt if not connected. */}
+      {/* Auto-capture requires the Gmail scopes — prompt if not connected. */}
       <GmailConnectBanner />
 
       {/* Device activity → AI summary → tracker updates */}
@@ -110,7 +110,7 @@ export function TrackerWorkspace() {
   );
 }
 
-// Shown until the user connects Gmail/Chat with the ingestion scopes — without
+// Shown until the user connects Gmail with the ingestion scopes — without
 // them the scrape silently returns "not connected" and the tracker never fills
 // from email. One tap starts the opt-in OAuth flow (read-only scopes).
 function GmailConnectBanner() {

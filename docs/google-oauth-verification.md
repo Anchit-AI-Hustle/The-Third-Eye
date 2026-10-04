@@ -1,175 +1,138 @@
-# Google OAuth verification — Data Access boxes
+# Google OAuth verification — response to Trust & Safety
 
-The rejection **"Request minimum scopes: the provided justification does not sufficiently explain why the requested OAuth scopes are necessary"** is a Console paste error, not a missing feature.
+Project **jarvis-anchit** (529553308976), app **The Third Eye**, `https://the-third-eye.anchit-tandon.com`.
 
-Google Auth Platform → **Data Access** has **three justification boxes**, grouped by sensitivity. The previous paste put a `gmail.readonly` blurb in the **sensitive** box. That box does not contain `gmail.readonly`. It contains `gmail.send`, `calendar.readonly` and `chat.spaces.readonly`, none of which the text mentioned.
+The October 2026 email raised six points. This file says what changed in code and what the project owner still has to do in the Console. This agent cannot type into Google Cloud Console, record video or reply to email.
 
-Canonical copy lives in `frontend/src/lib/oauthJustifications.ts` and is length-checked (≤1000 chars) by `oauthScopes.test.ts`. Paste those strings **verbatim**. Do not start mid-sentence.
+| Email point | Fix |
+|---|---|
+| Scope justification insufficient (gmail.readonly, gmail.send, calendar.readonly, chat.spaces.readonly) | New justifications below. Each one names the user-facing feature, the API call behind it and why a narrower scope fails. |
+| Scope discrepancy: code vs Console | Code now requests exactly **three** scopes (`INGESTION_SCOPE_LIST` in `frontend/src/lib/googleToken.ts`, pinned by `oauthScopes.test.ts`). The Console must list the same three, no more. |
+| Demo video: one feature per scope, gmail.send impact on the source account | Shot list in §3. |
+| Consent screen fully expanded | Shot list step 3. |
+| Test credentials + instructions | Reply template in §4. |
+| Don't serve unverified scopes to production traffic | §5. |
 
-This agent cannot type into Google Cloud Console. The steps below are for the project owner in the jarvis-anchit project.
+## 1. What changed in code (least privilege)
 
-## Console: three boxes, not five one-liners
-
-| Box | Scopes in that table | Paste |
+| Before | After | Why |
 |---|---|---|
-| Sensitive | `gmail.send`, `calendar.readonly`, `chat.spaces.readonly` | `SENSITIVE_SCOPES_JUSTIFICATION` |
-| Restricted — Gmail | `gmail.readonly` | `GMAIL_READONLY_JUSTIFICATION` |
-| Restricted — Chat | `chat.messages.readonly` | `CHAT_MESSAGES_JUSTIFICATION` |
+| `calendar.readonly` | `calendar.events.readonly` | The only Calendar call is `events.list` on the primary calendar. No calendar list, settings or ACL access is needed. |
+| `chat.spaces.readonly` | removed | Chat ingestion is gone. It needed a Workspace account, so consumer users couldn't use it. |
+| `chat.messages.readonly` (restricted) | removed | Same. This also removes a second restricted scope from review. |
+| `gmail.readonly` | kept | Task extraction and search need message bodies and `q` search. |
+| `gmail.send` | kept | Narrowest scope that can send. |
 
-**Five scopes. Not six.** `calendar.events` is not requested. Remove it from Data Access if it is still listed.
-
-Do **not** drop Chat. Task Tracker lists spaces (`spaces.list` → `chat.spaces.readonly`) and reads opted-in messages (`spaces.messages.list` → `chat.messages.readonly`). The second scope cannot list spaces; both stay.
-
-### 1. Sensitive box
-
-Paste:
+The consent screen at *Settings → Connections → Connect Google* now shows `openid email profile` and these three:
 
 ```
-The Third Eye (the-third-eye.anchit-tandon.com) is a personal productivity assistant. These scopes are used only after the user opts in at Settings → Connections.
-
-gmail.send: (1) send an assistant-drafted email after the user reviews recipient, subject and body and clicks Confirm; (2) deliver a reminder or daily digest the user scheduled. Never sent on a model's initiative.
-
-calendar.readonly: list upcoming events on the user's primary calendar when they ask about their schedule. Fetched for that request; not stored.
-
-chat.spaces.readonly: list Chat spaces so the user can choose which ones feed Task Tracker. spaces.list requires this scope; no messages are read with it.
-
-Why more limited scopes are insufficient: gmail.compose cannot send. calendar.freebusy has no titles or locations the briefing needs. chat.messages.readonly cannot call spaces.list, so omitting chat.spaces.readonly leaves the space picker empty.
+https://www.googleapis.com/auth/gmail.readonly
+https://www.googleapis.com/auth/gmail.send
+https://www.googleapis.com/auth/calendar.events.readonly
 ```
 
-### 2. Restricted Gmail — `gmail.readonly`
+Users who connected before keep their old `calendar.readonly` grant working (`googleCapabilities` accepts it). They are asked for the narrower one next time they reconnect.
 
-**What features will you use?** select **Email productivity**. Do not select backup, migration, monitoring, anti-spam or CRM.
+## 2. Console → Google Auth Platform → Data Access
 
-Paste:
+1. **Remove** `calendar.readonly`, `chat.spaces.readonly`, `chat.messages.readonly`, and `calendar.events` if it is listed.
+2. **Add** `.../auth/calendar.events.readonly`.
+3. The list must now be exactly `gmail.readonly` (restricted), `gmail.send` and `calendar.events.readonly` (sensitive). Any extra scope is a discrepancy.
+4. Paste the two justifications **verbatim**. They are the strings in `frontend/src/lib/oauthJustifications.ts`, each under 1000 characters.
 
-```
-gmail.readonly is used on the signed-in user's own mailbox after they connect Google:
-
-1. Task Tracker ingest — scan unread mail from the last 2 days and extract action items, deadlines and follow-ups into tasks the user can edit or delete.
-2. Assistant answers — search or summarise mail the user asked about.
-
-Data lifecycle: bodies are fetched over TLS and processed in memory for that request or ingest pass. We do not store raw email bodies, full threads or attachments. We persist extracted task titles/due dates, Gmail message IDs already processed (dedupe), and an AES-256-GCM encrypted refresh token. Data is never sold, used for ads, or used to train generalised AI models. Content is sent to an AI provider only to complete the user's request (Limited Use).
-
-Why gmail.metadata / gmail.labels are insufficient: they return headers, labels and subjects. Action items and deadlines live in the body. Extraction and summarisation cannot run on metadata.
-```
-
-### 3. Restricted Chat — `chat.messages.readonly`
-
-**What features will you use?** **Deselect "Chat app".** This product is not a bot installed into Google Chat. It reads Chat with **user OAuth**, the same pattern as Gmail. If Chat app is the only option, leave the dropdown empty — Google's docs tell Trust & Safety to classify it in that case.
-
-Paste:
+### Sensitive box — `gmail.send`, `calendar.events.readonly`
 
 ```
-This is not a Google Chat bot and is not installed into Chat spaces. It is a web assistant that reads Chat on the signed-in user's behalf with user OAuth (Chat API), the same pattern as Gmail.
+The Third Eye is a personal assistant. Both scopes act only on the signed-in user's own account, after they click Connect Google.
 
-chat.messages.readonly is used only on spaces the user switched on in Task Tracker, to extract action items, meeting requests and follow-ups from message text.
+gmail.send (users.messages.send): 1) The user asks the Assistant to email someone; a card shows recipient, subject and body, and nothing is sent until they click Confirm. The mail then appears in their Sent folder. 2) Reminders and a daily task briefing the user switched on are emailed to the user's own address. Never sent on the app's own initiative.
 
-Data lifecycle: message text is processed in memory. Raw transcripts are not stored. We persist extracted tasks, a per-space watermark (last processed timestamp), and the user's space opt-ins. Never sold, used for ads, or used to train generalised AI models.
+calendar.events.readonly (events.list on the primary calendar): when the user asks "what's on my calendar today/this week", the Assistant lists event titles, times and locations. Not stored, never modified.
 
-Why more limited scopes are insufficient: chat.spaces.readonly lists spaces but cannot call spaces.messages.list. Commitments live in message text, so chat.messages.readonly is required. We do not request chat.messages (read/write) because we never post, edit or delete Chat messages.
+Why narrower scopes are insufficient: gmail.send is the narrowest scope that can send (gmail.compose adds drafts). calendar.freebusy returns busy blocks without titles or locations, so it can't answer the question. calendar.events.readonly replaces the broader calendar.readonly.
 ```
 
-### 4. Demo video (required for restricted scopes)
+### Restricted box — `gmail.readonly`
 
-YouTube, **Unlisted**. Blank URL = automatic reject. Shot list is in §2 below.
+**What features will you use?** → **Email productivity**. Do not pick backup, migration, monitoring, anti-spam or CRM.
 
-### 5. Save and resubmit
+```
+Used only on the signed-in user's own mailbox, after they click Connect Google.
 
-Data Access → Save. Verification Center → Submit for verification.
+1. Task Tracker: every 3 hours and when the user opens the app, unread mail from the last 2 days (max 25) is read and action items and deadlines become tasks the user can edit or delete.
+2. Assistant: when the user asks ("any email from my bank?"), mail is searched and the matching message summarised.
 
-## Alternative: stay in Testing (personal use)
+Data lifecycle: bodies are processed in memory; raw bodies, threads and attachments are not stored. We keep extracted task titles and due dates, processed message IDs (to avoid duplicates) and an AES-256-GCM encrypted refresh token. Never sold, used for ads or to train generalised AI models; content goes to an AI provider only to complete the user's request (Limited Use).
 
-If the app is only for you / a known group (<100): Audience → **Testing**, add `anchit.tandon@gmail.com` under Test users, do not publish. Restricted-scope review, CASA and the demo video are then not required. The warning icon in Data Access can be ignored.
+Why gmail.metadata is insufficient: it returns headers only and cannot run search queries (q). Action items and deadlines are in the body, so extraction and search need gmail.readonly. We never modify or delete mail.
+```
 
-## The app + the scopes actually under review
+5. **Demo video URL**: the Unlisted YouTube link from §3.
+6. Save.
 
-- **App:** The Third Eye — `https://the-third-eye.anchit-tandon.com`
-- **Consent screen must match the live app.** Branding: App name = *The Third Eye*, logo, **Application home page** = the URL above, **Privacy policy** = `…/privacy_policy`, **Terms** = `…/terms_of_service`, **Authorized domain** = `anchit-tandon.com`.
+## 3. Demo video — shot list
 
-| Scope | Tier | Demonstrated by |
-|---|---|---|
-| `gmail.send` | Sensitive | Assistant drafts mail → confirmation card → **Confirm** → Sent folder. Also: a scheduled reminder arriving by email. |
-| `calendar.readonly` | Sensitive | Ask "what's on my calendar this week". |
-| `chat.spaces.readonly` | Sensitive | Task Tracker → Live Capture & Sources → Chat space picker lists spaces. |
-| `gmail.readonly` | Restricted | Task Tracker ingest: tasks appear from email, source visible. |
-| `chat.messages.readonly` | Restricted | Same ingest, after a space is switched on: tasks from Chat. |
+Upload to YouTube as **Unlisted**. Record on the production URL, in English, in a fresh incognito window. Keep the whole browser window and the **address bar** in frame. Record one continuous take through the consent step. Target length is 3–5 minutes.
 
-> **`calendar.events` is NOT requested — do not list or demo it.** `manage_calendar(action:'add')` builds a `calendar.google.com` deep link; there is no Calendar API write. An unused scope is what a reviewer flags. Claiming a capability the app does not have is a false statement to Trust & Safety.
+1. **The app.** Show the address bar with `the-third-eye.anchit-tandon.com`, then the app name and logo.
+2. **Sign in** with the mobile number and PIN. Say: "Signing in requests nothing from Google."
+3. **Settings → Connections → Connect Google.** On Google's screen:
+   - pick the test account;
+   - if Google shows a scope summary, click the link that **expands every permission** (or "See all"). Scroll so **each of the three permissions is fully visible and legible**;
+   - zoom into the **address bar** until the `client_id=529553308976-…` parameter is readable;
+   - click **Allow**. Do not cut.
+4. Back in Settings, Google shows as connected with the granted permissions.
+5. **gmail.readonly.** Open the test account's Gmail in a second tab. Show an unread email with an action item, e.g. "Please send the Q3 report by Friday." Go back to the app's **Task Tracker** and click **Scan now**. The task "Send the Q3 report" appears with its due date. Then ask the Assistant "any email from <sender>?" and show the summary. Say: "the app reads mail; it never changes or deletes it."
+6. **gmail.send.** In **Assistant**, type "email <second address you control> saying the report is ready". The confirmation card shows To, Subject and Body. Say "nothing is sent until I press Confirm", then press **Confirm**. Then show the source-account impact:
+   - the test account's Gmail **Sent** folder, with the message as the newest item from the test account;
+   - the recipient's inbox receiving it;
+   - optionally, a reminder email arriving in the test account's own inbox.
+7. **calendar.events.readonly.** In Google Calendar, show two events on the test account. In **Assistant**, ask "what's on my calendar this week?". The same titles, times and locations are listed. Say: "read only; the app never creates or edits events."
+8. **Revoking.** Open `myaccount.google.com/permissions` and show The Third Eye with its access. Optional.
 
-> ### ⚠️ Sign-in is not Google. Re-read this before recording.
->
-> Signing in is a **mobile number and a 4-digit PIN**. There is no Google provider on the login screen.
->
-> **Every Gmail, Calendar and Chat scope comes from one consent screen:** *Settings → Connections → Connect Google* (`INGESTION_SCOPES`). A video that only shows signing in never shows the scopes under review.
+Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.google.com` link and doesn't use the API.
 
-## 1) Reply to the Trust & Safety email
+## 4. Reply to the Trust & Safety email
 
-> Subject: Re: OAuth verification — The Third Eye — test instructions
+> Subject: Re: OAuth verification — jarvis-anchit (529553308976)
 >
 > Hello,
 >
-> Thank you for the review. Here is how to reach and test the OAuth consent flow for **The Third Eye** (`https://the-third-eye.anchit-tandon.com`).
+> Thank you for the review. We have addressed each point:
 >
-> **Test account (already added under Test users):**
-> - Email: `[test-account@gmail.com]`
-> - Password: `[password]`
-> - 2-Step Verification is **disabled** on this account, and it holds sample emails and Google Chat messages so the functionality is visible.
+> 1. **Minimum scopes.** We now request three scopes only: gmail.readonly, gmail.send and calendar.events.readonly. calendar.readonly was replaced by the narrower calendar.events.readonly. The Google Chat scopes (chat.spaces.readonly, chat.messages.readonly) were removed with the feature that used them. The Data Access page now matches what the application requests exactly.
+> 2. **Justifications.** These are updated in Data Access. They describe each feature, the API call behind it and why a narrower scope is insufficient.
+> 3. **Demo video.** Link: [UNLISTED YOUTUBE URL]. It shows the fully expanded consent screen with the client ID in the address bar, then each scope in use. For gmail.send it shows the confirmation step and the message in the source account's Sent folder.
+> 4. **Test account.**
+>    - The app's own sign-in is a mobile number and PIN: **[TEST MOBILE NUMBER] / PIN [XXXX]**. This sign-in requests no Google permissions.
+>    - The Google account to connect is **[test-account@gmail.com] / [password]**. 2-Step Verification is off, and the account is listed under Test users.
 >
-> **Reaching the consent screen:**
-> 1. Open `https://the-third-eye.anchit-tandon.com` and sign in with the test account's **mobile number and PIN**. This requests nothing from Google.
-> 2. You land on the dashboard. Gmail, Calendar and Chat are **not** connected yet, and the app says so.
-> 3. Go to **Settings → Connections → Connect Google**. This is the **only** consent screen under review. It lists the Gmail, Calendar and Chat scopes. Click **Allow**.
-> 4. Settings now shows Google as connected, with the granted permissions listed.
+>    Steps:
+>    1. Open https://the-third-eye.anchit-tandon.com and sign in with the mobile number and PIN above.
+>    2. Go to Settings → Connections → **Connect Google**. This is the consent screen under review. Sign in with the Google test account and click Allow.
+>    3. gmail.readonly: open Task Tracker and click "Scan now". Action items from the account's unread mail become tasks. You can also ask the Assistant "any email from …?".
+>    4. gmail.send: in Assistant, type "email [address] saying hello". A confirmation card appears. Nothing is sent until you click Confirm, and the message then appears in the account's Sent folder.
+>    5. calendar.events.readonly: in Assistant, ask "what's on my calendar this week?".
 >
-> Step 3 is the consent flow this submission is about. Steps 1-2 grant nothing that needs review.
+>    The connected scopes are not served to general production traffic until verification is complete; see point 5 below.
+> 5. **Unverified scopes.** Until verification completes, only test users can complete Connect Google. Everyone else uses the app without Google access.
 >
-> **Exercising each scope:**
-> - `gmail.readonly` → open **Task Tracker**. Recent email is scanned and action items appear as tasks, each showing its source.
-> - `chat.spaces.readonly` / `chat.messages.readonly` → in Task Tracker, open the Chat space picker (lists spaces), switch a space on, ingest, and show a task sourced from Chat.
-> - `gmail.send` → open **Assistant** and type: *"email [recipient] saying the report is ready"*. The assistant drafts it and shows a confirmation card. Nothing is sent until **Confirm** is clicked.
-> - `calendar.readonly` → in **Assistant**, ask *"what's on my calendar this week"*. Upcoming events are listed.
->
-> Please let me know if you need anything else.
->
-> Thanks,
+> Kind regards,
 > Anchit Tandon
 
-## 2) Demo video — shot list
+## 5. Keeping unverified scopes off production traffic
 
-Clears the functionality findings. Record on the **production URL**, 2–4 minutes, **one continuous capture through the consent step**.
+Google enforces this when the app's **Audience → Publishing status** is **Testing**. Only accounts on the Test users list (max 100) can complete Connect Google. Everyone else is refused on Google's screen, and the app keeps working without Gmail and Calendar (`googleCapabilities` reports "not connected"). Sign-in is phone + PIN and isn't affected.
 
-**Where it goes: YouTube, visibility Unlisted.** Do **not** commit the recording to this repository.
+- While review is open: stay in **Testing** (or switch back to it). Add your own account, the test account and any address Trust & Safety gives you.
+- After approval: publish to **In production**.
 
-**Record signed out, in a fresh profile or incognito window.** Narrate in English. Whole browser window in frame, address bar included.
+## 6. Pre-flight before recording
 
-1. **Prove it is the submitted app** — address bar showing `the-third-eye.anchit-tandon.com`, app name and logo.
-2. **Sign in with the mobile number and PIN** (no Google consent here).
-3. **Settings → Connections → Connect Google** → **the consent screen**. Three things must be legible:
-   - the **app name**,
-   - the **full scope list** — scroll it if clipped,
-   - **the address bar, including `client_id=`**.
-   Click **Allow**. Do not cut.
-4. **Land on Settings**, Google connected, permissions listed.
-5. **Gmail + Chat read** — Task Tracker. Show a task from email and one from Chat. Show the Chat space picker (`chat.spaces.readonly`).
-6. **Gmail send** — Assistant, ask it to email someone, confirmation card, **Confirm**, then the test account's **Sent** folder.
-7. **Calendar read** — *"what's on my calendar this week"*.
+- The **live build includes this change**. Check `/api/health` → `commit_short` against `main`. Until Vercel deploys again, the live consent screen still asks for the old five scopes, and recording it would reproduce the discrepancy.
+- `GOOGLE_CLIENT_ID` on Vercel is the jarvis-anchit client.
+- Branding: name *The Third Eye*, logo, home page, `/privacy_policy`, `/terms_of_service`, authorized domain `anchit-tandon.com`. The privacy policy lists the same three scopes.
+- The test account has an unread email with a clear action item and deadline, and two calendar events this week.
+- `/api/health` → `providers.gemini` is `true`, so extraction works.
 
-Do **not** demonstrate creating a calendar event.
-
-## 3) Pre-flight before you record
-
-- Test account is under **Test users**.
-- `https://the-third-eye.anchit-tandon.com/api/health` → `providers.gemini` is `true`.
-- `GOOGLE_CLIENT_ID` is set.
-- Ingest cooldown is 60s (`/api/ingest/run`).
-- Sample emails and Chat messages with clear action items exist on the test account.
-- `commit_short` from `/api/health` matches the live build.
-
-## 4) Console checklist, then resubmit
-
-- Branding matches the live app.
-- Test users: the test account, plus any address Trust & Safety gives you.
-- Data Access: the five scopes above, **three** justifications, Gmail feature = Email productivity, Chat feature **not** Chat app, Unlisted demo URL filled.
-- Reply to the Trust & Safety email, then **Resubmit for verification**.
-
-Restricted-scope review also requires a **CASA** assessment through a Google-approved assessor. Until it clears, only test users can complete *Connect Google*; `docs/GOOGLE_OAUTH.md` is the connect-flow runbook.
+Restricted-scope (`gmail.readonly`) approval also needs a **CASA** security assessment through a Google-approved assessor. Google will send instructions after this review.

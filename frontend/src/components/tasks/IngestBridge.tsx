@@ -7,7 +7,7 @@ const MIN_GAP_MS = 60_000;
 const POLL_MS = 3 * 60_000;
 
 // Headless: as soon as a signed-in user opens the app (and whenever the tab
-// regains focus, plus a slow background poll), pull new Gmail + Chat messages,
+// regains focus, plus a slow background poll), pull new Gmail messages,
 // analyse them and integrate relevant ones into the Task Tracker. Fires a
 // "te:tasks-updated" event when anything changed so open task views refresh.
 export function IngestBridge() {

@@ -26,7 +26,7 @@ export interface LocalTask {
   source_type?: string;
   source_link?: string;
   source_detail?: string;
-  // Written by the Gmail/Chat ingest (lib/ingest.ts -> lib/tasks.ts) into
+  // Written by the Gmail ingest (lib/ingest.ts -> lib/tasks.ts) into
   // columns the tasks table has carried since the ingestion migration, and
   // until now read by nothing: the tracker captured them and then dropped
   // them at the display layer.
@@ -95,7 +95,7 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
 
   useEffect(() => load(), [userId, load]);
 
-  // Refresh when foreground ingestion (Gmail/Chat → tasks) reports new work.
+  // Refresh when foreground ingestion (Gmail → tasks) reports new work.
   useEffect(() => {
     const onUpdated = () => load(false);
     window.addEventListener("te:tasks-updated", onUpdated);

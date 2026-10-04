@@ -2,7 +2,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SettingsClient } from "@/components/settings/SettingsClient";
 import { ConnectionsCard } from "@/components/settings/ConnectionsCard";
-import { ConversationSourcesCard } from "@/components/settings/ConversationSourcesCard";
 import { AutomationsCard } from "@/components/settings/AutomationsCard";
 import { PermissionsCard } from "@/components/settings/PermissionsCard";
 
@@ -21,7 +20,6 @@ export default async function SettingsPage() {
       </div>
       <SettingsClient user={session?.user ?? null} />
       <ConnectionsCard />
-      <ConversationSourcesCard />
       <AutomationsCard />
       <PermissionsCard />
     </div>

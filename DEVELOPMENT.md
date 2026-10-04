@@ -264,19 +264,21 @@ the self-built ones so they don't get buried in the third-party directory.
 
 ---
 
-## 9. Ingestion — inbox/chat → tasks
+## 9. Ingestion — inbox → tasks
 
-`lib/ingest.ts` + `lib/tasks.ts` + `/api/cron/scrape-gmail|scrape-chat` +
-`/api/ingest/run`:
+`lib/ingest.ts` + `lib/tasks.ts` + `/api/cron/scrape-gmail` + `/api/ingest/run`:
 
-- Cron (Gmail every 15 min, Chat offset) and an on-demand "Scan now" pull recent
-  messages, run them through the LLM extractor, and dual-key **dedup/merge** into the
-  `tasks` table (`dedupe_hash` + `normalize_heading` + owner match; owner-less tasks
-  match on `spoc IS NULL`). The Chat watermark only advances after a message is fully
-  processed, so a mid-run failure never skips messages.
-- Requires the "Connect Google" opt-in (Gmail/Chat scopes) + `DATABASE_URL`
-  + `TOKEN_ENCRYPTION_KEY`; the Live Capture page surfaces connection status + a
-  Scan-now with a result count so silent no-ops are visible.
+- Cron (GitHub Actions every 3 h, plus a daily Vercel cron), `IngestBridge` on app
+  open/focus, and an on-demand "Scan now" pull unread Gmail from the last 2 days, run
+  it through the LLM extractor, and dual-key **dedup/merge** into the `tasks` table
+  (`dedupe_hash` + `normalize_heading` + owner match; owner-less tasks match on
+  `spoc IS NULL`).
+- Requires the "Connect Google" opt-in + `DATABASE_URL` + `TOKEN_ENCRYPTION_KEY`; the
+  Live Capture page surfaces connection status + a Scan-now with a result count so
+  silent no-ops are visible.
+- Google Chat ingestion was removed (Oct 2026) to drop its restricted scope from OAuth
+  verification. The `conversation_sources` table is left in place; account deletion
+  still clears it.
 
 ---
 

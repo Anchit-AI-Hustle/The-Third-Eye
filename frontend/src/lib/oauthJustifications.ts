@@ -4,61 +4,38 @@
  * Google groups scopes by sensitivity, one box per group, 1000 characters
  * each. Pasting a gmail.readonly blurb into the sensitive box is what
  * produced the "Request minimum scopes" rejection: that box holds
- * gmail.send, calendar.readonly and chat.spaces.readonly.
+ * gmail.send and calendar.events.readonly.
  *
- * Copy SENSITIVE_SCOPES_JUSTIFICATION, GMAIL_READONLY_JUSTIFICATION and
- * CHAT_MESSAGES_JUSTIFICATION into the matching Console fields. Tests pin
- * length and that each box names every scope it covers.
+ * Copy SENSITIVE_SCOPES_JUSTIFICATION and GMAIL_READONLY_JUSTIFICATION into
+ * the matching Console fields. Tests pin length and that each box names
+ * every scope it covers.
  */
 
 export const SENSITIVE_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/chat.spaces.readonly",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
 ] as const;
 
 export const RESTRICTED_GMAIL_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.readonly",
 ] as const;
 
-export const RESTRICTED_CHAT_SCOPE_LIST = [
-  "https://www.googleapis.com/auth/chat.messages.readonly",
-] as const;
-
 /** Gmail restricted-scope "What features will you use?" — not Email client backup/migration. */
 export const GMAIL_FEATURE_SELECTION = "Email productivity";
 
-/**
- * Chat restricted-scope "What features will you use?".
- * Do NOT select "Chat app": this product is a web assistant using user OAuth,
- * not a bot installed into Google Chat spaces. Google's docs say leave the
- * list empty if the type is unclear so Trust & Safety classify it.
- */
-export const CHAT_FEATURE_SELECTION = "(leave empty — not a Chat app)";
+export const SENSITIVE_SCOPES_JUSTIFICATION = `The Third Eye is a personal assistant. Both scopes act only on the signed-in user's own account, after they click Connect Google.
 
-export const SENSITIVE_SCOPES_JUSTIFICATION = `The Third Eye (the-third-eye.anchit-tandon.com) is a personal productivity assistant. These scopes are used only after the user opts in at Settings → Connections.
+gmail.send (users.messages.send): 1) The user asks the Assistant to email someone; a card shows recipient, subject and body, and nothing is sent until they click Confirm. The mail then appears in their Sent folder. 2) Reminders and a daily task briefing the user switched on are emailed to the user's own address. Never sent on the app's own initiative.
 
-gmail.send: (1) send an assistant-drafted email after the user reviews recipient, subject and body and clicks Confirm; (2) deliver a reminder or daily digest the user scheduled. Never sent on a model's initiative.
+calendar.events.readonly (events.list on the primary calendar): when the user asks "what's on my calendar today/this week", the Assistant lists event titles, times and locations. Not stored, never modified.
 
-calendar.readonly: list upcoming events on the user's primary calendar when they ask about their schedule. Fetched for that request; not stored.
+Why narrower scopes are insufficient: gmail.send is the narrowest scope that can send (gmail.compose adds drafts). calendar.freebusy returns busy blocks without titles or locations, so it can't answer the question. calendar.events.readonly replaces the broader calendar.readonly.`;
 
-chat.spaces.readonly: list Chat spaces so the user can choose which ones feed Task Tracker. spaces.list requires this scope; no messages are read with it.
+export const GMAIL_READONLY_JUSTIFICATION = `Used only on the signed-in user's own mailbox, after they click Connect Google.
 
-Why more limited scopes are insufficient: gmail.compose cannot send. calendar.freebusy has no titles or locations the briefing needs. chat.messages.readonly cannot call spaces.list, so omitting chat.spaces.readonly leaves the space picker empty.`;
+1. Task Tracker: every 3 hours and when the user opens the app, unread mail from the last 2 days (max 25) is read and action items and deadlines become tasks the user can edit or delete.
+2. Assistant: when the user asks ("any email from my bank?"), mail is searched and the matching message summarised.
 
-export const GMAIL_READONLY_JUSTIFICATION = `gmail.readonly is used on the signed-in user's own mailbox after they connect Google:
+Data lifecycle: bodies are processed in memory; raw bodies, threads and attachments are not stored. We keep extracted task titles and due dates, processed message IDs (to avoid duplicates) and an AES-256-GCM encrypted refresh token. Never sold, used for ads or to train generalised AI models; content goes to an AI provider only to complete the user's request (Limited Use).
 
-1. Task Tracker ingest — scan unread mail from the last 2 days and extract action items, deadlines and follow-ups into tasks the user can edit or delete.
-2. Assistant answers — search or summarise mail the user asked about.
-
-Data lifecycle: bodies are fetched over TLS and processed in memory for that request or ingest pass. We do not store raw email bodies, full threads or attachments. We persist extracted task titles/due dates, Gmail message IDs already processed (dedupe), and an AES-256-GCM encrypted refresh token. Data is never sold, used for ads, or used to train generalised AI models. Content is sent to an AI provider only to complete the user's request (Limited Use).
-
-Why gmail.metadata / gmail.labels are insufficient: they return headers, labels and subjects. Action items and deadlines live in the body. Extraction and summarisation cannot run on metadata.`;
-
-export const CHAT_MESSAGES_JUSTIFICATION = `This is not a Google Chat bot and is not installed into Chat spaces. It is a web assistant that reads Chat on the signed-in user's behalf with user OAuth (Chat API), the same pattern as Gmail.
-
-chat.messages.readonly is used only on spaces the user switched on in Task Tracker, to extract action items, meeting requests and follow-ups from message text.
-
-Data lifecycle: message text is processed in memory. Raw transcripts are not stored. We persist extracted tasks, a per-space watermark (last processed timestamp), and the user's space opt-ins. Never sold, used for ads, or used to train generalised AI models.
-
-Why more limited scopes are insufficient: chat.spaces.readonly lists spaces but cannot call spaces.messages.list. Commitments live in message text, so chat.messages.readonly is required. We do not request chat.messages (read/write) because we never post, edit or delete Chat messages.`;
+Why gmail.metadata is insufficient: it returns headers only and cannot run search queries (q). Action items and deadlines are in the body, so extraction and search need gmail.readonly. We never modify or delete mail.`;

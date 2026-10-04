@@ -6,7 +6,7 @@ import { CONNECT_SCOPES, originFromRequest, revokeGoogleAccess } from "@/lib/goo
 
 export const runtime = "nodejs";
 
-// Opt-in: start an OAuth flow that requests the Gmail/Chat ingestion scopes for
+// Opt-in: start an OAuth flow that requests the Gmail ingestion scopes for
 // the signed-in user. Kept separate from sign-in so basic login stays free of
 // sensitive scopes (which would otherwise force OAuth verification).
 export async function GET(req: Request) {

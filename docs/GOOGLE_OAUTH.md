@@ -9,7 +9,7 @@ through *Settings → Connections → Connect Google*, which requests
 So everything below about **signing in** now describes the commented-out
 provider, and matters when restoring it. Everything about **connecting** —
 sections 1 to 5, the redirect URI, the consent screen, verification — is live and
-unchanged: it is how Gmail, Calendar and Chat are granted, and always was.
+unchanged: it is how Gmail and Calendar are granted. (Google Chat was dropped in October 2026.)
 
 Before it was commented out, sign-in requested **identity only** —
 `openid email profile` (`lib/googleToken.ts` → `BASIC_SCOPE_LIST`).
@@ -22,8 +22,8 @@ change.
 
 ## Read this before deploying
 
-`gmail.readonly` and `chat.messages.readonly` are **restricted** scopes;
-`gmail.send`, `calendar.readonly` and `chat.spaces.readonly` are **sensitive**.
+`gmail.readonly` is a **restricted** scope; `gmail.send` and
+`calendar.events.readonly` are **sensitive**.
 Requesting any of them *at sign-in* makes Google's verification review a gate on
 **logging in at all**, not just on the Gmail features:
 
@@ -38,7 +38,7 @@ and refused everybody else. **Sign-in no longer asks for them**, so none of the
 rows above gate login today. Publishing the consent screen is enough for anyone
 to sign in; the unverified warning still applies to the separate *connect*
 screen, and restricted-scope review (a CASA assessment, weeks) still gates
-Gmail/Chat ingestion — see `docs/google-oauth-verification.md`.
+Gmail ingestion — see `docs/google-oauth-verification.md`.
 
 Nothing is silently broken in the meantime: the granted scope string is stored
 with the refresh token and `googleCapabilities()` reads it, so a user without
@@ -67,11 +67,11 @@ APIs & Services → Credentials → your OAuth 2.0 Client ID:
   - `https://<your-domain>`
 - **Authorized redirect URIs**
   - `https://<your-domain>/api/auth/callback/google`  ← sign-in
-  - `https://<your-domain>/api/connect/google/callback`  ← Gmail/Chat connect
+  - `https://<your-domain>/api/connect/google/callback`  ← Gmail/Calendar connect
 
 **Both are required.** The second one used to be marked optional, from when
 sign-in granted the Gmail scopes itself. It is now the *only* way any user can
-connect Gmail, Calendar or Chat. Omit it and the exchange in
+connect Gmail or Calendar. Omit it and the exchange in
 `api/connect/google/callback` fails with `redirect_uri_mismatch`, which surfaces
 as `?connect=google_error` on the Settings page — nowhere near this list.
 
@@ -84,7 +84,7 @@ Add the `http://localhost:3000` equivalents too for local dev.
   else gets `AccessDenied`). Add each account under **Test users**.
 - **Publish app** is enough for sign-in, because sign-in asks for identity only.
   Users then see no warning and no test-user list applies.
-- Verification is still required for the **connect** flow's restricted Gmail/Chat
+- Verification is still required for the **connect** flow's restricted Gmail
   scopes. Until it clears, only test users can complete *Connect Google*, and
   they see the unverified warning while doing it. That limits a feature; it no
   longer limits logging in.
@@ -112,9 +112,9 @@ The `/auth/error` page shows the NextAuth error code and the likely fix:
 | `OAuthSignin` | Wrong client id/secret or unauthorized origin. |
 | `?connect=google_error` on Settings | Not a NextAuth code — the *connect* flow. Usually `…/api/connect/google/callback` missing from Authorized redirect URIs, or the account is not a test user while the restricted scopes are unverified. |
 
-## 5. Verification (needed for Gmail/Chat ingestion, not for sign-in)
+## 5. Verification (needed for Gmail ingestion, not for sign-in)
 
 Consent screen → submit for verification. Requires a **verified domain**
 (Search Console), the app homepage, the privacy policy (`/privacy_policy`), and
-for the **restricted** Gmail/Chat scopes a demo video + security assessment.
+for the **restricted** Gmail scope a demo video + security assessment.
 Google reviews this over days–weeks; it cannot be automated.
