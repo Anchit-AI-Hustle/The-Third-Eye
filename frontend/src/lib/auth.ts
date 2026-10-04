@@ -92,7 +92,7 @@ export const authOptions: NextAuthOptions = {
     //   if (!INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(scope, s))) return;
     //
     // google_tokens holds one row per user, upserted on user_id, and it is the
-    // row the Gmail/Chat crons, /api/chat and /api/act all read. Sign-in asks
+    // row the Gmail crons, /api/chat and /api/act all read. Sign-in asks
     // for identity only, so without that line a user who had connected Google
     // properly and then signed in again had their feature-scoped grant
     // overwritten by an identity-only one: Gmail stops working, and the row

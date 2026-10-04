@@ -31,7 +31,7 @@ function emailFromIdToken(idToken: string | undefined): string | null {
 }
 
 // Completes the opt-in Google connect flow: exchanges the code for a refresh
-// token carrying the Gmail/Chat scopes and stores it (encrypted) for the user.
+// token carrying the Gmail scopes and stores it (encrypted) for the user.
 export async function GET(req: Request) {
   const base = originFromRequest(req);
   const session = await getServerSession(authOptions);

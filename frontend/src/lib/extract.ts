@@ -42,17 +42,6 @@ is_actionable is true ONLY when there is a concrete required action for Anchit.
 Newsletters, receipts, digests, mass announcements, cold outreach, FYIs, and
 auto-replies are NOT actionable → is_actionable=false, tasks=[].`;
 
-const MEETING_SYSTEM_PROMPT = `${USER_CONTEXT}
-
-You are analysing a short transcript chunk (may mix Hindi + English). Translate
-Hindi to English but keep names verbatim. Return STRICT JSON:
-{"summary": string, "tasks": [ ... ]}
-${TASK_SHAPE_HINT}
-ANTI-HALLUCINATION: emit a task ONLY on an explicit verbatim commitment or
-assignment — never a mere mention. Never attribute a task to a named person
-without a verbatim same-utterance assignment. On garbled/near-silent/repetitive
-audio return tasks=[] and an honest "transcript unclear" summary.`;
-
 export function parseJsonBlock(text: string): Record<string, unknown> {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : (text.match(/\{[\s\S]*\}/)?.[0] ?? "");
@@ -124,15 +113,4 @@ export async function extractEmailTasks(input: {
   const rawTasks = Array.isArray(parsed.tasks) ? (parsed.tasks as Record<string, unknown>[]) : [];
   const tasks = rawTasks.map((t) => coerceTask(t, input.sender)).filter((t): t is ExtractedTask => !!t);
   return { summary: str(parsed.summary), isActionable: parsed.is_actionable === true, tasks };
-}
-
-export async function extractMeetingTasks(input: {
-  startedAt: string; transcript: string; defaultOwner?: string | null;
-}): Promise<ExtractionResult> {
-  const user = `Started: ${input.startedAt}\n\nTranscript:\n${input.transcript.slice(0, 16000)}`;
-  const parsed = await runExtraction(MEETING_SYSTEM_PROMPT, user, 2000);
-  if (!parsed) return { summary: null, isActionable: false, tasks: [] };
-  const rawTasks = Array.isArray(parsed.tasks) ? (parsed.tasks as Record<string, unknown>[]) : [];
-  const tasks = rawTasks.map((t) => coerceTask(t, input.defaultOwner ?? null)).filter((t): t is ExtractedTask => !!t);
-  return { summary: str(parsed.summary), isActionable: tasks.length > 0, tasks };
 }

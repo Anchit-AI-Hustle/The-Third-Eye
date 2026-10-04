@@ -11,7 +11,7 @@ import { TeamOS } from "@/components/team/TeamOS";
 
 // The unified Task Tracker workspace. One feature, two intake paths:
 //   1. Live Capture — the mic listens and auto-extracts action items.
-//   2. Ingestion    — Gmail + Google Chat of the linked account are scraped
+//   2. Ingestion    — Gmail of the linked account is scraped
 //                     (headless via IngestBridge, or on-demand "Scan now").
 // Both write into the same task store that the Tracker below reads, so a task
 // is a task no matter where it came from. The capture/sources panel is
@@ -42,7 +42,7 @@ export function TrackerWorkspace() {
 
   return (
     <div className="space-y-6">
-      {/* Auto-capture requires the Gmail/Chat scopes — prompt if not connected. */}
+      {/* Auto-capture requires the Gmail scopes — prompt if not connected. */}
       <GmailConnectBanner />
 
       {/* Device activity → AI summary → tracker updates */}
@@ -68,7 +68,7 @@ export function TrackerWorkspace() {
               {analyzing && <span className="text-[10px] font-mono text-text-muted">analyzing…</span>}
             </div>
             <div className="text-[11px] text-text-muted mt-0.5">
-              Mic + Gmail &amp; Chat feed this tracker automatically
+              Mic + Gmail feed this tracker automatically
               {liveTasks.length > 0 && !open ? ` · ${liveTasks.length} detected this session` : ""}
             </div>
           </div>
@@ -110,7 +110,7 @@ export function TrackerWorkspace() {
   );
 }
 
-// Shown until the user connects Gmail/Chat with the ingestion scopes — without
+// Shown until the user connects Gmail with the ingestion scopes — without
 // them the scrape silently returns "not connected" and the tracker never fills
 // from email. One tap starts the opt-in OAuth flow (read-only scopes).
 function GmailConnectBanner() {
@@ -141,9 +141,9 @@ function GmailConnectBanner() {
     <div className="flex items-start gap-3 rounded-card border border-[#F0C94E]/30 bg-[#F0C94E]/5 px-4 py-3">
       <Radio size={16} className="text-[#F0C94E] flex-none mt-0.5" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text-primary">Auto-capture from Gmail &amp; Chat is off</p>
+        <p className="text-sm font-medium text-text-primary">Auto-capture from Gmail is off</p>
         <p className="text-xs text-text-muted mt-0.5">
-          Connect your Google account (read-only) so new emails &amp; chats are scanned and turned into tasks automatically.
+          Connect your Google account so new emails are scanned and turned into tasks automatically.
         </p>
       </div>
       <a href="/api/connect/google"

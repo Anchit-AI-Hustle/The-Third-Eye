@@ -15,7 +15,6 @@ function scopeLabels(scopes: string[]): string[] {
     if (s.includes("gmail.send")) out.add("Gmail — send");
     else if (s.includes("gmail")) out.add("Gmail — read");
     if (s.includes("calendar")) out.add("Calendar");
-    if (s.includes("chat")) out.add("Chat");
   }
   return [...out];
 }
@@ -67,7 +66,7 @@ export function ConnectionsCard() {
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Google account</h2>
       <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
-        Connect Gmail, Calendar &amp; Chat so the assistant can read/summarise mail, send email, and turn messages into tasks.
+        Connect Gmail &amp; Calendar so the assistant can read/summarise mail, send email, check your schedule, and turn emails into tasks.
       </p>
 
       {banner === "connected" && (
@@ -84,7 +83,7 @@ export function ConnectionsCard() {
         <div className="flex items-start gap-2 mb-4 text-xs text-warning">
           <AlertCircle size={13} className="mt-px shrink-0" />
           <span>
-            Nothing was connected — none of the Gmail, Calendar or Chat boxes were ticked on
+            Nothing was connected — none of the Gmail or Calendar boxes were ticked on
             Google&apos;s screen. Any access you had already granted is untouched. Try again and
             allow at least one.
           </span>

@@ -63,8 +63,7 @@ jobs:
           failed=0
           for path in \
             "/api/cron/dispatch?job=reminders" \
-            "/api/cron/scrape-gmail" \
-            "/api/cron/scrape-chat"
+            "/api/cron/scrape-gmail"
           do
             echo "--- GET $path"
             code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 60 \

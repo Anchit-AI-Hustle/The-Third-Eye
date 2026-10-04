@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { INGESTION_SCOPE_LIST, googleCapabilities, hasGoogleScope } from "@/lib/googleToken";
+import { googleCapabilities } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -37,14 +37,15 @@ export async function GET() {
 
   const row = data as { scope?: string; updated_at?: string } | null;
   const scopes = row?.scope ? row.scope.split(/\s+/).filter(Boolean) : [];
-  const connected = INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(row?.scope, s));
+  // Which features the grant actually permits, so the card can stop inferring
+  // capability from a single boolean. Derived from capabilities rather than the
+  // current scope list so a grant of the pre-narrowing calendar.readonly still counts.
+  const capabilities = googleCapabilities(row?.scope);
   return Response.json(
     {
-      connected,
+      connected: Object.values(capabilities).some(Boolean),
       scopes,
-      // Which features the grant actually permits, so the card can stop
-      // inferring capability from a single boolean.
-      capabilities: googleCapabilities(row?.scope),
+      capabilities,
       updatedAt: row?.updated_at ?? null,
     },
     { headers: { "Cache-Control": "no-store" } },

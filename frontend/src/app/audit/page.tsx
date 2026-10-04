@@ -79,7 +79,7 @@ const AUDITS: Audit[] = [
     current: 9.4,
     target: 9.5,
     dims: { accuracy: 9, implementation: 10, execution: 9, results: 10 },
-    verdict: "TwinMind-style ambient capture, now unified into the Task Tracker as a single feature: the mic listens live and Gmail/Chat are scraped, both auto-extracting tasks/reminders/ideas into one shared queue (with an undo log). Lives in the collapsible “Live Capture & Sources” panel above the tracker. A screen Wake Lock keeps the mic alive mid-session, and the status panel shows Gmail/Chat connection + a Scan-now with results. The 0.1 gap is the one honest platform limit below.",
+    verdict: "TwinMind-style ambient capture, now unified into the Task Tracker as a single feature: the mic listens live and Gmail is scraped, both auto-extracting tasks/reminders/ideas into one shared queue (with an undo log). Lives in the collapsible “Live Capture & Sources” panel above the tracker. A screen Wake Lock keeps the mic alive mid-session, and the status panel shows Gmail connection + a Scan-now with results. The 0.1 gap is the one honest platform limit below.",
     issues: [
       { severity: "medium", text: "Browser can only listen while the tab is open — not system-wide.", fix: "Web scope is now maximised (auto-create tasks, screen Wake Lock, visible foreground status). True always-on capture with the app closed/screen off is a hard web-platform limit — no browser API allows it — and needs the native desktop agent (the existing Personal-AI-OS already does this).", status: "pending" },
     ],

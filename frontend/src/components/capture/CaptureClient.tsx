@@ -36,7 +36,7 @@ export function CaptureClient() {
 
   return (
     <div className="space-y-6">
-      {/* Email / Chat ingestion status + manual scan */}
+      {/* Email ingestion status + manual scan */}
       <IngestStatusPanel />
 
       {/* Control bar */}
@@ -202,7 +202,6 @@ function IngestStatusPanel() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const hasGmail = !!conn?.scopes?.some((s) => s.includes("gmail"));
-  const hasChat = !!conn?.scopes?.some((s) => s.includes("chat"));
 
   async function scanNow() {
     setScanning(true); setResult(null);
@@ -211,14 +210,8 @@ function IngestStatusPanel() {
       const d = await res.json();
       if (d.skipped === "not configured") { setResult("Server storage isn't configured (DATABASE_URL). Scraping can't run."); return; }
       if (d.skipped === "cooldown") { setResult("Just scanned — try again in a moment."); return; }
-      const parts: string[] = [];
-      for (const [label, r] of [["Gmail", d.gmail], ["Chat", d.chat]] as const) {
-        if (!r) continue;
-        if (r.skipped) parts.push(`${label}: not connected`);
-        else if (r.error) parts.push(`${label}: error`);
-        else parts.push(`${label}: ${r.inserted ?? 0} new, ${r.merged ?? 0} merged`);
-      }
-      setResult(parts.join(" · ") || "Scan complete.");
+      const r = d.gmail;
+      setResult(!r ? "Scan complete." : r.skipped ? "Gmail: not connected" : r.error ? "Gmail: error" : `Gmail: ${r.inserted ?? 0} new, ${r.merged ?? 0} merged`);
       if (d.changed) window.dispatchEvent(new CustomEvent("te:tasks-updated"));
     } catch {
       setResult("Scan failed — check your connection.");
@@ -237,16 +230,15 @@ function IngestStatusPanel() {
   return (
     <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="hud-label text-text-muted">Inbox &amp; Chat → Tasks</span>
+        <span className="hud-label text-text-muted">Inbox → Tasks</span>
         <div className="flex items-center gap-3 text-xs">
           <StatusDot on={hasGmail} label="Gmail" />
-          <StatusDot on={hasChat} label="Chat" />
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {!conn?.connected || !hasGmail || !hasChat ? (
+          {!conn?.connected || !hasGmail ? (
             <a href="/api/connect/google"
               className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:brightness-110">
-              <Link2 size={13} /> {conn?.connected ? "Grant Gmail + Chat" : "Connect Google"}
+              <Link2 size={13} /> {conn?.connected ? "Grant Gmail access" : "Connect Google"}
             </a>
           ) : null}
           <button onClick={scanNow} disabled={scanning}
@@ -257,7 +249,7 @@ function IngestStatusPanel() {
       </div>
       {(!conn?.connected) && (
         <p className="mt-2 text-xs text-text-muted">
-          Signing in doesn’t grant inbox access — connect here to let the assistant read Gmail &amp; Chat and turn them into tasks. Scans also run automatically every 15 minutes once connected.
+          Signing in doesn’t grant inbox access — connect here to let the assistant read Gmail and turn it into tasks. Scans also run automatically every 15 minutes once connected.
         </p>
       )}
       {result && <p className="mt-2 text-xs text-[#4FC3F7] font-mono">{result}</p>}

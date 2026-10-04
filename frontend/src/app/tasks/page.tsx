@@ -17,7 +17,7 @@ export default async function TasksPage() {
         </div>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Task Tracker</h1>
         <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">
-          One queue — auto-filled from live capture, Gmail &amp; Chat, and manual entry
+          One queue — auto-filled from live capture, Gmail, and manual entry
         </p>
       </div>
       <TrackerWorkspace />

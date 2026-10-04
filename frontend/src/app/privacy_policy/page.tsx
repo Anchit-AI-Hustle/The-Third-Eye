@@ -16,7 +16,7 @@ export default function PrivacyPolicyPage() {
         <h1 className="font-display text-2xl font-semibold text-text-primary mt-8 mb-2">
           Privacy Policy
         </h1>
-        <p className="text-text-muted text-sm font-mono mb-10">Last updated: September 2026</p>
+        <p className="text-text-muted text-sm font-mono mb-10">Last updated: October 2026</p>
 
         <div className="space-y-8 text-text-secondary text-sm leading-relaxed">
           <section>
@@ -66,30 +66,23 @@ export default function PrivacyPolicyPage() {
                 ask the assistant to summarise, search, or extract tasks from
               </li>
               <li>
-                <span className="font-mono text-xs">gmail.send</span> — to send email on your
-                behalf when you ask, and to deliver reminders you have scheduled
+                <span className="font-mono text-xs">gmail.send</span> — to send an email you asked
+                the assistant to write, only after you review it and press Confirm, and to email you
+                the reminders and daily briefing you switched on. Sent mail appears in your Gmail Sent
+                folder
               </li>
               <li>
-                <span className="font-mono text-xs">calendar.readonly</span> — to read your events
-                when you ask about your schedule
-              </li>
-              <li>
-                <span className="font-mono text-xs">chat.spaces.readonly</span> — to list the
-                Google Chat spaces your account belongs to, so you can choose which ones (if any)
-                feed the Task Tracker. Nothing is scanned until you switch a space on yourself
-              </li>
-              <li>
-                <span className="font-mono text-xs">chat.messages.readonly</span> — to read
-                messages only from the specific Chat spaces you have explicitly switched on, so
-                the assistant can extract tasks from them the same way it does for email
+                <span className="font-mono text-xs">calendar.events.owned.readonly</span> — to list
+                events on your own primary calendar when you ask about your schedule. We never create,
+                change or delete events
               </li>
             </ul>
             <p className="mt-3">
               Message and event content is fetched when a request or ingest pass needs it and is
-              processed in memory. We do not store raw email bodies, Chat transcripts, or calendar
-              event payloads. We persist only: extracted task titles and due dates you can edit or
-              delete; Gmail message IDs and Chat watermarks already processed (so we do not
-              re-scan them); the Chat spaces you opted in; and an encrypted Google refresh token.
+              processed in memory. We do not store raw email bodies, attachments or calendar event
+              payloads. We persist only: extracted task titles and due dates you can edit or
+              delete; Gmail message IDs already processed (so we do not re-scan them); and an
+              encrypted Google refresh token.
               Google user data is not used to train any machine-learning model, is not sold, and is
               not transferred to anyone except the AI providers listed below, and only to the
               extent needed to answer your request.
@@ -179,7 +172,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Third-Party Services</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Google — Gmail, Calendar and Chat access if you connect it (sign-in itself is a mobile number and PIN and requests nothing from Google)</li>
+              <li>Google — Gmail and Calendar access if you connect it (sign-in itself is a mobile number and PIN and requests nothing from Google)</li>
               <li>
                 AI model providers (Anthropic, OpenAI, Google, Groq, and similar) — to generate
                 responses and transcribe audio. Only the content needed to answer a given request
