@@ -68,7 +68,7 @@ export function TrackerWorkspace() {
               {analyzing && <span className="text-[10px] font-mono text-text-muted">analyzing…</span>}
             </div>
             <div className="text-[11px] text-text-muted mt-0.5">
-              Mic + Gmail &amp; Chat feed this tracker automatically
+              Mic + Gmail feed this tracker automatically
               {liveTasks.length > 0 && !open ? ` · ${liveTasks.length} detected this session` : ""}
             </div>
           </div>
@@ -141,9 +141,9 @@ function GmailConnectBanner() {
     <div className="flex items-start gap-3 rounded-card border border-[#F0C94E]/30 bg-[#F0C94E]/5 px-4 py-3">
       <Radio size={16} className="text-[#F0C94E] flex-none mt-0.5" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-text-primary">Auto-capture from Gmail &amp; Chat is off</p>
+        <p className="text-sm font-medium text-text-primary">Auto-capture from Gmail is off</p>
         <p className="text-xs text-text-muted mt-0.5">
-          Connect your Google account (read-only) so new emails &amp; chats are scanned and turned into tasks automatically.
+          Connect your Google account so new emails are scanned and turned into tasks automatically.
         </p>
       </div>
       <a href="/api/connect/google"

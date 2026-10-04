@@ -27,7 +27,9 @@ export async function GET(req: Request) {
     scope: CONNECT_SCOPES,
     access_type: "offline",
     prompt: "consent",
-    include_granted_scopes: "true",
+    // No incremental auth: it would fold in scopes granted before the narrowing
+    // (calendar.readonly, the Chat scopes), so the stored grant would outgrow
+    // the three under verification.
     login_hint: email,
     state,
   });

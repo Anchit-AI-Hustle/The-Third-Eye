@@ -42,7 +42,7 @@ export function LandingHero() {
           </h1>
 
           <p data-reveal className="mt-6 text-base leading-relaxed text-text-secondary md:text-lg">
-            No typing, no re-entry — Gmail and chat get scanned automatically and turned into a
+            No typing, no re-entry — your Gmail gets scanned automatically and turned into a
             tracked list. Notes you'll never lose, answers pulled straight from your own documents,
             all in one private workspace that remembers and acts for you — not just another list to
             maintain.
