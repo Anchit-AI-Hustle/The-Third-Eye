@@ -294,7 +294,17 @@ export function MusicStudio() {
   // before the music_tracks table exists, and upgrades to cloud once it does.
   const LS_KEY = "te_music_tracks_v1";
   const lsRead = (): SavedTrack[] => { try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]"); } catch { return []; } };
-  const lsWrite = (v: SavedTrack[]) => { try { localStorage.setItem(LS_KEY, JSON.stringify(v.slice(0, 200))); } catch { /* noop */ } };
+  // A song returned inline (data: URL) is a few MB; browsers cap local storage
+  // at about 5 MB. When the full list no longer fits, keep the newest inline
+  // audio and drop the inline audio of older rows (their cloud copy remains).
+  const lsWrite = (v: SavedTrack[]) => {
+    const rows = v.slice(0, 200);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(rows)); return; } catch { /* over quota: trim below */ }
+    try {
+      const slim = rows.map((r, i) => (i > 0 && r.audio_url?.startsWith("data:") ? { ...r, audio_url: "" } : r));
+      localStorage.setItem(LS_KEY, JSON.stringify(slim));
+    } catch { /* noop */ }
+  };
 
   const loadLibrary = useCallback(async () => {
     setLibLoading(true);
@@ -465,7 +475,7 @@ export function MusicStudio() {
 
   async function generate() {
     stopPoll();
-    setPhase("generating"); setError(null); setNote(null); setAudioUrl(null); setVideoUrl(null); setStatus("Writing the track…");
+    setPhase("generating"); setError(null); setNote(null); setAudioUrl(null); setVideoUrl(null); setStatus("Writing and composing the track… this can take a minute or two.");
     try {
       const res = await fetch("/api/tools/music", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payloadOf(f)),
@@ -476,8 +486,11 @@ export function MusicStudio() {
       setBrief(d.brief ?? null);
       setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
-      if (d.fellBackToInstrumental) setNote(`Couldn't generate sung vocals${d.vocalError ? ` — ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
-      if (d.loop) setNote(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
+      const notes: string[] = [];
+      if (d.elevenLabsError) notes.push(`ElevenLabs couldn't make this one (${String(d.elevenLabsError).slice(0, 160)}), so a backup model is used.`);
+      if (d.fellBackToInstrumental) notes.push(`Couldn't generate sung vocals${d.vocalError ? ` — ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
+      if (d.loop) notes.push(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
+      if (notes.length) setNote(notes.join(" "));
       // Free HuggingFace fallback returns audio synchronously (no job to poll).
       if (d.done && d.audioUrl) { onAudioReady(d.audioUrl); return; }
       setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
