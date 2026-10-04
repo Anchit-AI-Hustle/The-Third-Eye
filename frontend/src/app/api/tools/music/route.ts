@@ -5,12 +5,24 @@ import { replicateConfigured, createPrediction, getPrediction, audioUrlFrom } fr
 import { planSong } from "@/lib/music/agents";
 import { SONG_MODEL as VOCAL_MODEL, SONG_CLIP_MAX as VOCAL_CLIP_MAX } from "@/lib/music/models";
 import type { MusicInput } from "@/lib/music/types";
+import { elevenLabsConfigured, composeElevenLabs, elevenPrompt, clipSecondsFor } from "@/lib/music/elevenlabs";
+import { storeStudioAudio, audioPath } from "@/lib/music/studioAudio";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Eleven Music returns the finished song in one call, which can take a few
+// minutes for a long clip, so this route gets the full Fluid-compute lifetime.
+export const maxDuration = 300;
+const LIFETIME_MS = 300_000;
 
-// Real music generation for Music Studio — a faithful port of the MusicGenAI
-// project's Replicate routing:
+// Real music generation for Music Studio. With ELEVENLABS_API_KEY set, Eleven
+// Music (the same engine and key ANCHOR uses) makes the song first, sung or
+// instrumental, and returns it in this response. If it is not configured or
+// fails, the Replicate routing below runs exactly as before, and the reason
+// ElevenLabs failed travels back as `elevenLabsError`. The song is stored
+// (lib/music/studioAudio.ts) and the Studio gets a short URL that plays it by
+// byte range, so no response or saved library row ever carries the bytes. The Replicate routing is a
+// faithful port of the MusicGenAI project's:
 //   • Instrumental (or vocals off) → stability-ai/stable-audio  { prompt, seconds_total }
 //   • Vocals from scratch         → lucataco/ace-step           { tags, lyrics, duration }
 // (The production MusicGenAI app also has a GPU-worker segment pipeline + an
@@ -41,6 +53,10 @@ async function email() {
   const s = await getServerSession(authOptions);
   return s?.user?.email ?? null;
 }
+
+// Without a database the song can only travel inline, and only while the
+// base64 body stays under Vercel's 4.5 MB response limit.
+const INLINE_MAX = 3_200_000;
 
 // ── Free fallback: HuggingFace Inference (MusicGen) ─────────────────────────
 // When Replicate is unavailable — no token, or exhausted its 429 retries / out
@@ -86,7 +102,9 @@ async function tryHuggingFaceMusic(promptText: string, seconds: number): Promise
 
 
 export async function POST(req: NextRequest) {
-  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const startedAt = Date.now();
+  const user = await email();
+  if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
   let i: MusicInput;
   try { i = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
@@ -106,12 +124,44 @@ export async function POST(req: NextRequest) {
   // ace-step tags+lyrics), so it drives the instrumental models + HF fallback.
   const instrPromptText = prompt;
 
+  // Eleven Music first: one call, the finished song back in this response.
+  let elevenLabsError: string | undefined;
+  if (elevenLabsConfigured()) {
+    const elSeconds = clipSecondsFor(sessionSeconds);
+    try {
+      const el = await composeElevenLabs({
+        prompt: elevenPrompt({ prompt, tags, lyrics, sing }),
+        seconds: elSeconds, instrumental: !sing,
+        deadline: startedAt + LIFETIME_MS - 15_000,
+      });
+      const db = getDb();
+      let audioUrl: string;
+      let stored: string | null = null, storeError = "no database configured";
+      if (db) {
+        try { stored = audioPath(await storeStudioAudio(db, user, el.audio, { audioType: el.mime, provider: "elevenlabs", songId: el.songId })); }
+        catch (se) { storeError = se instanceof Error ? se.message : "store failed"; }
+      }
+      if (stored) audioUrl = stored;
+      else if (el.audio.length <= INLINE_MAX) audioUrl = `data:${el.mime};base64,${el.audio.toString("base64")}`;
+      else throw new Error(`the song was made but could not be delivered (${storeError})`);
+      return Response.json({
+        configured: true, done: true, audioUrl,
+        model: `elevenlabs:${el.model}`, provider: "elevenlabs", songId: el.songId,
+        prompt, tags, lyrics, sessionSeconds, clipSeconds: el.seconds, loop: sessionSeconds > el.seconds, ...briefMeta,
+      });
+    } catch (e) {
+      elevenLabsError = e instanceof Error ? e.message : "ElevenLabs failed";
+      console.warn(`[music] ElevenLabs failed, falling back: ${elevenLabsError}`);
+    }
+  }
+  const elMeta = elevenLabsError ? { elevenLabsError } : {};
+
   // If Replicate isn't configured, fall straight to the free HuggingFace
   // (MusicGen) provider when a token is present; else return the prompt/lyrics.
   if (!replicateConfigured()) {
     const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
-    if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta });
-    return Response.json({ configured: false, prompt, tags, lyrics, ...briefMeta, note: "Music generation needs REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool." });
+    if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
+    return Response.json({ configured: false, prompt, tags, lyrics, ...briefMeta, ...elMeta, note: "Music generation needs ELEVENLABS_API_KEY or REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool." });
   }
 
   // Route to a model that generates from text alone (no reference required).
@@ -143,17 +193,17 @@ export async function POST(req: NextRequest) {
     if (sing) {
       try {
         const p = await submitVocal();
-        return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics, ...loopMeta, ...briefMeta });
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model: VOCAL_MODEL, prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
       } catch (vErr) {
         // Surface WHY the singing model couldn't run — otherwise the user just
         // gets a silent instrumental and calls it "no melody in the lyrics".
         const vocalError = vErr instanceof Error ? vErr.message : "vocal model unavailable";
         const { p, model } = await submitInstrumental();
-        return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, fellBackToInstrumental: true, vocalModel: VOCAL_MODEL, vocalError, ...instrLoop, ...briefMeta });
+        return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, fellBackToInstrumental: true, vocalModel: VOCAL_MODEL, vocalError, ...instrLoop, ...briefMeta, ...elMeta });
       }
     }
     const { p, model } = await submitInstrumental();
-    return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, ...instrLoop, ...briefMeta });
+    return Response.json({ configured: true, jobId: p.id, status: p.status, model, prompt, tags, lyrics, ...instrLoop, ...briefMeta, ...elMeta });
   } catch (e) {
     // Replicate failed (out of credit, 429 after retries, model error). Before
     // surfacing an error, try the free HuggingFace instrumental fallback so the
@@ -164,10 +214,10 @@ export async function POST(req: NextRequest) {
         configured: true, done: true, audioUrl: hf,
         model: "huggingface:musicgen", provider: "huggingface",
         prompt, tags, lyrics, fellBackToInstrumental: sing,
-        ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), ...briefMeta,
+        ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), ...briefMeta, ...elMeta,
       });
     }
-    return Response.json({ error: `Music job failed: ${e instanceof Error ? e.message : "unknown"}`, prompt, tags, lyrics }, { status: 502 });
+    return Response.json({ error: `Music job failed: ${e instanceof Error ? e.message : "unknown"}${elevenLabsError ? ` (ElevenLabs: ${elevenLabsError})` : ""}`, prompt, tags, lyrics, ...elMeta }, { status: 502 });
   }
 }
 

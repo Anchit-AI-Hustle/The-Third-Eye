@@ -33,6 +33,8 @@ const TABLES = [
   "profiles", "google_tokens",
   // The daily song style and tracks; their audio chunks go with the tracks.
   "music_daily", "music_daily_tracks",
+  // Music Studio songs stored from Eleven Music; their chunks go with them.
+  "music_studio_audio",
   // GATEWAY CREDENTIALS, AND THEY MATTER MORE THAN THE REST OF THIS LIST.
   // gateway_tokens holds long-lived bearer tokens, and emailForToken()
   // authenticates from that row alone — /api/chat never re-checks phone_users. So
