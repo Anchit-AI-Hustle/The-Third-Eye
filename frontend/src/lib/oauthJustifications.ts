@@ -4,7 +4,7 @@
  * Google groups scopes by sensitivity, one box per group, 1000 characters
  * each. Pasting a gmail.readonly blurb into the sensitive box is what
  * produced the "Request minimum scopes" rejection: that box holds
- * gmail.send and calendar.events.readonly.
+ * gmail.send and calendar.events.owned.readonly.
  *
  * Copy SENSITIVE_SCOPES_JUSTIFICATION and GMAIL_READONLY_JUSTIFICATION into
  * the matching Console fields. Tests pin length and that each box names
@@ -13,7 +13,7 @@
 
 export const SENSITIVE_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/calendar.events.owned.readonly",
 ] as const;
 
 export const RESTRICTED_GMAIL_SCOPE_LIST = [
@@ -27,9 +27,9 @@ export const SENSITIVE_SCOPES_JUSTIFICATION = `The Third Eye is a personal assis
 
 gmail.send (users.messages.send): 1) The user asks the Assistant to email someone; a card shows recipient, subject and body, and nothing is sent until they click Confirm. The mail then appears in their Sent folder. 2) Reminders and a daily task briefing the user switched on are emailed to the user's own address. Never sent on the app's own initiative.
 
-calendar.events.readonly (events.list on the primary calendar): when the user asks "what's on my calendar today/this week", the Assistant lists event titles, times and locations. Not stored, never modified.
+calendar.events.owned.readonly (events.list on the user's own primary calendar): when the user asks "what's on my calendar today/this week", the Assistant lists event titles, times and locations. Not stored, never modified.
 
-Why narrower scopes are insufficient: gmail.send is the narrowest scope that can send (gmail.compose adds drafts). calendar.freebusy returns busy blocks without titles or locations, so it can't answer the question. calendar.events.readonly replaces the broader calendar.readonly.`;
+Why narrower scopes are insufficient: gmail.send is the narrowest scope that can send (gmail.compose adds drafts). calendar.freebusy has no titles or locations, so it can't answer. calendar.events.owned.readonly is limited to calendars the user owns and replaces calendar.readonly.`;
 
 export const GMAIL_READONLY_JUSTIFICATION = `Used only on the signed-in user's own mailbox, after they click Connect Google.
 

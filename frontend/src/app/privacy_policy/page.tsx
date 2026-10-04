@@ -72,8 +72,8 @@ export default function PrivacyPolicyPage() {
                 folder
               </li>
               <li>
-                <span className="font-mono text-xs">calendar.events.readonly</span> — to list
-                events on your primary calendar when you ask about your schedule. We never create,
+                <span className="font-mono text-xs">calendar.events.owned.readonly</span> — to list
+                events on your own primary calendar when you ask about your schedule. We never create,
                 change or delete events
               </li>
             </ul>

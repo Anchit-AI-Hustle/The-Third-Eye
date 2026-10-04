@@ -14,13 +14,14 @@ describe("OAuth scopes requested of Google", () => {
     expect([...INGESTION_SCOPE_LIST]).toEqual([
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/calendar.events.readonly",
+      "https://www.googleapis.com/auth/calendar.events.owned.readonly",
     ]);
   });
 
   it("does not request broader Calendar, write Gmail or any Chat scope", () => {
     const scopes = [...INGESTION_SCOPE_LIST] as string[];
     expect(scopes).not.toContain("https://www.googleapis.com/auth/calendar.readonly");
+    expect(scopes).not.toContain("https://www.googleapis.com/auth/calendar.events.readonly");
     expect(scopes).not.toContain("https://www.googleapis.com/auth/calendar.events");
     expect(scopes).not.toContain("https://www.googleapis.com/auth/gmail.modify");
     expect(scopes.some((s) => s.includes("/auth/chat."))).toBe(false);
@@ -38,7 +39,7 @@ describe("Data Access justifications (paste into the Console)", () => {
   });
 
   it("names every scope in its box and why a narrower one fails", () => {
-    for (const s of ["gmail.send", "calendar.events.readonly"]) {
+    for (const s of ["gmail.send", "calendar.events.owned.readonly"]) {
       expect(SENSITIVE_SCOPES_JUSTIFICATION).toContain(s);
     }
     expect(SENSITIVE_SCOPES_JUSTIFICATION.toLowerCase()).toContain("insufficient");

@@ -23,7 +23,7 @@ change.
 ## Read this before deploying
 
 `gmail.readonly` is a **restricted** scope; `gmail.send` and
-`calendar.events.readonly` are **sensitive**.
+`calendar.events.owned.readonly` are **sensitive**.
 Requesting any of them *at sign-in* makes Google's verification review a gate on
 **logging in at all**, not just on the Gmail features:
 

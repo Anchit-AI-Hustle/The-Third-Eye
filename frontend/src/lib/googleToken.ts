@@ -120,20 +120,21 @@ export async function revokeGoogleAccess(
  * OAuth scope at all). An unused restricted scope is exactly what a
  * verification reviewer flags, and there is nothing to demo it doing.
  *
- * Least privilege: calendar.events.readonly, not calendar.readonly — the app
- * only lists events on the primary calendar, never calendars or settings. The
- * Google Chat scopes are gone with Chat ingestion: they were needed only to
- * pull tasks from Chat spaces, which consumer Google accounts can't use, and
- * one of them was a second restricted scope.
+ * Least privilege: calendar.events.owned.readonly, not calendar.readonly — the app
+ * only lists events on the user's own primary calendar, never other calendars,
+ * calendar lists or settings. The Google Chat scopes are gone with Chat
+ * ingestion: they were needed only to pull tasks from Chat spaces, which
+ * consumer Google accounts can't use, and one of them was a second restricted
+ * scope.
  *
  * Console grouping (one justification box per group, see oauthJustifications.ts):
- *   Sensitive  — gmail.send, calendar.events.readonly
+ *   Sensitive  — gmail.send, calendar.events.owned.readonly
  *   Restricted — gmail.readonly
  */
 export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/calendar.events.owned.readonly",
 ] as const;
 
 /** Identity scopes. Requested by the connect flow, and by sign-in if Google is
@@ -181,8 +182,9 @@ export function googleCapabilities(granted: string | undefined): GoogleCapabilit
   return {
     gmailRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/gmail.readonly"),
     gmailSend: hasGoogleScope(granted, "https://www.googleapis.com/auth/gmail.send"),
-    // Grants made before the narrowing still carry calendar.readonly, which also reads events.
-    calendarRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.events.readonly")
+    // Grants made before the narrowing carry a broader scope that also reads events.
+    calendarRead: hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.events.owned.readonly")
+      || hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.events.readonly")
       || hasGoogleScope(granted, "https://www.googleapis.com/auth/calendar.readonly"),
   };
 }

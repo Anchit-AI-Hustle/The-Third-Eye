@@ -17,7 +17,7 @@ The October 2026 email raised six points. This file says what changed in code an
 
 | Before | After | Why |
 |---|---|---|
-| `calendar.readonly` | `calendar.events.readonly` | The only Calendar call is `events.list` on the primary calendar. No calendar list, settings or ACL access is needed. |
+| `calendar.readonly` | `calendar.events.owned.readonly` | The only Calendar call is `events.list` on the user's own primary calendar. No other calendars, calendar list, settings or ACL access is needed. |
 | `chat.spaces.readonly` | removed | Chat ingestion is gone. It needed a Workspace account, so consumer users couldn't use it. |
 | `chat.messages.readonly` (restricted) | removed | Same. This also removes a second restricted scope from review. |
 | `gmail.readonly` | kept | Task extraction and search need message bodies and `q` search. |
@@ -28,28 +28,28 @@ The consent screen at *Settings → Connections → Connect Google* now shows `o
 ```
 https://www.googleapis.com/auth/gmail.readonly
 https://www.googleapis.com/auth/gmail.send
-https://www.googleapis.com/auth/calendar.events.readonly
+https://www.googleapis.com/auth/calendar.events.owned.readonly
 ```
 
 Users who connected before keep their old `calendar.readonly` grant working (`googleCapabilities` accepts it). They are asked for the narrower one next time they reconnect.
 
 ## 2. Console → Google Auth Platform → Data Access
 
-1. **Remove** `calendar.readonly`, `chat.spaces.readonly`, `chat.messages.readonly`, and `calendar.events` if it is listed.
-2. **Add** `.../auth/calendar.events.readonly`.
-3. The list must now be exactly `gmail.readonly` (restricted), `gmail.send` and `calendar.events.readonly` (sensitive). Any extra scope is a discrepancy.
+1. **Remove** `calendar.readonly`, `chat.spaces.readonly`, `chat.messages.readonly`, and `calendar.events` / `calendar.events.readonly` if listed.
+2. **Add** `.../auth/calendar.events.owned.readonly`.
+3. The list must now be exactly `gmail.readonly` (restricted), `gmail.send` and `calendar.events.owned.readonly` (sensitive). Any extra scope is a discrepancy.
 4. Paste the two justifications **verbatim**. They are the strings in `frontend/src/lib/oauthJustifications.ts`, each under 1000 characters.
 
-### Sensitive box — `gmail.send`, `calendar.events.readonly`
+### Sensitive box — `gmail.send`, `calendar.events.owned.readonly`
 
 ```
 The Third Eye is a personal assistant. Both scopes act only on the signed-in user's own account, after they click Connect Google.
 
 gmail.send (users.messages.send): 1) The user asks the Assistant to email someone; a card shows recipient, subject and body, and nothing is sent until they click Confirm. The mail then appears in their Sent folder. 2) Reminders and a daily task briefing the user switched on are emailed to the user's own address. Never sent on the app's own initiative.
 
-calendar.events.readonly (events.list on the primary calendar): when the user asks "what's on my calendar today/this week", the Assistant lists event titles, times and locations. Not stored, never modified.
+calendar.events.owned.readonly (events.list on the user's own primary calendar): when the user asks "what's on my calendar today/this week", the Assistant lists event titles, times and locations. Not stored, never modified.
 
-Why narrower scopes are insufficient: gmail.send is the narrowest scope that can send (gmail.compose adds drafts). calendar.freebusy returns busy blocks without titles or locations, so it can't answer the question. calendar.events.readonly replaces the broader calendar.readonly.
+Why narrower scopes are insufficient: gmail.send is the narrowest scope that can send (gmail.compose adds drafts). calendar.freebusy has no titles or locations, so it can't answer. calendar.events.owned.readonly is limited to calendars the user owns and replaces calendar.readonly.
 ```
 
 ### Restricted box — `gmail.readonly`
@@ -87,7 +87,7 @@ Upload to YouTube as **Unlisted**. Record on the production URL, in English, in 
    - the test account's Gmail **Sent** folder, with the message as the newest item from the test account;
    - the recipient's inbox receiving it;
    - optionally, a reminder email arriving in the test account's own inbox.
-7. **calendar.events.readonly.** In Google Calendar, show two events on the test account. In **Assistant**, ask "what's on my calendar this week?". The same titles, times and locations are listed. Say: "read only; the app never creates or edits events."
+7. **calendar.events.owned.readonly.** In Google Calendar, show two events on the test account. In **Assistant**, ask "what's on my calendar this week?". The same titles, times and locations are listed. Say: "read only; the app never creates or edits events."
 8. **Revoking.** Open `myaccount.google.com/permissions` and show The Third Eye with its access. Optional.
 
 Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.google.com` link and doesn't use the API.
@@ -100,7 +100,7 @@ Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.g
 >
 > Thank you for the review. We have addressed each point:
 >
-> 1. **Minimum scopes.** We now request three scopes only: gmail.readonly, gmail.send and calendar.events.readonly. calendar.readonly was replaced by the narrower calendar.events.readonly. The Google Chat scopes (chat.spaces.readonly, chat.messages.readonly) were removed with the feature that used them. The Data Access page now matches what the application requests exactly.
+> 1. **Minimum scopes.** We now request three scopes only: gmail.readonly, gmail.send and calendar.events.owned.readonly. calendar.readonly was replaced by calendar.events.owned.readonly, which only covers events on calendars the user owns. The Google Chat scopes (chat.spaces.readonly, chat.messages.readonly) were removed with the feature that used them. The Data Access page now matches what the application requests exactly.
 > 2. **Justifications.** These are updated in Data Access. They describe each feature, the API call behind it and why a narrower scope is insufficient.
 > 3. **Demo video.** Link: [UNLISTED YOUTUBE URL]. It shows the fully expanded consent screen with the client ID in the address bar, then each scope in use. For gmail.send it shows the confirmation step and the message in the source account's Sent folder.
 > 4. **Test account.**
@@ -112,7 +112,7 @@ Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.g
 >    2. Go to Settings → Connections → **Connect Google**. This is the consent screen under review. Sign in with the Google test account and click Allow.
 >    3. gmail.readonly: open Task Tracker and click "Scan now". Action items from the account's unread mail become tasks. You can also ask the Assistant "any email from …?".
 >    4. gmail.send: in Assistant, type "email [address] saying hello". A confirmation card appears. Nothing is sent until you click Confirm, and the message then appears in the account's Sent folder.
->    5. calendar.events.readonly: in Assistant, ask "what's on my calendar this week?".
+>    5. calendar.events.owned.readonly: in Assistant, ask "what's on my calendar this week?".
 >
 >    The connected scopes are not served to general production traffic until verification is complete; see point 5 below.
 > 5. **Unverified scopes.** Until verification completes, only test users can complete Connect Google. Everyone else uses the app without Google access.
