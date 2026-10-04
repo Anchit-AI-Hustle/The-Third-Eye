@@ -24,16 +24,16 @@ const post = async (body: unknown) => {
 };
 const song = () => new Response(new Uint8Array(30_000).fill(0xff), { headers: { "content-type": "audio/mpeg", "song-id": "s1" } });
 
-beforeEach(() => { vi.stubEnv("ELEVENLABS_API_KEY", "test-key"); });
+beforeEach(() => { vi.stubEnv("ELEVENLABS_API_KEY", "test-key"); vi.stubEnv("DATABASE_URL", ""); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("/api/tools/music with ElevenLabs", () => {
-  it("returns the sung song inline and never touches Replicate", async () => {
+  it("without a database, returns the sung song inline and never touches Replicate", async () => {
     const f = vi.fn().mockResolvedValue(song());
     vi.stubGlobal("fetch", f);
     const { status, json } = await post({ description: "a dark techno song", duration: 600 });
     expect(status).toBe(200);
-    expect(json).toMatchObject({ configured: true, done: true, provider: "elevenlabs", model: "elevenlabs:music_v2_5", songId: "s1", clipSeconds: 180, loop: true, sessionSeconds: 600 });
+    expect(json).toMatchObject({ configured: true, done: true, provider: "elevenlabs", model: "elevenlabs:music_v2_5", songId: "s1", clipSeconds: 240, loop: true, sessionSeconds: 600 });
     expect(json.audioUrl.startsWith("data:audio/mpeg;base64,")).toBe(true);
     const sent = JSON.parse(f.mock.calls[0][1].body);
     expect(sent.force_instrumental).toBe(false);

@@ -6,6 +6,8 @@ import { planSong } from "@/lib/music/agents";
 import { SONG_MODEL as VOCAL_MODEL, SONG_CLIP_MAX as VOCAL_CLIP_MAX } from "@/lib/music/models";
 import type { MusicInput } from "@/lib/music/types";
 import { elevenLabsConfigured, composeElevenLabs, elevenPrompt, clipSecondsFor } from "@/lib/music/elevenlabs";
+import { storeStudioAudio, audioPath } from "@/lib/music/studioAudio";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 // Eleven Music returns the finished song in one call, which can take a few
@@ -17,7 +19,9 @@ const LIFETIME_MS = 300_000;
 // Music (the same engine and key ANCHOR uses) makes the song first, sung or
 // instrumental, and returns it in this response. If it is not configured or
 // fails, the Replicate routing below runs exactly as before, and the reason
-// ElevenLabs failed travels back as `elevenLabsError`. The Replicate routing is a
+// ElevenLabs failed travels back as `elevenLabsError`. The song is stored
+// (lib/music/studioAudio.ts) and the Studio gets a short URL that plays it by
+// byte range, so no response or saved library row ever carries the bytes. The Replicate routing is a
 // faithful port of the MusicGenAI project's:
 //   • Instrumental (or vocals off) → stability-ai/stable-audio  { prompt, seconds_total }
 //   • Vocals from scratch         → lucataco/ace-step           { tags, lyrics, duration }
@@ -49,6 +53,10 @@ async function email() {
   const s = await getServerSession(authOptions);
   return s?.user?.email ?? null;
 }
+
+// Without a database the song can only travel inline, and only while the
+// base64 body stays under Vercel's 4.5 MB response limit.
+const INLINE_MAX = 3_200_000;
 
 // ── Free fallback: HuggingFace Inference (MusicGen) ─────────────────────────
 // When Replicate is unavailable — no token, or exhausted its 429 retries / out
@@ -95,7 +103,8 @@ async function tryHuggingFaceMusic(promptText: string, seconds: number): Promise
 
 export async function POST(req: NextRequest) {
   const startedAt = Date.now();
-  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const user = await email();
+  if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
   let i: MusicInput;
   try { i = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
@@ -125,8 +134,18 @@ export async function POST(req: NextRequest) {
         seconds: elSeconds, instrumental: !sing,
         deadline: startedAt + LIFETIME_MS - 15_000,
       });
+      const db = getDb();
+      let audioUrl: string;
+      let stored: string | null = null, storeError = "no database configured";
+      if (db) {
+        try { stored = audioPath(await storeStudioAudio(db, user, el.audio, { audioType: el.mime, provider: "elevenlabs", songId: el.songId })); }
+        catch (se) { storeError = se instanceof Error ? se.message : "store failed"; }
+      }
+      if (stored) audioUrl = stored;
+      else if (el.audio.length <= INLINE_MAX) audioUrl = `data:${el.mime};base64,${el.audio.toString("base64")}`;
+      else throw new Error(`the song was made but could not be delivered (${storeError})`);
       return Response.json({
-        configured: true, done: true, audioUrl: el.audioUrl,
+        configured: true, done: true, audioUrl,
         model: `elevenlabs:${el.model}`, provider: "elevenlabs", songId: el.songId,
         prompt, tags, lyrics, sessionSeconds, clipSeconds: el.seconds, loop: sessionSeconds > el.seconds, ...briefMeta,
       });

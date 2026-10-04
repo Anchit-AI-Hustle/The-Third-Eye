@@ -356,8 +356,9 @@ export function MusicStudio() {
   async function makeVideo(audio: string, title: string, target: "create" | string) {
     setVideoBusy(true); setVideoPct(0); setError(null);
     try {
-      // data:/blob: URLs are already same-origin — only remote URLs need the proxy.
-      const src = /^(data:|blob:)/.test(audio) ? audio : proxied(audio);
+      // data:/blob: URLs and this app's own paths (stored Studio songs) are
+      // already same-origin — only remote URLs need the proxy.
+      const src = /^(data:|blob:|\/(?!\/))/.test(audio) ? audio : proxied(audio);
       // On the create tab, render the full requested session (the generator caps
       // it and the clip loops seamlessly to fill it); library items loop off.
       const loopToSeconds = target === "create" ? Number(f.duration) || undefined : undefined;

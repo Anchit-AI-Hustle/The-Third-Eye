@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CLIP_MAX, MAX_PROMPT, ElevenLabsError, clipSecondsFor, composeElevenLabs, elevenPrompt, outputFormatFor, reason, suggestion,
+  CLIP_MAX, MAX_PROMPT, ElevenLabsError, clipSecondsFor, composeElevenLabs, elevenPrompt, reason, suggestion,
 } from "@/lib/music/elevenlabs";
 
 const mp3 = (n = 20_000) => new Uint8Array(n).fill(0xff);
@@ -35,14 +35,11 @@ describe("elevenPrompt", () => {
 });
 
 describe("sizes", () => {
-  it("caps the clip and lowers the bitrate past two minutes", () => {
+  it("caps the clip so the longest song is one ranged answer", () => {
     expect(clipSecondsFor(18_000)).toBe(CLIP_MAX);
     expect(clipSecondsFor(3)).toBe(10);
-    expect(outputFormatFor(120)).toBe("mp3_44100_128");
-    expect(outputFormatFor(180)).toBe("mp3_44100_96");
-    // 180 s at 96 kbps, base64-encoded, must fit Vercel's 4.5 MB response body
-    expect(Math.ceil((180 * 96_000) / 8 / 3) * 4).toBeLessThan(4_500_000);
-    expect(Math.ceil((120 * 128_000) / 8 / 3) * 4).toBeLessThan(4_500_000);
+    // 240 s at 128 kbps is under four 1 MiB chunks, the most one answer carries
+    expect((CLIP_MAX * 128_000) / 8).toBeLessThan(4 * 1024 * 1024);
   });
 });
 
@@ -60,15 +57,15 @@ describe("refusals", () => {
 });
 
 describe("composeElevenLabs", () => {
-  it("sends the documented request and returns the song inline", async () => {
+  it("sends the documented request and returns the song's bytes", async () => {
     const f = vi.fn().mockResolvedValue(audio());
     const r = await composeElevenLabs({ prompt: "p", seconds: 95, instrumental: false, deadline: later(), fetchImpl: f, wait: noWait });
     const [url, init] = f.mock.calls[0];
     expect(url).toBe("https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128");
     expect(init.headers["xi-api-key"]).toBe("test-key");
     expect(JSON.parse(init.body)).toEqual({ prompt: "p", music_length_ms: 95_000, model_id: "music_v2_5", force_instrumental: false });
-    expect(r.audioUrl.startsWith("data:audio/mpeg;base64,")).toBe(true);
-    expect(r).toMatchObject({ songId: "song_1", bytes: 20_000, seconds: 95, model: "music_v2_5" });
+    expect(r.audio.length).toBe(20_000);
+    expect(r).toMatchObject({ mime: "audio/mpeg", songId: "song_1", seconds: 95, model: "music_v2_5", outputFormat: "mp3_44100_128" });
   });
 
   it("retries once with the service's rewrite of a refused prompt", async () => {
@@ -101,11 +98,11 @@ describe("composeElevenLabs", () => {
     expect(r.outputFormat).toBe("mp3_44100_64");
   });
 
-  it("refuses a body that is not audio, or too small, or too large to send back", async () => {
+  it("refuses a body that is not audio, or too small, or absurdly large", async () => {
     const run = (res: Response) => composeElevenLabs({ prompt: "p", seconds: 60, instrumental: true, deadline: later(), fetchImpl: vi.fn().mockResolvedValue(res), wait: noWait });
     await expect(run(new Response("{}", { headers: { "content-type": "application/json" } }))).rejects.toThrow(/not audio/);
     await expect(run(audio(500))).rejects.toThrow(/not a song/);
-    await expect(run(audio(3_300_000))).rejects.toThrow(/too large/);
+    await expect(run(audio(21 * 1024 * 1024))).rejects.toThrow(/more than a song/);
   });
 
   it("does not start when the function has no time left", async () => {

@@ -8,18 +8,18 @@
 // rewrite, which is tried once. The key is read from ELEVENLABS_API_KEY and is
 // never logged or returned. Music generation needs a paid ElevenLabs plan.
 //
-// The Studio gets the song back in the same response, as a data: URL, the way
-// the HuggingFace fallback already does, so there is no job to poll and nothing
-// to store. That keeps the response under Vercel's 4.5 MB body limit only if the
-// file stays small, so the clip is capped at CLIP_MAX and longer clips use a
-// lower bitrate (outputFormatFor). The player loops the clip to fill a session.
+// The bytes come back to the caller, which stores them (lib/music/studioAudio.ts)
+// and hands the Studio a short URL to play them by byte range. At 128 kbps the
+// longest clip (CLIP_MAX) is under 4 MiB, one ranged answer; the player loops
+// the clip to fill a longer session.
 
 export const ENDPOINT = "https://api.elevenlabs.io/v1/music";
 export const MODEL = process.env.ELEVENLABS_MUSIC_MODEL || "music_v2_5";
-export const CLIP_MAX = 180;          // seconds
+export const FORMAT = "mp3_44100_128";
+export const CLIP_MAX = 240;          // seconds
 export const CLIP_MIN = 10;
 export const MAX_PROMPT = 4100;        // the API's limit on `prompt`
-const MAX_BYTES = 3_200_000;           // as base64 that is ~4.27 MB, under the 4.5 MB limit
+const MAX_BYTES = 20 * 1024 * 1024;
 
 export class ElevenLabsError extends Error {
   constructor(message: string, readonly status?: number) { super(message); this.name = "ElevenLabsError"; }
@@ -32,11 +32,6 @@ export function elevenLabsKey(): string | null {
 
 export function elevenLabsConfigured(): boolean {
   return elevenLabsKey() !== null;
-}
-
-/** 128 kbps for up to two minutes, 96 kbps beyond, so the file always fits the response. */
-export function outputFormatFor(seconds: number): string {
-  return seconds <= 120 ? "mp3_44100_128" : "mp3_44100_96";
 }
 
 export function clipSecondsFor(sessionSeconds: number): number {
@@ -89,7 +84,7 @@ export function reason(status: number, body: string): string {
 }
 
 export interface ElevenResult {
-  audioUrl: string; model: string; outputFormat: string; songId: string | null; bytes: number; seconds: number;
+  audio: Buffer; mime: string; model: string; outputFormat: string; songId: string | null; seconds: number;
 }
 
 /**
@@ -105,7 +100,7 @@ export async function composeElevenLabs(opts: {
   const doFetch = opts.fetchImpl ?? fetch;
   const wait = opts.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const seconds = Math.min(Math.max(Math.round(opts.seconds), CLIP_MIN), CLIP_MAX);
-  let outputFormat = outputFormatFor(seconds);
+  let outputFormat = FORMAT;
   let body: Record<string, unknown> = {
     prompt: opts.prompt.slice(0, MAX_PROMPT),
     music_length_ms: seconds * 1000,
@@ -151,11 +146,8 @@ export async function composeElevenLabs(opts: {
     }
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length < 10_000) throw new ElevenLabsError(`ElevenLabs returned ${buf.length} bytes, not a song`);
-    if (buf.length > MAX_BYTES) throw new ElevenLabsError(`ElevenLabs returned ${(buf.length / 1e6).toFixed(1)} MB, too large to send back`);
+    if (buf.length > MAX_BYTES) throw new ElevenLabsError(`ElevenLabs returned ${(buf.length / 1e6).toFixed(1)} MB, more than a song should be`);
     const mime = ct.startsWith("audio/") ? ct : "audio/mpeg";
-    return {
-      audioUrl: `data:${mime};base64,${buf.toString("base64")}`,
-      model: String(body.model_id), outputFormat, songId: res.headers.get("song-id"), bytes: buf.length, seconds,
-    };
+    return { audio: buf, mime, model: String(body.model_id), outputFormat, songId: res.headers.get("song-id"), seconds };
   }
 }
