@@ -19,6 +19,7 @@ import { useMode } from "@/hooks/useMode";
 import { ActionCard } from "@/components/assistant/ActionCard";
 import { toolLabel } from "@/lib/toolLabels";
 import { classifyOpenUrl } from "@/lib/liveActions";
+import { isRecognizerNoise } from "@/lib/utterance";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -130,6 +131,7 @@ export function VoiceOverlay() {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
+      if (isRecognizerNoise(text)) return;
       // A pending "confirm before I act" takes priority over a new question.
       if (handleVoiceConfirm(text)) return;
       if (!isStreamingRef.current) sendRef.current(text);
@@ -163,7 +165,7 @@ export function VoiceOverlay() {
     const command = isNameTrigger(trigger, agent.name)
       ? stripWakeTrigger(transcript, trigger)
       : "";
-    if (command) {
+    if (command && !isRecognizerNoise(command)) {
       handsFreeRef.current = true;
       sendRef.current(command);
       return;

@@ -13,6 +13,7 @@ import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
 import { userFacingOutage } from "@/lib/llmCascade";
+import { UNHEARD } from "@/lib/utterance";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
@@ -1896,6 +1897,16 @@ export async function POST(req: NextRequest) {
 
         controller.close();
       } catch (err) {
+        const primary = err instanceof Error ? err.message : String(err);
+        // An empty reply is not an outage. Falling through here used to call
+        // every other provider, pick up a billing error from one of them, and
+        // show a red "unable to respond" card for a scrap the model ignored.
+        if (primary === "empty gemini response") {
+          send("text", { text: UNHEARD });
+          send("done", { stop_reason: "empty", model: MODEL, memory: memoryStore, sideEffects });
+          controller.close();
+          return;
+        }
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
         // Tier 2: try a tool-capable fallback (Groq/Cerebras/Mistral all speak
         // OpenAI-style function calling) so live actions — send an email, add
@@ -1950,7 +1961,12 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
-            if (!out.content?.trim()) throw new Error("empty tool fallback");
+            if (!out.content?.trim()) {
+              send("text", { text: UNHEARD });
+              send("done", { stop_reason: "empty", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects });
+              controller.close();
+              return;
+            }
             send("text", { text: out.content });
             await saveMemory(email, memory, memoryStore);
             send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects });

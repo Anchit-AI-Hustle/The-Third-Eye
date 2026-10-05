@@ -19,6 +19,7 @@ import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentConfirm, classifyVoiceConfirm } from "@/hooks/useAgentConfirm";
 import { classifyOpenUrl } from "@/lib/liveActions";
 import { isProviderMedia, saveMedia } from "@/lib/mediaFile";
+import { isRecognizerNoise } from "@/lib/utterance";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
@@ -216,6 +217,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
+      if (isRecognizerNoise(text)) return;
       const verdict = classifyVoiceConfirm(text);
       const waiting = pendingRef.current.filter((a) => a.status === "pending");
       if (verdict && waiting.length) {

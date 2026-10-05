@@ -7,6 +7,7 @@ import { Mic, MicOff, Volume2, VolumeX, ChevronDown, ExternalLink, X } from "luc
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { isRecognizerNoise } from "@/lib/utterance";
 
 interface Turn {
   role: "user" | "assistant";
@@ -50,6 +51,7 @@ export function VoiceWidget() {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
+      if (isRecognizerNoise(text)) return;
       if (!isStreamingRef.current) sendRef.current(text);
     }, []),
   });
