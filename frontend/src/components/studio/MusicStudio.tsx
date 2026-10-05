@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X, CalendarClock } from "lucide-react";
 import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
-import { generateVisualizerVideo } from "@/lib/musicVideo";
+import { generateVisualizerVideo, primeAudioContext } from "@/lib/musicVideo";
 import { recordGeneration } from "@/lib/generations";
 import { structuresFor } from "@/lib/music/structures";
 import { BPM_MAX, BPM_MIN } from "@/lib/music/types";
@@ -284,8 +284,10 @@ export function MusicStudio() {
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [libLoading, setLibLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoExt, setVideoExt] = useState("webm");
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoPct, setVideoPct] = useState(0);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState(false);
   const fFor = useRef(f); fFor.current = f;
   const pRef = useRef(""); const lRef = useRef("");
@@ -354,19 +356,21 @@ export function MusicStudio() {
   }
 
   async function makeVideo(audio: string, title: string, target: "create" | string) {
-    setVideoBusy(true); setVideoPct(0); setError(null);
+    // Must run before the first await: this is the click (or the generate click
+    // that already primed the context) Chrome uses to allow recording.
+    primeAudioContext();
+    setVideoBusy(true); setVideoPct(0); setVideoError(null);
     try {
       // data:/blob: URLs and this app's own paths (stored Studio songs) are
       // already same-origin — only remote URLs need the proxy.
       const src = /^(data:|blob:|\/(?!\/))/.test(audio) ? audio : proxied(audio);
-      // On the create tab, render the full requested session (the generator caps
-      // it and the clip loops seamlessly to fill it); library items loop off.
-      const loopToSeconds = target === "create" ? Number(f.duration) || undefined : undefined;
+      const loopToSeconds = target === "create" ? Number(fFor.current.duration) || undefined : undefined;
       const blob = await generateVisualizerVideo(src, { title, onProgress: setVideoPct, loopToSeconds });
       const url = URL.createObjectURL(blob);
-      if (target === "create") setVideoUrl(url);
-      else { const a = document.createElement("a"); a.href = url; a.download = `${title || "track"}.webm`; a.click(); }
-    } catch (e) { setError(e instanceof Error ? e.message : "Video generation failed."); }
+      const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+      if (target === "create") { setVideoExt(ext); setVideoUrl(url); }
+      else { const a = document.createElement("a"); a.href = url; a.download = `${title || "track"}.${ext}`; a.click(); }
+    } catch (e) { setVideoError(e instanceof Error ? e.message : "Video generation failed."); }
     finally { setVideoBusy(false); }
   }
 
@@ -475,8 +479,9 @@ export function MusicStudio() {
   }
 
   async function generate() {
+    primeAudioContext();
     stopPoll();
-    setPhase("generating"); setError(null); setNote(null); setAudioUrl(null); setVideoUrl(null); setStatus("Writing and composing the track… this can take a minute or two.");
+    setPhase("generating"); setError(null); setNote(null); setVideoError(null); setAudioUrl(null); setVideoUrl(null); setStatus("Writing and composing the track… this can take a minute or two.");
     try {
       const res = await fetch("/api/tools/music", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payloadOf(f)),
@@ -599,14 +604,12 @@ export function MusicStudio() {
               ))}
             </div>
           )}
+          {videoError && <p className="text-xs text-accent-red mt-3">{videoError}</p>}
+          {videoBusy && <p className="text-[11px] font-mono text-text-muted mt-2">Rendering video… {Math.round(videoPct * 100)}%</p>}
         </div>
         </div>
       ) : (
-      /* The form was capped at 400px while the output panel — empty until
-         something is generated — ate the rest of the page. Wider form,
-         narrower minimum for the output side so the page stops looking
-         half-unused before the first generation. */
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(420px,640px)_minmax(320px,1fr)] gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,640px)_minmax(280px,1fr)] gap-5 items-start">
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5 space-y-3.5 self-start">
         <div>
           <Label name="description">Music prompt <span className="text-accent-red">*</span></Label>
@@ -729,15 +732,21 @@ export function MusicStudio() {
         <DailyDrop preset={() => payloadOf(fFor.current)} />
       </div>
 
-      <div className="rounded-card border border-border-default bg-background-surface/40 p-5 min-h-[420px]">
+      <div className="rounded-card border border-border-default bg-background-surface/40 p-5 xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
         {phase === "idle" && (
-          <div className="h-full flex flex-col items-center justify-center text-center text-text-muted py-16">
+          <div className="flex flex-col items-center justify-center text-center text-text-muted py-10">
             <Music size={28} className="opacity-40 mb-3 text-[#34D399]" />
             <p className="text-sm">Describe a track, hit “Auto-fill all fields”, tweak, then “Generate music”.</p>
-            <p className="text-xs mt-1">You'll get a playable, downloadable audio track — instrumental or with AI vocals.</p>
+            <p className="text-xs mt-1">You'll get a playable audio track. Turn on “Also create a music video” to render a clip with it.</p>
           </div>
         )}
-        {busy && (<div className="h-full flex flex-col items-center justify-center text-center text-text-secondary py-16"><Loader2 size={24} className="animate-spin text-[#34D399] mb-3" /><p className="text-sm">{status}</p></div>)}
+        {busy && (
+          <div className="flex flex-col items-center justify-center text-center text-text-secondary py-10">
+            <Loader2 size={24} className="animate-spin text-[#34D399] mb-3" />
+            <p className="text-sm">{status}</p>
+            {f.makeVideoUpfront && <p className="text-[11px] font-mono text-text-muted mt-2">Music video starts the moment the track is ready.</p>}
+          </div>
+        )}
         {audioUrl && phase === "ready" && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}{loopSession && <span className="text-[10px] font-mono text-text-muted">· 🔁 looping to fill {fmtDuration(f.duration)}</span>}</div>
@@ -746,16 +755,17 @@ export function MusicStudio() {
               <a href={audioUrl} download className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Audio</a>
               <button onClick={() => makeVideo(audioUrl, f.title || f.description, "create")} disabled={videoBusy}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-[#34D399]/40 text-xs text-[#34D399] hover:bg-[#34D399]/10 disabled:opacity-40">
-                {videoBusy ? <><Loader2 size={12} className="animate-spin" /> Rendering {Math.round(videoPct * 100)}%</> : <><Film size={12} /> Generate video</>}
+                {videoBusy ? <><Loader2 size={12} className="animate-spin" /> Rendering {Math.round(videoPct * 100)}%</> : <><Film size={12} /> {videoUrl ? "Regenerate video" : "Generate video"}</>}
               </button>
             </div>
             {videoBusy && !videoUrl && (
               <p className="text-[11px] font-mono text-text-muted flex items-center gap-1.5"><Loader2 size={11} className="animate-spin text-[#34D399]" /> Rendering your music video… {Math.round(videoPct * 100)}%</p>
             )}
+            {videoError && <p className="text-xs text-accent-red">{videoError}</p>}
             {videoUrl && (
               <div className="space-y-2">
                 <video controls src={videoUrl} className="w-full rounded-input bg-black" />
-                <a href={videoUrl} download={`${f.title || "track"}.webm`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download video</a>
+                <a href={videoUrl} download={`${(f.title || "track").replace(/[^\w\s-]/g, "").trim() || "track"}.${videoExt}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download video</a>
               </div>
             )}
             {brief && <BriefCard brief={brief} />}

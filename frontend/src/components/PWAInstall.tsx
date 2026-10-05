@@ -8,7 +8,7 @@ interface InstallPrompt extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export function PWAInstall() {
+export function PWAInstall({ collapsed = false }: { collapsed?: boolean }) {
   const [deferred, setDeferred] = useState<InstallPrompt | null>(null);
   const [show, setShow] = useState(false);
 
@@ -28,20 +28,21 @@ export function PWAInstall() {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 animate-slide-up">
-      <div className="bg-background-elevated border border-border-default rounded-lg shadow-elevated p-3 flex items-center gap-3 max-w-xs">
-        <button
-          onClick={async () => {
-            deferred?.prompt();
-            await deferred?.userChoice;
-            setDeferred(null);
-            setShow(false);
-          }}
-          className="flex items-center gap-2 bg-accent-blue text-background-base px-3 py-2 rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
-        >
-          <Download size={14} />
-          Install App
-        </button>
+    <div className={`flex items-center gap-1 ${collapsed ? "justify-center px-1 py-1" : "px-2 pb-1"}`}>
+      <button
+        onClick={async () => {
+          deferred?.prompt();
+          await deferred?.userChoice;
+          setDeferred(null);
+          setShow(false);
+        }}
+        title="Install App"
+        className="flex items-center gap-2 bg-accent-blue text-background-base px-2.5 py-1.5 rounded-md text-xs font-medium hover:opacity-90 transition-opacity"
+      >
+        <Download size={14} />
+        {!collapsed && "Install App"}
+      </button>
+      {!collapsed && (
         <button
           onClick={() => {
             localStorage.setItem("pwa-install-dismissed", "1");
@@ -52,7 +53,7 @@ export function PWAInstall() {
         >
           <X size={14} />
         </button>
-      </div>
+      )}
     </div>
   );
 }

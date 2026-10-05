@@ -423,16 +423,17 @@ export function VoiceOverlay() {
         <button
           onClick={() => setExpanded(true)}
           className={cn(
-            "flex items-center gap-2.5 pl-3 pr-2 py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group",
+            "flex items-center gap-2.5 pl-1.5 pr-1.5 py-1.5 lg:pl-3 lg:pr-2 lg:py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group",
             indicatorActive && "animate-border-glow",
           )}
         >
-          <span className={cn("w-2 h-2 rounded-full transition-colors", statusColor, indicatorActive && "animate-pulse", micOn && "shadow-[0_0_8px_rgba(79,195,247,0.5)]")} />
-          {/* Show truncated last response or status */}
+          <span className={cn("hidden lg:block w-2 h-2 rounded-full transition-colors", statusColor, indicatorActive && "animate-pulse", micOn && "shadow-[0_0_8px_rgba(79,195,247,0.5)]")} />
+          {/* The name makes a wide pill that covered form fields on a phone.
+              Desktop keeps it; small screens are just the reactor. */}
           {response && !isStreaming ? (
-            <span className="text-xs font-mono text-text-secondary max-w-[160px] truncate">{response.slice(0, 50)}</span>
+            <span className="hidden lg:inline text-xs font-mono text-text-secondary max-w-[160px] truncate">{response.slice(0, 50)}</span>
           ) : (
-            <span className="text-xs font-mono text-text-secondary group-hover:text-[#4FC3F7] transition-colors tracking-wider">
+            <span className="hidden lg:inline text-xs font-mono text-text-secondary group-hover:text-[#4FC3F7] transition-colors tracking-wider">
               {micOn ? status : agent.name}
             </span>
           )}
