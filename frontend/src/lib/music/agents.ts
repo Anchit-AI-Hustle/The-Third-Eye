@@ -143,7 +143,7 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
   const system = [
     "You are a professional topliner writing lyrics to be sung by an AI singing model (ACE-Step / Suno).",
     "Write ORIGINAL lyrics with concrete imagery, a memorable hook and a consistent meter that sits on the groove. Never reuse existing song lyrics.",
-    "The user's subject is the only topic. Use their words and images. Do not swap in a different story, genre, or mood.",
+    "The request is a production brief, not a lyric. Do not quote it, repeat it, or use any phrase from it as a sung line. Write new words that fit the genre, mood and language. If the brief names a situation, write about that situation in your own words.",
     sections.length
       ? `Use EXACTLY these section tags, in this order, each on its own line in lowercase square brackets: ${sections.map((x) => `[${x}]`).join(" ")}. Do not add, rename or skip sections.`
       : "Use lowercase section tags on their own line: [intro], [verse], [pre-chorus], [chorus], [bridge], [outro].",
@@ -157,9 +157,8 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
     "Finish every section you open. Output ONLY the tagged lyrics — no title, notes, markdown or quotes.",
   ].join("\n");
   const user = [
-    `Title: ${i.title || "(untitled)"}`,
-    `Subject — the song is about this, in these words: ${songSubject(i.description || "") || brief.culturalContext}`,
-    i.description ? `Full request: ${i.description}` : "",
+    `Title: ${i.title || "(untitled)"} — a title may be the hook only when it is not the request itself.`,
+    i.description ? `Production brief (never sing these words): ${i.description}` : `Feel: ${brief.culturalContext}`,
     `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM, energy ${brief.energy}/10`,
     `Vocal style: ${brief.vocalStyle}`,
     i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 — sparser, softer lines toward 1 (whispered/intimate), bigger declamatory lines toward 10 (belted/anthemic).` : "",
@@ -253,8 +252,8 @@ export async function planSong(i: MusicInput): Promise<{ brief: MusicBrief; plan
     beatSmith(i, brief).catch(() => fallbackBeats(i, brief)),
     vocals && i.lyricsMode !== "manual" ? lyricist(i, brief).catch(() => "") : Promise.resolve(""),
   ]);
-  let lyrics = (manual || autoLyrics).trim();
-  if (vocals && !lyrics) lyrics = fallbackLyrics(i, brief);
+  let lyrics = manual || stripPromptLines(autoLyrics.trim(), i.description || "");
+  if (vocals && !manual && !sungLines(lyrics)) lyrics = fallbackLyrics(i, brief);
   const plan = conductor(i, brief, beats, lyrics);
   return { brief, plan, sing: vocals && plan.lyrics.trim().length > 0 };
 }
@@ -296,14 +295,44 @@ export function fallbackBeats(i: MusicInput, brief: MusicBrief): BeatSpec {
 
 // A minimal-but-real singable lyric, so vocal tracks always have something to
 // sing even if the Lyricist agent is unavailable ("be it very less, but there").
-export function fallbackLyrics(i: MusicInput, brief?: MusicBrief): string {
-  const subject = songSubject(i.description || "") || (i.title || "").trim() || brief?.genre || "tonight";
-  const hook = subject.slice(0, 72);
-  const light = VOCAL_LIGHT.test(`${brief?.genre ?? ""} ${brief?.subgenre ?? ""} ${i.genre ?? ""} ${subject}`);
-  if (light) return ["[intro]", "[drop]", hook, "[chorus]", hook, hook, "[outro]", hook].join("\n");
+function sungLines(lyrics: string): boolean {
+  return lyrics.split("\n").some((l) => l.trim() && !l.trim().startsWith("["));
+}
+
+// A line that is the request, or that contains a long stretch of it, is the
+// prompt being sung. Short topics ("the rain") can still appear in new lines.
+export function stripPromptLines(lyrics: string, description: string): string {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ").trim();
+  const raw = norm(description);
+  const subject = norm(songSubject(description));
+  const exact = [raw, subject].filter(Boolean);
+  const contained = exact.filter((s) => s.length >= 12);
+  return lyrics.split("\n").filter((line) => {
+    const n = norm(line);
+    if (!n || line.trim().startsWith("[")) return true;
+    if (exact.some((b) => n === b)) return false;
+    return !contained.some((b) => n.includes(b));
+  }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function lyricHook(i: MusicInput, brief?: MusicBrief): string {
+  const title = (i.title || "").trim();
+  const desc = (i.description || "").trim().toLowerCase();
+  const subject = songSubject(i.description || "").toLowerCase();
+  const t = title.toLowerCase();
+  if (title && t !== subject && t !== desc && !desc.includes(t) && !subject.includes(t)) return title.slice(0, 48);
   const mood = (i.mood || brief?.moods?.[0] || "").toString().toLowerCase();
-  const line2 = mood ? `${hook}, ${mood}` : hook;
-  return ["[verse]", hook, line2, "[chorus]", hook, hook, "[outro]", hook].join("\n");
+  if (/dark|sad|melanch|lonely/.test(mood)) return "deeper now";
+  if (/happy|uplift|joy|bright|hope/.test(mood)) return "lights up";
+  if (/angry|aggressive|rage|fierce/.test(mood)) return "break it open";
+  return "feel the night";
+}
+
+export function fallbackLyrics(i: MusicInput, brief?: MusicBrief): string {
+  const hook = lyricHook(i, brief);
+  const light = VOCAL_LIGHT.test(`${brief?.genre ?? ""} ${brief?.subgenre ?? ""} ${i.genre ?? ""} ${i.description ?? ""}`);
+  if (light) return ["[intro]", "[drop]", hook, "[chorus]", hook, hook, "[outro]", hook].join("\n");
+  return ["[verse]", "Hold on, the night is moving", hook, "[chorus]", hook, hook, "[outro]", hook].join("\n");
 }
 
 // ── Lyrics normaliser (shared) ───────────────────────────────────────────────
