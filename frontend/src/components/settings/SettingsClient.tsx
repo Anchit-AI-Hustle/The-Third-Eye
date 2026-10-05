@@ -73,7 +73,7 @@ export function SettingsClient({ user }: Props) {
           <div>
             <p className="text-text-primary font-medium">{user?.name ?? "Unknown"}</p>
             <p className="text-text-muted text-sm mt-0.5">{user?.email ?? ""}</p>
-            <p className="text-text-muted text-xs mt-1 font-mono">Signed in with your mobile number</p>
+            <p className="text-text-muted text-xs mt-1 font-mono">Signed in with Google</p>
           </div>
         </div>
       </Section>

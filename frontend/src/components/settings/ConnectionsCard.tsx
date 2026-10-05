@@ -51,7 +51,7 @@ export function ConnectionsCard() {
   const labels = scopeLabels(status?.scopes ?? []);
 
   async function disconnect() {
-    if (!confirm("Disconnect Google? The assistant will lose access to your mail, calendar and chat, and the permission is revoked at Google.")) return;
+    if (!confirm("Disconnect Google? The assistant will lose access to your mail and calendar, and the permission is revoked at Google.")) return;
     setDisconnecting(true);
     try {
       const r = await fetch("/api/connect/google", { method: "DELETE" });
@@ -144,7 +144,8 @@ export function ConnectionsCard() {
       </div>
 
       <p className="text-text-muted text-[11px] font-mono mt-3 leading-relaxed">
-        Signing in with Google asks for mail access up front. Reconnect here if a box was left unticked.
+        Sign-in does not grant mail. Connect here when you want the assistant to read or send it.
+        While Google's review of those permissions is open, only a listed test account can finish this step.
         Disconnecting revokes the permission at Google and deletes the token stored here.
       </p>
 
