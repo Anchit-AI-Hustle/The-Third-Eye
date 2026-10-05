@@ -1,6 +1,5 @@
 "use client";
 import { Check, X, Lock, Mic, Camera, MapPin, Bell, RotateCcw, Crown, Code, Search, Music, Shield, HeartPulse, Home, Lightbulb, FileText, Phone, Calendar, Brain } from "lucide-react";
-import { MainLayout } from "@/components/layout/MainLayout";
 import { BRAND_LOGOS } from "@/components/BrandLogos";
 import { useAllConsents, useConsentBundle } from "@/hooks/useConsent";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
@@ -115,8 +114,7 @@ export default function CapabilitiesPage() {
   };
 
   return (
-    <MainLayout>
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         <header className="space-y-2">
           <div className="text-xs uppercase tracking-[0.2em] text-text-muted">Operator: {agent.name}</div>
           <h1 className="text-2xl sm:text-3xl font-semibold">Capabilities</h1>
@@ -215,6 +213,5 @@ export default function CapabilitiesPage() {
           </section>
         ))}
       </div>
-    </MainLayout>
   );
 }

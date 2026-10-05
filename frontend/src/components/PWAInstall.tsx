@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Download, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface InstallPrompt extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export function PWAInstall({ collapsed = false }: { collapsed?: boolean }) {
+export function PWAInstall({ collapsed = false, narrowOpen = false }: { collapsed?: boolean; narrowOpen?: boolean }) {
   const [deferred, setDeferred] = useState<InstallPrompt | null>(null);
   const [show, setShow] = useState(false);
 
@@ -28,7 +29,11 @@ export function PWAInstall({ collapsed = false }: { collapsed?: boolean }) {
   if (!show) return null;
 
   return (
-    <div className={`flex items-center gap-1 ${collapsed ? "justify-center px-1 py-1" : "px-2 pb-1"}`}>
+    <div className={cn(
+      "flex items-center gap-1 px-2 pb-1",
+      !narrowOpen && "max-lg:justify-center max-lg:px-1",
+      collapsed && "lg:justify-center lg:px-1",
+    )}>
       <button
         onClick={async () => {
           deferred?.prompt();
@@ -40,20 +45,22 @@ export function PWAInstall({ collapsed = false }: { collapsed?: boolean }) {
         className="flex items-center gap-2 bg-accent-blue text-background-base px-2.5 py-1.5 rounded-md text-xs font-medium hover:opacity-90 transition-opacity"
       >
         <Download size={14} />
-        {!collapsed && "Install App"}
+        <span className={cn(!narrowOpen && "max-lg:hidden", collapsed && "lg:hidden")}>Install App</span>
       </button>
-      {!collapsed && (
-        <button
-          onClick={() => {
-            localStorage.setItem("pwa-install-dismissed", "1");
-            setShow(false);
-          }}
-          className="text-text-muted hover:text-text-primary transition-colors p-1"
-          aria-label="Dismiss"
-        >
-          <X size={14} />
-        </button>
-      )}
+      <button
+        onClick={() => {
+          localStorage.setItem("pwa-install-dismissed", "1");
+          setShow(false);
+        }}
+        className={cn(
+          "text-text-muted hover:text-text-primary transition-colors p-1",
+          !narrowOpen && "max-lg:hidden",
+          collapsed && "lg:hidden",
+        )}
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }

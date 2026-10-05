@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
 import {
   ShieldCheck, Check, X, AlertTriangle, ChevronDown, Wrench, Target as TargetIcon,
 } from "lucide-react";
@@ -245,8 +244,7 @@ export default function AuditPage() {
   }, []);
 
   return (
-    <MainLayout>
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         <header className="space-y-2">
           <div className="text-xs uppercase tracking-[0.2em] text-text-muted flex items-center gap-2">
             <ShieldCheck size={13} className="text-[#4FC3F7]" /> Overall App Audit
@@ -362,7 +360,6 @@ export default function AuditPage() {
           })}
         </div>
       </div>
-    </MainLayout>
   );
 }
 

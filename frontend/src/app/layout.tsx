@@ -4,6 +4,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { Providers } from "./providers";
+import { AppShell } from "@/components/layout/AppShell";
 import {
   SITE_URL,
   GOOGLE_SITE_VERIFICATION,
@@ -73,7 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${inter.variable} ${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >
         <a href="#main-content" className="skip-link">Skip to main content</a>
-        <Providers>{children}</Providers>
+        <Providers><AppShell>{children}</AppShell></Providers>
         <Analytics />
         <script
           dangerouslySetInnerHTML={{

@@ -16,7 +16,7 @@ const NAV_ITEMS = [
 export function BottomNav() {
   const pathname = usePathname();
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-background-surface/95 backdrop-blur-modal border-t border-border-default safe-bottom">
+    <nav className="lg:hidden fixed bottom-0 left-16 right-0 z-30 bg-background-surface/95 backdrop-blur-modal border-t border-border-default safe-bottom">
       <div className="flex items-stretch h-16">
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = pathname.startsWith(href);

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Cloud, CloudOff, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Sync = { remote: boolean; reason: string } | null;
 
 // A small, honest indicator of where the user's data actually lives. Without
 // this, a missing DATABASE_URL silently drops the whole app into
 // localStorage-only mode — data looks saved but never syncs across devices.
-export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
+export function CloudSyncBadge({ collapsed, narrowOpen = false }: { collapsed?: boolean; narrowOpen?: boolean }) {
   const [sync, setSync] = useState<Sync>(null);
   const [loading, setLoading] = useState(true);
 
@@ -38,18 +39,17 @@ export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
   const Icon = loading ? Loader2 : remote ? Cloud : CloudOff;
   const color = loading ? "text-text-muted" : remote ? "text-[#34D399]" : "text-[#F0C94E]";
 
-  if (collapsed) {
-    return (
-      <div className="flex justify-center py-1" title={`${label} — ${tip}`}>
-        <Icon size={14} className={`${color} ${loading ? "animate-spin" : ""}`} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono" title={tip}>
-      <Icon size={12} className={`${color} flex-none ${loading ? "animate-spin" : ""}`} />
-      <span className={color}>{label}</span>
+    <div
+      className={cn(
+        "flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono",
+        !narrowOpen && "max-lg:justify-center max-lg:px-1",
+        collapsed && "lg:justify-center lg:px-1",
+      )}
+      title={`${label} — ${tip}`}
+    >
+      <Icon size={14} className={cn(color, "flex-none", loading && "animate-spin")} />
+      <span className={cn(color, !narrowOpen && "max-lg:hidden", collapsed && "lg:hidden")}>{label}</span>
     </div>
   );
 }
