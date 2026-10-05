@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, Download, Loader2, RefreshCw, Save, Sparkles } from "lucide-react";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 // The daily drop: save the current Music Studio form as a style, and the daily
 // cron makes a new song in it every morning (lib/music/daily.ts).
@@ -32,7 +33,7 @@ function useDaily() {
   return { settings, tracks, loading, load };
 }
 
-export function DailyDrop({ preset }: { preset: () => Record<string, unknown> }) {
+export function DailyDrop({ preset, context = {} }: { preset: () => Record<string, unknown>; context?: Record<string, string> }) {
   const { settings, load } = useDaily();
   const [refs, setRefs] = useState("");
   const [busy, setBusy] = useState<"save" | "run" | "toggle" | null>(null);
@@ -82,6 +83,12 @@ export function DailyDrop({ preset }: { preset: () => Record<string, unknown> })
           ? `${settings.enabled ? "On" : "Paused"} — ${[settings.preset.genre, settings.preset.tempo && `${settings.preset.tempo} BPM`].filter(Boolean).join(" · ")}. A new song in this style every morning (around 07:00 IST); the last 7 are kept in Library.`
           : "Save this form as your style and a new, different song in it is made every morning (around 07:00 IST). The last 7 are kept in Library."}
       </p>
+      <div className="flex items-center text-[11px] text-text-secondary">
+        <span>Reference tracks</span>
+        <AiFieldBar tool={{ label: "Music Studio", purpose: "artists or tracks a daily song should sound like" }}
+          field={{ name: "refs", label: "Reference tracks", type: "text", placeholder: "artists or your own track titles" }}
+          value={refs} context={context} onChange={setRefs} />
+      </div>
       <input value={refs} onChange={(e) => setRefs(e.target.value)} maxLength={300}
         placeholder="Your tracks it should sound like — e.g. Project Mayhem, Underground Fever Dream"
         className="w-full bg-background-base border border-border-default rounded-input px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted outline-none focus:border-[#34D399]" />

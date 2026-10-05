@@ -6,6 +6,7 @@ import { recordGeneration } from "@/lib/generations";
 import { assembleEpisode, type Aspect, type Soundtrack } from "@/lib/episodeVideo";
 import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
 type JobState = { status: "idle" | "rendering" | "done" | "error"; url?: string; msg?: string };
@@ -204,11 +205,30 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
                 </button>
               </div>
             </div>
-            <p className="text-[11px] leading-relaxed text-text-secondary">{s.prompt}</p>
+            <div className="flex flex-wrap items-center text-[11px] text-text-secondary">
+              <span>Shot prompt</span>
+              <AiFieldBar tool={{ label: tool === "reel" ? "Reel Studio" : "Video Studio", purpose: "a shot prompt a video model can render" }}
+                field={{ name: `shot-${s.n}`, label: `Shot ${s.n}: ${s.title}`, type: "textarea", placeholder: "what the camera sees" }}
+                value={s.prompt}
+                context={{ Title: s.title, Narration: s.narration, Script: script.slice(0, 500) }}
+                onChange={(v) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, prompt: v } : row) ?? prev)} />
+            </div>
+            <textarea value={s.prompt} rows={2} onChange={(e) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, prompt: e.target.value } : row) ?? prev)}
+              className="w-full bg-background-surface border border-border-default rounded-input px-2 py-1.5 text-[11px] leading-relaxed text-text-secondary outline-none resize-y" />
             {s.narration && (
-              <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-text-primary">
-                <Mic size={11} className="flex-none mt-0.5 text-text-muted" />“{s.narration}”
-              </p>
+              <>
+                <div className="flex flex-wrap items-center text-[11px] text-text-secondary">
+                  <Mic size={11} className="text-text-muted" />
+                  <span>Narration</span>
+                  <AiFieldBar tool={{ label: tool === "reel" ? "Reel Studio" : "Video Studio", purpose: "a spoken line over this shot" }}
+                    field={{ name: `narration-${s.n}`, label: `Narration ${s.n}`, type: "textarea", placeholder: "what is said" }}
+                    value={s.narration}
+                    context={{ Title: s.title, "Shot prompt": s.prompt, Script: script.slice(0, 500) }}
+                    onChange={(v) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, narration: v } : row) ?? prev)} />
+                </div>
+                <textarea value={s.narration} rows={2} onChange={(e) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, narration: e.target.value } : row) ?? prev)}
+                  className="w-full bg-background-surface border border-border-default rounded-input px-2 py-1.5 text-[11px] leading-relaxed text-text-primary outline-none resize-y" />
+              </>
             )}
             {c.status === "error" && <p className="text-[11px] text-accent-red">{c.msg}</p>}
             {v.status === "error" && <p className="text-[11px] text-accent-red">Voice-over: {v.msg}</p>}
