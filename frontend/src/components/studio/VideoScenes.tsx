@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Clapperboard, Loader2, Film, Download, AlertTriangle, Mic, Tv, Layers } from "lucide-react";
 import { recordGeneration } from "@/lib/generations";
 import { assembleEpisode, type Aspect, type Soundtrack } from "@/lib/episodeVideo";
+import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
 
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
@@ -215,10 +216,10 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
             {c.status === "done" && c.url && (
               <div className="space-y-1.5">
                 <video controls src={c.url} className="w-full rounded-input bg-black" />
-                <a href={c.url} target="_blank" rel="noopener noreferrer"
+                <button type="button" onClick={() => saveMedia(c.url!, `${title} ${s.n}`).catch(() => setError("Could not download this clip."))}
                   className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary">
                   <Download size={11} /> Save clip — the provider link expires in about an hour
-                </a>
+                </button>
               </div>
             )}
           </div>
@@ -247,10 +248,10 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
           {episode.status === "done" && episode.url && (
             <div className="space-y-1.5">
               <video controls src={episode.url} className={`rounded-input bg-black ${aspect === "9:16" ? "w-full max-w-xs mx-auto block" : "w-full"}`} />
-              <a href={episode.url} download={fileName}
+              <button type="button" onClick={() => saveMedia(episode.url!, fileName.replace(/\.[a-z0-9]+$/i, "")).catch(() => setEpisode({ status: "error", msg: "Could not download the episode." }))}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold hover:brightness-110" style={{ color: accent }}>
                 <Download size={11} /> Download {fileName}
-              </a>
+              </button>
             </div>
           )}
         </div>

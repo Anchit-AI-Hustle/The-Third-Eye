@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Loader2, Music, Play, Download, Sparkles, AlertTriangle, Copy, Check, Wand2, Zap, RefreshCw, WandSparkles, Library, Film, Trash2, Plus, X, CalendarClock } from "lucide-react";
 import { dataInsert, dataList, dataDelete } from "@/lib/dataClient";
 import { generateVisualizerVideo, primeAudioContext } from "@/lib/musicVideo";
+import { saveMedia } from "@/lib/mediaFile";
 import { recordGeneration } from "@/lib/generations";
 import { structuresFor } from "@/lib/music/structures";
 import { BPM_MAX, BPM_MIN } from "@/lib/music/types";
@@ -284,7 +285,6 @@ export function MusicStudio() {
   const [tracks, setTracks] = useState<SavedTrack[]>([]);
   const [libLoading, setLibLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoExt, setVideoExt] = useState("webm");
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoPct, setVideoPct] = useState(0);
   const [videoError, setVideoError] = useState<string | null>(null);
@@ -367,9 +367,8 @@ export function MusicStudio() {
       const loopToSeconds = target === "create" ? Number(fFor.current.duration) || undefined : undefined;
       const blob = await generateVisualizerVideo(src, { title, onProgress: setVideoPct, loopToSeconds });
       const url = URL.createObjectURL(blob);
-      const ext = blob.type.includes("mp4") ? "mp4" : "webm";
-      if (target === "create") { setVideoExt(ext); setVideoUrl(url); }
-      else { const a = document.createElement("a"); a.href = url; a.download = `${title || "track"}.${ext}`; a.click(); }
+      if (target === "create") setVideoUrl(url);
+      else await saveMedia(url, title || "track");
     } catch (e) { setVideoError(e instanceof Error ? e.message : "Video generation failed."); }
     finally { setVideoBusy(false); }
   }
@@ -592,7 +591,7 @@ export function MusicStudio() {
                   </div>
                   {t.audio_url && <audio controls src={t.audio_url} className="w-full h-9" />}
                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {t.audio_url && <a href={t.audio_url} download className="inline-flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary"><Download size={11} /> Audio</a>}
+                    {t.audio_url && <button type="button" onClick={() => saveMedia(t.audio_url!, t.title || "track").catch((e) => setVideoError(e instanceof Error ? e.message : "Download failed."))} className="inline-flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary"><Download size={11} /> Audio</button>}
                     {t.audio_url && (
                       <button onClick={() => makeVideo(t.audio_url!, t.title || "track", t.id)} disabled={videoBusy}
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-input border border-[#34D399]/40 text-[11px] text-[#34D399] hover:bg-[#34D399]/10 disabled:opacity-40">
@@ -752,7 +751,7 @@ export function MusicStudio() {
             <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}{loopSession && <span className="text-[10px] font-mono text-text-muted">· 🔁 looping to fill {fmtDuration(f.duration)}</span>}</div>
             <audio controls loop={loopSession} src={audioUrl} className="w-full" />
             <div className="flex flex-wrap items-center gap-2">
-              <a href={audioUrl} download className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Audio</a>
+              <button type="button" onClick={() => saveMedia(audioUrl, f.title || f.description || "track").catch((e) => setError(e instanceof Error ? e.message : "Download failed."))} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Audio</button>
               <button onClick={() => makeVideo(audioUrl, f.title || f.description, "create")} disabled={videoBusy}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-[#34D399]/40 text-xs text-[#34D399] hover:bg-[#34D399]/10 disabled:opacity-40">
                 {videoBusy ? <><Loader2 size={12} className="animate-spin" /> Rendering {Math.round(videoPct * 100)}%</> : <><Film size={12} /> {videoUrl ? "Regenerate video" : "Generate video"}</>}
@@ -765,7 +764,7 @@ export function MusicStudio() {
             {videoUrl && (
               <div className="space-y-2">
                 <video controls src={videoUrl} className="w-full rounded-input bg-black" />
-                <a href={videoUrl} download={`${(f.title || "track").replace(/[^\w\s-]/g, "").trim() || "track"}.${videoExt}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download video</a>
+                <button type="button" onClick={() => saveMedia(videoUrl, f.title || f.description || "track").catch((e) => setVideoError(e instanceof Error ? e.message : "Download failed."))} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Download video</button>
               </div>
             )}
             {brief && <BriefCard brief={brief} />}

@@ -18,6 +18,7 @@ import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentConfirm, classifyVoiceConfirm } from "@/hooks/useAgentConfirm";
 import { classifyOpenUrl } from "@/lib/liveActions";
+import { isProviderMedia, saveMedia } from "@/lib/mediaFile";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
@@ -1091,20 +1092,30 @@ function MessageBubble({ message, session }: { message: Message; session: any })
             <>
               {message.content ? (
                 <div className="prose-jarvis">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                    a: ({ href, children }) => href && isProviderMedia(href)
+                      ? <button type="button" className="underline" onClick={() => { void saveMedia(href, "download"); }}>{children}</button>
+                      : <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
+                  }}>{message.content}</ReactMarkdown>
                 </div>
               ) : message.streaming ? <ThinkingDots /> : null}
               {message.streaming && message.content && (
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
               {message.media?.map((item) => (
-                item.kind === "audio" ? (
-                  <audio key={item.url} src={item.url} controls className="mt-2 w-full" />
-                ) : item.kind === "video" ? (
-                  <video key={item.url} src={item.url} controls className="mt-2 w-full rounded-input" />
-                ) : (
-                  <img key={item.url} src={item.url} alt={item.alt || ""} className="mt-2 max-w-full rounded-input" />
-                )
+                <div key={item.url} className="mt-2">
+                  {item.kind === "audio" ? (
+                    <audio src={item.url} controls className="w-full" />
+                  ) : item.kind === "video" ? (
+                    <video src={item.url} controls className="w-full rounded-input" />
+                  ) : (
+                    <img src={item.url} alt={item.alt || ""} className="max-w-full rounded-input" />
+                  )}
+                  <button type="button" onClick={() => { void saveMedia(item.url, item.alt || item.kind); }}
+                    className="mt-1 text-[11px] text-text-muted hover:text-text-primary">
+                    Download
+                  </button>
+                </div>
               ))}
             </>
           )}
