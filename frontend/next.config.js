@@ -15,7 +15,9 @@ const CSP_REPORT_ONLY = [
   "frame-src 'self' https://js.stripe.com https://checkout.stripe.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // Chrome applies form-action to the 302 after the Google sign-in POST.
+  // 'self' alone blocks accounts.google.com and the button never leaves the app.
+  "form-action 'self' https://accounts.google.com",
   "object-src 'none'",
 ].join("; ");
 

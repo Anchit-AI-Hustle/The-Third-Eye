@@ -1,7 +1,7 @@
 "use client";
 
 import { getCsrfToken } from "next-auth/react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 const ERROR_TEXT: Record<string, string> = {
   AccessDenied: "Google didn't allow that sign-in. It only needs your name and email.",
@@ -18,29 +18,36 @@ export function SignInClient({
   callbackUrl: string;
   initialError: string | null;
 }) {
+  const [csrfToken, setCsrfToken] = useState("");
   const [csrfError, setCsrfError] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function startGoogle(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    setBusy(true);
-    setCsrfError(false);
-    try {
-      const token = await getCsrfToken();
-      if (!token) {
-        setBusy(false);
-        setCsrfError(true);
-        return;
-      }
-      const input = form.elements.namedItem("csrfToken");
-      if (input instanceof HTMLInputElement) input.value = token;
-      // Native submit. A second React onSubmit would fetch again and rotate the cookie.
-      form.submit();
-    } catch {
-      setBusy(false);
+  useEffect(() => {
+    let cancelled = false;
+    getCsrfToken()
+      .then((token) => {
+        if (cancelled) return;
+        if (!token) {
+          setCsrfError(true);
+          return;
+        }
+        setCsrfToken(token);
+      })
+      .catch(() => {
+        if (!cancelled) setCsrfError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function startGoogle(event: FormEvent<HTMLFormElement>) {
+    if (!csrfToken) {
+      event.preventDefault();
       setCsrfError(true);
+      return;
     }
+    setBusy(true);
   }
 
   const message = csrfError
@@ -98,20 +105,19 @@ export function SignInClient({
             </div>
           )}
 
-          {/* fetch(signIn) sets the state cookie on a background response. Chrome
-              drops that cookie on the way back from Google, so the callback
-              looks like a new sign-in. A form POST sets it on this navigation. */}
+          {/* Native POST. fetch(signIn) set the state cookie on a background
+              response that Chrome dropped on the way back from Google. */}
           <form
             method="post"
             action="/api/auth/signin/google"
             className="w-full"
             onSubmit={startGoogle}
           >
-            <input type="hidden" name="csrfToken" value="" />
+            <input type="hidden" name="csrfToken" value={csrfToken} />
             <input type="hidden" name="callbackUrl" value={callbackUrl} />
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || !csrfToken}
               className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
             >
               {busy ? "Opening Google…" : "Continue with Google"}

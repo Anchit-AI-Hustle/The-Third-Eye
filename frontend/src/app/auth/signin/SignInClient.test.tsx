@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SignInClient } from "./SignInClient";
 
@@ -15,7 +15,6 @@ describe("SignInClient", () => {
   });
 
   it("posts straight to Google sign-in with a fresh csrf token", async () => {
-    const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
     const { container } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
     const form = container.querySelector("form");
     expect(form?.getAttribute("method")).toBe("post");
@@ -23,16 +22,31 @@ describe("SignInClient", () => {
     expect(container.querySelector("input[name=json]")).toBeNull();
     expect(container.querySelector("input[name=callbackUrl]")?.getAttribute("value")).toBe("/dashboard");
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
-    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(container.querySelector("input[name=csrfToken]")?.getAttribute("value")).toBe("csrf-test");
+    });
     expect(getCsrfToken).toHaveBeenCalledTimes(1);
-    expect(container.querySelector("input[name=csrfToken]")?.getAttribute("value")).toBe("csrf-test");
-    submit.mockRestore();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
   });
 
-  it("shows the Google error that brought the browser back", () => {
+  it("lets the browser POST so Google can set the state cookie", async () => {
+    const { container } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    await waitFor(() => {
+      expect(container.querySelector("input[name=csrfToken]")?.getAttribute("value")).toBe("csrf-test");
+    });
+    const form = container.querySelector("form");
+    expect(form).toBeTruthy();
+    const event = new Event("submit", { bubbles: true, cancelable: true });
+    act(() => {
+      form!.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("shows the Google error that brought the browser back", async () => {
     render(<SignInClient callbackUrl="/dashboard" initialError="OAuthCallback" />);
     expect(screen.getByRole("alert")).toHaveTextContent("Google didn't finish");
     expect(screen.getByRole("alert")).toHaveTextContent("OAuthCallback");
+    await waitFor(() => expect(getCsrfToken).toHaveBeenCalled());
   });
 });
