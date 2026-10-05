@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
+import { silencePeak } from "@/lib/activation";
 import { useWakeLock } from "./useWakeLock";
 
 type Listener = (trigger: string, transcript: string) => void;
@@ -17,9 +18,6 @@ const WATCHDOG_MS = 10_000;
 // through the microphone directly: fixed-length chunks, gated by loudness, and
 // transcribed only when they contain speech.
 const BG_CHUNK_MS = 6_000;
-// Peak amplitude below this is treated as silence and never sent for
-// transcription. Matches the day recorder's threshold.
-const BG_SILENCE_PEAK = 0.012;
 
 const DEFAULT_TRIGGERS = ["hi", "hey", "ok", "hello"];
 
@@ -35,6 +33,8 @@ export interface WakeWordOptions {
   onWake: Listener;
   extraTriggers?: string[];   // ["hi", "hey", "ok"]
   cooldownMs?: number;        // time between fires
+  /** 0.2–1. Higher = quieter speech still counts as a hidden-tab chunk. */
+  sensitivity?: number;
   /**
    * Keep listening while the tab is hidden by transcribing microphone chunks
    * server-side. Costs a transcription call per chunk that contains speech, so
@@ -160,6 +160,7 @@ export function useWakeWord({
   extraTriggers,
   cooldownMs = 1500,
   backgroundListening = true,
+  sensitivity = 0.7,
 }: WakeWordOptions) {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -177,6 +178,7 @@ export function useWakeWord({
   const pendingRef = useRef<{ trigger: string; text: string } | null>(null);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeLock = useWakeLock();
+  const sensitivityRef = useRef(sensitivity);
 
   // Held for as long as the wake word is enabled. An open capture stream is
   // what keeps the tab off the browser's aggressively-throttled background
@@ -191,9 +193,10 @@ export function useWakeWord({
   const rafRef = useRef(0);
 
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
+  useEffect(() => { sensitivityRef.current = sensitivity; }, [sensitivity]);
   useEffect(() => {
     agentNameRef.current = agentName;
-    triggersRef.current = buildTriggerSet(agentName, extraTriggers ?? DEFAULT_TRIGGERS);
+    triggersRef.current = buildTriggerSet(agentName, [...DEFAULT_TRIGGERS, ...(extraTriggers ?? [])]);
   }, [agentName, extraTriggers]);
 
   useEffect(() => {
@@ -248,7 +251,7 @@ export function useWakeWord({
     rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
 
     rec.onstop = async () => {
-      const loudEnough = peakRef.current >= BG_SILENCE_PEAK;
+      const loudEnough = peakRef.current >= silencePeak(sensitivityRef.current);
       const blob = new Blob(parts, { type: mime || "audio/webm" });
 
       // Queue the next chunk before awaiting the network so listening is

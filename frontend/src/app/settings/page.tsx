@@ -1,9 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { SettingsClient } from "@/components/settings/SettingsClient";
-import { ConnectionsCard } from "@/components/settings/ConnectionsCard";
-import { AutomationsCard } from "@/components/settings/AutomationsCard";
-import { PermissionsCard } from "@/components/settings/PermissionsCard";
+import { SettingsHub } from "@/components/settings/SettingsHub";
 
 export const metadata = { title: "Settings — The Third Eye" };
 
@@ -16,12 +13,9 @@ export default async function SettingsPage() {
           <span className="hud-label text-[#4FC3F7]">// System Configuration</span>
         </div>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Settings</h1>
-        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">Manage your account and system preferences</p>
+        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">Manage your account, agent, and how you wake it</p>
       </div>
-      <SettingsClient user={session?.user ?? null} />
-      <ConnectionsCard />
-      <AutomationsCard />
-      <PermissionsCard />
+      <SettingsHub user={session?.user ?? null} />
     </div>
   );
 }
