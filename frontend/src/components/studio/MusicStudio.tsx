@@ -37,9 +37,10 @@ const GENRES = [
   "Gamelan", "Klezmer", "Celtic", "Fado", "Rai", "Gospel", "Christian/worship", "World", "Ska",
   "Musical theatre", "Disco", "Swing", "Bebop",
 ];
-const MOODS = [
+export const MOODS = [
   "Uplifting", "Chill", "Energetic", "Melancholic", "Dreamy", "Epic", "Romantic", "Playful",
-  "Dark", "Nostalgic", "Aggressive", "Peaceful", "Mysterious", "Triumphant", "Hopeful",
+  "Dark", "Hypnotic", "Driving", "Relentless", "Psychedelic", "Intense", "Raw",
+  "Nostalgic", "Aggressive", "Peaceful", "Mysterious", "Triumphant", "Hopeful",
   "Anxious/tense", "Euphoric", "Sorrowful", "Sensual", "Whimsical", "Menacing", "Serene",
   "Rebellious", "Bittersweet", "Majestic", "Intimate", "Haunting", "Groovy", "Ethereal",
   "Gritty", "Tender", "Ominous", "Jubilant", "Wistful", "Fierce", "Cozy", "Carefree",
@@ -161,10 +162,10 @@ export function matchOption(val: string, opts: string[]): string | null {
 // option (keeping it verbatim if genuinely novel), dedupe, cap at `max` — so a
 // field that can hold several values actually receives several, instead of
 // the whole string being treated as one unmatched blob.
-export function matchOptions(val: string | undefined, opts: string[], max: number): string[] {
+export function matchOptions(val: string | undefined, opts: string[], max: number, split: RegExp = /,/): string[] {
   if (!val) return [];
   const seen = new Set<string>();
-  for (const piece of val.split(",")) {
+  for (const piece of val.split(split)) {
     const t = piece.trim();
     if (!t) continue;
     const matched = matchOption(t, opts) || t;
@@ -387,10 +388,11 @@ export function MusicStudio() {
       const x = d.fields ?? {};
       setF((p) => ({
         ...p,
+        description: typeof x.description === "string" && x.description.trim() ? x.description : p.description,
         title: x.title || p.title,
         genres: x.genre ? matchOptions(x.genre, GENRES, 6) : p.genres,
         subgenre: x.subgenre || p.subgenre,
-        moods: x.mood ? matchOptions(x.mood, MOODS, 5) : p.moods,
+        moods: x.mood ? matchOptions(x.mood, MOODS, 5, /[,&/]|\band\b/i) : p.moods,
         tempo: Number(x.tempo) >= BPM_MIN && Number(x.tempo) <= BPM_MAX ? Math.round(x.tempo) : p.tempo,
         energy: Number(x.energy) >= 1 && Number(x.energy) <= 10 ? Math.round(x.energy) : p.energy,
         duration: Number(x.duration) >= 10 && Number(x.duration) <= 120 ? Math.round(x.duration) : p.duration,
@@ -422,7 +424,7 @@ export function MusicStudio() {
     const current = f[name];
     if (Array.isArray(current)) {
       const [opts, max] = LIST_FIELDS[name] ?? [[], 4];
-      const items = matchOptions(suggestion, opts, max);
+      const items = matchOptions(suggestion, opts, max, name === "moods" ? /[,&/]|\band\b/i : /,/);
       if (items.length) set(name, items as never);
       return;
     }
@@ -531,14 +533,17 @@ export function MusicStudio() {
   // lost against four identical-looking icons in a row, so each gets its own
   // fast CSS tooltip instead — and a larger tap target, since four icons at
   // size 12 with a 4px gap were hard to aim at on a real screen.
-  const AiBar = ({ name }: { name: keyof Fields }) => (
+  const AiBar = ({ name }: { name: keyof Fields }) => {
+    const current = f[name];
+    const empty = Array.isArray(current) ? current.length === 0 : typeof current === "string" ? !current.trim() : false;
+    return (
     <span className="inline-flex items-center gap-1.5 ml-2 align-middle">
       {(["suggest", "enhance", "new"] as const).map((a) => {
         const Icon = a === "suggest" ? Wand2 : a === "enhance" ? Zap : RefreshCw;
         const on = busyField === `${String(name)}:${a}`;
         const label = a === "suggest" ? "Suggest" : a === "enhance" ? "Enhance" : "New";
         return (
-          <IconBtn key={a} label={label} onClick={() => aiField(name, a)} disabled={!!busyField}>
+          <IconBtn key={a} label={label} onClick={() => aiField(name, a)} disabled={!!busyField || (a === "enhance" && empty)}>
             {on ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
           </IconBtn>
         );
@@ -547,7 +552,8 @@ export function MusicStudio() {
         <Trash2 size={13} />
       </IconBtn>
     </span>
-  );
+    );
+  };
 
   // The toolbar sits beside the label, not in it (a label's first button becomes
   // its control); htmlFor keeps the field's accessible name.
@@ -728,7 +734,7 @@ export function MusicStudio() {
         {note && <p className="text-xs text-[#F0C94E] flex items-start gap-1.5"><AlertTriangle size={12} className="flex-none mt-0.5" />{note}</p>}
         {error && <p className="text-xs text-accent-red">{error}</p>}
 
-        <DailyDrop preset={() => payloadOf(fFor.current)} />
+        <DailyDrop preset={() => payloadOf(fFor.current)} context={{ Genre: f.genres.join(", "), Description: f.description, Artists: f.artistInspiration.join(", ") }} />
       </div>
 
       <div className="rounded-card border border-border-default bg-background-surface/40 p-5 xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">

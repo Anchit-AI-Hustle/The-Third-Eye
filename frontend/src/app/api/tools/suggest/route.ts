@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
+import { correctSpelling } from "@/lib/textPolish";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     `You fill in ONE field of the "${str(body.tool?.label, 80) || "Studio"}" form${str(body.tool?.purpose, 300) ? ` — ${str(body.tool?.purpose, 300)}` : ""}.`,
     `Field: "${label}"${str(body.field?.placeholder, 160) ? ` (hint: ${str(body.field?.placeholder, 160)})` : ""}.`,
     instruction(type, options),
-    "Stay coherent with everything else already filled in on the form. Output ONLY the value — no label, no quotes, no explanation.",
+    "Stay coherent with everything else already filled in on the form. Correct obvious spelling. When enhancing, keep the intent and add specific detail — do not return the same words unchanged. A title or name must not be a copy of another field. Output ONLY the value — no label, no quotes, no explanation.",
   ].join("\n");
   const user = [
     context.length ? `Rest of the form:\n${context.map(([k, v]) => `- ${k}: ${v}`).join("\n")}` : "The rest of the form is empty.",
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
 }
 
 function normalize(raw: string, type: FieldType, options: string[]): string {
-  const text = raw.trim().replace(/^```[a-z]*\n?|\n?```$/gi, "").trim();
+  const text = correctSpelling(raw.trim().replace(/^```[a-z]*\n?|\n?```$/gi, "").trim());
   if (type === "textarea") return text.replace(/^["“]|["”]$/g, "").trim();
   const line = text.split("\n")[0].replace(/^[\s"'“`*\-–]+|[\s"'”`*.,;:]+$/g, "").trim();
   if (type === "text") return line;

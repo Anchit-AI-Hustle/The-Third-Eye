@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Download, ExternalLink, Loader2, PenLine, Store, Copy, Check } from "lucide-react";
 import { parseOutline, partsFor, buildEpub, crc32, type OutlineChapter } from "@/lib/book";
 import { recordGeneration } from "@/lib/generations";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 // Writes the planned book out chapter by chapter, keeps the draft in this
 // browser as it goes (a book is too long to lose to a closed tab), then packs
@@ -192,10 +193,17 @@ export function BookWriter({ outline, inputs, accent }: { outline: string; input
               {open === c.n && (
                 <>
                   <p className="text-[11px] text-text-muted whitespace-pre-line">{c.beats}</p>
-                  {text && (
-                    <textarea value={text} onChange={(e) => setTexts((t) => ({ ...t, [c.n]: e.target.value }))} rows={14}
-                      className="w-full bg-background-surface border border-border-default rounded-input px-3 py-2 text-sm text-text-primary leading-relaxed outline-none resize-y" />
-                  )}
+                  <div className="flex flex-wrap items-center text-xs font-mono text-text-secondary">
+                    <span>Chapter draft</span>
+                    <AiFieldBar tool={{ label: "Book Studio", purpose: "one chapter of a book, in the book's voice, continuing from the beats" }}
+                      field={{ name: `chapter-${c.n}`, label: `Chapter ${c.n}: ${c.title}`, type: "textarea", placeholder: "the chapter prose" }}
+                      value={text}
+                      context={{ Premise: inputs.premise ?? "", Title: meta.title || inputs.title || "", Voice: inputs.voice ?? "", Beats: c.beats }}
+                      onChange={(v) => setTexts((t) => ({ ...t, [c.n]: v }))} />
+                  </div>
+                  <textarea value={text} onChange={(e) => setTexts((t) => ({ ...t, [c.n]: e.target.value }))} rows={14}
+                    placeholder="Suggest a draft from the beats, or write it yourself."
+                    className="w-full bg-background-surface border border-border-default rounded-input px-3 py-2 text-sm text-text-primary leading-relaxed outline-none resize-y" />
                 </>
               )}
             </div>

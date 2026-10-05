@@ -26,6 +26,27 @@ describe("auto-fill", () => {
     expect(f.vocalEffects).toBe("Heavy delay, voc");
   });
 
+  it("turns a misspelled prompt into a title, both genres, and moods — never the prompt itself", async () => {
+    cascade.mockRejectedValueOnce(new Error("down"));
+    const f = await infer("psychadelic acid");
+    expect(f.description).toBe("psychedelic acid");
+    expect(f.title.toLowerCase()).not.toMatch(/psych|psychedelic acid/);
+    expect(f.genre).toMatch(/Psytrance/);
+    expect(f.genre).toMatch(/Acid/);
+    expect(f.mood).toMatch(/Hypnotic/);
+    expect(f.mood).toMatch(/Driving/);
+    expect(f.lyricsTheme.toLowerCase()).not.toMatch(/psych/);
+    expect(f.artistInspiration).toMatch(/Astrix/);
+  });
+
+  it("replaces a title that is just the description", async () => {
+    reply(JSON.stringify({ title: "psychadelic acid", genre: "Acid Rave", mood: "Hypnotic & driving" }));
+    const f = await infer("psychadelic acid");
+    expect(f.title.toLowerCase()).not.toMatch(/psych|psychedelic acid/);
+    expect(f.mood).toBe("Hypnotic, Driving");
+    expect(f.genre).toMatch(/Psytrance/);
+  });
+
   it("grounds the model in the genre and offers that genre's structures", async () => {
     reply("{}");
     const f = await infer("psychedelic acid rave anthem");
@@ -55,6 +76,28 @@ describe("per-field suggestions", () => {
     reply("y"); await suggest({ field: "title", action: "new", context: { genre: "Psytrance" } });
     expect(cascade.mock.calls[0][0].temperature).toBeLessThan(cascade.mock.calls[1][0].temperature as number);
     expect(cascade.mock.calls[0][0].system).toMatch(/Genre knowledge[\s\S]*Psytrance/);
+  });
+
+  it("enhances a short prompt instead of handing the typo back, even when the model is down", async () => {
+    cascade.mockRejectedValueOnce(new Error("down"));
+    const res = await suggest({ field: "description", action: "enhance", value: "psychadelic acid", context: { genre: "Pop" } });
+    const suggestion = (await res.json()).suggestion as string;
+    expect(res.status).toBe(200);
+    expect(suggestion.toLowerCase()).toContain("psychedelic");
+    expect(suggestion.toLowerCase()).not.toContain("psychadelic");
+    expect(suggestion.length).toBeGreaterThan("psychadelic acid".length + 40);
+    expect(cascade.mock.calls[0][0].system).toMatch(/Psytrance|psytrance|Acid/);
+  });
+
+  it("does not accept the prompt as a song title", async () => {
+    reply("psychadelic acid");
+    const suggestion = (await (await suggest({ field: "title", action: "suggest", value: "", context: { description: "psychadelic acid", genre: "Pop" } })).json()).suggestion as string;
+    expect(suggestion.toLowerCase()).not.toMatch(/psych|psychedelic acid/);
+  });
+
+  it("refuses to enhance an empty field", async () => {
+    expect((await suggest({ field: "title", action: "enhance", value: "" })).status).toBe(400);
+    expect(cascade).not.toHaveBeenCalled();
   });
 
   it("says so when a number field comes back without a number", async () => {
