@@ -10,7 +10,7 @@ const err = (status: number, body: unknown) => new Response(JSON.stringify(body)
 const noWait = () => Promise.resolve();
 const later = () => Date.now() + 280_000;
 
-beforeEach(() => { vi.stubEnv("ELEVENLABS_API_KEY", "test-key"); });
+beforeEach(() => { vi.stubEnv("ELEVENLABS_API_KEY", "sk_test-key"); });
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("elevenPrompt", () => {
@@ -62,7 +62,7 @@ describe("composeElevenLabs", () => {
     const r = await composeElevenLabs({ prompt: "p", seconds: 95, instrumental: false, deadline: later(), fetchImpl: f, wait: noWait });
     const [url, init] = f.mock.calls[0];
     expect(url).toBe("https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128");
-    expect(init.headers["xi-api-key"]).toBe("test-key");
+    expect(init.headers["xi-api-key"]).toBe("sk_test-key");
     expect(JSON.parse(init.body)).toEqual({ prompt: "p", music_length_ms: 95_000, model_id: "music_v2_5", force_instrumental: false });
     expect(r.audio.length).toBe(20_000);
     expect(r).toMatchObject({ mime: "audio/mpeg", songId: "song_1", seconds: 95, model: "music_v2_5", outputFormat: "mp3_44100_128" });
@@ -116,5 +116,13 @@ describe("composeElevenLabs", () => {
     vi.stubEnv("ELEVENLABS_API_KEY", "");
     await expect(composeElevenLabs({ prompt: "p", seconds: 60, instrumental: true, deadline: later(), fetchImpl: vi.fn(), wait: noWait }))
       .rejects.toThrow(/not set/);
+  });
+
+  it("does not send a key id", async () => {
+    vi.stubEnv("ELEVENLABS_API_KEY", "a1b2c3d4");
+    const f = vi.fn();
+    await expect(composeElevenLabs({ prompt: "p", seconds: 60, instrumental: true, deadline: later(), fetchImpl: f, wait: noWait }))
+      .rejects.toThrow(/not set/);
+    expect(f).not.toHaveBeenCalled();
   });
 });

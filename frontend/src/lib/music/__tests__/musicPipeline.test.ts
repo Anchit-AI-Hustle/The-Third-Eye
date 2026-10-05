@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/llmCascade", () => ({ llmCascade: vi.fn() }));
 import { llmCascade } from "@/lib/llmCascade";
-import { completeLyrics, conductor, lyricist, musicologist, planSong } from "@/lib/music/agents";
+import { completeLyrics, conductor, fallbackLyrics, lyricist, musicologist, planSong, songSubject } from "@/lib/music/agents";
 import { sectionsOf, structuresFor } from "@/lib/music/structures";
 import { cleanList, cleanTempo, cleanValue } from "@/lib/music/normalize";
 import { lookupGenres } from "@/lib/music/knowledge";
@@ -78,7 +78,14 @@ describe("lyrics", () => {
     const { plan, sing } = await planSong({ description: "acid rave anthem", title: "Its Acid Time", tempo: 200 });
     expect(sing).toBe(true);
     expect(plan.lyrics).toContain("[chorus]");
+    expect(plan.lyrics.toLowerCase()).toContain("acid rave anthem");
     expect(plan.tags.startsWith("200 bpm")).toBe(true);
+  });
+
+  it("takes the subject out of a create-a-song instruction and sings that", () => {
+    expect(songSubject("create hard techno and acid")).toBe("hard techno and acid");
+    expect(songSubject("make me a song about the rain")).toBe("the rain");
+    expect(fallbackLyrics({ description: "create hard techno and acid", genre: "Hard Techno" }).toLowerCase()).toContain("hard techno and acid");
   });
 });
 
