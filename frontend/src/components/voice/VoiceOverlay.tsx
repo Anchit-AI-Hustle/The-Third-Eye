@@ -149,6 +149,7 @@ export function VoiceOverlay() {
   // panel and starts listening — true hands-free entry.
   const onWake = useCallback(async (trigger: string, transcript: string) => {
     if (isStreamingRef.current) return;
+    stt.prime();
     if (!(await requestCapability("microphone"))) return;
     setExpanded(true);
     // "Hey JARVIS, what's the weather" carries its command in the same breath.
@@ -230,6 +231,7 @@ export function VoiceOverlay() {
       setMicOn(false);
       setLiveBubble(null);
     } else {
+      stt.prime();
       if (!(await requestCapability("microphone"))) return;
       // Granting here also unblocks the wake word for the rest of the session,
       // so the user does not have to authorise the same microphone twice.
@@ -580,7 +582,7 @@ export function VoiceOverlay() {
                 )}
                 <p className="hud-label text-[#4FC3F7]/60 text-[9px]">
                   {stt.permissionDenied
-                    ? "Microphone blocked — allow it in your browser's address bar, then tap the mic again"
+                    ? "Microphone is blocked. Allow it for this site, then tap the mic again"
                     : micOn && stt.recognitionIssue === "network"
                     ? "Speech recognition can't reach its service — check your connection or try typing"
                     : micOn && stt.recognitionIssue === "audio-capture"

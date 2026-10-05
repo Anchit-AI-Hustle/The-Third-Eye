@@ -153,6 +153,7 @@ export function VoiceWidget() {
       setMicOn(false);
       setLiveBubble(null);
     } else {
+      stt.prime();
       stt.enable();
       setMicOn(true);
     }

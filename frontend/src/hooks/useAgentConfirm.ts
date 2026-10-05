@@ -144,11 +144,13 @@ export function useAgentConfirm() {
 // Interpret a spoken transcript as a hands-free response to a pending action.
 // Returns "confirm", "cancel", or null (treat as a new message).
 export function classifyVoiceConfirm(transcript: string): "confirm" | "cancel" | null {
-  const t = transcript.trim().toLowerCase().replace(/[.!,]/g, "");
+  const t = transcript.trim().toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, "").replace(/\s+/g, " ").trim();
   if (!t) return null;
-  const confirm = /^(confirm|yes|yep|yeah|do it|send it|send|go ahead|approve|approved|confirmed|okay do it|ok do it)$/;
-  const cancel = /^(cancel|no|nope|stop|don'?t|abort|never ?mind|discard)$/;
-  if (confirm.test(t)) return "confirm";
-  if (cancel.test(t)) return "cancel";
+  const words = t.split(" ");
+  if (words.length > 6) return null;
+  if (/^(cancel|no|nope|stop|don't|dont|abort|never mind|discard|no thanks|don't do it|dont do it)$/.test(t)) return "cancel";
+  if (/^(confirm|confirmed|yes|yep|yeah|yup|do it|do that|send it|send|go ahead|approve|approved|okay|ok|okay do it|ok do it|yes please|yes send|yes send it|that's right|thats right|sounds good|please do|go for it)$/.test(t)) return "confirm";
+  if (/^(no|don't|dont|cancel)\b/.test(t)) return "cancel";
+  if (/^(yes|yeah|yep|yup|ok|okay|confirm|send|approve)\b/.test(t)) return "confirm";
   return null;
 }

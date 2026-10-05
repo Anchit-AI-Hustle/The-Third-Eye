@@ -26,9 +26,37 @@ export interface VoiceSTTCallbacks {
 // bins disappear into a hundred silent ones, so the old threshold never fired
 // and the server never received audio when the browser recognizer was down.
 const SPEECH_PEAK = 0.02;
-const BARGE_PEAK = 0.12;
+// Speaker bleed from the agent's own voice sits well under a close mic.
+// A single frame at 0.12 used to cancel speech the instant it started.
+const BARGE_PEAK = 0.45;
 const SILENCE_MS = 700;
-const BARGE_HOLD_MS = 280;
+const BARGE_HOLD_MS = 520;
+const BARGE_GRACE_MS = 700;
+
+export function bargeDecision(input: {
+  suppressed: boolean;
+  peak: number;
+  floor: number;
+  quietForMs: number;
+  loudForMs: number;
+}): "speak" | "idle" | "learn" | "barge" | "wait" {
+  if (!input.suppressed) return input.peak >= SPEECH_PEAK ? "speak" : "idle";
+  if (input.quietForMs < BARGE_GRACE_MS) return "learn";
+  const gate = Math.max(BARGE_PEAK, input.floor * 1.8);
+  if (input.peak >= gate && input.loudForMs >= BARGE_HOLD_MS) return "barge";
+  return "wait";
+}
+
+const IOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+export function recorderMime(ios = IOS): string {
+  const types = ios
+    ? ["audio/mp4", "audio/aac", "audio/webm;codecs=opus", "audio/webm"]
+    : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+  const supported = typeof MediaRecorder !== "undefined" ? MediaRecorder.isTypeSupported?.bind(MediaRecorder) : undefined;
+  const found = types.find((m) => supported?.(m));
+  return found || (ios ? "audio/mp4" : "");
+}
 
 export function pcmPeak(buf: Uint8Array): number {
   let peak = 0;
@@ -54,7 +82,7 @@ function armUtteranceRecorder(
   skip: () => boolean,
 ): () => void {
   if (typeof MediaRecorder === "undefined") return () => {};
-  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+  const mime = recorderMime();
   let raf = 0;
   let rec: MediaRecorder | null = null;
   let parts: Blob[] = [];
@@ -63,6 +91,9 @@ function armUtteranceRecorder(
   let stopped = false;
   let holdUntil = 0;
   let barged = false;
+  let quietSince = 0;
+  let loudSince = 0;
+  let floor = 0;
 
   const drop = () => {
     parts = [];
@@ -80,7 +111,7 @@ function armUtteranceRecorder(
     onTranscribing();
     try {
       const fd = new FormData();
-      fd.append("audio", blob, mime.includes("mp4") ? "speech.mp4" : "speech.webm");
+      fd.append("audio", blob, /mp4|aac|m4a/.test(mime) ? "speech.m4a" : "speech.webm");
       const code = lang();
       if (code) fd.append("lang", code);
       const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
@@ -109,7 +140,11 @@ function armUtteranceRecorder(
       parts = [];
       void flush(blob);
     };
-    try { rec.start(250); } catch { rec = null; }
+    try { rec.start(250); }
+    catch {
+      try { rec.start(); }
+      catch { rec = null; }
+    }
   };
 
   const end = () => {
@@ -126,22 +161,39 @@ function armUtteranceRecorder(
     analyser.getByteTimeDomainData(time);
     const peak = pcmPeak(time);
     const quiet = suppressed();
-    if (peak >= (quiet ? BARGE_PEAK : SPEECH_PEAK)) {
-      if (quiet && !barged) {
-        barged = true;
-        onBarge();
-        drop();
-        holdUntil = Date.now() + BARGE_HOLD_MS;
-      }
-      if (!suppressed() && Date.now() >= holdUntil) {
+    const now = Date.now();
+    if (!quiet) quietSince = 0;
+    else if (!quietSince) { quietSince = now; floor = peak; loudSince = 0; }
+    if (quiet && now - quietSince < BARGE_GRACE_MS && peak > floor) floor = peak;
+    const decision = bargeDecision({
+      suppressed: quiet,
+      peak,
+      floor,
+      quietForMs: quietSince ? now - quietSince : 0,
+      loudForMs: loudSince ? now - loudSince : 0,
+    });
+    if (decision === "barge" && !barged) {
+      barged = true;
+      onBarge();
+      drop();
+      holdUntil = now + BARGE_HOLD_MS;
+      loudSince = 0;
+    } else if (decision === "wait" || decision === "learn") {
+      if (decision === "learn" || peak < Math.max(BARGE_PEAK, floor * 1.8)) loudSince = 0;
+      else if (!loudSince) loudSince = now;
+    } else if (decision === "speak") {
+      barged = false;
+      loudSince = 0;
+      if (now >= holdUntil) {
         if (!voiced) { voiced = true; begin(); }
         silenceAt = 0;
       }
     } else {
       barged = false;
-      if (voiced && Date.now() >= holdUntil) {
-        if (!silenceAt) silenceAt = Date.now();
-        else if (Date.now() - silenceAt > SILENCE_MS) end();
+      loudSince = 0;
+      if (voiced && now >= holdUntil) {
+        if (!silenceAt) silenceAt = now;
+        else if (now - silenceAt > SILENCE_MS) end();
       }
     }
     raf = requestAnimationFrame(tick);
@@ -235,15 +287,23 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       rafRef.current = requestAnimationFrame(tick);
     };
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       if (!activeRef.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
       streamRef.current = stream;
-      const ctx = new AudioContext();
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = audioCtxRef.current && audioCtxRef.current.state !== "closed"
+        ? audioCtxRef.current
+        : new AC();
       // Chrome/Safari can hand back a context in "suspended" state — the await
       // above breaks the direct user-gesture chain autoplay policy checks for.
       // Suspended means getByteFrequencyData reads all zeros forever, so the
@@ -258,6 +318,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       const resumeCtx = () => { void audioCtxRef.current?.resume(); };
       resumeCtxRef.current = resumeCtx;
       window.addEventListener("pointerdown", resumeCtx);
+      window.addEventListener("touchstart", resumeCtx);
       window.addEventListener("keydown", resumeCtx);
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
@@ -304,6 +365,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     stopEarRef.current = null;
     if (resumeCtxRef.current) {
       window.removeEventListener("pointerdown", resumeCtxRef.current);
+      window.removeEventListener("touchstart", resumeCtxRef.current);
       window.removeEventListener("keydown", resumeCtxRef.current);
       resumeCtxRef.current = null;
     }
@@ -315,7 +377,21 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     cbRef.current.onLevel?.(0);
   }, []);
 
+  const prime = useCallback(() => {
+    try {
+      const session = (navigator as any).audioSession;
+      if (session && session.type !== "play-and-record") session.type = "play-and-record";
+    } catch { /* not Safari */ }
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") audioCtxRef.current = new AC();
+      void audioCtxRef.current.resume();
+    } catch { /* noop */ }
+  }, []);
+
   const enable = useCallback(async () => {
+    prime();
     if (activeRef.current) return;
     const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
@@ -354,13 +430,14 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
       rec.onspeechstart = () => {
         lastEventRef.current = Date.now();
+        if (cbRef.current.shouldSuppress?.()) return;
         setRecognitionIssue(null);
         cbRef.current.onSpeechStart?.();
-        if (cbRef.current.shouldSuppress?.()) return;
         setAudioState("speaking");
       };
 
       rec.onspeechend = () => {
+        if (cbRef.current.shouldSuppress?.()) return;
         cbRef.current.onSpeechEnd?.();
         setAudioState("transcribing");
         armStuck();
@@ -390,18 +467,18 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
       rec.onerror = (e: any) => {
         if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          // Speech recognition can be refused while the capture stream is live.
-          // Only treat that as a blocked microphone when we never got a stream.
+          // The browser speech service often refuses on iPhone home-screen apps
+          // while the capture stream is live. That is not a blocked microphone,
+          // and it is not an error to show — the recording still goes to the server.
           if (!streamRef.current) {
             setPermissionDenied(true);
             activeRef.current = false;
             setAudioState("idle");
             return;
           }
-          setRecognitionIssue("network");
           srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
         } else if (e.error === "network" || e.error === "audio-capture") {
-          setRecognitionIssue(e.error);
+          if (!streamRef.current) setRecognitionIssue(e.error);
           srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
         }
         setAudioState("waiting");
@@ -417,7 +494,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
     startRecRef.current = startRec;
     startRec();
-  }, [startMeter, wakeLock]);
+  }, [startMeter, wakeLock, prime]);
 
   const disable = useCallback(() => {
     activeRef.current = false;
@@ -471,7 +548,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     };
   }, [supported, forceRestart]);
 
-  return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, enable, disable };
+  return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, prime, enable, disable };
 }
 
 // backward-compat alias

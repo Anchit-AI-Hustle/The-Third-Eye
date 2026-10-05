@@ -654,6 +654,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   async function toggleMic() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
     else {
+      stt.prime();
       if (!(await requestCapability("microphone"))) return;
       stt.enable(); setMicOn(true);
     }
@@ -663,6 +664,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   async function toggleDictate() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
     else {
+      stt.prime();
       if (!(await requestCapability("microphone"))) return;
       setVoiceMode("dictate"); stt.enable(); setMicOn(true);
     }
@@ -891,7 +893,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </button>
           </div>
         )}
-        <div className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
           {/* Mode chip: Chat ▾ → Narrate */}
           <div className="relative flex-none self-stretch flex items-center">
             {modeMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />}
@@ -921,7 +923,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             aria-label="Message input"
             rows={1}
             disabled={isStreaming}
-            className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
+            className="w-full min-w-0 sm:flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-base resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
             style={{ height: "auto" }}
             onInput={(e) => {
               const t = e.currentTarget;
@@ -930,7 +932,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
             }}
           />
           {/* Reply selector: how answers come back */}
-          <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5 self-stretch" role="group" aria-label="How replies come back">
+          <div className="flex items-center gap-1 overflow-x-auto max-w-full">
+          <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5" role="group" aria-label="How replies come back">
             <button type="button" onClick={() => setReplyMode("text")} title="Text only — silent answers"
               className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
               <Type size={13} />
@@ -988,7 +991,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           {(isStreaming || tts.speaking) ? (
             <button onClick={interrupt} title="Stop (Esc)"
               className="flex-none flex items-center gap-1 px-2 py-1.5 rounded-input text-accent-red hover:bg-accent-red/10 transition-colors">
-              <X size={15} /><span className="text-[11px] font-mono">Esc</span>
+              <X size={15} /><span className="hidden sm:inline text-[11px] font-mono">Esc</span>
             </button>
           ) : (
             <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
@@ -997,10 +1000,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
               <Send size={15} />
             </button>
           )}
+          </div>
         </div>
         <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted")}>
           {stt.permissionDenied
-            ? "Microphone blocked for this site — click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
+            ? "Microphone is blocked. Allow it for this site in the browser settings, then tap the mic again."
             : micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
             : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
