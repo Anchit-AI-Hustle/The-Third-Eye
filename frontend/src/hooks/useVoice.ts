@@ -390,15 +390,18 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
       rec.onerror = (e: any) => {
         if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          setPermissionDenied(true);
-          activeRef.current = false;
-          setAudioState("idle");
-          return;
-        }
-        if (e.error === "network" || e.error === "audio-capture") {
+          // Speech recognition can be refused while the capture stream is live.
+          // Only treat that as a blocked microphone when we never got a stream.
+          if (!streamRef.current) {
+            setPermissionDenied(true);
+            activeRef.current = false;
+            setAudioState("idle");
+            return;
+          }
+          setRecognitionIssue("network");
+          srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
+        } else if (e.error === "network" || e.error === "audio-capture") {
           setRecognitionIssue(e.error);
-          // Restarting immediately on a dead speech service hammers it and
-          // steals the mic from the recorder that is supposed to take over.
           srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
         }
         setAudioState("waiting");
