@@ -17,7 +17,7 @@ const ERRORS: Record<string, { title: string; detail: string }> = {
   AccessDenied: {
     title: "Google didn't allow that sign-in",
     detail:
-      "The consent screen was cancelled, or this Google account isn't allowed to use the app yet. Try again and accept the requested access.",
+      "Google refused this account. Sign-in only needs your name and email. If you were connecting Gmail, that access is still under Google's review, so only a listed test user can allow it until the review finishes.",
   },
   OAuthSignin: {
     title: "Couldn't start Google sign-in",

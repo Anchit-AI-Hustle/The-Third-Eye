@@ -127,11 +127,9 @@ export async function revokeGoogleAccess(
  * same three must be the only scopes listed in Google Cloud Console → Data
  * Access, or verification fails on "scope discrepancy".
  *
- * NOT requested at sign-in — and now sign-in could not request them if it
- * wanted to: signing in is a mobile number and a 4-digit PIN (see lib/auth.ts)
- * and asks Google for nothing at all. These are requested only by
- * /api/connect/google, i.e. Settings → Connections, so connecting Google is
- * always a separate, explicit step.
+ * NOT requested at sign-in. Sign-in asks for SIGNIN_SCOPES only. These are
+ * requested only by /api/connect/google, i.e. Settings → Connections, so
+ * connecting Gmail is always a separate, explicit step.
  *
  * They were kept off the login screen even while Google WAS the login, because
  * gmail.readonly (restricted) and gmail.send (sensitive) both trigger Google's
@@ -166,9 +164,30 @@ export const INGESTION_SCOPE_LIST = [
   "https://www.googleapis.com/auth/calendar.events.owned.readonly",
 ] as const;
 
-/** Identity scopes. Requested by the connect flow, and by sign-in if Google is
- * ever restored as a provider (see lib/auth.ts). */
+/** Identity scopes. This is the entire sign-in request. */
 export const BASIC_SCOPE_LIST = ["openid", "email", "profile"] as const;
+
+/**
+ * What the Google sign-in button asks for. Name and email only.
+ *
+ * Gmail and Calendar are not here. Those scopes are restricted and sensitive,
+ * and Google's review is still open. Asking for them on the login screen makes
+ * that review a gate on signing in: while the app is in testing, or in
+ * production but unverified, only listed test users get past Google's page.
+ * Everyone else is refused. Mail is granted later, from Settings → Connections.
+ *
+ * access_type online overrides NextAuth's default of offline, so sign-in does
+ * not ask for a refresh token. prompt select_account lets a person with more
+ * than one Google account pick the right one without a consent screen every time.
+ */
+export const SIGNIN_SCOPES = BASIC_SCOPE_LIST.join(" ");
+
+export const GOOGLE_SIGNIN_PARAMS = {
+  scope: SIGNIN_SCOPES,
+  prompt: "select_account",
+  access_type: "online",
+  response_type: "code",
+} as const;
 
 /**
  * Everything /api/connect/google asks for: the feature scopes plus identity.

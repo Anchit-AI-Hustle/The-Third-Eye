@@ -67,7 +67,7 @@ export default function SignInPage() {
             Sign in to continue
           </h2>
           <p className="text-text-muted text-xs text-center mb-6">
-            Google is the only sign-in. Allow Gmail when asked so mail can be sent directly.
+            Google is the only sign-in. It asks for your name and email. Mail and calendar are connected later, from Settings, and only if you allow them.
           </p>
 
           {error && (

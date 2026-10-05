@@ -30,32 +30,14 @@ otherwise undocumented outside this file and the code itself.
 ## 2. Tech stack & platform
 
 - **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
-- **Auth:** NextAuth v4 with a **credentials** provider — a **mobile number and a
-  4-digit PIN**, ported from parwah-hq. **JWT** sessions. Accounts live in
-  `phone_users` (scrypt PIN hash; 5 wrong tries then an **escalating** lock — 15
-  min, 1 h, 6 h, 24 h — because a *fixed* 15-minute lock allows 480 guesses a day
-  and a 4-digit space is only 10,000, i.e. ~21 days, not years). `phone_pin_attempt`
-  tests the lock and spends the try in one statement **before** any hashing, so a
-  burst of concurrent requests cannot test more than five in a window;
-  `phone_pin_ok` clears the count, lock and ladder on success. `auth_rate_limit` +
-  `auth_rate_limit_hit` cap attempts per caller (60/10 min, best-effort — checked
-  first, so an abusive caller cannot seed number buckets) then per number (10/10
-  min, unforgeable); both fail **closed**, and the function prunes expired rows so
-  the limiter's own table cannot be grown without bound. The sign-in form
-  pre-flights the number against `POST /api/auth/phone` to decide whether to ask
-  for a name (sign-up) or the PIN — that route returns **only** whether the
-  number is registered, never the account holder's name or lock state.
-  Deleting an account removes the `phone_users` row too — **last**, and only once
-  every other table succeeded, so a partial failure can still be retried rather
-  than signing someone out of an account they can no longer reach. The identity the whole app keys on,
-  `session.user.email`, is now the E.164 number — an opaque key to almost every
-  consumer, but **anything that writes *to* the identity rather than keying on it
-  must check `isEmailIdentity()`** (`lib/serverIdentity.ts`): Stripe's
-  `customer_email` and the cron's Gmail `To:` both silently assumed an address.
-  **Google OAuth is commented out in `lib/auth.ts`, not deleted.**
-  Removing it costs no feature: Gmail/Calendar always ran on the refresh token
-  from the separate opt-in "Connect Google" flow (Settings → Connections), never
-  on the session's Google token.
+- **Auth:** NextAuth v4, **Google only**, **JWT** sessions. The login request is
+  identity only (`GOOGLE_SIGNIN_PARAMS`: `openid email profile`,
+  `prompt=select_account`, `access_type=online`). Gmail and Calendar are not on
+  that screen. They are the separate Settings → Connections grant
+  (`CONNECT_SCOPES`), because those scopes are still under Google's review and
+  asking for them at sign-in blocks everyone who is not a test user. The identity
+  the app keys on is `session.user.email` (the Google address). A refresh token is
+  stored only when the connect step actually returns a feature scope.
 - **Data:** Supabase Postgres (project `hlcjghpzxzatgjfwcoav`) with **pgvector** for
   memory/RAG, reached server-side through `lib/db.ts` (`pg`). The browser never talks
   to the database, and Supabase's Data API is locked out of it (see §4).

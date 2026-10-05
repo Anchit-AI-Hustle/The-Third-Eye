@@ -50,8 +50,8 @@ const FEATURES: Feature[] = [
 const FLOW = [
   {
     step: "01",
-    title: "Sign in with your mobile number",
-    body: "Your number and a 4-digit PIN. We ask for your name once — nothing else, unless you turn on an integration yourself.",
+    title: "Sign in with Google",
+    body: "Your name and email only. Mail and calendar stay off until you connect them yourself.",
   },
   {
     step: "02",

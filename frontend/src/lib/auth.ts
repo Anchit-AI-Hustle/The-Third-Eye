@@ -1,15 +1,13 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { resolveAuthSecret } from "@/lib/authSecret";
-import { CONNECT_SCOPES, storeGoogleRefreshToken } from "@/lib/googleToken";
+import { GOOGLE_SIGNIN_PARAMS, storeGoogleRefreshToken } from "@/lib/googleToken";
 
 /**
- * Sign-in is Google only. The same consent also asks for Gmail and Calendar,
- * and the refresh token is stored when those scopes are actually granted, so
- * a confirmed send can go out through Gmail without a second connect step.
- * Declining the mail boxes still signs the person in; Settings → Connections
- * can grant them later. An identity-only grant never overwrites a working one
- * (`storeGoogleRefreshToken`).
+ * Sign-in is Google only, and it asks for name and email only
+ * (`GOOGLE_SIGNIN_PARAMS`). Gmail and Calendar are Settings → Connections.
+ * A refresh token from that later step is stored only when a feature scope
+ * was actually granted. An identity-only grant never overwrites a working one.
  */
 const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
@@ -21,11 +19,7 @@ export const authOptions: NextAuthOptions = {
             clientId: process.env.GOOGLE_CLIENT_ID!,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
             authorization: {
-              params: {
-                scope: CONNECT_SCOPES,
-                access_type: "offline",
-                prompt: "consent",
-              },
+              params: { ...GOOGLE_SIGNIN_PARAMS },
             },
           }),
         ]
