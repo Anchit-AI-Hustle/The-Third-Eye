@@ -1,7 +1,7 @@
 "use client";
 
-import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { getCsrfToken } from "next-auth/react";
+import { useState, type FormEvent } from "react";
 
 const ERROR_TEXT: Record<string, string> = {
   AccessDenied: "Google didn't allow that sign-in. It only needs your name and email.",
@@ -18,21 +18,36 @@ export function SignInClient({
   callbackUrl: string;
   initialError: string | null;
 }) {
+  const [csrfError, setCsrfError] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(
-    initialError ? ERROR_TEXT[initialError] ?? "Sign-in didn't finish. Continue once more." : null,
-  );
 
-  async function withGoogle() {
+  async function startGoogle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
     setBusy(true);
-    setError(null);
+    setCsrfError(false);
     try {
-      await signIn("google", { callbackUrl });
+      const token = await getCsrfToken();
+      if (!token) {
+        setBusy(false);
+        setCsrfError(true);
+        return;
+      }
+      const input = form.elements.namedItem("csrfToken");
+      if (input instanceof HTMLInputElement) input.value = token;
+      // Native submit. A second React onSubmit would fetch again and rotate the cookie.
+      form.submit();
     } catch {
       setBusy(false);
-      setError("Could not reach Google. Check your connection and try again.");
+      setCsrfError(true);
     }
   }
+
+  const message = csrfError
+    ? "Couldn't start Google sign-in."
+    : initialError
+      ? (ERROR_TEXT[initialError] ?? "Sign-in didn't finish. Continue once more.")
+      : null;
 
   return (
     <div className="min-h-screen bg-background-base flex flex-col items-center justify-center px-4 relative overflow-hidden">
@@ -71,19 +86,37 @@ export function SignInClient({
             One Google step. It asks for your name and email, then opens your workspace.
           </p>
 
-          {error && (
-            <div className="mb-5 p-3 bg-accent-red/10 border border-accent-red/20 rounded-input text-accent-red text-sm text-center">
-              {error}
+          {message && (
+            <div
+              role="alert"
+              className="mb-5 p-3 bg-accent-red/10 border border-accent-red/20 rounded-input text-accent-red text-sm text-center"
+            >
+              {message}
+              {initialError && !csrfError && (
+                <p className="mt-1 text-xs text-text-muted">{initialError}</p>
+              )}
             </div>
           )}
 
-          <button
-            onClick={withGoogle}
-            disabled={busy}
-            className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+          {/* fetch(signIn) sets the state cookie on a background response. Chrome
+              drops that cookie on the way back from Google, so the callback
+              looks like a new sign-in. A form POST sets it on this navigation. */}
+          <form
+            method="post"
+            action="/api/auth/signin/google"
+            className="w-full"
+            onSubmit={startGoogle}
           >
-            {busy ? "Opening Google…" : "Continue with Google"}
-          </button>
+            <input type="hidden" name="csrfToken" value="" />
+            <input type="hidden" name="callbackUrl" value={callbackUrl} />
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+            >
+              {busy ? "Opening Google…" : "Continue with Google"}
+            </button>
+          </form>
         </div>
       </div>
     </div>

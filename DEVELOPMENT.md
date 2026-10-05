@@ -32,7 +32,9 @@ otherwise undocumented outside this file and the code itself.
 - **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
 - **Auth:** NextAuth v4, **Google only**, **JWT** sessions. The login request is
   identity only (`GOOGLE_SIGNIN_PARAMS`: `openid email profile`,
-  `prompt=select_account`, `access_type=online`). Gmail and Calendar are not on
+  `prompt=select_account`, `access_type=online`). The button is a form POST to
+  `/api/auth/signin/google` (not `signIn()`), so the state cookie is set on that
+  navigation and is still there when Google returns. Gmail and Calendar are not on
   that screen. They are the separate Settings → Connections grant
   (`CONNECT_SCOPES`), because those scopes are still under Google's review and
   asking for them at sign-in blocks everyone who is not a test user. The identity

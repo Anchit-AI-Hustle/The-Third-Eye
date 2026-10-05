@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeCallbackPath, safeRedirectUrl } from "@/lib/authRedirect";
+import { firstQueryValue, safeCallbackPath, safeRedirectUrl } from "@/lib/authRedirect";
 import { authUsesSecureCookies, sessionCookieName } from "@/lib/authCookies";
 
 describe("safeCallbackPath", () => {
@@ -19,6 +19,15 @@ describe("safeCallbackPath", () => {
     expect(safeCallbackPath("")).toBe("/dashboard");
     expect(safeCallbackPath("https://evil.example/steal")).toBe("/dashboard");
     expect(safeCallbackPath("//evil.example")).toBe("/dashboard");
+  });
+});
+
+describe("firstQueryValue", () => {
+  it("unwraps the first search param", () => {
+    expect(firstQueryValue("OAuthCallback")).toBe("OAuthCallback");
+    expect(firstQueryValue(["Callback", "OAuthCallback"])).toBe("Callback");
+    expect(firstQueryValue("  ")).toBeUndefined();
+    expect(firstQueryValue(undefined)).toBeUndefined();
   });
 });
 

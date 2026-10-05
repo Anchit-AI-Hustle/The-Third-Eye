@@ -4,6 +4,13 @@
 
 const BLOCKED = [/^\/auth(?:\/|$)/, /^\/api\/auth(?:\/|$)/];
 
+export function firstQueryValue(value: string | string[] | undefined | null): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed || undefined;
+}
+
 export function safeCallbackPath(raw: string | null | undefined, baseOrigin?: string): string {
   if (!raw) return "/dashboard";
   let path = raw.trim();
