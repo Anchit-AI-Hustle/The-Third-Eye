@@ -101,7 +101,8 @@ export async function beatSmith(i: MusicInput, brief: MusicBrief): Promise<BeatS
     `Vocals: ${brief.vocalStyle}`,
     brief.productionNotes ? `Production notes: ${brief.productionNotes}` : "",
     brief.referenceArtists.length ? `Reference feel (do NOT copy): ${brief.referenceArtists.join(", ")}` : "",
-    i.description ? `Original request: ${i.description}` : "",
+    i.description ? `The track must be this, in the user's words: ${songSubject(i.description)}` : "",
+    i.description && songSubject(i.description) !== i.description.trim() ? `Full request: ${i.description}` : "",
   ].filter(Boolean).join("\n");
 
   const out = await llmCascade({ system, messages: [{ role: "user", content: user }], jsonMode: true, maxTokens: 700, temperature: 0.7, stage: "music:beatsmith" });
@@ -123,6 +124,17 @@ export async function beatSmith(i: MusicInput, brief: MusicBrief): Promise<BeatS
 
 const VOCAL_LIGHT = /psy|goa|trance|techno|acid|rave|house|edm|dnb|drum|dubstep|hardcore|hardstyle|gabber|core|ambient|electro|dance/i;
 
+// "create hard techno and acid" is an instruction, not the lyric. What remains
+// after the command is the subject the song has to be about.
+export function songSubject(description: string): string {
+  const raw = description.trim();
+  const stripped = raw.replace(
+    /^(?:please\s+)?(?:can you\s+)?(?:create|make|generate|write|compose|produce|give me)\s+(?:me\s+)?(?:a\s+|an\s+|some\s+)?(?:(?:song|track|music|tune|beat)\s+)?(?:(?:about|of|for|called|named|that(?:\s+says)?|with|titled)\s+)?/i,
+    "",
+  ).trim();
+  return stripped || raw;
+}
+
 export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string> {
   const langs = (i.vocalLanguage || "English").split(",").map((l) => l.trim()).filter(Boolean);
   const structure = i.structure || brief.structure || "Verse–Chorus–Verse–Chorus–Bridge–Chorus";
@@ -131,6 +143,7 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
   const system = [
     "You are a professional topliner writing lyrics to be sung by an AI singing model (ACE-Step / Suno).",
     "Write ORIGINAL lyrics with concrete imagery, a memorable hook and a consistent meter that sits on the groove. Never reuse existing song lyrics.",
+    "The user's subject is the only topic. Use their words and images. Do not swap in a different story, genre, or mood.",
     sections.length
       ? `Use EXACTLY these section tags, in this order, each on its own line in lowercase square brackets: ${sections.map((x) => `[${x}]`).join(" ")}. Do not add, rename or skip sections.`
       : "Use lowercase section tags on their own line: [intro], [verse], [pre-chorus], [chorus], [bridge], [outro].",
@@ -145,7 +158,8 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
   ].join("\n");
   const user = [
     `Title: ${i.title || "(untitled)"}`,
-    `Theme / brief: ${i.description || brief.culturalContext}`,
+    `Subject — the song is about this, in these words: ${songSubject(i.description || "") || brief.culturalContext}`,
+    i.description ? `Full request: ${i.description}` : "",
     `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM, energy ${brief.energy}/10`,
     `Vocal style: ${brief.vocalStyle}`,
     i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 — sparser, softer lines toward 1 (whispered/intimate), bigger declamatory lines toward 10 (belted/anthemic).` : "",
@@ -202,7 +216,12 @@ export function conductor(
     .join(", ")
     .slice(0, 600);
   // The instrumental/model prompt is the beat-smith's prompt (already vocals-agnostic).
-  const prompt = beats.modelPrompt.slice(0, 600);
+  // If that rewrite dropped what the user actually asked for, put it back in front.
+  const subject = songSubject(i.description || "");
+  const modelPrompt = beats.modelPrompt.slice(0, 600);
+  const prompt = subject && !modelPrompt.toLowerCase().includes(subject.toLowerCase().slice(0, Math.min(24, subject.length)))
+    ? `${subject}. ${modelPrompt}`.slice(0, 600)
+    : modelPrompt;
   return {
     prompt,
     tags,
@@ -278,12 +297,13 @@ export function fallbackBeats(i: MusicInput, brief: MusicBrief): BeatSpec {
 // A minimal-but-real singable lyric, so vocal tracks always have something to
 // sing even if the Lyricist agent is unavailable ("be it very less, but there").
 export function fallbackLyrics(i: MusicInput, brief?: MusicBrief): string {
-  const firstSentence = (i.description || "").trim().split(/[.!?\n]+/).map((s) => s.trim()).filter(Boolean)[0];
-  const hook = (i.title || firstSentence || brief?.genre || "tonight").trim().slice(0, 48);
+  const subject = songSubject(i.description || "") || (i.title || "").trim() || brief?.genre || "tonight";
+  const hook = subject.slice(0, 72);
+  const light = VOCAL_LIGHT.test(`${brief?.genre ?? ""} ${brief?.subgenre ?? ""} ${i.genre ?? ""} ${subject}`);
+  if (light) return ["[intro]", "[drop]", hook, "[chorus]", hook, hook, "[outro]", hook].join("\n");
   const mood = (i.mood || brief?.moods?.[0] || "").toString().toLowerCase();
-  const line1 = firstSentence ? firstSentence.slice(0, 64) : (mood ? `we light it up with a ${mood} glow` : "we light it up tonight");
-  const line2 = mood ? `feel the ${mood} take control` : "feel the rhythm in my soul";
-  return ["[verse]", line1, line2, "[chorus]", hook, hook, "[outro]", hook].join("\n");
+  const line2 = mood ? `${hook}, ${mood}` : hook;
+  return ["[verse]", hook, line2, "[chorus]", hook, hook, "[outro]", hook].join("\n");
 }
 
 // ── Lyrics normaliser (shared) ───────────────────────────────────────────────

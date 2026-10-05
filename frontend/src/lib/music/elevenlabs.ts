@@ -25,9 +25,18 @@ export class ElevenLabsError extends Error {
   constructor(message: string, readonly status?: number) { super(message); this.name = "ElevenLabsError"; }
 }
 
+// ElevenLabs stopped accepting the key id shown in the dashboard (August 2026).
+// A working secret is the value shown once at creation, and it starts with sk_.
+// Sending the id back produces HTTP 400 "API key ID used as API key".
+function usableElevenKey(raw: string | undefined): string | null {
+  const k = raw?.trim();
+  return k && k.startsWith("sk_") ? k : null;
+}
+
 export function elevenLabsKey(): string | null {
-  const k = process.env.ELEVENLABS_API_KEY?.trim();
-  return k ? k : null;
+  return usableElevenKey(process.env.ELEVENLABS_API_KEY)
+    ?? usableElevenKey(process.env.ELEVEN_API_KEY)
+    ?? usableElevenKey(process.env.XI_API_KEY);
 }
 
 export function elevenLabsConfigured(): boolean {

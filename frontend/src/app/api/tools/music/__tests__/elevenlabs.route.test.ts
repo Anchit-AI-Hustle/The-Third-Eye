@@ -24,7 +24,7 @@ const post = async (body: unknown) => {
 };
 const song = () => new Response(new Uint8Array(30_000).fill(0xff), { headers: { "content-type": "audio/mpeg", "song-id": "s1" } });
 
-beforeEach(() => { vi.stubEnv("ELEVENLABS_API_KEY", "test-key"); vi.stubEnv("DATABASE_URL", ""); });
+beforeEach(() => { vi.stubEnv("ELEVENLABS_API_KEY", "sk_test-key"); vi.stubEnv("DATABASE_URL", ""); });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("/api/tools/music with ElevenLabs", () => {
@@ -59,6 +59,16 @@ describe("/api/tools/music with ElevenLabs", () => {
     expect(createPrediction).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a key id as no key and runs the earlier Replicate path", async () => {
+    vi.stubEnv("ELEVENLABS_API_KEY", "a1b2c3d4e5f64789");
+    const f = vi.fn();
+    vi.stubGlobal("fetch", f);
+    const { json } = await post({ description: "create hard techno and acid" });
+    expect(json).toMatchObject({ configured: true, jobId: "rep123" });
+    expect(json.elevenLabsError).toBeUndefined();
+    expect(f).not.toHaveBeenCalled();
+  });
+
   it("without the key, runs the Replicate path exactly as before", async () => {
     vi.stubEnv("ELEVENLABS_API_KEY", "");
     const f = vi.fn();
@@ -70,9 +80,9 @@ describe("/api/tools/music with ElevenLabs", () => {
   });
 
   it("keeps the key out of every response", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad key test-key", { status: 401 })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad key sk_test-key", { status: 401 })));
     const { json } = await post({ description: "x" });
-    expect(JSON.stringify(json)).not.toContain("test-key");
+    expect(JSON.stringify(json)).not.toContain("sk_test-key");
     expect(json.elevenLabsError).toMatch(/rejected the API key/);
   });
 });
