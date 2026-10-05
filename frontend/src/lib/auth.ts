@@ -1,19 +1,20 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { authUsesSecureCookies } from "@/lib/authCookies";
+import { safeRedirectUrl } from "@/lib/authRedirect";
 import { resolveAuthSecret } from "@/lib/authSecret";
-import { CONNECT_SCOPES, storeGoogleRefreshToken } from "@/lib/googleToken";
+import { GOOGLE_SIGNIN_PARAMS, storeGoogleRefreshToken } from "@/lib/googleToken";
 
 /**
- * Sign-in is Google only. The same consent also asks for Gmail and Calendar,
- * and the refresh token is stored when those scopes are actually granted, so
- * a confirmed send can go out through Gmail without a second connect step.
- * Declining the mail boxes still signs the person in; Settings → Connections
- * can grant them later. An identity-only grant never overwrites a working one
- * (`storeGoogleRefreshToken`).
+ * Sign-in is Google only, and it asks for name and email only
+ * (`GOOGLE_SIGNIN_PARAMS`). Gmail and Calendar are Settings → Connections.
+ * A refresh token from that later step is stored only when a feature scope
+ * was actually granted. An identity-only grant never overwrites a working one.
  */
 const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 export const authOptions: NextAuthOptions = {
+  useSecureCookies: authUsesSecureCookies(),
   providers: [
     ...(googleConfigured
       ? [
@@ -21,11 +22,7 @@ export const authOptions: NextAuthOptions = {
             clientId: process.env.GOOGLE_CLIENT_ID!,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
             authorization: {
-              params: {
-                scope: CONNECT_SCOPES,
-                access_type: "offline",
-                prompt: "consent",
-              },
+              params: { ...GOOGLE_SIGNIN_PARAMS },
             },
           }),
         ]
@@ -45,7 +42,12 @@ export const authOptions: NextAuthOptions = {
       }
       const email = typeof token.email === "string" ? token.email : "";
       if (account?.refresh_token && email) {
-        await storeGoogleRefreshToken(email, account.refresh_token, account.scope, email);
+        try {
+          await storeGoogleRefreshToken(email, account.refresh_token, account.scope, email);
+        } catch {
+          // Saving the refresh token is optional. A database error here used to
+          // fail the whole callback and drop the browser back on the sign-in page.
+        }
       }
       return token;
     },
@@ -58,10 +60,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async redirect({ url, baseUrl }) {
-      if (url === baseUrl || url === `${baseUrl}/`) return `${baseUrl}/dashboard`;
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      if (url.startsWith(baseUrl)) return url;
-      return `${baseUrl}/dashboard`;
+      return safeRedirectUrl(url, baseUrl);
     },
   },
   pages: {

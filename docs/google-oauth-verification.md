@@ -75,7 +75,7 @@ Why gmail.metadata is insufficient: it returns headers only and cannot run searc
 Upload to YouTube as **Unlisted**. Record on the production URL, in English, in a fresh incognito window. Keep the whole browser window and the **address bar** in frame. Record one continuous take through the consent step. Target length is 3–5 minutes.
 
 1. **The app.** Show the address bar with `the-third-eye.anchit-tandon.com`, then the app name and logo.
-2. **Sign in** with the mobile number and PIN. Say: "Signing in requests nothing from Google."
+2. **Sign in** with Google. On Google's screen, say: "Sign-in asks only for my name and email. Mail is a separate step." Show that the permissions listed are profile only, not Gmail.
 3. **Settings → Connections → Connect Google.** On Google's screen:
    - pick the test account;
    - if Google shows a scope summary, click the link that **expands every permission** (or "See all"). Scroll so **each of the three permissions is fully visible and legible**;
@@ -104,11 +104,10 @@ Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.g
 > 2. **Justifications.** These are updated in Data Access. They describe each feature, the API call behind it and why a narrower scope is insufficient.
 > 3. **Demo video.** Link: [UNLISTED YOUTUBE URL]. It shows the fully expanded consent screen with the client ID in the address bar, then each scope in use. For gmail.send it shows the confirmation step and the message in the source account's Sent folder.
 > 4. **Test account.**
->    - The app's own sign-in is a mobile number and PIN: **[TEST MOBILE NUMBER] / PIN [XXXX]**. This sign-in requests no Google permissions.
->    - The Google account to connect is **[test-account@gmail.com] / [password]**. 2-Step Verification is off, and the account is listed under Test users.
+>    - Sign-in is Google, identity only (name and email). Use **[test-account@gmail.com] / [password]**. 2-Step Verification is off, and the account is listed under Test users. This sign-in does not request Gmail or Calendar.
 >
 >    Steps:
->    1. Open https://the-third-eye.anchit-tandon.com and sign in with the mobile number and PIN above.
+>    1. Open https://the-third-eye.anchit-tandon.com and choose Continue with Google. The consent screen for sign-in lists profile access only.
 >    2. Go to Settings → Connections → **Connect Google**. This is the consent screen under review. Sign in with the Google test account and click Allow.
 >    3. gmail.readonly: open Task Tracker and click "Scan now". Action items from the account's unread mail become tasks. You can also ask the Assistant "any email from …?".
 >    4. gmail.send: in Assistant, type "email [address] saying hello". A confirmation card appears. Nothing is sent until you click Confirm, and the message then appears in the account's Sent folder.
@@ -122,7 +121,7 @@ Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.g
 
 ## 5. Keeping unverified scopes off production traffic
 
-Google enforces this when the app's **Audience → Publishing status** is **Testing**. Only accounts on the Test users list (max 100) can complete Connect Google. Everyone else is refused on Google's screen, and the app keeps working without Gmail and Calendar (`googleCapabilities` reports "not connected"). Sign-in is phone + PIN and isn't affected.
+Google enforces this when the app's **Audience → Publishing status** is **Testing**. Only accounts on the Test users list (max 100) can complete Connect Google. Everyone else is refused on Google's screen, and the app keeps working without Gmail and Calendar (`googleCapabilities` reports "not connected"). Sign-in asks for name and email only, so it is not affected. Do not add the three feature scopes to the sign-in request.
 
 - While review is open: stay in **Testing** (or switch back to it). Add your own account, the test account and any address Trust & Safety gives you.
 - After approval: publish to **In production**.

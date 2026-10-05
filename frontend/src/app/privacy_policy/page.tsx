@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Data We Collect</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Your mobile number and the name you give when you sign up, plus a one-way hash of your 4-digit PIN (never the PIN itself)</li>
+              <li>The name, email address and profile photo from the Google account you use to sign in</li>
               <li>Messages and queries you send to the assistant, and its replies</li>
               <li>Documents and files you upload to the knowledge base</li>
               <li>Tasks, notes, goals, reminders, and expense records you create</li>
@@ -44,10 +44,9 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Google User Data</h2>
             <p className="mb-3">
-              Connecting Google is optional and entirely separate from signing in. Signing in uses
-              your mobile number and PIN and requests nothing at all from Google — we receive no
-              Google profile, name, email address or photo unless you connect. Gmail and Calendar
-              access is granted only if you complete the
+              Signing in with Google requests only your name, email address and profile photo
+              (openid, email and profile). That identifies your workspace. Gmail and Calendar are
+              not part of sign-in. They are granted only if you complete the
               &ldquo;Connect Google&rdquo; step in Settings, and can be revoked at any time from
               that screen or from your{" "}
               <a
@@ -172,7 +171,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Third-Party Services</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Google — Gmail and Calendar access if you connect it (sign-in itself is a mobile number and PIN and requests nothing from Google)</li>
+              <li>Google — your name and email to sign in. Gmail and Calendar only if you connect them in Settings</li>
               <li>
                 AI model providers (Anthropic, OpenAI, Google, Groq, and similar) — to generate
                 responses and transcribe audio. Only the content needed to answer a given request

@@ -1,18 +1,13 @@
 # Google Sign-In & OAuth runbook
 
-**Google is no longer a sign-in provider at all.** Signing in is a mobile number
-and a 4-digit PIN (`lib/auth.ts`, a NextAuth credentials provider; the Google
-provider is commented out in the same file). Google is only ever a *connection*,
-through *Settings → Connections → Connect Google*, which requests
-`INGESTION_SCOPES` on its own consent screen.
+**Sign-in is Google, and it requests identity only** — `openid email profile`
+(`SIGNIN_SCOPES` / `GOOGLE_SIGNIN_PARAMS` in `lib/googleToken.ts`, used by
+`lib/auth.ts`). Gmail and Calendar are a second screen, *Settings → Connections
+→ Connect Google*, which requests `CONNECT_SCOPES`.
 
-So everything below about **signing in** now describes the commented-out
-provider, and matters when restoring it. Everything about **connecting** —
-sections 1 to 5, the redirect URI, the consent screen, verification — is live and
-unchanged: it is how Gmail and Calendar are granted. (Google Chat was dropped in October 2026.)
-
-Before it was commented out, sign-in requested **identity only** —
-`openid email profile` (`lib/googleToken.ts` → `BASIC_SCOPE_LIST`).
+That split is what keeps login working while Google's review of the mail scopes
+is open. Asking for `gmail.readonly` on the sign-in button makes the review a
+gate on logging in.
 
 This document described the opposite until now, and kept doing so after the
 change shipped. Two code comments and `/api/connect/google/status` were written
@@ -33,12 +28,13 @@ Requesting any of them *at sign-in* makes Google's verification review a gate on
 | In production, unverified | Test users only, and others see an "unverified app" warning. |
 | In production, verified | Anyone. |
 
-That is what was happening: the app worked for its author, who is a test user,
-and refused everybody else. **Sign-in no longer asks for them**, so none of the
-rows above gate login today. Publishing the consent screen is enough for anyone
-to sign in; the unverified warning still applies to the separate *connect*
-screen, and restricted-scope review (a CASA assessment, weeks) still gates
-Gmail ingestion — see `docs/google-oauth-verification.md`.
+That is what was happening when sign-in asked for the mail scopes: the app
+worked for its author, who is a test user, and refused everybody else.
+**Sign-in does not ask for them**, so none of the rows above gate login.
+Publishing the consent screen is enough for anyone to sign in with Google.
+The unverified warning still applies to the separate *connect* screen, and
+restricted-scope review (a CASA assessment) still gates Gmail — see
+`docs/google-oauth-verification.md`.
 
 Nothing is silently broken in the meantime: the granted scope string is stored
 with the refresh token and `googleCapabilities()` reads it, so a user without
@@ -80,14 +76,19 @@ Add the `http://localhost:3000` equivalents too for local dev.
 ## 2. OAuth consent screen
 
 - User type: **External**.
-- If status is **Testing**, only listed **test users** can sign in (everyone
-  else gets `AccessDenied`). Add each account under **Test users**.
-- **Publish app** is enough for sign-in, because sign-in asks for identity only.
-  Users then see no warning and no test-user list applies.
-- Verification is still required for the **connect** flow's restricted Gmail
-  scopes. Until it clears, only test users can complete *Connect Google*, and
-  they see the unverified warning while doing it. That limits a feature; it no
-  longer limits logging in.
+- **Audience → Publishing status must be In production.** While it is Testing,
+  Google refuses every account that is not a test user, including a
+  name-and-email sign-in (`AccessDenied`). Publishing is allowed because
+  sign-in does not request a sensitive scope.
+- Keep the three feature scopes on Data Access. Do not add them to the sign-in
+  request. Until verification finishes, only test users can complete *Connect
+  Google*, and they see the unverified warning while doing it. That limits
+  mail, not logging in.
+- Branding must match the site: app name **The Third Eye**, home page
+  `https://the-third-eye.anchit-tandon.com`, privacy policy
+  `https://the-third-eye.anchit-tandon.com/privacy_policy`, terms
+  `https://the-third-eye.anchit-tandon.com/terms_of_service`, authorised domain
+  `anchit-tandon.com`. The privacy policy names the same three scopes.
 
 ## 3. Deployment env (Vercel → Production)
 

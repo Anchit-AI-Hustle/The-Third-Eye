@@ -1,3 +1,13 @@
 # Supabase CLI project config. project_id is the project ref
 # (Dashboard → Project Settings → General → Reference ID).
 project_id = "hlcjghpzxzatgjfwcoav"
+
+# Hosted Auth → Google. `supabase config push` writes only the keys declared
+# here. The secret is read from the environment at push time and is not stored
+# in this file. Google's authorized redirect URI for this project is
+# https://hlcjghpzxzatgjfwcoav.supabase.co/auth/v1/callback
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
