@@ -178,7 +178,7 @@ export default function PrivacyPolicyPage() {
                 responses and transcribe audio. Only the content needed to answer a given request
                 is sent.
               </li>
-              <li>Neon — database</li>
+              <li>Supabase — database</li>
               <li>Vercel — application hosting</li>
               <li>Stripe — subscription payments. Card details are handled by Stripe; we never receive or store them.</li>
             </ul>
