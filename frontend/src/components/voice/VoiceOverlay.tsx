@@ -75,6 +75,7 @@ export function VoiceOverlay() {
     pendingActions,
     pendingOpens,
     addPending,
+    supersedePending,
     dismissOpen,
     openLinks,
     confirmAction,
@@ -112,15 +113,17 @@ export function VoiceOverlay() {
       );
     }, []),
     onSpeechStart: useCallback(() => {
+      tts.stop();
+      suppressRef.current = false;
       setLiveBubble({ phase: "recording", level: 0 });
       setExpanded(true);
-    }, []),
+    }, [tts]),
     onSpeechEnd: useCallback(() => {
       setLiveBubble((prev) => (prev ? { ...prev, phase: "transcribing" } : null));
     }, []),
     onInterim: useCallback((text: string) => {
       if (!text) {
-        setLiveBubble((prev) => (prev ? { ...prev, phase: "transcribing" } : null));
+        setLiveBubble(null);
         return;
       }
       setLiveBubble((prev) => ({ phase: "interim", level: prev?.level ?? 0, text }));
@@ -255,6 +258,9 @@ export function VoiceOverlay() {
     async (text?: string) => {
       const msg = (text ?? input).trim();
       if (!msg || isStreamingRef.current) return;
+      isStreamingRef.current = true;
+      tts.stop();
+      supersedePending();
 
       const currentAttachments = [...attachedFiles];
       setInput("");
@@ -335,7 +341,7 @@ export function VoiceOverlay() {
                   if (micOn || handsFreeRef.current) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
                 } else if (eventType === "error") {
                   setActiveTool(null);
-                  setResponse(`Error: ${parsed.message ?? "Unknown error"}`);
+                  setResponse((prev) => prev.trim() ? prev : `Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
                   setActiveTool(null);
                   if (parsed.memory) memoryRef.current = parsed.memory;
@@ -346,6 +352,14 @@ export function VoiceOverlay() {
                   ];
                   applyActions(parsed.sideEffects);
                   openLinks(parsed.sideEffects);
+                  const media = (parsed.sideEffects ?? [])
+                    .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)
+                    .map((fx: { data: { url: string } }) => fx.data.url)
+                    .filter((u: string) => !fullText.includes(u));
+                  if (media.length) {
+                    fullText = `${fullText}\n\n${media.join("\n")}`;
+                    setResponse(fullText);
+                  }
                   if (fullText) tts.speak(fullText);
                 }
               } catch {}
@@ -361,7 +375,7 @@ export function VoiceOverlay() {
         setIsStreaming(false);
       }
     },
-    [input, session, allTasks, expenses, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn]
+    [input, session, allTasks, expenses, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn, supersedePending]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);

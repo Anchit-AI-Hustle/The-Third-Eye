@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
 
 /**
  * Mint a fresh Google access token for a user from their stored (encrypted)
@@ -11,6 +11,35 @@ import { decrypt } from "@/lib/crypto";
  * (`/api/connect/google`), which requests the Gmail scopes — basic sign-in
  * does not grant them.
  */
+/**
+ * Store a refresh token only when it actually carries a Gmail or Calendar
+ * scope. An identity-only grant must not overwrite a working one.
+ */
+export async function storeGoogleRefreshToken(
+  userId: string,
+  refreshToken: string | undefined,
+  scope: string | undefined,
+  mailbox?: string | null,
+): Promise<boolean> {
+  if (!userId || !refreshToken) return false;
+  if (!INGESTION_SCOPE_LIST.some((s) => hasGoogleScope(scope, s))) return false;
+  const sb = getDb();
+  if (!sb) return false;
+  const enc = encrypt(refreshToken);
+  if (!enc) return false;
+  const { error } = await sb.from("google_tokens").upsert(
+    {
+      user_id: userId,
+      refresh_token_enc: enc,
+      scope,
+      ...(mailbox ? { email: mailbox } : {}),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  return !error;
+}
+
 export async function getGoogleAccessToken(
   email: string,
 ): Promise<{ accessToken: string; scope?: string } | null> {

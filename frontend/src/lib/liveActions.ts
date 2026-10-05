@@ -37,12 +37,29 @@ export type DirectTurn =
   | { kind: "open"; text: string; sideEffects: OpenSideEffect[] }
   | { kind: "email"; text: string; args: { action: "email"; to: string; subject: string; body: string } };
 
+/** Platforms the assistant can connect and then read, the same way Settings → Connections does. */
+export const CONNECTORS: { id: string; label: string; href: string; test: RegExp }[] = [
+  { id: "github", label: "GitHub", href: "/api/connect/github", test: /git\s*hub/i },
+  { id: "google", label: "Google", href: "/api/connect/google", test: /\b(google|gmail|g\s*mail|calendar)\b/i },
+];
+
 const LEAD =
   /^(?:(?:hey|hi|ok|okay)\s+)?(?:jarvis\b[:,]?\s*)?(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?/i;
 
 const OPEN_CMD = /^(?:open|go to|take me to|navigate to|pull up)\s+(.+)$/i;
-const EMAIL_CMD = /^(?:send|shoot|write|draft)\s+(?:an?\s+)?(?:e-?mail|mail)\b|^(?:e-?mail|mail)\s+/i;
-const EMAIL_ADDR = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const CONNECT_CMD = /^(?:connect|link|hook up)(?:\s+me)?(?:\s+to)?(?:\s+(?:my|the))?\s+(.+)$/i;
+const EMAIL_CMD = /^(?:send|shoot|write|draft|compose)\s+(?:an?\s+)?(?:e-?mail|mail)\b|^(?:e-?mail|mail)\s+/i;
+const EMAIL_ADDR = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+/** Every well-formed address in a To header. Comma-separated is what Gmail sends. */
+export function emailRecipients(raw: string): string[] {
+  const out: string[] = [];
+  for (const part of raw.split(/[,;]/)) {
+    const addr = part.trim();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr) && !out.includes(addr)) out.push(addr);
+  }
+  return out;
+}
 
 /**
  * Commands that must not wait on a model round-trip. "Open my tasks" and
@@ -54,7 +71,22 @@ export function directTurn(message: string): DirectTurn | null {
   if (!stripped) return null;
   const email = parseEmail(stripped);
   if (email) return email;
+  const connect = parseConnect(stripped);
+  if (connect) return connect;
   return parseOpen(stripped);
+}
+
+function parseConnect(text: string): DirectTurn | null {
+  const m = CONNECT_CMD.exec(text.replace(/[.!?]+$/, "").trim());
+  if (!m) return null;
+  const name = m[1].trim();
+  const hit = CONNECTORS.find((c) => c.test.test(name));
+  if (!hit) return null;
+  return {
+    kind: "open",
+    text: `Connecting ${hit.label}. Approve access on the next screen and I can use it directly.`,
+    sideEffects: [{ type: "open_url", data: { url: hit.href, label: `Connect ${hit.label}` } }],
+  };
 }
 
 function parseOpen(text: string): DirectTurn | null {
@@ -85,24 +117,29 @@ function parseOpen(text: string): DirectTurn | null {
 function parseEmail(text: string): DirectTurn | null {
   const flat = text.replace(/[.!?]+$/, "").trim();
   if (!EMAIL_CMD.test(flat)) return null;
+  EMAIL_ADDR.lastIndex = 0;
   const found = flat.match(EMAIL_ADDR);
-  if (!found) return null;
-  const to = found[0];
-  let rest = flat
-    .replace(found[0], " ")
-    .replace(/^(?:send|shoot|write|draft)\s+(?:an?\s+)?(?:e-?mail|mail)\s+(?:to\s+)?/i, " ")
+  if (!found?.length) return null;
+  const to = emailRecipients(found.join(", ")).join(", ");
+  if (!to) return null;
+
+  let rest = flat;
+  for (const addr of found) rest = rest.split(addr).join(" ");
+  rest = rest
+    .replace(/^(?:send|shoot|write|draft|compose)\s+(?:an?\s+)?(?:e-?mail|mail)\s+(?:to\s+)?/i, " ")
     .replace(/^(?:e-?mail|mail)\s+(?:to\s+)?/i, " ")
+    .replace(/\b(?:and|plus|&)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
   let subject = "";
   let body = "";
-  const about = /^(?:about|regarding|re|subject)\s*[:-]?\s*(.+?)(?:\s+(?:saying|that says|body)\s*[:-]?\s*(.*))?$/i.exec(rest);
+  const about = /^(?:about|regarding|re|subject)\s*[:-]?\s*(.+?)(?:\s+(?:saying|that says|that|body)\s*[:-]?\s*(.*))?$/i.exec(rest);
   if (about) {
     subject = about[1].trim();
     body = (about[2] ?? "").trim();
   } else {
-    const saying = /^(?:saying|that says|body)\s*[:-]?\s*(.+)$/i.exec(rest);
+    const saying = /^(?:saying|that says|that|body)\s*[:-]?\s*(.+)$/i.exec(rest);
     body = saying ? saying[1].trim() : rest.replace(/^[:-]\s*/, "").trim();
   }
   if (!subject) subject = (body || "Message").slice(0, 80);

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const audio = form.get("audio") as Blob | null;
     const lang = (form.get("lang") as string | null) ?? undefined;
 
-    if (!audio || audio.size < 1000) {
+    if (!audio || audio.size < 400) {
       return Response.json({ text: "" });
     }
     if (audio.size > MAX_AUDIO_BYTES) {

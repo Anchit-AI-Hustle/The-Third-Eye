@@ -119,6 +119,22 @@ function failureKind(a: LlmCascadeResult["attempts"][number]): string {
   return "request refused";
 }
 
+/**
+ * What to tell the person waiting on a chat reply when every provider failed.
+ * An empty balance does not clear in a minute; a 429 does. `insufficient_quota`
+ * matches both shapes, so credit exhaustion wins and is never described as a
+ * short wait.
+ */
+export function userFacingOutage(raw: string): string {
+  const outOfCredit = /credit balance|insufficient_quota|\bbilling\b|payment required/i.test(raw);
+  const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
+  const overloaded = /\b503\b|UNAVAILABLE|overloaded/i.test(raw);
+  if (outOfCredit) return "I'm temporarily unable to respond right now. Please try again in a little while.";
+  if (rateLimited) return "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute.";
+  if (overloaded) return "I'm at capacity right now — this should clear on its own within a minute or two. Please try again shortly.";
+  return "Something went wrong on my end. Please try again in a moment.";
+}
+
 /** The user-facing reason a generation failed — which provider said what, not "all unavailable". */
 export function generationFailure(e: unknown): string {
   if (e instanceof LlmCascadeError) return `No AI provider answered — ${summarizeAttempts(e.attempts)}.`;
@@ -538,21 +554,23 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
   } finally { clear(); }
 }
 
-// Only providers verified to support tool calling on their free-tier models —
-// deliberately smaller than the full text-only cascade order above.
-const toolCapableOrder = (): { provider: "groq" | "cerebras" | "mistral"; base: string; model: string }[] => [
-  { provider: "groq", base: GROQ_BASE, model: modelFor("groq") },
-  { provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras") },
-  { provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral") },
-];
+// OpenAI-compatible tool callers. Order prefers a paid key that is actually
+// present, then the free tiers, so a Gemini 429 still has somewhere to land.
+function toolCapableOrder(): { provider: string; base: string; model: string; key: string }[] {
+  const keys = loadKeys();
+  const rows: { provider: string; base: string; model: string; key: string }[] = [];
+  if (keys.openai[0]) rows.push({ provider: "openai", base: OPENAI_BASE, model: modelFor("openai"), key: keys.openai[0] });
+  if (keys.groq) rows.push({ provider: "groq", base: GROQ_BASE, model: modelFor("groq"), key: keys.groq });
+  if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
+  if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
+  if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
+  if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free", key: keys.openrouter });
+  return rows;
+}
 
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
-  const keys = loadKeys();
-  const byProvider: Record<string, string> = { groq: keys.groq, cerebras: keys.cerebras, mistral: keys.mistral };
   const attempts: string[] = [];
-  for (const { provider, base, model } of toolCapableOrder()) {
-    const key = byProvider[provider];
-    if (!key) { attempts.push(`${provider}:no key`); continue; }
+  for (const { provider, base, model, key } of toolCapableOrder()) {
     if (inCooldown(provider)) { attempts.push(`${provider}:cooling down`); continue; }
     const res = await callOpenAICompatibleTools(base, key, model, opts);
     if (res.ok) return { content: res.content, tool_calls: res.tool_calls, provider, model };
@@ -593,11 +611,20 @@ export function geminiToolsToOpenAI(
 // multipart endpoints, so the same request shape works for each.
 export interface TranscribeCascadeResult { text: string; provider: string; model: string }
 
+function transcriptionFile(audio: Blob): { file: File; mime: string } {
+  const t = (audio.type || "").toLowerCase();
+  if (t.includes("mp4") || t.includes("m4a") || t.includes("aac")) return { file: new File([audio], "audio.mp4", { type: "audio/mp4" }), mime: "audio/mp4" };
+  if (t.includes("wav")) return { file: new File([audio], "audio.wav", { type: "audio/wav" }), mime: "audio/wav" };
+  if (t.includes("mpeg") || t.includes("mp3")) return { file: new File([audio], "audio.mp3", { type: "audio/mpeg" }), mime: "audio/mpeg" };
+  if (t.includes("ogg")) return { file: new File([audio], "audio.ogg", { type: "audio/ogg" }), mime: "audio/ogg" };
+  return { file: new File([audio], "audio.webm", { type: "audio/webm" }), mime: "audio/webm" };
+}
+
 async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = 30_000): Promise<{ ok: boolean; text?: string; status?: number; quota?: boolean }> {
   const { signal, clear } = withTimeout(timeoutMs);
   try {
     const fd = new FormData();
-    fd.append("file", new File([audio], "audio.webm", { type: audio.type || "audio/webm" }));
+    fd.append("file", transcriptionFile(audio).file);
     fd.append("model", model);
     if (lang) fd.append("language", lang.split("-")[0]);
     fd.append("response_format", "text");
@@ -643,7 +670,7 @@ async function transcribeGemini(key: string, audio: Blob, lang?: string): Promis
   const { signal, clear } = withTimeout(30_000);
   try {
     const buf = Buffer.from(await audio.arrayBuffer());
-    if (buf.length < 1000) return { ok: false, status: 0 };
+    if (buf.length < 400) return { ok: false, status: 0 };
     const prompt = lang
       ? `Transcribe this audio (${lang}). Return only the transcript.`
       : "Transcribe this audio. Return only the transcript.";
@@ -654,7 +681,7 @@ async function transcribeGemini(key: string, audio: Blob, lang?: string): Promis
         contents: [{
           parts: [
             { text: prompt },
-            { inline_data: { mime_type: audio.type || "audio/webm", data: buf.toString("base64") } },
+            { inline_data: { mime_type: transcriptionFile(audio).mime, data: buf.toString("base64") } },
           ],
         }],
       }),

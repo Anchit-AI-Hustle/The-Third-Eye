@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getDb } from "@/lib/db";
-import { encrypt } from "@/lib/crypto";
-import { INGESTION_SCOPE_LIST, hasGoogleScope, originFromRequest } from "@/lib/googleToken";
+import { INGESTION_SCOPE_LIST, hasGoogleScope, originFromRequest, storeGoogleRefreshToken } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -102,22 +100,7 @@ export async function GET(req: Request) {
     return denied;
   }
 
-  const sb = getDb();
-  if (tok.refresh_token && sb) {
-    const enc = encrypt(tok.refresh_token);
-    if (enc) {
-      await sb.from("google_tokens").upsert(
-        {
-          user_id: email,
-          refresh_token_enc: enc,
-          scope: tok.scope,
-          ...(mailbox ? { email: mailbox } : {}),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-    }
-  }
+  await storeGoogleRefreshToken(email, tok.refresh_token, tok.scope, mailbox);
 
   const done = NextResponse.redirect(`${base}/settings?connect=google_connected`);
   done.cookies.delete("g_connect_state");

@@ -38,6 +38,13 @@ export function useAgentConfirm() {
     setPendingOpens([]);
   }, []);
 
+  // A new request replaces the previous one. Finished cards and unconfirmed
+  // proposals stop sitting under the next answer; an in-flight confirm keeps running.
+  const supersedePending = useCallback(() => {
+    setPendingActions((prev) => prev.filter((a) => a.status === "running"));
+    setPendingOpens([]);
+  }, []);
+
   const dismissOpen = useCallback((url: string) => {
     setPendingOpens((p) => p.filter((x) => x.url !== url));
   }, []);
@@ -126,6 +133,7 @@ export function useAgentConfirm() {
     pendingOpens,
     addPending,
     clearPending,
+    supersedePending,
     dismissOpen,
     openLinks,
     confirmAction,

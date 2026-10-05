@@ -64,11 +64,37 @@ describe("direct email", () => {
     expect(directTurn("send an email about lunch")).toBeNull();
   });
 
+  it("sends the words after that to every address, not the leftover sentence", () => {
+    const turn = directTurn("Write a mail to anchit.tandon@gmail.com and anchit.tandon@vahdam.com that test-mail by Jarvis");
+    expect(turn?.kind).toBe("email");
+    if (turn?.kind !== "email") return;
+    expect(turn.args.to).toBe("anchit.tandon@gmail.com, anchit.tandon@vahdam.com");
+    expect(turn.args.body).toBe("test-mail by Jarvis");
+    expect(turn.args.subject).toBe("test-mail by Jarvis");
+    expect(turn.args.subject).not.toMatch(/vahdam/);
+  });
+
   it("strips header injection out of the subject", () => {
     const turn = directTurn("email ada@example.com subject Hello\r\nBcc: evil@x.com");
     expect(turn?.kind).toBe("email");
     if (turn?.kind !== "email") return;
     expect(turn.args.subject).not.toMatch(/[\r\n]/);
+  });
+});
+
+describe("direct connect", () => {
+  it("opens the GitHub connector instead of asking for pasted code", () => {
+    const turn = directTurn("connect to my github");
+    expect(turn?.kind).toBe("open");
+    if (turn?.kind !== "open") return;
+    expect(turn.sideEffects[0].data.url).toBe("/api/connect/github");
+  });
+
+  it("opens the Google connector", () => {
+    const turn = directTurn("connect gmail");
+    expect(turn?.kind).toBe("open");
+    if (turn?.kind !== "open") return;
+    expect(turn.sideEffects[0].data.url).toBe("/api/connect/google");
   });
 });
 

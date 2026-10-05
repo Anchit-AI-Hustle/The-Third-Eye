@@ -171,11 +171,11 @@ export const geminiTools = [
       },
       {
         name: "generate",
-        description: "Unified generation engine: images, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs. type='image' for AI images, 'qr' for QR codes, 'chart' for data viz, 'invoice' for billing, 'resume' for CV, 'screenshot' for webpage capture, 'form' for surveys, 'analyze' for data insights, 'shorten_url' for URL shortening, 'code' for programming, 'pdf' for documents.",
+        description: "Unified generation engine: images, music, video, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs. type='image' makes a real image, 'music' makes a track, 'video' starts a clip, 'code' writes or reviews code. Always call this for those tasks instead of describing them.",
         parameters: {
           type: "OBJECT",
           properties: {
-            type: { type: "STRING", enum: ["image", "qr", "chart", "invoice", "resume", "screenshot", "form", "analyze", "shorten_url", "code", "pdf"], description: "What to generate" },
+            type: { type: "STRING", enum: ["image", "music", "video", "qr", "chart", "invoice", "resume", "screenshot", "form", "analyze", "shorten_url", "code", "pdf"], description: "What to generate" },
             prompt: { type: "STRING", description: "Description for image/QR generation" },
             style: { type: "STRING", enum: ["realistic", "artistic", "minimal", "cartoon", "photo"], description: "Visual style (for image)" },
             size: { type: "STRING", enum: ["square", "landscape", "portrait", "wide"], description: "Aspect ratio (for image)" },
@@ -506,6 +506,20 @@ export const geminiTools = [
             guests: { type: "NUMBER", description: "Number of guests (optional)" },
           },
           required: ["type", "query"],
+        },
+      },
+      {
+        name: "github",
+        description: "Read the signed-in user's GitHub account: repositories, issues, pull requests, file contents, and code search. action='connect' when they ask to connect GitHub and it is not connected yet. Never ask them to paste a repository when this tool can read it.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["status", "connect", "list_repos", "list_issues", "list_pulls", "get_file", "search_code"], description: "What to read" },
+            repo: { type: "STRING", description: "owner/name, for issues, pulls, and files" },
+            path: { type: "STRING", description: "File or directory path inside the repo (get_file)" },
+            query: { type: "STRING", description: "Code search query (search_code)" },
+          },
+          required: ["action"],
         },
       },
       {

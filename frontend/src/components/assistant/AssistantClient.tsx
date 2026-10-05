@@ -16,7 +16,7 @@ import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
-import { useAgentConfirm } from "@/hooks/useAgentConfirm";
+import { useAgentConfirm, classifyVoiceConfirm } from "@/hooks/useAgentConfirm";
 import { classifyOpenUrl } from "@/lib/liveActions";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
@@ -37,6 +37,7 @@ interface Message {
   streaming?: boolean;
   toolsUsed?: string[];
   error?: string;
+  media?: { kind?: string; url: string; alt?: string }[];
 }
 
 interface LiveBubble {
@@ -159,6 +160,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     pendingOpens,
     addPending,
     clearPending,
+    supersedePending,
     dismissOpen,
     openLinks,
     confirmAction,
@@ -182,6 +184,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }, [undoable]);
 
   const tts = useTTS(agent?.voicePreference);
+  const pendingRef = useRef(pendingActions);
+  useEffect(() => { pendingRef.current = pendingActions; }, [pendingActions]);
 
   const stt = useVoiceSTT({
     lang,
@@ -191,14 +195,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
         ? { ...prev, level: l } : prev);
     }, []),
     onSpeechStart: useCallback(() => {
+      tts.stop();
+      suppressRef.current = false;
       setLiveBubble({ phase: "recording", level: 0 });
-    }, []),
+    }, [tts]),
     onSpeechEnd: useCallback(() => {
       setLiveBubble((prev) => prev ? { ...prev, phase: "transcribing" } : null);
     }, []),
     onInterim: useCallback((text: string) => {
       if (!text) {
-        setLiveBubble((prev) => prev ? { ...prev, phase: "transcribing" } : null);
+        setLiveBubble(null);
         return;
       }
       setLiveBubble((prev) => ({
@@ -209,13 +215,20 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }, []),
     onTranscript: useCallback((text: string) => {
       setLiveBubble(null);
-      // Dictate: drop the transcript into the composer for review, don't send.
+      const verdict = classifyVoiceConfirm(text);
+      const waiting = pendingRef.current.filter((a) => a.status === "pending");
+      if (verdict && waiting.length) {
+        const last = waiting[waiting.length - 1];
+        if (verdict === "confirm") confirmAction(last);
+        else cancelAction(last.id);
+        return;
+      }
       if (voiceModeRef.current === "dictate") {
         setInput((prev) => (prev ? prev.replace(/\s+$/, "") + " " : "") + text);
         return;
       }
       if (!isStreamingRef.current) sendRef.current(text);
-    }, []),
+    }, [confirmAction, cancelAction]),
   });
 
   // Wake word: passive listening for the agent's name. Only runs while the mic
@@ -400,11 +413,19 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || isStreamingRef.current) return;
+    isStreamingRef.current = true;
+    tts.stop();
+    supersedePending();
 
     // "All systems online" / "<system> status" → run the spoken status sequence
     // instead of a normal chat turn.
     const sysCmd = matchSystemsCommand(msg);
-    if (sysCmd) { triggerSystemsOnline(sysCmd); setInput(""); return; }
+    if (sysCmd) {
+      isStreamingRef.current = false;
+      triggerSystemsOnline(sysCmd);
+      setInput("");
+      return;
+    }
 
     // Activity → reset the proactive idle timer and re-arm nudges.
     lastActivityRef.current = Date.now();
@@ -500,10 +521,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 });
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
-                setMessages((prev) => prev.map((m) =>
-                  m.id === assistantId ? { ...m, content: "", error: errMsg, streaming: false } : m
-                ));
-                setApiError(errMsg);
+                setMessages((prev) => prev.map((m) => {
+                  if (m.id !== assistantId) return m;
+                  if (m.content.trim()) return { ...m, streaming: false };
+                  return { ...m, content: "", error: errMsg, streaming: false };
+                }));
                 return;
               } else if (eventType === "done") {
                 if (parsed.memory) {
@@ -521,6 +543,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
                 openLinks(parsed.sideEffects);
+                const media = (parsed.sideEffects ?? [])
+                  .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)
+                  .map((fx: { data: { kind?: string; url: string; alt?: string } }) => fx.data);
+                if (media.length) {
+                  setMessages((prev) => prev.map((m) => {
+                    if (m.id !== assistantId) return m;
+                    const missing = media.map((x: { url: string }) => x.url).filter((u: string) => !m.content.includes(u));
+                    return { ...m, media, content: missing.length ? `${m.content}\n\n${missing.join("\n")}` : m.content };
+                  }));
+                }
                 tts.speak(fullText);
               }
             } catch { /* non-JSON */ }
@@ -542,7 +574,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo]);
+  }, [input, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -690,6 +722,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           )}>
             {killed ? "Agent stopped · turn it back on in Settings"
               : systemOnline ? "JARVIS activated · all systems online"
+              : stt.recognitionIssue === "server" ? "I heard you, but transcription failed — say it once more"
+              : stt.recognitionIssue ? "Browser speech recognition stalled — keep talking, I'll transcribe it here"
               : tts.speaking ? "Speaking · hold on…"
               : doneMsg ?? (
                 isStreaming ? "Processing · composing response…"
@@ -1063,6 +1097,15 @@ function MessageBubble({ message, session }: { message: Message; session: any })
               {message.streaming && message.content && (
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
+              {message.media?.map((item) => (
+                item.kind === "audio" ? (
+                  <audio key={item.url} src={item.url} controls className="mt-2 w-full" />
+                ) : item.kind === "video" ? (
+                  <video key={item.url} src={item.url} controls className="mt-2 w-full rounded-input" />
+                ) : (
+                  <img key={item.url} src={item.url} alt={item.alt || ""} className="mt-2 max-w-full rounded-input" />
+                )
+              ))}
             </>
           )}
         </div>

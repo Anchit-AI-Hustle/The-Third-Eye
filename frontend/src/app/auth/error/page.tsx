@@ -6,23 +6,26 @@ import { Suspense } from "react";
 
 // NextAuth redirects here with ?error=<code>. Map each code to something the
 // operator can act on, and always surface the raw code — a generic "an error
-// occurred" hides whether the problem is missing server env or a bad PIN.
+// occurred" hides whether the problem is missing server env or Google declining the sign-in.
 //
-// The OAuth codes (OAuthSignin, OAuthCallback, OAuthAccountNotLinked,
-// AccessDenied for a Google consent screen) went when Google stopped being a
-// sign-in provider — see lib/auth.ts. Sign-in is now a mobile number and a
-// 4-digit PIN, and the form shows a wrong PIN or a locked account inline, so
-// almost nothing should ever land here.
 const ERRORS: Record<string, { title: string; detail: string }> = {
   Configuration: {
     title: "Server isn't configured for sign-in",
     detail:
-      "Sign-in needs NEXTAUTH_SECRET and NEXTAUTH_URL, and DATABASE_URL (Supabase Postgres) to keep accounts in. Set them in the deployment environment.",
+      "Sign-in needs GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET and NEXTAUTH_URL. Set them in the deployment environment.",
   },
-  CredentialsSignin: {
-    title: "That number and PIN didn’t match",
+  AccessDenied: {
+    title: "Google didn't allow that sign-in",
     detail:
-      "Check the number, then the PIN. Five wrong PINs lock the account for fifteen minutes; after that, try again.",
+      "The consent screen was cancelled, or this Google account isn't allowed to use the app yet. Try again and accept the requested access.",
+  },
+  OAuthSignin: {
+    title: "Couldn't start Google sign-in",
+    detail: "The Google client isn't configured. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+  },
+  OAuthCallback: {
+    title: "Google didn't finish signing you in",
+    detail: "The return from Google failed. Try again. If it keeps happening, the redirect URL on the Google client doesn't match this site.",
   },
   SessionRequired: {
     title: "Please sign in to see that page",
