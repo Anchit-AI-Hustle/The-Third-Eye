@@ -1,5 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { authUsesSecureCookies } from "@/lib/authCookies";
+import { safeRedirectUrl } from "@/lib/authRedirect";
 import { resolveAuthSecret } from "@/lib/authSecret";
 import { GOOGLE_SIGNIN_PARAMS, storeGoogleRefreshToken } from "@/lib/googleToken";
 
@@ -12,6 +14,7 @@ import { GOOGLE_SIGNIN_PARAMS, storeGoogleRefreshToken } from "@/lib/googleToken
 const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
 export const authOptions: NextAuthOptions = {
+  useSecureCookies: authUsesSecureCookies(),
   providers: [
     ...(googleConfigured
       ? [
@@ -39,7 +42,12 @@ export const authOptions: NextAuthOptions = {
       }
       const email = typeof token.email === "string" ? token.email : "";
       if (account?.refresh_token && email) {
-        await storeGoogleRefreshToken(email, account.refresh_token, account.scope, email);
+        try {
+          await storeGoogleRefreshToken(email, account.refresh_token, account.scope, email);
+        } catch {
+          // Saving the refresh token is optional. A database error here used to
+          // fail the whole callback and drop the browser back on the sign-in page.
+        }
       }
       return token;
     },
@@ -52,10 +60,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async redirect({ url, baseUrl }) {
-      if (url === baseUrl || url === `${baseUrl}/`) return `${baseUrl}/dashboard`;
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      if (url.startsWith(baseUrl)) return url;
-      return `${baseUrl}/dashboard`;
+      return safeRedirectUrl(url, baseUrl);
     },
   },
   pages: {
