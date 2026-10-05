@@ -5,6 +5,8 @@ import { Menu } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { VoiceOverlay } from "../voice/VoiceOverlay";
+import { useJarvisTriggers } from "@/hooks/useJarvisTriggers";
+import { activateAssistant } from "@/lib/activation";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -13,6 +15,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, mainClassName }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useJarvisTriggers(activateAssistant);
 
   return (
     <div className="flex h-screen bg-background-base overflow-hidden">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
 import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,8 @@ import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { ActionCard } from "./ActionCard";
 import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
+import { useActivationConfig } from "@/hooks/useActivationConfig";
+import { phraseTriggers } from "@/lib/activation";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
@@ -104,6 +106,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // reply is read aloud; "dictate" = speech fills the input box for review and
   // is NOT sent until the user presses send.
   const [voiceMode, setVoiceMode] = useState<"dictate" | "call">("call");
+  const { config: activation, update: updateActivation } = useActivationConfig();
   const [wakeEnabled, setWakeEnabled] = useState(false);
   // Conversation checkpoints (inspired by Opcode rewind): save/restore snapshots
   const [checkpoints, setCheckpoints] = useState<{ id: string; label: string; messages: Message[]; history: HistoryEntry[]; timestamp: number }[]>([]);
@@ -129,9 +132,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
     // grant was revoked, would otherwise show the icon lit with the hook
     // silently never listening (getPolicy, not the micAlways state, since
     // that effect may not have committed yet on this same mount).
-    const wasOn = localStorage.getItem("jarvis_wakeword") === "1";
-    setWakeEnabled(wasOn && getPolicy("microphone") === "always");
-  }, []);
+    setWakeEnabled(activation.wakeWordEnabled && getPolicy("microphone") === "always");
+  }, [activation.wakeWordEnabled]);
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
@@ -260,7 +262,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
     stt.enable();
     setMicOn(true);
   }, [stt, requestCapability, agent?.name]);
-  useWakeWord({ agentName: agent?.name ?? "JARVIS", enabled: wakeEnabled && micAlways && !micOn, onWake, cooldownMs: 2000 });
+  useWakeWord({
+    agentName: agent?.name ?? "JARVIS",
+    extraTriggers: useMemo(() => phraseTriggers(activation.selectedWakeWord), [activation.selectedWakeWord]),
+    sensitivity: activation.wakeWordSensitivity,
+    enabled: wakeEnabled && micAlways && !micOn,
+    onWake,
+    cooldownMs: 2000,
+  });
 
   // Track TTS state in a ref so callbacks can see it
   useEffect(() => {
@@ -958,7 +967,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             onClick={async () => {
               if (wakeEnabled) {
                 setWakeEnabled(false);
-                try { localStorage.setItem("jarvis_wakeword", "0"); } catch { /* noop */ }
+                updateActivation("wakeWordEnabled", false);
                 return;
               }
               // useWakeWord only ever actually listens when micAlways is true — a
@@ -973,7 +982,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 if (getPolicy("microphone") !== "always") return;
               }
               setWakeEnabled(true);
-              try { localStorage.setItem("jarvis_wakeword", "1"); } catch { /* noop */ }
+              updateActivation("wakeWordEnabled", true);
             }}
             title={
               wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`

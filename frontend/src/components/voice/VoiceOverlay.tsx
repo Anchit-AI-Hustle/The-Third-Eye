@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio, AlertTriangle } from "lucide-react";
@@ -16,6 +16,8 @@ import { useAgentActions } from "@/hooks/useAgentActions";
 import { useAgentConfirm, classifyVoiceConfirm, type PendingAction } from "@/hooks/useAgentConfirm";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
+import { useActivationConfig } from "@/hooks/useActivationConfig";
+import { ACTIVATE_EVENT, phraseTriggers, loadActivation, hapticIfEnabled } from "@/lib/activation";
 import { ActionCard } from "@/components/assistant/ActionCard";
 import { toolLabel } from "@/lib/toolLabels";
 import { classifyOpenUrl } from "@/lib/liveActions";
@@ -34,11 +36,8 @@ export function VoiceOverlay() {
 
   const [expanded, setExpanded] = useState(false);
   const [micOn, setMicOn] = useState(false);
-  const [wakeEnabled, setWakeEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const v = localStorage.getItem("jarvis_wake_enabled");
-    return v === null ? true : v === "true";
-  });
+  const { config: activation, update: updateActivation } = useActivationConfig();
+  const wakeEnabled = activation.wakeWordEnabled;
   const [liveBubble, setLiveBubble] = useState<LiveBubble | null>(null);
   const [lastQuery, setLastQuery] = useState("");
   const [response, setResponse] = useState("");
@@ -189,25 +188,52 @@ export function VoiceOverlay() {
   // Ask for the microphone the moment the user turns the wake word on, rather
   // than silently doing nothing until they happen to use the mic button.
   const toggleWake = useCallback(async () => {
-    if (wakeEnabled) { setWakeEnabled(false); return; }
+    if (wakeEnabled) { updateActivation("wakeWordEnabled", false); return; }
     if (!micReady && !(await requestCapability("microphone"))) return;
     setMicGranted(true);
-    setWakeEnabled(true);
-  }, [wakeEnabled, micReady, requestCapability]);
+    updateActivation("wakeWordEnabled", true);
+  }, [wakeEnabled, micReady, requestCapability, updateActivation]);
+
+  const extraTriggers = useMemo(
+    () => phraseTriggers(activation.selectedWakeWord),
+    [activation.selectedWakeWord]
+  );
 
   // !tts.speaking matters even though micOn is normally true after a wake:
   // a typed question with the mic off still gets a spoken reply, and the wake
   // recognizer would otherwise hear the agent say its own name and self-trigger.
   const wake = useWakeWord({
     agentName: agent.name,
+    extraTriggers,
+    sensitivity: activation.wakeWordSensitivity,
     enabled: wakeEnabled && micReady && !micOn && !tts.speaking,
     onWake,
     cooldownMs: 2000,
   });
 
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("jarvis_wake_enabled", String(wakeEnabled));
-  }, [wakeEnabled]);
+    const open = () => setExpanded(true);
+    window.addEventListener(ACTIVATE_EVENT, open);
+    return () => window.removeEventListener(ACTIVATE_EVENT, open);
+  }, []);
+
+  const swipeStartY = useRef<number | null>(null);
+  const onOrbTouchStart = (e: React.TouchEvent) => {
+    swipeStartY.current = e.touches[0]?.clientY ?? null;
+  };
+  const onOrbTouchEnd = (e: React.TouchEvent) => {
+    const start = swipeStartY.current;
+    swipeStartY.current = null;
+    if (start == null) return;
+    const end = e.changedTouches[0]?.clientY;
+    if (end == null) return;
+    const cfg = loadActivation();
+    if (!cfg.gestureEnabled || cfg.selectedGesture !== "swipe_up") return;
+    if (start - end > 36) {
+      hapticIfEnabled(cfg);
+      setExpanded(true);
+    }
+  };
 
   useEffect(() => {
     if (tts.speaking) {
@@ -422,6 +448,8 @@ export function VoiceOverlay() {
       {!expanded && (
         <button
           onClick={() => setExpanded(true)}
+          onTouchStart={onOrbTouchStart}
+          onTouchEnd={onOrbTouchEnd}
           className={cn(
             "flex items-center gap-2.5 pl-1.5 pr-1.5 py-1.5 lg:pl-3 lg:pr-2 lg:py-2 rounded-full holo-card shadow-lg hover:shadow-[0_0_20px_rgba(79,195,247,0.15)] transition-all hover:scale-[1.02] active:scale-95 group",
             indicatorActive && "animate-border-glow",
