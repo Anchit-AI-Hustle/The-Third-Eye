@@ -5,7 +5,7 @@ import { isSensitive } from "@/lib/actions";
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
 import { getGoogleAccessToken } from "@/lib/googleToken";
-import { gmailComposeUrl } from "@/lib/liveActions";
+import { emailRecipients, gmailComposeUrl } from "@/lib/liveActions";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
 
@@ -16,10 +16,9 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return json({ error: "Not authenticated" }, 401);
-  // The confirmed send needs a token carrying gmail.send, and only the opt-in
-  // connect flow (/api/connect/google - Settings -> Connections) ever grants it:
-  // signing in is a mobile number and a PIN and asks Google for nothing. The
-  // session token is not used here either, because it can lag a re-consent.
+  // The confirmed send needs a token carrying gmail.send. Google sign-in asks
+  // for it, and Settings → Connections can grant it again if it was declined.
+  // The session token is not used here, because it can lag a re-consent.
   let accessToken: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
@@ -49,10 +48,11 @@ export async function POST(req: NextRequest) {
       if (premiumEnforced() && (await getTier(email)) !== "premium") {
         return json({ ok: false, result: "Sending email needs JARVIS Premium. Upgrade in Settings → Upgrade." });
       }
-      const to = String(args?.to ?? "");
+      const recipients = emailRecipients(String(args?.to ?? ""));
+      const to = recipients.join(", ");
       const subject = String(args?.subject ?? "");
       const body = String(args?.body ?? "");
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
+      if (!recipients.length) {
         return json({ ok: false, result: "Need a valid email address to send." });
       }
       const compose = gmailComposeUrl(to, subject, body);

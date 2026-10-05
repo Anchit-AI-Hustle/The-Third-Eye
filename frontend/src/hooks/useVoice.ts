@@ -22,6 +22,139 @@ export interface VoiceSTTCallbacks {
   lang?: string;
 }
 
+// Time-domain peak, 0–1. Averaging FFT bins hides speech: a few loud low
+// bins disappear into a hundred silent ones, so the old threshold never fired
+// and the server never received audio when the browser recognizer was down.
+const SPEECH_PEAK = 0.02;
+const BARGE_PEAK = 0.12;
+const SILENCE_MS = 700;
+const BARGE_HOLD_MS = 280;
+
+export function pcmPeak(buf: Uint8Array): number {
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = Math.abs(buf[i] - 128) / 128;
+    if (v > peak) peak = v;
+  }
+  return peak;
+}
+
+/** Record each spoken phrase and transcribe it on the server when the browser recognizer returns nothing. */
+function armUtteranceRecorder(
+  stream: MediaStream,
+  analyser: AnalyserNode,
+  active: () => boolean,
+  suppressed: () => boolean,
+  lang: () => string | undefined,
+  emit: (text: string) => void,
+  onTranscribing: () => void,
+  onBarge: () => void,
+  onEmpty: () => void,
+  onFail: () => void,
+  skip: () => boolean,
+): () => void {
+  if (typeof MediaRecorder === "undefined") return () => {};
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+  let raf = 0;
+  let rec: MediaRecorder | null = null;
+  let parts: Blob[] = [];
+  let voiced = false;
+  let silenceAt = 0;
+  let stopped = false;
+  let holdUntil = 0;
+  let barged = false;
+
+  const drop = () => {
+    parts = [];
+    if (rec && rec.state === "recording") {
+      rec.onstop = null;
+      try { rec.stop(); } catch { /* already stopped */ }
+    }
+    rec = null;
+    voiced = false;
+    silenceAt = 0;
+  };
+
+  const flush = async (blob: Blob) => {
+    if (stopped || blob.size < 400 || skip()) return;
+    onTranscribing();
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, mime.includes("mp4") ? "speech.mp4" : "speech.webm");
+      const code = lang();
+      if (code) fd.append("lang", code);
+      const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
+      const data = await res.json().catch(() => ({}));
+      const text = res.ok && typeof data?.text === "string" ? data.text.trim() : "";
+      if (!res.ok) onFail();
+      if (text && !skip()) emit(text);
+      else onEmpty();
+    } catch {
+      onFail();
+      onEmpty();
+    }
+  };
+
+  const begin = () => {
+    if (rec && rec.state === "recording") return;
+    parts = [];
+    try {
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    } catch {
+      return;
+    }
+    rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
+    rec.onstop = () => {
+      const blob = new Blob(parts, { type: mime || "audio/webm" });
+      parts = [];
+      void flush(blob);
+    };
+    try { rec.start(250); } catch { rec = null; }
+  };
+
+  const end = () => {
+    if (rec && rec.state === "recording") {
+      try { rec.stop(); } catch { /* noop */ }
+    }
+    voiced = false;
+    silenceAt = 0;
+  };
+
+  const time = new Uint8Array(analyser.fftSize);
+  const tick = () => {
+    if (stopped || !active()) return;
+    analyser.getByteTimeDomainData(time);
+    const peak = pcmPeak(time);
+    const quiet = suppressed();
+    if (peak >= (quiet ? BARGE_PEAK : SPEECH_PEAK)) {
+      if (quiet && !barged) {
+        barged = true;
+        onBarge();
+        drop();
+        holdUntil = Date.now() + BARGE_HOLD_MS;
+      }
+      if (!suppressed() && Date.now() >= holdUntil) {
+        if (!voiced) { voiced = true; begin(); }
+        silenceAt = 0;
+      }
+    } else {
+      barged = false;
+      if (voiced && Date.now() >= holdUntil) {
+        if (!silenceAt) silenceAt = Date.now();
+        else if (Date.now() - silenceAt > SILENCE_MS) end();
+      }
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  return () => {
+    stopped = true;
+    cancelAnimationFrame(raf);
+    drop();
+  };
+}
+
 export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const [audioState, setAudioState] = useState<AudioState>("idle");
   const [supported, setSupported] = useState(false);
@@ -42,13 +175,43 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const rafRef = useRef<number | null>(null);
   const lastEventRef = useRef(0);
   const startRecRef = useRef<() => void>(() => {});
+  const lastTranscriptRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  const webFinalAt = useRef(0);
+  const stuckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeLock = useWakeLock();
+
+  const armStuck = () => {
+    if (stuckTimer.current) clearTimeout(stuckTimer.current);
+    // Web Speech can report "speech ended" and then never return text. Don't
+    // leave the composer on "thinking" after the server has also had its turn.
+    stuckTimer.current = setTimeout(() => {
+      stuckTimer.current = null;
+      if (Date.now() - webFinalAt.current > 2500) cbRef.current.onInterim?.("");
+    }, 9000);
+  };
+  const clearStuck = () => {
+    if (stuckTimer.current) { clearTimeout(stuckTimer.current); stuckTimer.current = null; }
+  };
+
+  const emitTranscript = useCallback((text: string) => {
+    const t = text.trim();
+    if (!t || cbRef.current.shouldSuppress?.()) return;
+    const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
+    const now = Date.now();
+    if (norm(t) && norm(t) === norm(lastTranscriptRef.current.text) && now - lastTranscriptRef.current.at < 6000) return;
+    lastTranscriptRef.current = { text: t, at: now };
+    setRecognitionIssue(null);
+    clearStuck();
+    cbRef.current.onInterim?.("");
+    cbRef.current.onTranscript(t);
+  }, []);
 
   useEffect(() => {
     const SR = typeof window !== "undefined"
       ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
       : null;
-    setSupported(!!SR && !!navigator?.mediaDevices?.getUserMedia);
+    const mic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+    setSupported(!!SR || mic);
 
     // Check Whisper (200 = available + key set, 503 = no key)
     fetch("/api/transcribe", { method: "POST", body: new FormData() })
@@ -56,30 +219,29 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       .catch(() => setWhisperAvailable(false));
   }, []);
 
+  const stopEarRef = useRef<(() => void) | null>(null);
+  const resumeCtxRef = useRef<(() => void) | null>(null);
+  const srDelayRef = useRef(150);
+
   const startMeter = useCallback(async () => {
     if (streamRef.current) return;
-    // On touch devices (iOS Safari, mobile Chrome), calling getUserMedia
-    // here on top of SpeechRecognition's implicit mic acquisition produces
-    // a second permission prompt. Skip the visualisation stream on mobile;
-    // we emit a synthetic level instead so the existing UI doesn't break.
-    const isTouch = typeof window !== "undefined"
-      && (window.matchMedia?.("(pointer: coarse)").matches
-        || /iPad|iPhone|iPod|Android/i.test(navigator.userAgent));
-    if (isTouch) {
+    const synthetic = () => {
       const tick = () => {
         if (!activeRef.current) return;
-        // Pulse 25..65 while listening so the bars animate without a real stream.
         const level = 25 + Math.round(Math.sin(Date.now() / 200) * 20 + 20);
         cbRef.current.onLevel?.(level);
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
-      return;
-    }
+    };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      if (!activeRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       const ctx = new AudioContext();
       // Chrome/Safari can hand back a context in "suspended" state — the await
@@ -87,24 +249,64 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       // Suspended means getByteFrequencyData reads all zeros forever, so the
       // level meter looks dead even though the mic itself is live.
       if (ctx.state === "suspended") void ctx.resume();
+      // A context opened from an effect (wake-word auto-start) stays suspended
+      // until the next gesture, and a suspended analyser reads silence forever.
+      if (resumeCtxRef.current) {
+        window.removeEventListener("pointerdown", resumeCtxRef.current);
+        window.removeEventListener("keydown", resumeCtxRef.current);
+      }
+      const resumeCtx = () => { void audioCtxRef.current?.resume(); };
+      resumeCtxRef.current = resumeCtx;
+      window.addEventListener("pointerdown", resumeCtx);
+      window.addEventListener("keydown", resumeCtx);
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;
       src.connect(analyser);
       audioCtxRef.current = ctx;
-      const data = new Uint8Array(analyser.frequencyBinCount);
+      const time = new Uint8Array(analyser.fftSize);
+      stopEarRef.current?.();
+      stopEarRef.current = armUtteranceRecorder(
+        stream,
+        analyser,
+        () => activeRef.current,
+        () => !!cbRef.current.shouldSuppress?.(),
+        () => cbRef.current.lang,
+        emitTranscript,
+        () => {
+          cbRef.current.onSpeechEnd?.();
+          setAudioState("transcribing");
+          armStuck();
+        },
+        () => { cbRef.current.onSpeechStart?.(); },
+        () => {
+          setAudioState("waiting");
+          cbRef.current.onInterim?.("");
+        },
+        () => setRecognitionIssue("server"),
+        () => Date.now() - webFinalAt.current < 2500,
+      );
       const tick = () => {
         if (!activeRef.current) return;
-        analyser.getByteFrequencyData(data);
-        const level = Math.round((data.reduce((s, v) => s + v, 0) / data.length / 255) * 100);
+        analyser.getByteTimeDomainData(time);
+        const level = Math.min(100, Math.round(pcmPeak(time) * 140));
         cbRef.current.onLevel?.(level);
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
-    } catch { /* mic permission handled by SpeechRecognition */ }
-  }, []);
+    } catch {
+      synthetic();
+    }
+  }, [emitTranscript]);
 
   const stopMeter = useCallback(() => {
+    stopEarRef.current?.();
+    stopEarRef.current = null;
+    if (resumeCtxRef.current) {
+      window.removeEventListener("pointerdown", resumeCtxRef.current);
+      window.removeEventListener("keydown", resumeCtxRef.current);
+      resumeCtxRef.current = null;
+    }
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     audioCtxRef.current?.close().catch(() => {});
@@ -114,16 +316,23 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   }, []);
 
   const enable = useCallback(async () => {
-    if (!supported || activeRef.current) return;
+    if (activeRef.current) return;
+    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+    if (!SRClass && !canMic) return;
     activeRef.current = true;
     setPermissionDenied(false);
     setRecognitionIssue(null);
     lastEventRef.current = Date.now();
+    srDelayRef.current = 150;
     // Mid-conversation the screen must not sleep, or the mic is suspended.
     wakeLock.acquire();
 
-    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SRClass) { activeRef.current = false; return; }
+    // Open the capture stream before the browser recognizer. Starting
+    // SpeechRecognition first, then getUserMedia, leaves Chrome's recognizer
+    // with a dead mic: it stays on "listening" and never returns words.
+    await startMeter();
+    if (!activeRef.current || !SRClass) return;
 
     const startRec = () => {
       if (!activeRef.current) return;
@@ -132,7 +341,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       rec.continuous = true;
       rec.interimResults = true;
       rec.maxAlternatives = 1;
-      rec.lang = cbRef.current.lang || "";
+      // An empty lang is what Chrome sends to its speech service as a blank
+      // locale, which comes back as a network error and no transcript. The
+      // composer starts with lang "" until the user picks one.
+      const requested = (cbRef.current.lang || "").trim();
+      rec.lang = requested || (typeof navigator !== "undefined" ? navigator.language : "") || "en-US";
 
       rec.onstart = () => {
         lastEventRef.current = Date.now();
@@ -142,14 +355,15 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       rec.onspeechstart = () => {
         lastEventRef.current = Date.now();
         setRecognitionIssue(null);
-        if (cbRef.current.shouldSuppress?.()) return;
         cbRef.current.onSpeechStart?.();
+        if (cbRef.current.shouldSuppress?.()) return;
         setAudioState("speaking");
       };
 
       rec.onspeechend = () => {
         cbRef.current.onSpeechEnd?.();
         setAudioState("transcribing");
+        armStuck();
       };
 
       rec.onresult = (event: any) => {
@@ -165,10 +379,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
             interim += event.results[i][0].transcript;
           }
         }
+        srDelayRef.current = 150;
         if (interim.trim()) cbRef.current.onInterim?.(interim.trim());
         if (final.trim()) {
-          cbRef.current.onTranscript(final.trim());
-          cbRef.current.onInterim?.("");
+          webFinalAt.current = Date.now();
+          emitTranscript(final.trim());
           setAudioState("waiting");
         }
       };
@@ -182,14 +397,16 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         }
         if (e.error === "network" || e.error === "audio-capture") {
           setRecognitionIssue(e.error);
+          // Restarting immediately on a dead speech service hammers it and
+          // steals the mic from the recorder that is supposed to take over.
+          srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
         }
         setAudioState("waiting");
-        // no-speech / network: let onend restart
       };
 
       rec.onend = () => {
         if (!activeRef.current) { setAudioState("idle"); return; }
-        setTimeout(startRec, 150);
+        setTimeout(startRec, srDelayRef.current);
       };
 
       try { rec.start(); } catch { setTimeout(startRec, 500); }
@@ -197,11 +414,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
     startRecRef.current = startRec;
     startRec();
-    startMeter();
-  }, [supported, startMeter, wakeLock]);
+  }, [startMeter, wakeLock]);
 
   const disable = useCallback(() => {
     activeRef.current = false;
+    clearStuck();
     try { recRef.current?.abort(); } catch {}
     recRef.current = null;
     stopMeter();

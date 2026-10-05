@@ -11,6 +11,8 @@ import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
+import { getGithubAccessToken, runGithub } from "@/lib/github";
+import { userFacingOutage } from "@/lib/llmCascade";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
@@ -60,7 +62,8 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **calculate**: run a precise financial calc (GST, income tax, EMI, SIP, FD…) by slug + inputs — always use this instead of doing money arithmetic yourself
 - **communicate**: send WhatsApp/SMS/email, make calls, read emails — action='whatsapp'/'sms'/'email'/'call'/'read_emails'
 - **navigate**: directions, GPS location, nearby places — action='directions' for maps, 'location' for coords, 'nearby' for POIs
-- **generate**: images, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs — type='image'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
+- **generate**: images, music, video, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs — type='image'/'music'/'video'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
+- **github**: the user's connected GitHub account — repos, issues, pull requests, file contents, code search. action='connect' opens the GitHub connector.
 - **automate**: schedule recurring actions and run background checks — action='schedule' to set up, 'check' to scan for issues
 - **learn**: proactive suggestions, insights, habits, pattern learning — action='suggest'/'insights'/'habits'/'record'
 - **get_current_time**: any time/date question
@@ -94,6 +97,15 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - When overdue tasks accumulate, suggest reprioritization.
 - Track your own learning confidence: only suggest automations when confidence > 0.7.
 - NEVER fabricate data or claim actions succeeded unless the tool confirms it.
+
+## This turn is the only task
+- The latest user message is the only thing to do. Earlier turns are context, not a queue of unfinished jobs.
+- Do not re-open, re-send, re-generate, or re-propose an action from an earlier turn unless the latest message explicitly asks for that same thing again.
+- A short follow-up ("done?", "no link", "and the other one") refers only to the immediately previous turn. Answer it from what already happened. Do not start the tool over.
+- When a tool result contains a URL, copy that exact URL into the reply. Never say a link was shared unless the URL is in your message.
+- Email: \`to\` is every address they named, comma-separated. \`body\` is only the message they asked to send. \`subject\` is a short title of that message. Never put another recipient or the words "and … that" into the subject or body.
+- Repositories, issues, and code live on GitHub. Call \`github\`. If it says GitHub isn't connected, the tool opens the connect screen — do not ask them to paste the code.
+- Images, music, video, and code are done with \`generate\` (type image, music, video, or code). Do the task. Do not describe a result you did not get back from the tool.
 
 ## Honesty & status reporting (CRITICAL — never violate)
 - Report ONLY what actually happened, based strictly on the tool results you received. Never claim an action succeeded unless its tool result confirms success.
@@ -595,7 +607,9 @@ async function runTool(
     case "generate": {
       const type = input.type ?? "image";
       switch (type) {
-        case "image": return { result: generateImage(input.prompt ?? "", input.style ?? "realistic", input.size ?? "square") };
+        case "image": return generateImage(input.prompt ?? "", input.style ?? "realistic", input.size ?? "square");
+        case "music": return await generateMusic(ctx.email, input.prompt ?? input.description ?? "");
+        case "video": return await generateVideo(input.prompt ?? input.description ?? "");
         case "qr": return { result: generateQR(input.data ?? "", input.label) };
         case "chart": return { result: createChart(input.title ?? "Chart", input.chart_type ?? "bar", input.data ?? "") };
         case "invoice": return { result: generateInvoice(input.client ?? "", input.items ?? "", input.tax_rate, input.notes) };
@@ -606,7 +620,7 @@ async function runTool(
         case "analyze": return { result: analyzeData(input.data ?? "", input.question ?? "") };
         case "code": return { result: await generateCode(input.task ?? "generate", input.language ?? "typescript", input.description ?? "", input.context) };
         case "pdf": return { result: generatePdf(input.title ?? "Document", input.content ?? "", input.format ?? "report") };
-        default: return { result: `Unknown generation type: ${type}. Supported: image, qr, chart, invoice, resume, screenshot, form, analyze, shorten_url, code, pdf` };
+        default: return { result: `Unknown generation type: ${type}. Supported: image, music, video, qr, chart, invoice, resume, screenshot, form, analyze, shorten_url, code, pdf` };
       }
     }
 
@@ -761,6 +775,9 @@ async function runTool(
 
     case "smart_summary":
       return { result: await smartSummary(input.source ?? "", input.depth ?? "brief", input.focus) };
+
+    case "github":
+      return githubTool(ctx, input);
 
     default:
       return { result: `I don't have a handler for "${name}". Try rephrasing or use one of my available tools.` };
@@ -1302,7 +1319,7 @@ async function autonomousCheck(checkType: string, ctx: RunContext): Promise<stri
 
 // ─── JARVIS 2.0 — New Capability Implementations ──────────────────────────
 
-function generateImage(prompt: string, style: string, size: string): string {
+function generateImage(prompt: string, style: string, size: string): { result: string; sideEffect: { type: string; data: any } } {
   const styleMap: Record<string, string> = {
     realistic: "photorealistic, high detail, professional photography",
     artistic: "artistic, creative, painterly style",
@@ -1316,7 +1333,94 @@ function generateImage(prompt: string, style: string, size: string): string {
   const styledPrompt = `${prompt}, ${styleMap[style] || styleMap.realistic}`;
   const encoded = encodeURIComponent(styledPrompt);
   const w = (sizeMap[size] || "1024x1024").split("x");
-  return `**Image Generated**\n\nPrompt: ${styledPrompt}\nSize: ${sizeMap[size] || "1024x1024"}\n\n[Open in new tab](https://image.pollinations.ai/prompt/${encoded}?width=${w[0]}&height=${w[1]}&nologo=true)\n\nClick the link above to view and download your generated image. The image is rendered by Pollinations AI from your prompt.`;
+  const url = `https://image.pollinations.ai/prompt/${encoded}?width=${w[0]}&height=${w[1]}&nologo=true`;
+  return {
+    result: `Image ready. Put this exact URL in your reply, on its own line:\n${url}`,
+    sideEffect: { type: "media", data: { kind: "image", url, alt: prompt } },
+  };
+}
+
+async function generateMusic(userId: string | null | undefined, prompt: string): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
+  const description = prompt.trim();
+  if (!description) return { result: "Need a description of the track to generate." };
+  const studio = { type: "open_url", data: { url: "/tools/music", label: "Music Studio" } };
+  try {
+    const { elevenLabsConfigured, composeElevenLabs } = await import("@/lib/music/elevenlabs");
+    const { storeStudioAudio, audioPath } = await import("@/lib/music/studioAudio");
+    const db = getDb();
+    if (elevenLabsConfigured() && db && userId) {
+      const song = await composeElevenLabs({
+        prompt: description,
+        seconds: 15,
+        instrumental: true,
+        deadline: Date.now() + 45_000,
+      });
+      const id = await storeStudioAudio(db, userId, song.audio, { audioType: song.mime, provider: "elevenlabs", songId: song.songId });
+      const url = audioPath(id);
+      return {
+        result: `Track ready. Put this exact URL in your reply:\n${url}`,
+        sideEffect: { type: "media", data: { kind: "audio", url, alt: description } },
+      };
+    }
+  } catch (e) {
+    return {
+      result: `Music generation didn't finish (${e instanceof Error ? e.message : "provider error"}). Music Studio is open so they can retry there.`,
+      sideEffect: studio,
+    };
+  }
+  return {
+    result: "Music generation needs ELEVENLABS_API_KEY on this server. Music Studio is open with the request — say that plainly, don't invent a track.",
+    sideEffect: studio,
+  };
+}
+
+async function generateVideo(prompt: string): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
+  const description = prompt.trim();
+  if (!description) return { result: "Need a description of the video to generate." };
+  const studio = { type: "open_url", data: { url: "/tools/video", label: "Video Studio" } };
+  try {
+    const { replicateConfigured, createPrediction, getPrediction, videoUrlFrom } = await import("@/lib/replicate");
+    if (!replicateConfigured()) {
+      return { result: "Video rendering needs REPLICATE_API_TOKEN. Video Studio is open. Don't claim a clip exists.", sideEffect: studio };
+    }
+    const model = process.env.VIDEO_MODEL || "bytedance/seedance-1-lite";
+    const job = await createPrediction(model, {
+      prompt: description.slice(0, 1500),
+      duration: 5,
+      resolution: process.env.VIDEO_RESOLUTION || "480p",
+      aspect_ratio: "16:9",
+    });
+    const deadline = Date.now() + 25_000;
+    let current = job;
+    while (Date.now() < deadline && current.status !== "succeeded" && current.status !== "failed" && current.status !== "canceled") {
+      await new Promise((r) => setTimeout(r, 2500));
+      current = await getPrediction(job.id);
+    }
+    const url = current.status === "succeeded" ? videoUrlFrom(current.output) : null;
+    if (url) {
+      return { result: `Video ready. Put this exact URL in your reply:\n${url}`, sideEffect: { type: "media", data: { kind: "video", url, alt: description } } };
+    }
+    return { result: `Video is rendering (job ${job.id}, status ${current.status}). Video Studio is open. Don't claim it is finished until a URL comes back.`, sideEffect: studio };
+  } catch (e) {
+    return { result: `Video didn't start (${e instanceof Error ? e.message : "provider error"}).`, sideEffect: studio };
+  }
+}
+
+async function githubTool(ctx: RunContext, input: { action?: string; repo?: string; path?: string; query?: string }): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
+  const connect = { type: "open_url", data: { url: "/api/connect/github", label: "Connect GitHub" } };
+  if ((input.action ?? "status") === "connect") {
+    return { result: "Opening the GitHub connect screen. After they approve it, call github again.", sideEffect: connect };
+  }
+  if (!ctx.email) return { result: "Not signed in.", sideEffect: connect };
+  const grant = await getGithubAccessToken(ctx.email).catch(() => null);
+  if (!grant) {
+    return { result: "GitHub isn't connected. The connect screen is opening — don't ask them to paste code.", sideEffect: connect };
+  }
+  try {
+    return { result: await runGithub(grant.token, input.action ?? "status", input) };
+  } catch (e) {
+    return { result: e instanceof Error ? e.message : "GitHub request failed." };
+  }
 }
 
 function generateQR(data: string, label?: string): string {
@@ -1488,10 +1592,9 @@ export async function POST(req: NextRequest) {
   // (service-role bypasses RLS).
   const identity = await identify(req.headers, "chat");
   const email = identity.email;
-  // Sign-in is a phone number and a PIN and involves no Google token at all.
-  // Only the token minted from the opt-in "Connect Google" flow (Settings →
-  // Connections) can touch Gmail/Calendar, so use that alone; absent it the
-  // Google tools report "not connected" accurately.
+  // Gmail and Calendar use the refresh token stored at Google sign-in, or by
+  // Settings → Connections if those scopes were declined. The session token is
+  // not read here.
   let accessToken: string | undefined;
 
   // /api/chat isn't covered by the middleware matcher, so guard here: no session
@@ -1511,11 +1614,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Use the stored Google grant (gmail/calendar scopes) when available. Sign-in
-  // grants nothing from Google at all - it is a mobile number and a PIN - so
-  // this is absent until the user goes through /api/connect/google, and the
-  // capability check below is what the assistant must act on rather than the
-  // presence of a token.
+  // Use the stored Google grant when it carries Gmail or Calendar scopes.
   let googleScope: string | undefined;
   try {
     const connected = await getGoogleAccessToken(email);
@@ -1728,6 +1827,17 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          if (!functionCalls.length && !fullText.trim()) {
+            if (loopGuard > 1) {
+              send("text", { text: "Done." });
+              await saveMemory(email, memory, memoryStore);
+              send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
+              controller.close();
+              return;
+            }
+            throw new Error("empty gemini response");
+          }
+
           if (functionCalls.length > 0) {
             const assistantParts: Part[] = [];
             if (fullText) assistantParts.push({ text: fullText });
@@ -1840,7 +1950,8 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
-            if (out.content) send("text", { text: out.content });
+            if (!out.content?.trim()) throw new Error("empty tool fallback");
+            send("text", { text: out.content });
             await saveMemory(email, memory, memoryStore);
             send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects });
             if (email && out.content) void rememberExchange(email, message, out.content).catch(() => {});
@@ -1903,32 +2014,7 @@ export async function POST(req: NextRequest) {
             err instanceof Error ? err.message : String(err),
             cascadeErr instanceof Error ? cascadeErr.message : String(cascadeErr),
           ].join(" | ");
-          // Two failures that look alike and are not: a rate limit clears on its
-          // own in about a minute, an empty balance never does. Telling someone
-          // to "try again shortly" when the account is out of credit sends them
-          // to wait for something that will not happen.
-          const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
-          const outOfCredit = /credit balance|insufficient_quota|billing|payment/i.test(raw);
-          // Distinct from a rate limit: the model is up but every provider's
-          // free-tier capacity is momentarily saturated (Gemini's 503 "model
-          // is overloaded" is the common case). Same remedy — retry shortly —
-          // but "I've hit the usage limit" would be the wrong diagnosis.
-          const overloaded = /\b503\b|UNAVAILABLE|overloaded|server.?error/i.test(raw);
-          // User-facing copy stays free of anything that sounds like a devops
-          // runbook — no provider names, no env var names, no "billing" or
-          // "quota". Whoever is chatting with JARVIS is not the operator; the
-          // operator-facing detail (raw, with provider/env-var names) is what
-          // console.error below logs, not what ships to the person waiting on
-          // a reply.
-          const message = outOfCredit && rateLimited
-            ? "I'm temporarily unable to respond — my AI services are at capacity right now. This should clear within a couple of minutes. Please try again shortly."
-            : outOfCredit
-              ? "I'm temporarily unable to respond right now. Please try again in a little while."
-              : rateLimited
-                ? "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute."
-                : overloaded
-                  ? "I'm at capacity right now — this should clear on its own within a minute or two. Please try again shortly."
-                  : "Something went wrong on my end. Please try again in a moment.";
+          const message = userFacingOutage(raw);
           // A streaming response has already sent its 200 headers by now, so
           // this failure is invisible to anything watching status codes. Log it
           // so it reaches the runtime logs and gets grouped as an error there —

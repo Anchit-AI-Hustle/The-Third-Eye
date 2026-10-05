@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generationFailure, geminiToolsToOpenAI, llmCascade, resetCooldowns, toolCallCascade } from "@/lib/llmCascade";
+import { generationFailure, geminiToolsToOpenAI, llmCascade, resetCooldowns, toolCallCascade, userFacingOutage } from "@/lib/llmCascade";
 
 // A provider that just failed on quota grounds should be skipped on the next
 // call within the cooldown window, instead of paying for another failed
@@ -190,6 +190,18 @@ describe("toolCallCascade: tool-capable fallback (Groq/Cerebras/Mistral)", () =>
 
   it("throws when no tool-capable provider is configured", async () => {
     await expect(toolCallCascade({ messages: [{ role: "user", content: "hi" }], tools: [] })).rejects.toThrow(/no key/);
+  });
+});
+
+describe("userFacingOutage", () => {
+  it("does not tell someone an empty balance will clear in a couple of minutes", () => {
+    const raw = "openai 429 insufficient_quota billing | gemini RESOURCE_EXHAUSTED";
+    expect(userFacingOutage(raw)).toBe("I'm temporarily unable to respond right now. Please try again in a little while.");
+    expect(userFacingOutage(raw)).not.toMatch(/couple of minutes/);
+  });
+
+  it("treats a plain rate limit as a short wait", () => {
+    expect(userFacingOutage("RESOURCE_EXHAUSTED 429")).toMatch(/about a minute/);
   });
 });
 
