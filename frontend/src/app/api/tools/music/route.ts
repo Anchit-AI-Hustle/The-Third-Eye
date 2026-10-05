@@ -161,7 +161,11 @@ export async function POST(req: NextRequest) {
   if (!replicateConfigured()) {
     const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
     if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
-    return Response.json({ configured: false, prompt, tags, lyrics, ...briefMeta, ...elMeta, note: "Music generation needs ELEVENLABS_API_KEY or REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool." });
+    const keySet = !!process.env.ELEVENLABS_API_KEY?.trim();
+    const keyNote = keySet && !elevenLabsConfigured()
+      ? "The saved ElevenLabs value is a key id, not the secret. A working key starts with sk_ and is shown once when it is created or rotated. "
+      : "";
+    return Response.json({ configured: false, prompt, tags, lyrics, ...briefMeta, ...elMeta, note: `${keyNote}Music generation needs an sk_ ELEVENLABS_API_KEY or REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool.` });
   }
 
   // Route to a model that generates from text alone (no reference required).

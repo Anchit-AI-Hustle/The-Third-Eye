@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft, Copy, Check, Download, Trash2, Eye, Code2, AlertTriangle } from "lucide-react";
 import { GEN_APPS, deleteGeneration, getGeneration, type GenerationRecord } from "@/lib/generations";
+import { saveMedia } from "@/lib/mediaFile";
 
 // Full input → output view for one generation.
 export function GenerationDetail({ id }: { id: string }) {
@@ -15,6 +16,7 @@ export function GenerationDetail({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const [htmlView, setHtmlView] = useState<"preview" | "code">("preview");
   const [mediaBroken, setMediaBroken] = useState(false);
+  const [dlError, setDlError] = useState<string | null>(null);
 
   useEffect(() => { setRec(getGeneration(id)); setMediaBroken(false); }, [id]);
 
@@ -31,9 +33,11 @@ export function GenerationDetail({ id }: { id: string }) {
   const meta = GEN_APPS[rec.app] ?? { label: rec.app, color: "#8891A8", icon: "FileText" };
   const copy = () => navigator.clipboard.writeText(rec.output).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   const download = () => {
-    // Media outputs are a provider URL, not text — wrapping one in a .md blob
-    // would "download" the link itself. Open it so the browser saves the file.
-    if (rec.kind === "video" || rec.kind === "audio") { window.open(rec.output, "_blank", "noopener"); return; }
+    setDlError(null);
+    if (rec.kind === "video" || rec.kind === "audio") {
+      saveMedia(rec.output, rec.title).catch((e) => setDlError(e instanceof Error ? e.message : "Download failed."));
+      return;
+    }
     const ext = rec.kind === "html" ? "html" : rec.kind === "json" ? "json" : "md";
     const mime = rec.kind === "html" ? "text/html" : rec.kind === "json" ? "application/json" : "text/markdown";
     const blob = new Blob([rec.output], { type: mime });
@@ -49,7 +53,8 @@ export function GenerationDetail({ id }: { id: string }) {
           {rec.kind !== "audio" && (
             <button onClick={copy} className={btn}>{copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}</button>
           )}
-          {rec.kind !== "audio" && <button onClick={download} className={btn}><Download size={13} /> Download</button>}
+          <button onClick={download} className={btn}><Download size={13} /> Download</button>
+          {dlError && <span className="text-[11px] text-accent-red">{dlError}</span>}
           <button
             onClick={() => {
               if (!confirm(`Delete "${rec.title}"? This can't be undone.`)) return;

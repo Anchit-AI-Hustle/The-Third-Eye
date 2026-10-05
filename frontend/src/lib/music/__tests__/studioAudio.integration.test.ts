@@ -30,7 +30,7 @@ describe.skipIf(!url)("Music Studio audio on Postgres", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = url;
-    process.env.ELEVENLABS_API_KEY = "test-key";
+    process.env.ELEVENLABS_API_KEY = "sk_test-key";
     db = (await import("@/lib/db")).getDb()!;
   });
   afterAll(async () => {

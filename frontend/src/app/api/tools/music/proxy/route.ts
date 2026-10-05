@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ANCHOR_REPO } from "@/lib/anchor";
+import { contentDisposition, mediaFilename } from "@/lib/mediaFile";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,12 +52,19 @@ export async function GET(req: NextRequest) {
   }
   if (!upstream?.ok || !upstream.body) return new Response("upstream error", { status: 502 });
 
-  return new Response(upstream.body, {
-    status: 200,
-    headers: {
-      "Content-Type": upstream.headers.get("content-type") ?? "audio/mpeg",
-      "Cache-Control": "private, max-age=3600",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+  const q = new URL(req.url).searchParams;
+  const type = upstream.headers.get("content-type") ?? "application/octet-stream";
+  const headers: Record<string, string> = {
+    "Content-Type": type,
+    "Cache-Control": "private, max-age=3600",
+    "Access-Control-Allow-Origin": "*",
+  };
+  // Playback stays inline. A download must not open the browser's media player,
+  // so the file is served as an attachment named for what it actually is.
+  if (q.get("dl") === "1") {
+    headers["Content-Disposition"] = contentDisposition(mediaFilename(q.get("name") ?? "", type, parsed.pathname));
+    headers["X-Content-Type-Options"] = "nosniff";
+  }
+
+  return new Response(upstream.body, { status: 200, headers });
 }

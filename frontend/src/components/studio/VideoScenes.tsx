@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Clapperboard, Loader2, Film, Download, AlertTriangle, Mic, Tv, Layers } from "lucide-react";
 import { recordGeneration } from "@/lib/generations";
 import { assembleEpisode, type Aspect, type Soundtrack } from "@/lib/episodeVideo";
+import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
+import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
 type JobState = { status: "idle" | "rendering" | "done" | "error"; url?: string; msg?: string };
@@ -203,11 +205,30 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
                 </button>
               </div>
             </div>
-            <p className="text-[11px] leading-relaxed text-text-secondary">{s.prompt}</p>
+            <div className="flex flex-wrap items-center text-[11px] text-text-secondary">
+              <span>Shot prompt</span>
+              <AiFieldBar tool={{ label: tool === "reel" ? "Reel Studio" : "Video Studio", purpose: "a shot prompt a video model can render" }}
+                field={{ name: `shot-${s.n}`, label: `Shot ${s.n}: ${s.title}`, type: "textarea", placeholder: "what the camera sees" }}
+                value={s.prompt}
+                context={{ Title: s.title, Narration: s.narration, Script: script.slice(0, 500) }}
+                onChange={(v) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, prompt: v } : row) ?? prev)} />
+            </div>
+            <textarea value={s.prompt} rows={2} onChange={(e) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, prompt: e.target.value } : row) ?? prev)}
+              className="w-full bg-background-surface border border-border-default rounded-input px-2 py-1.5 text-[11px] leading-relaxed text-text-secondary outline-none resize-y" />
             {s.narration && (
-              <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-text-primary">
-                <Mic size={11} className="flex-none mt-0.5 text-text-muted" />“{s.narration}”
-              </p>
+              <>
+                <div className="flex flex-wrap items-center text-[11px] text-text-secondary">
+                  <Mic size={11} className="text-text-muted" />
+                  <span>Narration</span>
+                  <AiFieldBar tool={{ label: tool === "reel" ? "Reel Studio" : "Video Studio", purpose: "a spoken line over this shot" }}
+                    field={{ name: `narration-${s.n}`, label: `Narration ${s.n}`, type: "textarea", placeholder: "what is said" }}
+                    value={s.narration}
+                    context={{ Title: s.title, "Shot prompt": s.prompt, Script: script.slice(0, 500) }}
+                    onChange={(v) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, narration: v } : row) ?? prev)} />
+                </div>
+                <textarea value={s.narration} rows={2} onChange={(e) => setScenes((prev) => prev?.map((row) => row.n === s.n ? { ...row, narration: e.target.value } : row) ?? prev)}
+                  className="w-full bg-background-surface border border-border-default rounded-input px-2 py-1.5 text-[11px] leading-relaxed text-text-primary outline-none resize-y" />
+              </>
             )}
             {c.status === "error" && <p className="text-[11px] text-accent-red">{c.msg}</p>}
             {v.status === "error" && <p className="text-[11px] text-accent-red">Voice-over: {v.msg}</p>}
@@ -215,10 +236,10 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
             {c.status === "done" && c.url && (
               <div className="space-y-1.5">
                 <video controls src={c.url} className="w-full rounded-input bg-black" />
-                <a href={c.url} target="_blank" rel="noopener noreferrer"
+                <button type="button" onClick={() => saveMedia(c.url!, `${title} ${s.n}`).catch(() => setError("Could not download this clip."))}
                   className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary">
                   <Download size={11} /> Save clip — the provider link expires in about an hour
-                </a>
+                </button>
               </div>
             )}
           </div>
@@ -247,10 +268,10 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
           {episode.status === "done" && episode.url && (
             <div className="space-y-1.5">
               <video controls src={episode.url} className={`rounded-input bg-black ${aspect === "9:16" ? "w-full max-w-xs mx-auto block" : "w-full"}`} />
-              <a href={episode.url} download={fileName}
+              <button type="button" onClick={() => saveMedia(episode.url!, fileName.replace(/\.[a-z0-9]+$/i, "")).catch(() => setEpisode({ status: "error", msg: "Could not download the episode." }))}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold hover:brightness-110" style={{ color: accent }}>
                 <Download size={11} /> Download {fileName}
-              </a>
+              </button>
             </div>
           )}
         </div>

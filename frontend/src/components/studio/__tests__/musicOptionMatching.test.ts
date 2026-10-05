@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { matchOption, matchOptions } from "@/components/studio/MusicStudio";
+import { matchOption, matchOptions, MOODS } from "@/components/studio/MusicStudio";
 
 // "hard techno rap" autofilled to a single genre chip reading "Techno" — the
 // specific match got silently downgraded to a shorter, more generic option
@@ -48,6 +48,11 @@ describe("matchOptions: a multi-select field actually receives multiple values",
 
   it("caps at max", () => {
     expect(matchOptions("Techno, Hard Techno, Hip-Hop, House", GENRES, 2)).toHaveLength(2);
+  });
+
+  it("splits a mood phrase on & into chips the picker actually has", () => {
+    expect(MOODS).toEqual(expect.arrayContaining(["Hypnotic", "Driving"]));
+    expect(matchOptions("Hypnotic & driving", MOODS, 5, /[,&/]|\band\b/i)).toEqual(["Hypnotic", "Driving"]);
   });
 
   it("returns nothing for an empty or undefined value", () => {

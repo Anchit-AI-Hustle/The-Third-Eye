@@ -58,6 +58,12 @@ describe("/api/tools/suggest — the Studio's AI toolbar for any field", () => {
     expect((await suggest({ tool, field, action: "new", value: "x".repeat(12_001) })).status).toBe(200);
   });
 
+  it("corrects a repeated misspelling in the suggestion", async () => {
+    reply("a psychadelic acid night");
+    const field = { name: "vibe", label: "Genre / vibe", type: "text" };
+    expect((await (await suggest({ tool, field, action: "suggest" })).json()).suggestion).toBe("a psychedelic acid night");
+  });
+
   it("rejects malformed requests without calling a model", async () => {
     for (const body of [null, {}, { field: { label: "" } }, { field: { label: "Budget", type: "select", options: [] } }]) {
       expect((await suggest(body as never)).status).toBe(400);
