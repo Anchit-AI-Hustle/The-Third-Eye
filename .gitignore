@@ -14,3 +14,6 @@ build/
 .DS_Store
 .vercel
 .env*
+
+# Supabase CLI cache (written by `supabase link`)
+supabase/.temp/

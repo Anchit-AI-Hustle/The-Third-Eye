@@ -56,8 +56,9 @@ otherwise undocumented outside this file and the code itself.
   Removing it costs no feature: Gmail/Calendar always ran on the refresh token
   from the separate opt-in "Connect Google" flow (Settings → Connections), never
   on the session's Google token.
-- **Data:** Neon Postgres with **pgvector** for memory/RAG, reached server-side
-  through `lib/db.ts` (`pg`). The browser never talks to the database (see §4).
+- **Data:** Supabase Postgres (project `hlcjghpzxzatgjfwcoav`) with **pgvector** for
+  memory/RAG, reached server-side through `lib/db.ts` (`pg`). The browser never talks
+  to the database, and Supabase's Data API is locked out of it (see §4).
 - **LLM:** a 7-provider server-side cascade (`lib/llmCascade.ts`) — openai →
   anthropic → gemini → grok → groq → cerebras → ollama — with quota fallback. The
   assistant loop uses Gemini function-calling and falls back to the cascade.
@@ -116,24 +117,38 @@ server route**, `app/api/data/[entity]/route.ts`:
   `from().select().eq()` / `rpc()` builder surface the code was written against
   (it was supabase-js), returning `{ data, error, count }` with Postgres SQLSTATE
   codes and never throwing. It connects as the table owner, so RLS policies do
-  not apply to it — every query must filter by `user_id` itself.
+  not apply to it — every query must filter by `user_id` itself. Supabase hosts
+  connect over TLS verified against Supabase's root CA (`lib/pgConnection.mjs`),
+  since `sslmode=require` means verify-full to `pg` and that root is not in Node's
+  trust store.
 - Entity allowlist: `tasks`, `team_members`, `notes`, `goals`, `knowledge_docs`,
   `expenses`.
 - Client hooks (`useLocalTasks/Notes/Goals/Knowledge/Expenses`) go through
   `lib/dataClient.ts`, which falls back to **localStorage** when not signed in (401)
   or `DATABASE_URL` is unset (501) — so the app still works offline/unconfigured.
 - **Schema** is applied by `frontend/scripts/migrate.mjs`, the first step of
-  `npm run build`: `supabase/neon-compat.sql` (stand-ins for the Supabase
-  roles/`auth.jwt()` the files reference), then `supabase-schema*.sql`, then
-  `supabase/migrations/*.sql` in order, each once, tracked in
-  `public.app_migrations`. It runs only on production builds (previews share the
+  `npm run build`: `supabase/platform-compat.sql` (creates the Supabase
+  roles/`auth.jwt()` the files reference only where they are missing — local
+  Postgres, CI), then `supabase-schema*.sql`, then `supabase/migrations/*.sql` in
+  order, each once, tracked in `public.app_migrations`, then
+  `supabase/lockdown.sql` on every run (revokes `anon`/`authenticated` from the
+  `public` and `kolab` schemas and enables RLS on every table, so the publishable
+  key reaches nothing through `/rest/v1` or `/graphql/v1`). The Supabase CLI's
+  `db push` is not the migration path: it applies only `supabase/migrations/`,
+  which assume the base `supabase-schema*.sql` tables already exist. It runs only on production builds (previews share the
   production database) and is skipped without `DATABASE_URL`. The RLS policies in
   those files are kept but inert under the owner connection. A **Cloud synced /
   Local only** badge (`components/layout/CloudSyncBadge.tsx` + `/api/sync-status`)
   surfaces which mode you're in so a missing `DATABASE_URL` isn't a silent
   data-loss trap.
-- Integration test: `TEST_DATABASE_URL=postgres://… npm test` runs
-  `lib/__tests__/db.integration.test.ts` against a migrated database.
+- Integration tests: `TEST_DATABASE_URL=postgres://… npm test` runs the
+  `*.integration.test.ts` files against a migrated database —
+  `schema.integration.test.ts` checks every table, selected column and `rpc()`
+  function the code uses exists and that the API roles have no grants;
+  `phoneAuth.integration.test.ts` runs sign-up, sign-in and the PIN lockout. The
+  closest local stand-in for production is the real Supabase image:
+  `docker run -d -p 54322:5432 -e POSTGRES_PASSWORD=pw supabase/postgres:17.6.1.104`,
+  then `DATABASE_URL=postgres://postgres:pw@localhost:54322/postgres node scripts/migrate.mjs`.
 
 ### 4a. Moving an existing workspace onto a phone identity
 
@@ -148,7 +163,7 @@ the email identity again either.
 
 There is no automatic link, on purpose: silently merging two identities is a
 worse failure than an obvious empty workspace. Re-key deliberately instead, once,
-against the database (Neon SQL editor), **before** putting anything into the
+against the database (Supabase SQL editor), **before** putting anything into the
 new account so nothing collides:
 
 ```sql
@@ -228,7 +243,7 @@ Generators, all powered by the shared `llmCascade` (no new keys):
   **Daily drop** (`lib/music/daily.ts`): "Save as my daily style" stores the
   form in `music_daily`; the daily cron (`/api/cron/dispatch`, job `music`)
   makes one new track per user per day and hands it to Replicate with a
-  webhook (`/api/tools/music/daily/webhook`). The audio is kept in Neon
+  webhook (`/api/tools/music/daily/webhook`). The audio is kept in Postgres
   (`music_daily_chunks`, 1 MiB chunks, last 7 days) because Replicate deletes
   outputs within the hour, and it is served by byte range
   (`/api/tools/music/daily/[id]`) because a Vercel response can't exceed
@@ -322,7 +337,10 @@ to the database.
 - **Deploy:** Vercel, Root Directory `frontend`, auto-deploy on `main`
   (`vercel.json`). Env: `GEMINI_API_KEY` (+ other provider keys),
   `GOOGLE_CLIENT_ID/SECRET`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`,
-  `DATABASE_URL` + `DATABASE_URL_UNPOOLED` (Neon, from the Vercel integration),
+  `DATABASE_URL` (Supabase transaction pooler, port 6543) + `DATABASE_URL_UNPOOLED`
+  (session pooler, port 5432 — migrations take an advisory lock, which needs a
+  session; the direct `db.<ref>.supabase.co` host is IPv6-only and unreachable
+  from Vercel),
   `TOKEN_ENCRYPTION_KEY`, `SERPER_API_KEY`.
 - **OAuth redirect URIs** to whitelist in Google Console:
   `…/api/auth/callback/google` (sign-in) and `…/api/connect/google/callback`
@@ -343,7 +361,7 @@ to the database.
     original file; `public.app_migrations` tracks applied files by path, and
     removing a file that already ran desyncs the ledger from the live
     database. If the change is destructive (dropped a column with data in
-    it), restore from a Neon point-in-time branch instead, then reapply
+    it), restore from a Supabase backup (point-in-time recovery on paid plans) instead, then reapply
     migrations up to (not including) the bad one.
   - **Bad env var / secret rotation.** Vercel → Settings → Environment
     Variables keeps no built-in history; before changing a production value,

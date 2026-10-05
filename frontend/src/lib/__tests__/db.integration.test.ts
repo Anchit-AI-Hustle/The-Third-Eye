@@ -13,7 +13,7 @@ describe.skipIf(!url)("db adapter against Postgres", () => {
     db = (await import("@/lib/db")).getDb()!;
   });
   afterAll(async () => {
-    for (const t of ["tasks", "reminders", "conversation_sources", "expenses", "cortex_memories", "usage_counters", "auth_rate_limit", "lifelog_days"]) {
+    for (const t of ["tasks", "reminders", "conversation_sources", "expenses", "cortex_memories", "cortex_doc_chunks", "knowledge_docs", "usage_counters", "auth_rate_limit", "lifelog_days"]) {
       await db.from(t).delete().eq(t === "auth_rate_limit" ? "k" : "user_id", U);
     }
   });
@@ -89,6 +89,12 @@ describe.skipIf(!url)("db adapter against Postgres", () => {
     expect(m.error).toBeNull();
     expect(m.data[0]).toMatchObject({ content: "hello" });
     expect(m.data[0].similarity).toBeCloseTo(1);
+    expect((await db.from("knowledge_docs").insert({ id: `${U}-d`, user_id: U, title: "Doc" })).error).toBeNull();
+    const chunk = { id: `${U}-c`, user_id: U, doc_id: `${U}-d`, doc_title: "Doc", chunk_index: 0, content: "chunk", embedding: vec };
+    expect((await db.from("cortex_doc_chunks").insert(chunk)).error).toBeNull();
+    const c = await db.rpc("match_cortex_chunks", { p_user_id: U, query_embedding: vec, match_count: 3 });
+    expect(c.error).toBeNull();
+    expect(c.data[0]).toMatchObject({ doc_title: "Doc", content: "chunk" });
     expect((await db.rpc("increment_usage", { p_user_id: U, p_metric: "chat", p_amount: 1 })).data).toBe(1);
     expect((await db.rpc("auth_rate_limit_hit", { p_bucket: "phone_number", p_key: U, p_window_secs: 600 })).data).toBe(1);
   });

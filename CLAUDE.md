@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 **The live product is `frontend/`.** Next.js 14 App Router + TypeScript,
-NextAuth (phone + PIN, JWT sessions), Neon Postgres (+ pgvector, via `lib/db.ts`) as the
+NextAuth (phone + PIN, JWT sessions), Supabase Postgres (+ pgvector, via `lib/db.ts`) as the
 data layer, Tailwind + Radix UI, a 7-provider server-side LLM cascade
 (`lib/llmCascade.ts`), deployed on Vercel with auto-deploy on `main`. Full
 detail, updated as things ship: **[DEVELOPMENT.md](DEVELOPMENT.md) — read
@@ -36,7 +36,7 @@ itself but should not be assumed to describe the live app.
 
 `docker-compose.yml` orchestrates Postgres 16, Redis 7, Nginx, n8n,
 backend, frontend for a hypothetical full local stack — not how the live
-product actually runs (that's Vercel + Neon, no Docker).
+product actually runs (that's Vercel + Supabase, no Docker).
 
 ## Common Commands
 

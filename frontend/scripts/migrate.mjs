@@ -2,8 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { pgConnection } from "../src/lib/pgConnection.mjs";
 
-// Applies the repo's SQL to the Neon database before `next build`, once per file.
+// Applies the repo's SQL to the database before `next build`, once per file.
 // Preview deployments share the production database, so only production builds
 // (or a local build pointed at its own DATABASE_URL) may migrate.
 
@@ -31,11 +32,11 @@ const files = [
   ...sorted(migrations, (f) => f.endsWith(".sql")).map((f) => join("supabase", "migrations", f)),
 ];
 
-const client = new pg.Client({ connectionString: url });
+const client = new pg.Client(pgConnection(url));
 await client.connect();
 try {
   await client.query("select pg_advisory_lock(7317001)");
-  await client.query(readFileSync(join(root, "supabase", "neon-compat.sql"), "utf8"));
+  await client.query(readFileSync(join(root, "supabase", "platform-compat.sql"), "utf8"));
   await client.query(
     "create table if not exists public.app_migrations (name text primary key, applied_at timestamptz not null default now())",
   );
@@ -54,6 +55,7 @@ try {
       break;
     }
   }
+  await client.query(readFileSync(join(root, "supabase", "lockdown.sql"), "utf8"));
 } finally {
   await client.end();
 }

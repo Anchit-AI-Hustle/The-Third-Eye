@@ -1,6 +1,7 @@
 import { Pool, types, type PoolClient } from "pg";
+import { pgConnection } from "./pgConnection.mjs";
 
-// Server-only Postgres (Neon) access behind the query-builder surface the app
+// Server-only Postgres (Supabase) access behind the query-builder surface the app
 // was written against: `db.from(t).select(...).eq(...)` and `db.rpc(fn, args)`,
 // resolving to `{ data, error, count }` and never throwing. The connection is
 // the table owner, so RLS policies do not apply here — every caller constrains
@@ -46,7 +47,7 @@ let _pool: Pool | null = null;
 function pool(): Pool | null {
   const url = process.env.DATABASE_URL;
   if (!url) return null;
-  if (!_pool) _pool = new Pool({ connectionString: url, max: 3, idleTimeoutMillis: 10_000, types: { getTypeParser } });
+  if (!_pool) _pool = new Pool({ ...pgConnection(url), max: 3, idleTimeoutMillis: 10_000, types: { getTypeParser } });
   return _pool;
 }
 
