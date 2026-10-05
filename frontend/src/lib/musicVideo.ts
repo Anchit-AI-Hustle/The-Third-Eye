@@ -15,9 +15,17 @@
 //   • Quality: explicit high bitrate + 1080p (the browser's default bitrate is
 //     conservative and produces blocky 720p).
 
-// Recording longer than this in the browser exhausts memory, so we cap the
-// rendered video and let the in-app player loop for the full session length.
-const MAX_VIDEO_SECONDS = 180;
+// A music video is one pass of the clip, looped only up to this. Recording is
+// real time at 720p; the old 3-minute 1080p capture exhausted the tab and the
+// file never appeared. The in-app player still loops the full session.
+export const MAX_VIDEO_SECONDS = 48;
+
+/** How many seconds to record: the clip, or the session if it is longer, never past the cap. */
+export function renderLength(clipDur: number, loopToSeconds?: number): number {
+  const clip = Number.isFinite(clipDur) && clipDur > 0 ? clipDur : 1;
+  const asked = loopToSeconds && loopToSeconds > clip + 0.05 ? loopToSeconds : clip;
+  return Math.min(Math.max(asked, 1), MAX_VIDEO_SECONDS);
+}
 
 export interface VisualizerOptions {
   title?: string;
@@ -46,35 +54,62 @@ function trimSilence(buf: AudioBuffer, ctx: BaseAudioContext): AudioBuffer {
   return out;
 }
 
+// Chrome only honours AudioContext.resume() during a user gesture. A music job
+// finishes long after that gesture expires, so a context created then stays
+// suspended, the recorder's audio track never starts, and no video is produced.
+// primeAudioContext() has to run inside the click that starts generation.
+let primed: AudioContext | null = null;
+
+export function primeAudioContext(): void {
+  if (typeof window === "undefined") return;
+  const AC = (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+  if (!AC) return;
+  if (!primed || primed.state === "closed") primed = new AC();
+  void primed.resume();
+}
+
+function recorderMime(): string {
+  const options = [
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+  ];
+  const hit = options.find((m) => MediaRecorder.isTypeSupported(m));
+  if (!hit) throw new Error("This browser can't record video.");
+  return hit;
+}
+
 export async function generateVisualizerVideo(
   audioSrc: string,
   opts: VisualizerOptions = {},
 ): Promise<Blob> {
   if (typeof window === "undefined") throw new Error("client only");
-  const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-  if (!AC || typeof MediaRecorder === "undefined") throw new Error("This browser can't record video.");
+  if (typeof MediaRecorder === "undefined") throw new Error("This browser can't record video.");
+  primeAudioContext();
+  const ctx = primed;
+  if (!ctx) throw new Error("This browser can't record video.");
+  await ctx.resume();
+  if (ctx.state !== "running") {
+    throw new Error("The browser blocked recording. Press Generate video — that click unlocks it.");
+  }
 
-  // Decode the clip up-front so playback is sample-accurate and loopable.
+  opts.onProgress?.(0);
   const resp = await fetch(audioSrc);
   if (!resp.ok) throw new Error("Could not load the audio for video.");
   const raw = await resp.arrayBuffer();
+  if (raw.byteLength < 64) throw new Error("The audio file was empty, so no video could be made.");
 
-  const ctx = new AC();
   let buffer: AudioBuffer;
   try {
     buffer = await ctx.decodeAudioData(raw.slice(0));
   } catch {
-    await ctx.close().catch(() => {});
     throw new Error("This audio format can't be decoded for video in this browser.");
   }
   const clip = trimSilence(buffer, ctx);
   const clipDur = clip.duration;
-
-  // How long to render: fill the requested session, but cap for the browser.
-  const target = Math.min(
-    Math.max(opts.loopToSeconds && opts.loopToSeconds > clipDur ? opts.loopToSeconds : clipDur, 1),
-    MAX_VIDEO_SECONDS,
-  );
+  const target = renderLength(clipDur, opts.loopToSeconds);
   const willLoop = target > clipDur + 0.05;
 
   const source = ctx.createBufferSource();
@@ -86,23 +121,27 @@ export async function generateVisualizerVideo(
   source.connect(analyser);
   analyser.connect(dest); // record the audio; not routed to speakers (silent render)
 
+  // Chrome drops the audio track once it thinks nothing is playing. A silent
+  // carrier keeps the track alive for the whole recording.
+  const carrier = ctx.createConstantSource();
+  carrier.offset.value = 0;
+  carrier.connect(dest);
+
   const canvas = document.createElement("canvas");
-  canvas.width = 1920; canvas.height = 1080;
+  canvas.width = 1280; canvas.height = 720;
   const g = canvas.getContext("2d", { alpha: false })!;
   const FPS = 30;
   const canvasStream = canvas.captureStream(FPS);
   const mixed = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
 
-  const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
-    .find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
+  const mime = recorderMime();
   const rec = new MediaRecorder(mixed, {
     mimeType: mime,
-    videoBitsPerSecond: 8_000_000, // ~8 Mbps 1080p — sharp, no blocky artefacts
+    videoBitsPerSecond: 4_000_000,
     audioBitsPerSecond: 192_000,
   });
   const chunks: Blob[] = [];
   rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  const finished = new Promise<Blob>((res) => { rec.onstop = () => res(new Blob(chunks, { type: "video/webm" })); });
 
   const bins = analyser.frequencyBinCount;
   const data = new Uint8Array(bins);
@@ -125,12 +164,12 @@ export async function generateVisualizerVideo(
     g.fillStyle = bg; g.fillRect(0, 0, W, H);
 
     // Circular spectrum — bars radiating from the centre.
-    const ring = 220 + bass * 90;
-    const n = 128;
+    const ring = Math.min(W, H) * 0.22 + bass * 50;
+    const n = 96;
     for (let i = 0; i < n; i++) {
       const v = data[Math.floor((i / n) * bins)] / 255;
       const ang = (i / n) * Math.PI * 2 - Math.PI / 2 + frame * 0.002;
-      const len = 18 + v * 360;
+      const len = 12 + v * (Math.min(W, H) * 0.28);
       const x1 = cx + Math.cos(ang) * ring, y1 = cy + Math.sin(ang) * ring;
       const x2 = cx + Math.cos(ang) * (ring + len), y2 = cy + Math.sin(ang) * (ring + len);
       g.strokeStyle = `hsl(${(150 + i * 2.2 + frame) % 360}, 80%, ${45 + v * 30}%)`;
@@ -151,8 +190,8 @@ export async function generateVisualizerVideo(
     g.textAlign = "center";
     g.fillStyle = "rgba(232,247,240,0.96)";
     g.shadowColor = "rgba(52,211,153,0.6)"; g.shadowBlur = 32;
-    g.font = "bold 72px system-ui, -apple-system, sans-serif";
-    g.fillText(title.slice(0, 40), cx, H - 96);
+    g.font = `bold ${Math.round(H * 0.067)}px system-ui, -apple-system, sans-serif`;
+    g.fillText(title.slice(0, 40), cx, H - Math.round(H * 0.09));
     g.shadowBlur = 0;
     g.textAlign = "left";
 
@@ -160,13 +199,20 @@ export async function generateVisualizerVideo(
     raf = requestAnimationFrame(draw);
   };
 
+  g.fillStyle = "#05050C"; g.fillRect(0, 0, W, H);
+  let stopped = false;
+  const stopRecording = () => new Promise<void>((res) => {
+    if (stopped || rec.state === "inactive") return res();
+    stopped = true;
+    rec.onstop = () => res();
+    try { rec.stop(); } catch { res(); }
+  });
   try {
-    await ctx.resume();
-    g.fillStyle = "#05050C"; g.fillRect(0, 0, W, H); // prime first frame
-    // Start audio and recording in the same tick → tracks are aligned.
     startTs = performance.now();
+    carrier.start();
     source.start();
-    rec.start();
+    try { rec.start(500); }
+    catch { throw new Error("This browser couldn't start the video recorder. Press Generate video to try again."); }
     draw();
     await new Promise<void>((res) => {
       const stopAt = startTs + target * 1000;
@@ -174,15 +220,17 @@ export async function generateVisualizerVideo(
         if (performance.now() >= stopAt) return res();
         setTimeout(tick, 100);
       };
-      // Also honour the natural end when we're not looping.
-      source.onended = () => res();
+      source.onended = () => { if (!willLoop) res(); };
       tick();
     });
   } finally {
     cancelAnimationFrame(raf);
     try { source.stop(); } catch { /* already stopped */ }
-    if (rec.state !== "inactive") rec.stop();
-    try { await ctx.close(); } catch { /* noop */ }
+    try { carrier.stop(); } catch { /* already stopped */ }
+    try { source.disconnect(); analyser.disconnect(); carrier.disconnect(); } catch { /* noop */ }
+    await stopRecording();
   }
-  return finished;
+  const blob = new Blob(chunks, { type: mime.split(";")[0] });
+  if (blob.size < 1000) throw new Error("The recording came out empty. Press Generate video to try again.");
+  return blob;
 }

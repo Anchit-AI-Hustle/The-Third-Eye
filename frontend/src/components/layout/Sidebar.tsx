@@ -14,6 +14,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode, type ModeId } from "@/hooks/useMode";
 import { CloudSyncBadge } from "./CloudSyncBadge";
+import { PWAInstall } from "@/components/PWAInstall";
 import { WalletWidget } from "@/components/billing/WalletWidget";
 
 // Mode-aware, grouped navigation. Each item can be scoped to a subset of modes;
@@ -233,6 +234,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
             <WalletWidget />
           </div>
         )}
+        <PWAInstall collapsed={collapsed} />
         <CloudSyncBadge collapsed={collapsed} />
         <Link href="/settings" title={collapsed ? "Settings" : undefined}
           onClick={() => { if (onMobileClose) onMobileClose(); }}
