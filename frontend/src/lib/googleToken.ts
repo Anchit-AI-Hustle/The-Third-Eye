@@ -180,12 +180,12 @@ export const BASIC_SCOPE_LIST = ["openid", "email", "profile"] as const;
  * not ask for a refresh token. prompt select_account lets a person with more
  * than one Google account pick the right one without a consent screen every time.
  */
-export const SIGNIN_SCOPES = BASIC_SCOPE_LIST.join(" ");
+export const SIGNIN_SCOPES = CONNECT_SCOPES;
 
 export const GOOGLE_SIGNIN_PARAMS = {
-  scope: SIGNIN_SCOPES,
-  prompt: "select_account",
-  access_type: "online",
+  scope: CONNECT_SCOPES,
+  prompt: "consent select_account",
+  access_type: "offline",
   response_type: "code",
 } as const;
 
