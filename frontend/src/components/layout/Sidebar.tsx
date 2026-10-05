@@ -71,9 +71,28 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Capabilities", href: "/capabilities", icon: Sparkles },
       { label: "Agent Activity", href: "/activity", icon: Activity },
       { label: "App Audit", href: "/audit", icon: ShieldCheck },
+      { label: "Settings", href: "/settings", icon: Settings },
     ],
   },
 ];
+
+function SignOutButton({ collapsed }: { collapsed?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => signOutAndClear({ callbackUrl: "/auth/signin" })}
+      title="Sign out"
+      aria-label="Sign out"
+      className={cn(
+        "flex items-center gap-3 rounded-input text-sm text-text-secondary hover:text-accent-red hover:bg-accent-red/8 transition-all duration-150 w-full",
+        collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
+      )}
+    >
+      <LogOut size={16} className="flex-none" />
+      {!collapsed && <span className="flex-1 text-left font-mono text-xs tracking-wide">Sign out</span>}
+    </button>
+  );
+}
 
 function visibleItems(items: NavItem[], modeId: ModeId): NavItem[] {
   return items.filter((it) => !it.modes || it.modes.includes(modeId));
@@ -107,11 +126,11 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
       )}
       <aside
         className={cn(
-          "flex flex-col h-screen bg-background-surface border-r border-border-default transition-all duration-200 ease-in-out flex-none z-50",
+          "flex flex-col bg-background-surface border-r border-border-default transition-all duration-200 ease-in-out flex-none",
           /* Desktop: sticky, hidden below lg */
-          "hidden lg:flex lg:sticky lg:top-0",
-          /* Mobile: fixed overlay drawer */
-          mobileOpen && "!flex fixed inset-y-0 left-0",
+          "hidden lg:flex lg:sticky lg:top-0 lg:h-screen lg:z-50",
+          /* Mobile: drawer sits above the tab bar so Settings / Sign out stay reachable */
+          mobileOpen && "!flex fixed top-0 left-0 z-[60] pt-[env(safe-area-inset-top)] bottom-[calc(4rem+env(safe-area-inset-bottom))]",
           collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
         )}
       >
@@ -236,16 +255,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
         )}
         <PWAInstall collapsed={collapsed} />
         <CloudSyncBadge collapsed={collapsed} />
-        <Link href="/settings" title={collapsed ? "Settings" : undefined}
-          onClick={() => { if (onMobileClose) onMobileClose(); }}
-          className={cn(
-            "flex items-center gap-3 rounded-input text-sm text-text-secondary hover:text-text-primary hover:bg-background-elevated transition-all border border-transparent",
-            collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
-          )}
-        >
-          <Settings size={16} className="flex-none" />
-          {!collapsed && <span className="font-mono text-xs tracking-wide">Settings</span>}
-        </Link>
 
         {session?.user && (
           <div className={cn(
@@ -264,21 +273,13 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
               </div>
             )}
             {!collapsed && (
-              <>
-                <span className="text-text-secondary text-xs truncate flex-1 font-mono">
-                  {session.user.name?.split(" ")[0] ?? session.user.email}
-                </span>
-                <button onClick={() => signOutAndClear({ callbackUrl: "/auth/signin" })}
-                  className="text-text-muted hover:text-accent-red transition-colors p-1.5"
-                  title="Sign out"
-                  aria-label="Sign out"
-                >
-                  <LogOut size={13} />
-                </button>
-              </>
+              <span className="text-text-secondary text-xs truncate flex-1 font-mono">
+                {session.user.name?.split(" ")[0] ?? session.user.email}
+              </span>
             )}
           </div>
         )}
+        <SignOutButton collapsed={collapsed} />
       </div>
     </aside>
     </>
