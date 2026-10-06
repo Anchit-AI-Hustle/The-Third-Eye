@@ -69,6 +69,12 @@ export function ActionCard({
               )}
             </div>
           )}
+          {a.fallbackUrl && (
+            <a href={a.fallbackUrl} target="_blank" rel="noopener noreferrer"
+              className="inline-flex mt-3 text-xs text-accent-blue underline">
+              Open Gmail draft
+            </a>
+          )}
           {a.status === "canceled" && (
             <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>
           )}

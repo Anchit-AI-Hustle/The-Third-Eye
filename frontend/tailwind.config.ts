@@ -55,7 +55,7 @@ const config: Config = {
         warning: "#F59E0B",
       },
       fontFamily: {
-        sans:    ["Inter", "system-ui", "sans-serif"],
+        sans:    ["Geist", "Inter", "system-ui", "sans-serif"],
         display: ["Geist", "Inter", "system-ui", "sans-serif"],
         mono:    ["Geist Mono", "ui-monospace", "monospace"],
         // Kolab Studio's own display + label faces (Archivo / JetBrains Mono) — see

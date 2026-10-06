@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
@@ -12,7 +11,6 @@ import {
 } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/react";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 // Build the verification block, omitting any token that isn't set so we never
 // ship an empty <meta content=""> (which some crawlers treat as a failed claim).
@@ -70,7 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark" suppressHydrationWarning>
       <head />
       <body
-        className={`${inter.variable} ${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
+        className={`${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>

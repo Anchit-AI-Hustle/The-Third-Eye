@@ -30,7 +30,7 @@ const TABLES = [
   "jarvis_memory", "usage_counters",
   "cortex_memories", "cortex_doc_chunks", "reminders", "push_subscriptions",
   "notification_log", "processed_messages", "chat_watermarks", "activity_log", "device_logs",
-  "profiles", "google_tokens",
+  "profiles", "google_tokens", "github_tokens",
   // The daily song style and tracks; their audio chunks go with the tracks.
   "music_daily", "music_daily_tracks",
   // Music Studio songs stored from Eleven Music; their chunks go with them.

@@ -514,7 +514,7 @@ export const geminiTools = [
         parameters: {
           type: "OBJECT",
           properties: {
-            action: { type: "STRING", enum: ["status", "connect", "list_repos", "list_issues", "list_pulls", "get_file", "search_code"], description: "What to read" },
+            action: { type: "STRING", enum: ["status", "connect", "list_repos", "list_files", "list_issues", "list_pulls", "get_file", "search_code"], description: "What to read" },
             repo: { type: "STRING", description: "owner/name, for issues, pulls, and files" },
             path: { type: "STRING", description: "File or directory path inside the repo (get_file)" },
             query: { type: "STRING", description: "Code search query (search_code)" },

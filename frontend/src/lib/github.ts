@@ -34,6 +34,7 @@ export async function revokeGithubAccess(userId: string): Promise<boolean> {
 
 async function gh(token: string, path: string): Promise<any> {
   const res = await fetch(`https://api.github.com${path}`, {
+    cache: "no-store", redirect: "error", signal: AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
@@ -84,6 +85,11 @@ export async function runGithub(
     if (!Array.isArray(pulls) || !pulls.length) return `No open pull requests in ${repo}.`;
     return pulls.map((p: any) => `- #${p.number} ${p.title} (${p.user?.login ?? "?"})`).join("\n");
   }
+  if (action === "list_files") {
+    const repo = repoOf(input);
+    const tree = await gh(token, `/repos/${repo}/git/trees/HEAD?recursive=1`);
+    return JSON.stringify({ truncated: tree.truncated || tree.tree.length > 1500, files: tree.tree.slice(0, 1500).map((f: any) => ({ path: f.path, type: f.type, size: f.size })) });
+  }
   if (action === "get_file") {
     const repo = repoOf(input);
     const path = String(input.path ?? "").replace(/^\/+/, "");
@@ -92,7 +98,7 @@ export async function runGithub(
     if (Array.isArray(file)) return file.map((f: any) => `${f.type === "dir" ? "dir" : "file"} ${f.path}`).join("\n");
     if (file.encoding === "base64" && typeof file.content === "string") {
       const text = Buffer.from(file.content.replace(/\n/g, ""), "base64").toString("utf8");
-      return `${file.path} (${file.size} bytes)\n\n${text.slice(0, 12000)}`;
+      return `${file.path} (${file.size} bytes)\n\n${text.slice(0, 12000)}${text.length > 12000 ? "\n[File truncated at 12000 characters]" : ""}`;
     }
     return `${file.path}: ${file.html_url ?? "no preview"}`;
   }

@@ -49,16 +49,13 @@ const LEAD =
 const OPEN_CMD = /^(?:open|go to|take me to|navigate to|pull up)\s+(.+)$/i;
 const CONNECT_CMD = /^(?:connect|link|hook up)(?:\s+me)?(?:\s+to)?(?:\s+(?:my|the))?\s+(.+)$/i;
 const EMAIL_CMD = /^(?:send|shoot|write|draft|compose)\s+(?:an?\s+)?(?:e-?mail|mail)\b|^(?:e-?mail|mail)\s+/i;
-const EMAIL_ADDR = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const EMAIL_ADDR = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
 /** Every well-formed address in a To header. Comma-separated is what Gmail sends. */
 export function emailRecipients(raw: string): string[] {
-  const out: string[] = [];
-  for (const part of raw.split(/[,;]/)) {
-    const addr = part.trim();
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr) && !out.includes(addr)) out.push(addr);
-  }
-  return out;
+  const parts = raw.split(/[,;]/).map((part) => part.trim());
+  if (!parts.every((addr) => /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(addr))) return [];
+  return [...new Set(parts)];
 }
 
 /**
@@ -95,7 +92,7 @@ function parseOpen(text: string): DirectTurn | null {
   let rest = m[1].trim().replace(/\s+please$/i, "").trim();
   if (/\band\b/i.test(rest)) return null;
   let query: string | undefined;
-  const q = /^(.*?)\s+(?:for|search(?:ing)?)\s+(.+)$/i.exec(rest);
+  const q = /^(.*?)\s+(?:for|search(?:ing)?)\s+([\s\S]+)$/i.exec(rest);
   if (q) {
     rest = q[1].trim();
     query = q[2].trim();
@@ -115,38 +112,43 @@ function parseOpen(text: string): DirectTurn | null {
 }
 
 function parseEmail(text: string): DirectTurn | null {
-  const flat = text.replace(/[.!?]+$/, "").trim();
-  if (!EMAIL_CMD.test(flat)) return null;
-  EMAIL_ADDR.lastIndex = 0;
-  const found = flat.match(EMAIL_ADDR);
-  if (!found?.length) return null;
-  const to = emailRecipients(found.join(", ")).join(", ");
-  if (!to) return null;
-
-  let rest = flat;
-  for (const addr of found) rest = rest.split(addr).join(" ");
-  rest = rest
-    .replace(/^(?:send|shoot|write|draft|compose)\s+(?:an?\s+)?(?:e-?mail|mail)\s+(?:to\s+)?/i, " ")
-    .replace(/^(?:e-?mail|mail)\s+(?:to\s+)?/i, " ")
-    .replace(/\b(?:and|plus|&)\b/gi, " ")
-    .replace(/\s+/g, " ")
+  if (!EMAIL_CMD.test(text)) return null;
+  let rest = text
+    .replace(/^(?:send|shoot|write|draft|compose)\s+(?:an?\s+)?(?:e-?mail|mail)\s+(?:to\s+)?/i, "")
+    .replace(/^(?:e-?mail|mail)\s+(?:to\s+)?/i, "")
     .trim();
+  const recipients: string[] = [];
+  while (true) {
+    const found = EMAIL_ADDR.exec(rest);
+    if (!found || found.index !== 0) return null;
+    recipients.push(found[0]);
+    rest = rest.slice(found[0].length).trimStart();
+    const separator = /^(?:[,;]\s*(?:and\s+)?|(?:and|&)\s+)/i.exec(rest);
+    if (!separator) break;
+    const next = rest.slice(separator[0].length);
+    if (EMAIL_ADDR.exec(next)?.index !== 0) return null;
+    rest = next;
+  }
+  const to = [...new Set(recipients)].join(", ");
+  // Only bypass the model for explicit content, not prose-writing instructions.
+  if (!/^(?:about|regarding|re|subject|saying|that(?: says)?|body)\b|^[:-]/i.test(rest)) return null;
 
   let subject = "";
   let body = "";
-  const about = /^(?:about|regarding|re|subject)\s*[:-]?\s*(.+?)(?:\s+(?:saying|that says|that|body)\s*[:-]?\s*(.*))?$/i.exec(rest);
+  const about = /^(?:about|regarding|re|subject)\s*[:-]?\s*([\s\S]+?)(?:\s+(?:saying|that(?: says)?|body)\s*[:-]?\s*([\s\S]*))?$/i.exec(rest);
   if (about) {
     subject = about[1].trim();
     body = (about[2] ?? "").trim();
   } else {
-    const saying = /^(?:saying|that says|that|body)\s*[:-]?\s*(.+)$/i.exec(rest);
+    const saying = /^(?:saying|that(?: says)?|body)\s*[:-]?\s*([\s\S]+)$/i.exec(rest);
     body = saying ? saying[1].trim() : rest.replace(/^[:-]\s*/, "").trim();
   }
-  if (!subject) subject = (body || "Message").slice(0, 80);
+  if (!subject && !body) return null;
+  if (!subject) subject = body.slice(0, 80);
   if (!body) body = subject;
   return {
     kind: "email",
-    text: `Ready to send that to ${to}. Confirm and it goes out.`,
+    text: `Review the email to ${to}, then confirm to send.`,
     args: { action: "email", to, subject: headerSafe(subject), body },
   };
 }

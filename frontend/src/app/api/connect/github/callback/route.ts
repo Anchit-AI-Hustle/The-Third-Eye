@@ -51,8 +51,8 @@ export async function GET(req: Request) {
     if (me.ok) login = ((await me.json()) as { login?: string }).login ?? null;
   } catch { /* login is display-only */ }
 
-  await storeGithubToken(email, tok.access_token, login);
-  const done = NextResponse.redirect(`${base}/settings?connect=github_connected`);
+  const stored = await storeGithubToken(email, tok.access_token, login);
+  const done = NextResponse.redirect(`${base}/settings?connect=${stored ? "github_connected" : "github_error"}`);
   done.cookies.delete("gh_connect_state");
   return done;
 }

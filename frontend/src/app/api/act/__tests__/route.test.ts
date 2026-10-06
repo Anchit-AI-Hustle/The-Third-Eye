@@ -122,10 +122,10 @@ describe("what the endpoint accepts", () => {
     }
   });
 
-  it("opens a prefilled compose when Gmail is not connected, and does not claim the mail was sent", async () => {
+  it("offers a prefilled compose when Gmail is not connected, and does not claim the mail was sent", async () => {
     googleToken = null;
     const { body } = await post({ tool: "communicate", args: EMAIL_ARGS });
-    expect(body.ok).toBe(true);
+    expect(body.ok).toBe(false);
     expect(String(body.result)).toMatch(/isn't connected/i);
     expect(String(body.result)).not.toMatch(/Email sent/i);
     expect(String(body.openUrl)).toContain("mail.google.com");
@@ -153,5 +153,22 @@ describe("confirmed connector writes", () => {
     const { status } = await post({ tool: "mcp__google__gmail_search", args: { query: "x" } });
     expect(status).toBe(400);
     expect(callMcpTool).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("recipient integrity", () => {
+  it("sends both recipients and the exact body", async () => {
+    const { body } = await post({ tool: "communicate", args: { ...EMAIL_ARGS, to: "a@example.com, b@example.com", body: "Research and development\nContact c@example.com." } });
+    expect(body.ok).toBe(true);
+    const init = vi.mocked(fetch).mock.calls[0][1]!;
+    const raw = Buffer.from(JSON.parse(String(init.body)).raw, "base64url").toString();
+    expect(raw).toContain("To: a@example.com, b@example.com\r\n");
+    expect(raw).toContain("Research and development\nContact c@example.com.");
+  });
+  it.each(["a@example.com, invalid", "a@example.com\r\nBcc: b@example.com", "a@example.com,"])("rejects the whole malformed recipient list: %s", async (to) => {
+    const { body } = await post({ tool: "communicate", args: { ...EMAIL_ARGS, to } });
+    expect(body.ok).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

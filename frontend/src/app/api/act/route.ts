@@ -58,9 +58,9 @@ export async function POST(req: NextRequest) {
       const compose = gmailComposeUrl(to, subject, body);
       if (!accessToken) {
         return json({
-          ok: true,
+          ok: false,
           openUrl: compose,
-          result: `Gmail isn't connected for a direct send. Opening a prefilled compose to ${to} — press Send there. To send from here next time: Settings → Connections → "Connect Google".`,
+          result: `Gmail isn't connected for a direct send. No email was sent. Open the Gmail draft below to send to ${to} yourself. To send from here next time: Settings → Connections → "Connect Google".`,
         });
       }
       const sent = await sendGmail(accessToken, to, subject, body);
@@ -69,10 +69,10 @@ export async function POST(req: NextRequest) {
         return json({
           ok: false,
           openUrl: compose,
-          result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access). A prefilled compose is open if the browser allowed it.",
+          result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access). No email was sent. You can open the Gmail draft below.",
         });
       }
-      return json({ ok: false, openUrl: compose, result: "Gmail rejected the send. A prefilled compose is open if the browser allowed it." });
+      return json({ ok: false, openUrl: compose, result: "Gmail rejected the send. No email was sent. You can open the Gmail draft below." });
     }
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));

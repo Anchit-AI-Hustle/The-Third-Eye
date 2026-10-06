@@ -168,3 +168,18 @@ describe("system status", () => {
     expect(status.serper).toBe(true);
   });
 });
+
+
+describe("email content boundaries", () => {
+  it("keeps addresses and conjunctions in the body rather than treating them as recipients", () => {
+    const turn = directTurn("email ada@example.com and ben@example.com saying Research and development: ask support@example.com.\nThanks!");
+    expect(turn).toMatchObject({ kind: "email", args: { to: "ada@example.com, ben@example.com", body: "Research and development: ask support@example.com.\nThanks!" } });
+  });
+  it("leaves prose-writing requests and missing content to the model", () => {
+    expect(directTurn("write an email to ada@example.com apologizing for the delay")).toBeNull();
+    expect(directTurn("email ada@example.com")).toBeNull();
+  });
+  it("does not mistake a mentioned address for the intended recipient", () => {
+    expect(directTurn("write an email to Alice saying contact bob@example.com")).toBeNull();
+  });
+});

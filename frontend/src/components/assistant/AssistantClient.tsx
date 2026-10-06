@@ -423,6 +423,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const sendMessage = useCallback(async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || isStreamingRef.current) return;
+    const verdict = classifyVoiceConfirm(msg);
+    const action = pendingActions.filter((a) => a.status === "pending").at(-1);
+    if (verdict && action) {
+      setInput("");
+      if (verdict === "confirm") await confirmAction(action);
+      else cancelAction(action.id);
+      return;
+    }
     isStreamingRef.current = true;
     tts.stop();
     supersedePending();
@@ -453,7 +461,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }]);
     setIsStreaming(true);
 
-    abortRef.current = new AbortController();
+    const controller = new AbortController();
+      abortRef.current = controller;
+      isStreamingRef.current = true;
 
     try {
       const readyDocs = docs.filter((d) => d.processing_status === "ready")
@@ -484,7 +494,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           agentPersona: agent?.personality,
           mode: modeId,
         }),
-        signal: abortRef.current.signal,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -503,6 +513,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       while (true) {
         const { done, value } = await reader.read();
+        if (controller.signal.aborted) return;
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -582,9 +593,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
         m.id === assistantId ? { ...m, content: "", error: errMsg, streaming: false } : m
       ));
     } finally {
-      setIsStreaming(false);
+      if (abortRef.current === controller) {
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
     }
-  }, [input, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending]);
+  }, [input, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -610,15 +624,21 @@ export function AssistantClient({ userName }: { userName?: string }) {
     const cp = checkpoints.find((c) => c.id === cpId);
     if (!cp) return;
     saveCheckpoint("Before rewind"); // auto-save before restoring
+    abortRef.current?.abort();
+    isStreamingRef.current = false;
+    setIsStreaming(false);
+    clearPending();
+    tts.stop();
     setMessages(cp.messages);
     historyRef.current = cp.history;
     setShowCheckpoints(false);
-  }, [checkpoints, saveCheckpoint]);
+  }, [checkpoints, saveCheckpoint, clearPending, tts]);
 
   function handleClear() {
     if (isStreaming) abortRef.current?.abort();
     tts.stop();
     if (messages.length > 0) saveCheckpoint("Before clear");
+    isStreamingRef.current = false;
     setMessages([]);
     setLiveBubble(null);
     setApiError(null);

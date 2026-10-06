@@ -284,9 +284,11 @@ export function VoiceOverlay() {
     async (text?: string) => {
       const msg = (text ?? input).trim();
       if (!msg || isStreamingRef.current) return;
+      if (handleVoiceConfirm(msg)) { setInput(""); return; }
       isStreamingRef.current = true;
       tts.stop();
       supersedePending();
+      pendingRef.current = [];
 
       const currentAttachments = [...attachedFiles];
       setInput("");
@@ -297,7 +299,9 @@ export function VoiceOverlay() {
       setActiveTool(null);
       setExpanded(true);
       setIsStreaming(true);
-      abortRef.current = new AbortController();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      isStreamingRef.current = true;
 
       try {
         const readyDocs = docs
@@ -324,7 +328,7 @@ export function VoiceOverlay() {
             expenses: expenses.map((e) => ({ id: e.id, amount: e.amount, category: e.category, gst_rate: e.gst_rate, spent_on: e.spent_on })),
             attachments: currentAttachments.map((f) => ({ name: f.name, content: f.content })),
           }),
-          signal: abortRef.current.signal,
+          signal: controller.signal,
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -338,7 +342,8 @@ export function VoiceOverlay() {
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (controller.signal.aborted) return;
+        if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
@@ -398,10 +403,13 @@ export function VoiceOverlay() {
         setActiveTool(null);
         setResponse(`Error: ${err?.message ?? "Unknown error"}`);
       } finally {
-        setIsStreaming(false);
+        if (abortRef.current === controller) {
+          isStreamingRef.current = false;
+          setIsStreaming(false);
+        }
       }
     },
-    [input, session, allTasks, expenses, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn, supersedePending]
+    [input, session, allTasks, expenses, docs, applyActions, tts, attachedFiles, agent, modeId, addPending, openLinks, micOn, supersedePending, handleVoiceConfirm]
   );
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);

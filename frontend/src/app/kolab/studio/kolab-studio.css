@@ -3,6 +3,9 @@
    which applied them to `body`/`html` directly — safe there since Kolab is a single-purpose
    app, not safe here where Kolab is one feature among many). */
 .kolab-theme {
+  --font-kolab-archivo: var(--font-geist-sans);
+  --font-kolab-inter: var(--font-geist-sans);
+  --font-kolab-jetbrains: var(--font-geist-mono);
   --kolab-base: #141210;
   --kolab-surface: #1d1a17;
   --kolab-surface2: #26221e;

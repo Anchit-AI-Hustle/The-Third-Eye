@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { classifyOpenUrl } from "@/lib/liveActions";
 
 // A sensitive action the agent proposed (send_email / pay / whatsapp / call /
@@ -13,6 +13,7 @@ export interface PendingAction {
   summary: string;
   status: "pending" | "running" | "done" | "failed" | "canceled";
   result?: string;
+  fallbackUrl?: string;
   url?: string; // deep link to open on approval (pay/whatsapp/call/sms)
   openLabel?: string; // confirm-button label for a client action
   clientAction?: boolean; // true → open url on the confirming tap (no /api/act)
@@ -24,24 +25,22 @@ export interface PendingAction {
  * behaves identically everywhere and the two surfaces can never drift apart.
  */
 export function useAgentConfirm() {
+  const actionsRef = useRef<PendingAction[]>([]);
+  const turnRef = useRef(0);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   // Links the agent wanted to open that the browser blocked (iOS/Safari block
   // window.open outside a user gesture) — surfaced as tappable chips.
   const [pendingOpens, setPendingOpens] = useState<{ url: string; label: string }[]>([]);
 
   const addPending = useCallback((a: PendingAction) => {
-    setPendingActions((prev) => [...prev, a]);
+    actionsRef.current = [...actionsRef.current, a];
+    setPendingActions(actionsRef.current);
   }, []);
 
   const clearPending = useCallback(() => {
+    turnRef.current += 1;
+    actionsRef.current = [];
     setPendingActions([]);
-    setPendingOpens([]);
-  }, []);
-
-  // A new request replaces the previous one. Finished cards and unconfirmed
-  // proposals stop sitting under the next answer; an in-flight confirm keeps running.
-  const supersedePending = useCallback(() => {
-    setPendingActions((prev) => prev.filter((a) => a.status === "running"));
     setPendingOpens([]);
   }, []);
 
@@ -78,6 +77,10 @@ export function useAgentConfirm() {
   }, []);
 
   const confirmAction = useCallback(async (action: PendingAction) => {
+    const current = actionsRef.current.find((a) => a.id === action.id);
+    if (!current || !["pending", "failed"].includes(current.status)) return;
+    current.status = "running";
+    const turn = turnRef.current;
     // Deep-link intents (pay/whatsapp/call/sms): open the target app on THIS
     // tap (a real user gesture, so iOS allows it). We never execute the payment.
     if (action.clientAction && action.url) {
@@ -88,6 +91,7 @@ export function useAgentConfirm() {
       } catch {
         /* noop */
       }
+      current.status = "done";
       setPendingActions((prev) =>
         prev.map((a) =>
           a.id === action.id
@@ -106,25 +110,29 @@ export function useAgentConfirm() {
       });
       const data = await res.json().catch(() => ({}));
       const openUrl = typeof data.openUrl === "string" ? data.openUrl : "";
-      // Confirm click is a user gesture, so this tab is allowed to open.
-      if (classifyOpenUrl(openUrl) === "web") {
-        try { window.open(openUrl, "_blank", "noopener,noreferrer"); } catch { /* shown in the result text */ }
-      }
+      if (turn !== turnRef.current) return;
+      const fallbackUrl = classifyOpenUrl(openUrl) === "web" ? openUrl : undefined;
       const succeeded = res.ok && data.ok !== false && !data.error;
       const result = data.result ?? data.error ?? (succeeded ? "Done." : "The action was rejected.");
+      current.status = succeeded ? "done" : "failed";
       setPendingActions((prev) =>
-        prev.map((a) => (a.id === action.id ? { ...a, status: succeeded ? "done" : "failed", result } : a)),
+        prev.map((a) => (a.id === action.id ? { ...a, status: current.status, result, fallbackUrl } : a)),
       );
     } catch {
+      if (turn !== turnRef.current) return;
+      current.status = "failed";
       setPendingActions((prev) =>
         prev.map((a) =>
-          a.id === action.id ? { ...a, status: "failed", result: "Couldn't reach the server — nothing was done." } : a,
+          a.id === action.id ? { ...a, status: "failed", result: "Couldn't confirm the result. Check the destination before retrying to avoid doing it twice." } : a,
         ),
       );
     }
   }, []);
 
   const cancelAction = useCallback((id: string) => {
+    const action = actionsRef.current.find((a) => a.id === id);
+    if (!action || action.status === "running") return;
+    action.status = "canceled";
     setPendingActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: "canceled" } : a)));
   }, []);
 
@@ -133,7 +141,7 @@ export function useAgentConfirm() {
     pendingOpens,
     addPending,
     clearPending,
-    supersedePending,
+    supersedePending: clearPending,
     dismissOpen,
     openLinks,
     confirmAction,
