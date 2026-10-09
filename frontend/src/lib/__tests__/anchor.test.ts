@@ -84,7 +84,9 @@ describe("confirm-then-act", () => {
     // "status", skipped the confirmation and never ran.
     const chat = readFileSync(path.resolve(__dirname, "../../app/api/chat/route.ts"), "utf8");
     const calls = [...chat.matchAll(/isSensitive\(([^)]*)\)/g)].map((m) => m[1]);
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
     for (const args of calls) expect(args).toContain(",");
+    // Both the Gemini loop and the tool-calling fallback run tools through the one executor.
+    expect((chat.match(/await execute\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });

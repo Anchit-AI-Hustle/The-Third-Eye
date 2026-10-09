@@ -15,6 +15,59 @@ import { GST_SLABS } from "@/lib/calculators/formulas";
 export const geminiTools = [
   {
     functionDeclarations: [
+      // ─── VERIFIED CHECKLIST (handled by lib/checklist, not runTool) ────────
+      {
+        name: "plan_checklist",
+        description: "Break the user's request into small, ordered steps before doing multi-step or world-changing work. Each step says how it will be verified. Calling it again replaces the open steps and keeps verified ones.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            steps: {
+              type: "ARRAY",
+              description: "Ordered steps",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  title: { type: "STRING", description: "One concrete action, e.g. 'Create the calendar event for Friday 3pm'" },
+                  verify: { type: "STRING", description: "How completion will be proven, e.g. 'list events on Friday and see it'" },
+                  needs_tool: { type: "BOOLEAN", description: "false only for pure reasoning/writing steps with no tool to run" },
+                },
+                required: ["title", "verify"],
+              },
+            },
+          },
+          required: ["steps"],
+        },
+      },
+      {
+        name: "start_step",
+        description: "Mark a checklist step as the one being worked on. Tool calls after this count towards it.",
+        parameters: { type: "OBJECT", properties: { step: { type: "NUMBER", description: "Step number" } }, required: ["step"] },
+      },
+      {
+        name: "complete_step",
+        description: "Ask to tick a step after doing AND checking it. Refused unless a tool call for the step succeeded, the last one did not fail, and nothing awaits the user's Confirm.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            step: { type: "NUMBER", description: "Step number" },
+            evidence: { type: "STRING", description: "What the tool returned that proves it is done" },
+          },
+          required: ["step", "evidence"],
+        },
+      },
+      {
+        name: "fail_step",
+        description: "Record that a step failed and why, before fixing and retrying it — or when it truly cannot be done.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            step: { type: "NUMBER", description: "Step number" },
+            reason: { type: "STRING", description: "What went wrong" },
+          },
+          required: ["step", "reason"],
+        },
+      },
       // ─── PLATFORM TOOLS (consolidated from 61 → 31) ───────────────────────
       {
         name: "manage_tasks",
