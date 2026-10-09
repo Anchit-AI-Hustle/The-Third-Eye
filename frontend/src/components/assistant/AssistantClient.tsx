@@ -23,6 +23,8 @@ import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { ActionCard } from "./ActionCard";
+import { ChecklistCard } from "./ChecklistCard";
+import { CHECKLIST_TOOLS, type Step } from "@/lib/checklist";
 import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { phraseTriggers } from "@/lib/activation";
@@ -41,6 +43,7 @@ interface Message {
   toolsUsed?: string[];
   error?: string;
   media?: { kind?: string; url: string; alt?: string }[];
+  checklist?: Step[];
 }
 
 interface LiveBubble {
@@ -469,11 +472,17 @@ export function AssistantClient({ userName }: { userName?: string }) {
       const readyDocs = docs.filter((d) => d.processing_status === "ready")
         .map((d) => ({ id: d.id, title: d.title, content: d.content, chunk_count: d.chunk_count }));
 
+      // An unfinished checklist travels with the next message, so "continue" or a
+      // confirmed send resumes it instead of starting over.
+      const prior = [...messagesRef.current].reverse().find((m) => m.role === "assistant" && m.checklist?.length)?.checklist;
+      const openChecklist = prior?.some((s) => s.status !== "done") ? prior : undefined;
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg,
+          checklist: openChecklist,
           history: historyRef.current,
           memory: memoryRef.current,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -529,10 +538,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, content: fullText, toolsUsed } : m
                 ));
-              } else if (eventType === "tool" && parsed.name) {
+              } else if (eventType === "tool" && parsed.name && !CHECKLIST_TOOLS.has(parsed.name)) {
                 toolsUsed.push(toolLabel(parsed.name, parsed.input));
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
+                ));
+              } else if (eventType === "checklist" && Array.isArray(parsed.steps)) {
+                setMessages((prev) => prev.map((m) =>
+                  m.id === assistantId ? { ...m, checklist: parsed.steps } : m
                 ));
               } else if (eventType === "confirm" && parsed.tool) {
                 addPending({
@@ -1088,6 +1101,7 @@ function MessageBubble({ message, session }: { message: Message; session: any })
     <div className={cn("flex items-start gap-3 animate-slide-in", isUser && "flex-row-reverse")}>
       {isUser ? <UserAvatar session={session} /> : <AgentAvatar />}
       <div className={cn("max-w-[85%] sm:max-w-[75%]", isUser && "items-end flex flex-col")}>
+        {!isUser && message.checklist && message.checklist.length > 0 && <ChecklistCard steps={message.checklist} />}
         {message.toolsUsed && message.toolsUsed.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {message.toolsUsed.map((tool, i) => (

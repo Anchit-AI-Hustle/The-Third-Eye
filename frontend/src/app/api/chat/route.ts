@@ -32,6 +32,7 @@ import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 import { gatherResearchRounds } from "@/lib/deepResearch";
 import { anchorStatus } from "@/lib/anchor";
 import { modelFor } from "@/lib/llmCascade";
+import { CHECKLIST_INSTRUCTION, CHECKLIST_TOOLS, Checklist, classifyResult, resumeNote } from "@/lib/checklist";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1267,6 +1268,8 @@ interface ChatRequest {
   /** IANA zone from the device, e.g. "Asia/Kolkata". Used to resolve "tomorrow
    *  at 7" into a real timestamp. Falls back to the edge-provided zone header. */
   timezone?: string;
+  /** The previous reply's checklist when it ended with steps still open. */
+  checklist?: unknown;
 }
 
 // Mode-aware runtime (ported from the Mirror app): the operator's active mode
@@ -1525,7 +1528,7 @@ export async function POST(req: NextRequest) {
   const {
     message, history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], location, deviceInfo,
-    agentName, agentId, agentPersona, mode, timezone,
+    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist,
   } = body;
 
   if (!message?.trim()) {
@@ -1708,7 +1711,7 @@ export async function POST(req: NextRequest) {
       webSearch: !!process.env.SERPER_API_KEY,
     },
   });
-  systemInstruction += `\n\n${normalized.brief}`;
+  systemInstruction += `\n\n${normalized.brief}\n\n${CHECKLIST_INSTRUCTION}${resumeNote(priorChecklist)}`;
 
   const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools }) : null;
   const contents: Content[] = [
@@ -1719,12 +1722,53 @@ export async function POST(req: NextRequest) {
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
   const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, accessToken, location, tier: effectiveTier, email };
+  const checklist = Checklist.resume(priorChecklist);
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
       const send = (event: string, data: any) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+
+      // Checklist calls are answered by the ledger, not runTool, and ordered
+      // around the real tools in the same batch: plan/start first so the work is
+      // attributed to its step, complete/fail last so a tick sees the outcome of
+      // the call that was meant to earn it.
+      const execute = async (calls: { name: string; args: any }[]) => {
+        const out: { result: string; sideEffect?: { type: string; data: any } }[] = new Array(calls.length);
+        const phase = (n: string) => (n === "plan_checklist" || n === "start_step" ? 0 : CHECKLIST_TOOLS.has(n) ? 2 : 1);
+        for (const p of [0, 1, 2]) {
+          await Promise.all(calls.map(async (c, i) => {
+            if (phase(c.name) !== p) return;
+            if (CHECKLIST_TOOLS.has(c.name)) {
+              out[i] = { result: checklist.apply(c.name, c.args) };
+              send("checklist", { steps: checklist.snapshot() });
+              return;
+            }
+            // Confirm-then-act: never run world-changing actions silently.
+            if (isSensitive(c.name, c.args)) {
+              const summary = summarizeAction(c.name, c.args);
+              // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
+              // client opens on the confirming tap; email is server-executed
+              // via /api/act (no url). clientAction tells the card which path.
+              const intent = resolveIntent(c.name, c.args);
+              send("confirm", { id: crypto.randomUUID(), tool: c.name, args: c.args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });
+              out[i] = { result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
+            } else {
+              out[i] = await runTool(c.name, c.args, ctx);
+            }
+            checklist.record(classifyResult(out[i].result));
+          }));
+          if (p === 1 && checklist.planned) send("checklist", { steps: checklist.snapshot() });
+        }
+        return out;
+      };
+      // Said before "done" whenever the ledger has open steps, so the closing
+      // message cannot report more than was verified.
+      const reportShortfall = () => {
+        const gap = checklist.shortfall();
+        if (gap) send("text", { text: gap });
       };
 
       try {
@@ -1758,7 +1802,9 @@ export async function POST(req: NextRequest) {
         let loopGuard = 0;
         let currentContents = contents;
 
-        while (loopGuard++ < 8) {
+        let finished = false;
+        // Verified multi-step work needs room for plan, act, check and tick per step.
+        while (loopGuard++ < (checklist.planned ? 30 : 8)) {
           const result = await model.generateContentStream({ contents: currentContents });
 
           let fullText = "";
@@ -1775,9 +1821,9 @@ export async function POST(req: NextRequest) {
 
           if (!functionCalls.length && !fullText.trim()) {
             if (loopGuard > 1) {
-              send("text", { text: "Done." });
+              send("text", { text: checklist.shortfall() ?? "Done." });
               await saveMemory(email, memory, memoryStore);
-              send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
+              send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
               controller.close();
               return;
             }
@@ -1792,21 +1838,7 @@ export async function POST(req: NextRequest) {
               send("tool", { name: fc.name, input: fc.args });
             }
 
-            const toolResults = await Promise.all(
-              functionCalls.map(async (fc) => {
-                // Confirm-then-act: never run world-changing actions silently.
-                if (isSensitive(fc.name, fc.args)) {
-                  const summary = summarizeAction(fc.name, fc.args);
-                  // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
-                  // client opens on the confirming tap; email is server-executed
-                  // via /api/act (no url). clientAction tells the card which path.
-                  const intent = resolveIntent(fc.name, fc.args);
-                  send("confirm", { id: crypto.randomUUID(), tool: fc.name, args: fc.args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });
-                  return { result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
-                }
-                return runTool(fc.name, fc.args, ctx);
-              })
-            );
+            const toolResults = await execute(functionCalls);
 
             const toolResponseParts: Part[] = toolResults.map((tr, i) => {
               if (tr.sideEffect) {
@@ -1832,14 +1864,20 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
+          reportShortfall();
           await saveMemory(email, memory, memoryStore);
-          send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects });
+          send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
           // Best-effort, non-blocking: don't hold the stream open (which keeps the
           // client's composer locked) while the embedding + insert run.
           if (email && fullText) void rememberExchange(email, message, fullText).catch(() => {});
+          finished = true;
           break;
         }
 
+        if (!finished) {
+          send("text", { text: `${checklist.shortfall() ?? ""}\n\nI've reached the step limit for one reply — say "continue" and I'll pick up from the first open step.` });
+          send("done", { stop_reason: "max_steps", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+        }
         controller.close();
       } catch (err) {
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
@@ -1868,7 +1906,7 @@ export async function POST(req: NextRequest) {
           let loopGuard2 = 0;
           let usedProvider = "";
           let usedModel = "";
-          while (loopGuard2++ < 8) {
+          while (loopGuard2++ < (checklist.planned ? 30 : 8)) {
             const out = await toolCallCascade({ messages: toolMessages, tools: openAiTools, temperature: 0.6, maxTokens: 1500 });
             usedProvider = out.provider;
             usedModel = out.model;
@@ -1877,29 +1915,22 @@ export async function POST(req: NextRequest) {
               toolMessages.push({ role: "assistant", content: out.content, tool_calls: out.tool_calls });
               for (const tc of out.tool_calls) send("tool", { name: tc.function.name, input: parseArgs(tc.function.arguments) });
 
-              const results = await Promise.all(out.tool_calls.map(async (tc) => {
-                const args = parseArgs(tc.function.arguments);
-                if (isSensitive(tc.function.name, args)) {
-                  const summary = summarizeAction(tc.function.name, args);
-                  const intent = resolveIntent(tc.function.name, args);
-                  send("confirm", { id: crypto.randomUUID(), tool: tc.function.name, args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });
-                  return { id: tc.id, result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
-                }
-                const tr = await runTool(tc.function.name, args, ctx);
+              const results = await execute(out.tool_calls.map((tc) => ({ name: tc.function.name, args: parseArgs(tc.function.arguments) })));
+              results.forEach((tr, i) => {
                 if (tr.sideEffect) {
                   if (tr.sideEffect.type === "batch" && Array.isArray(tr.sideEffect.data)) sideEffects.push(...tr.sideEffect.data);
                   else sideEffects.push(tr.sideEffect);
                 }
-                return { id: tc.id, result: tr.result };
-              }));
-              for (const r of results) toolMessages.push({ role: "tool", tool_call_id: r.id, content: r.result });
+                toolMessages.push({ role: "tool", tool_call_id: out.tool_calls![i].id, content: tr.result });
+              });
               continue;
             }
 
             if (!out.content?.trim()) throw new Error("empty tool fallback");
             send("text", { text: out.content });
+            reportShortfall();
             await saveMemory(email, memory, memoryStore);
-            send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects });
+            send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
             if (email && out.content) void rememberExchange(email, message, out.content).catch(() => {});
             break;
           }
