@@ -1764,6 +1764,10 @@ export async function POST(req: NextRequest) {
         }
         return out;
       };
+      // Stop starting new rounds well inside maxDuration, so a long checklist
+      // ends with its open steps reported instead of a stream cut mid-reply.
+      const deadline = Date.now() + (maxDuration - 15) * 1000;
+
       // Said before "done" whenever the ledger has open steps, so the closing
       // message cannot report more than was verified.
       const reportShortfall = () => {
@@ -1804,7 +1808,7 @@ export async function POST(req: NextRequest) {
 
         let finished = false;
         // Verified multi-step work needs room for plan, act, check and tick per step.
-        while (loopGuard++ < (checklist.planned ? 30 : 8)) {
+        while (loopGuard++ < (checklist.planned ? 30 : 8) && Date.now() < deadline) {
           const result = await model.generateContentStream({ contents: currentContents });
 
           let fullText = "";
@@ -1875,7 +1879,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (!finished) {
-          send("text", { text: `${checklist.shortfall() ?? ""}\n\nI've reached the step limit for one reply — say "continue" and I'll pick up from the first open step.` });
+          send("text", { text: `${checklist.shortfall() ?? ""}\n\nI've reached the time or step limit for one reply — say "continue" and I'll pick up from the first open step.` });
           send("done", { stop_reason: "max_steps", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
         }
         controller.close();
@@ -1904,9 +1908,10 @@ export async function POST(req: NextRequest) {
           ];
 
           let loopGuard2 = 0;
+          let fallbackFinished = false;
           let usedProvider = "";
           let usedModel = "";
-          while (loopGuard2++ < (checklist.planned ? 30 : 8)) {
+          while (loopGuard2++ < (checklist.planned ? 30 : 8) && Date.now() < deadline) {
             const out = await toolCallCascade({ messages: toolMessages, tools: openAiTools, temperature: 0.6, maxTokens: 1500 });
             usedProvider = out.provider;
             usedModel = out.model;
@@ -1932,7 +1937,12 @@ export async function POST(req: NextRequest) {
             await saveMemory(email, memory, memoryStore);
             send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
             if (email && out.content) void rememberExchange(email, message, out.content).catch(() => {});
+            fallbackFinished = true;
             break;
+          }
+          if (!fallbackFinished) {
+            send("text", { text: `${checklist.shortfall() ?? ""}\n\nI've reached the time or step limit for one reply — say "continue" and I'll pick up from the first open step.` });
+            send("done", { stop_reason: "max_steps", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
           }
           tier2Handled = true;
           controller.close();

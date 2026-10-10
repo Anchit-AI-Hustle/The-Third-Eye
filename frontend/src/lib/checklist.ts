@@ -24,7 +24,7 @@ export const CHECKLIST_TOOLS = new Set(["plan_checklist", "start_step", "complet
 // Handlers report trouble in their first words ("Couldn't …", "[News error …]",
 // "Need a …", "Not signed in"); content further in is the user's data and may
 // say "error" legitimately.
-const FAILED = /^\s*(\[|⚠|❌|error\b|failed\b|\w+ failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|need (a|an|the)\b|no \w+ named\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set)\b/i;
+const FAILED = /^\s*(\[[^\]\n]{0,60}\b(error|failed|unavailable)\b|⚠|❌|error\b|failed\b|\w+ failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|need (a|an|the)\b|no \w+ named\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set)\b/i;
 
 export function classifyResult(result: string): Outcome {
   if (/^Proposed to the user for confirmation/.test(result)) return "awaiting";
@@ -88,7 +88,10 @@ export class Checklist {
       .filter((s: any) => String(s?.title ?? "").trim())
       .slice(0, 20);
     if (!steps.length) return "plan_checklist needs at least one step with a title.";
-    const done = this.steps.filter((s) => s.status === "done");
+    // Renumber from 1 and drop recorded outcomes: a new step 2 must not inherit
+    // the old step 2's tool results, and kept ticks must not share an id with it.
+    const done = this.steps.filter((s) => s.status === "done").map((s, i) => ({ ...s, id: i + 1 }));
+    this.outcomes.clear();
     this.steps = [
       ...done,
       ...steps.map((s: any, i: number) => ({
@@ -100,7 +103,8 @@ export class Checklist {
       })),
     ];
     this.active = null;
-    return `Checklist set with ${this.steps.length} step(s). Work them in order: start_step, do the work with tools, check the result, then complete_step with the evidence.`;
+    const list = this.steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title}`).join("\n");
+    return `Checklist set:\n${list}\nWork the open steps in order: start_step, do the work with tools, check the result, then complete_step with the evidence.`;
   }
 
   private find(id: number): Step | undefined {

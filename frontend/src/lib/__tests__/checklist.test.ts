@@ -78,6 +78,19 @@ describe("Checklist", () => {
     expect(c.snapshot().map((s) => [s.id, s.status])).toEqual([[1, "done"], [2, "pending"]]);
   });
 
+  it("re-planning neither leaks old tool results into new steps nor duplicates ids", () => {
+    const c = new Checklist();
+    plan(c);
+    c.apply("start_step", { step: 3 });
+    c.record("ok");
+    c.apply("complete_step", { step: 3, evidence: "Summary written below" });
+    c.apply("start_step", { step: 2 });
+    c.record("ok");
+    c.apply("plan_checklist", { steps: [{ title: "New A", verify: "a" }, { title: "New B", verify: "b" }] });
+    expect(c.snapshot().map((s) => [s.id, s.title, s.status])).toEqual([[1, "Summarise for the user", "done"], [2, "New A", "pending"], [3, "New B", "pending"]]);
+    expect(c.apply("complete_step", { step: 2, evidence: "inherited from before" })).toMatch(/no tool has run/);
+  });
+
   it("carries only earned ticks into the next turn", () => {
     const c = new Checklist();
     plan(c);
@@ -97,5 +110,14 @@ describe("Checklist", () => {
     expect(c.apply("plan_checklist", { steps: [] })).toMatch(/at least one step/);
     plan(c);
     expect(c.apply("complete_step", { step: 9, evidence: "whatever it is" })).toMatch(/no step 9/);
+  });
+});
+
+describe("classifyResult on tool output that opens with a bracket", () => {
+  it("only fails a bracket that reports an error", () => {
+    expect(classifyResult('[{"id":"evt1","summary":"Design review"}]')).toBe("ok");
+    expect(classifyResult("[Q3 report](https://mail.google.com/x) from Priya")).toBe("ok");
+    expect(classifyResult("[Stock error: HTTP 500]")).toBe("failed");
+    expect(classifyResult("[Weather unavailable — no key]")).toBe("failed");
   });
 });
