@@ -168,8 +168,7 @@ export function resolveSystems(target: SystemsTarget): SystemDef[] {
 
 function ttsEnabled(): boolean {
   if (typeof window === "undefined") return false;
-  const v = localStorage.getItem("jarvis_tts_enabled");
-  return v === null ? true : v === "true";
+  return localStorage.getItem("jarvis_tts_enabled_v2") === "true";
 }
 
 function loadVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> {

@@ -28,6 +28,11 @@ export interface VoiceSTTCallbacks {
 const SPEECH_PEAK = 0.02;
 const BARGE_PEAK = 0.12;
 const SILENCE_MS = 700;
+// Speech has to clear the room's own level by this factor, and last this many
+// frames (~60/s), before a phrase is sent: fans, traffic and keyboard clicks
+// otherwise reach Whisper, which turns noise into "Thank you." in any language.
+const NOISE_MARGIN = 2.5;
+const MIN_SPEECH_FRAMES = 18;
 const BARGE_HOLD_MS = 280;
 
 export function pcmPeak(buf: Uint8Array): number {
@@ -63,6 +68,8 @@ function armUtteranceRecorder(
   let stopped = false;
   let holdUntil = 0;
   let barged = false;
+  let floor = 0;
+  let speechFrames = 0;
 
   const drop = () => {
     parts = [];
@@ -73,6 +80,7 @@ function armUtteranceRecorder(
     rec = null;
     voiced = false;
     silenceAt = 0;
+    speechFrames = 0;
   };
 
   const flush = async (blob: Blob) => {
@@ -113,11 +121,13 @@ function armUtteranceRecorder(
   };
 
   const end = () => {
+    if (speechFrames < MIN_SPEECH_FRAMES) { drop(); return; }
     if (rec && rec.state === "recording") {
       try { rec.stop(); } catch { /* noop */ }
     }
     voiced = false;
     silenceAt = 0;
+    speechFrames = 0;
   };
 
   const time = new Uint8Array(analyser.fftSize);
@@ -126,7 +136,10 @@ function armUtteranceRecorder(
     analyser.getByteTimeDomainData(time);
     const peak = pcmPeak(time);
     const quiet = suppressed();
-    if (peak >= (quiet ? BARGE_PEAK : SPEECH_PEAK)) {
+    const threshold = Math.max(quiet ? BARGE_PEAK : SPEECH_PEAK, floor * NOISE_MARGIN);
+    if (!voiced) floor = floor ? floor * 0.98 + peak * 0.02 : peak;
+    if (peak >= threshold) {
+      if (voiced) speechFrames++;
       if (quiet && !barged) {
         barged = true;
         onBarge();
@@ -271,7 +284,9 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         analyser,
         () => activeRef.current,
         () => !!cbRef.current.shouldSuppress?.(),
-        () => cbRef.current.lang,
+        // Unset, Whisper guesses the language per clip and "hears" Ukrainian or
+        // Portuguese in noise; the browser language is the right default.
+        () => cbRef.current.lang || navigator.language,
         emitTranscript,
         () => {
           cbRef.current.onSpeechEnd?.();
@@ -549,12 +564,18 @@ async function waitForVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> 
   });
 }
 
+const TTS_KEY = "jarvis_tts_enabled_v2";
+
 export function useTTS(voicePreference?: string) {
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
-  const [enabled, setEnabled] = useState(true);
+  // Replies are text by default; reading them aloud is opt-in. A new key, so the
+  // old always-on default stored for every earlier visitor doesn't carry over.
+  const [enabled, setEnabled] = useState(false);
+  const loaded = useRef(false);
   useEffect(() => {
-    if (localStorage.getItem("jarvis_tts_enabled") === "false") setEnabled(false);
+    if (localStorage.getItem(TTS_KEY) === "true") setEnabled(true);
+    loaded.current = true;
   }, []);
   const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -575,7 +596,7 @@ export function useTTS(voicePreference?: string) {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("jarvis_tts_enabled", String(enabled));
+    if (loaded.current) localStorage.setItem(TTS_KEY, String(enabled));
   }, [enabled]);
 
   const startKeepalive = useCallback(() => {
