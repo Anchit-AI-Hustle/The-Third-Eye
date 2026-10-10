@@ -1,0 +1,12 @@
+{
+  "name": "third-eye-oauth-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "node record-demo.mjs setup",
+    "record": "node record-demo.mjs record"
+  },
+  "dependencies": {
+    "playwright-core": "1.48.2"
+  }
+}

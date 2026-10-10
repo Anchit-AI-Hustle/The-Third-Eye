@@ -72,6 +72,9 @@ Why gmail.metadata is insufficient: it returns headers only and cannot run searc
 
 ## 3. Demo video — shot list
 
+**Automated recording (Mac):** `scripts/oauth-demo/record-demo.mjs` drives Chrome through this exact shot list on the live site, screen-records it with ffmpeg (address bar included), and adds spoken narration, burned-in captions and a zoom on the consent screen's `client_id`. Steps it can't click itself pause and ask you to click; the recording keeps running. Usage is in the script header.
+
+
 Upload to YouTube as **Unlisted**. Record on the production URL, in English, in a fresh incognito window. Keep the whole browser window and the **address bar** in frame. Record one continuous take through the consent step. Target length is 3–5 minutes.
 
 1. **The app.** Show the address bar with `the-third-eye.anchit-tandon.com`, then the app name and logo.
