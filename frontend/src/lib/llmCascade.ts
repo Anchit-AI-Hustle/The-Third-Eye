@@ -699,6 +699,19 @@ async function transcribeGemini(key: string, audio: Blob, lang?: string): Promis
   }
 }
 
+// What Whisper reliably "hears" in silence or room noise — subtitle credits from
+// its training data. Alone in a clip they are never what the user said.
+const HALLUCINATIONS = new Set([
+  "thank you", "thank you very much", "thanks", "thanks for watching", "thank you for watching",
+  "thank you so much for watching", "please subscribe", "subscribe", "bye", "you", "okay", "so",
+  "subtitles by the amara.org community", "transcribed by https://otter.ai",
+]);
+
+export function isHallucination(text: string): boolean {
+  const t = text.toLowerCase().replace(/[^\p{L}\p{N}\s.:/-]/gu, "").replace(/[.\s]+$/, "").trim();
+  return !t || HALLUCINATIONS.has(t);
+}
+
 export async function transcribeCascade(audio: Blob, lang?: string): Promise<TranscribeCascadeResult> {
   const keys = loadKeys();
   const errors: string[] = [];

@@ -90,6 +90,9 @@ const LANGUAGES = [
   { code: "ko-KR", label: "한국어" },
 ];
 
+const INTRO_KEY = "jarvis_intro_spoken_v1";
+const INTRO_LINE = "I'm JARVIS. Tell me what you need done, like sending an email or booking a meeting, and I'll plan it, do it and check every step.";
+
 export function AssistantClient({ userName }: { userName?: string }) {
   const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -190,6 +193,26 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }, [undoable]);
 
   const tts = useTTS(agent?.voicePreference);
+  const ttsRef = useRef(tts);
+  useEffect(() => { ttsRef.current = tts; }, [tts]);
+
+  // Replies are text by default; one spoken line on the first visit tells people
+  // JARVIS acts, not just answers. Browsers only allow speech after a gesture.
+  useEffect(() => {
+    if (localStorage.getItem(INTRO_KEY)) return;
+    const intro = () => {
+      window.removeEventListener("pointerdown", intro);
+      window.removeEventListener("keydown", intro);
+      localStorage.setItem(INTRO_KEY, "1");
+      void ttsRef.current.speak(INTRO_LINE, undefined, true);
+    };
+    window.addEventListener("pointerdown", intro);
+    window.addEventListener("keydown", intro);
+    return () => {
+      window.removeEventListener("pointerdown", intro);
+      window.removeEventListener("keydown", intro);
+    };
+  }, []);
   const pendingRef = useRef(pendingActions);
   useEffect(() => { pendingRef.current = pendingActions; }, [pendingActions]);
 

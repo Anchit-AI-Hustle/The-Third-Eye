@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { transcribeCascade } from "@/lib/llmCascade";
+import { isHallucination, transcribeCascade } from "@/lib/llmCascade";
 import { usableGeminiKey } from "@/lib/providerReady";
 
 export const runtime = "nodejs";
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { text, provider } = await transcribeCascade(audio, lang);
-    return Response.json({ text, provider });
+    return Response.json({ text: isHallucination(text) ? "" : text, provider });
   } catch (err) {
     console.error("transcribe route error:", err);
     return Response.json({ error: "Transcription failed" }, { status: 500 });
