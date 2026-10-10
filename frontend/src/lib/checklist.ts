@@ -88,7 +88,10 @@ export class Checklist {
       .filter((s: any) => String(s?.title ?? "").trim())
       .slice(0, 20);
     if (!steps.length) return "plan_checklist needs at least one step with a title.";
-    const done = this.steps.filter((s) => s.status === "done");
+    // Renumber from 1 and drop recorded outcomes: a new step 2 must not inherit
+    // the old step 2's tool results, and kept ticks must not share an id with it.
+    const done = this.steps.filter((s) => s.status === "done").map((s, i) => ({ ...s, id: i + 1 }));
+    this.outcomes.clear();
     this.steps = [
       ...done,
       ...steps.map((s: any, i: number) => ({
@@ -100,7 +103,8 @@ export class Checklist {
       })),
     ];
     this.active = null;
-    return `Checklist set with ${this.steps.length} step(s). Work them in order: start_step, do the work with tools, check the result, then complete_step with the evidence.`;
+    const list = this.steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title}`).join("\n");
+    return `Checklist set:\n${list}\nWork the open steps in order: start_step, do the work with tools, check the result, then complete_step with the evidence.`;
   }
 
   private find(id: number): Step | undefined {

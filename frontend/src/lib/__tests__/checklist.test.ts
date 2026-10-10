@@ -78,6 +78,19 @@ describe("Checklist", () => {
     expect(c.snapshot().map((s) => [s.id, s.status])).toEqual([[1, "done"], [2, "pending"]]);
   });
 
+  it("re-planning neither leaks old tool results into new steps nor duplicates ids", () => {
+    const c = new Checklist();
+    plan(c);
+    c.apply("start_step", { step: 3 });
+    c.record("ok");
+    c.apply("complete_step", { step: 3, evidence: "Summary written below" });
+    c.apply("start_step", { step: 2 });
+    c.record("ok");
+    c.apply("plan_checklist", { steps: [{ title: "New A", verify: "a" }, { title: "New B", verify: "b" }] });
+    expect(c.snapshot().map((s) => [s.id, s.title, s.status])).toEqual([[1, "Summarise for the user", "done"], [2, "New A", "pending"], [3, "New B", "pending"]]);
+    expect(c.apply("complete_step", { step: 2, evidence: "inherited from before" })).toMatch(/no tool has run/);
+  });
+
   it("carries only earned ticks into the next turn", () => {
     const c = new Checklist();
     plan(c);
