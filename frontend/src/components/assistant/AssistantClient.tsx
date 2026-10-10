@@ -420,26 +420,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }
   }, []);
 
-  // Auto-start mic and greet on mount. Only auto-open the mic under a standing
-  // "every time" grant; otherwise the user starts it with the mic button (which
-  // asks through the permission gate).
-  const greetedRef = useRef(false);
-  useEffect(() => {
-    if (stt.supported && getPolicy("microphone") === "always") {
-      stt.enable();
-      setMicOn(true);
-    }
-    if (!greetedRef.current && tts.supported) {
-      greetedRef.current = true;
-      const greeting = userName
-        ? `Good to see you, ${userName}. At your service.`
-        : "J.A.R.V.I.S. online. At your service.";
-      // short delay so TTS context is unlocked by the page interaction
-      setTimeout(() => tts.speak(greeting), 600);
-    }
-    return () => stt.disable();
+  // Opens in text mode: the mic only starts when the user picks call or dictate
+  // (or says the wake word), and the only unprompted speech is the first-visit intro.
+  useEffect(() => () => stt.disable(),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stt.supported, tts.supported]);
+  []);
 
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
   useEffect(() => {
