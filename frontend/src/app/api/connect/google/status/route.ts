@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { googleCapabilities } from "@/lib/googleToken";
+import { canConnectGoogle, googleCapabilities } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -46,6 +46,7 @@ export async function GET() {
       connected: Object.values(capabilities).some(Boolean),
       scopes,
       capabilities,
+      available: canConnectGoogle(email),
       updatedAt: row?.updated_at ?? null,
     },
     { headers: { "Cache-Control": "no-store" } },

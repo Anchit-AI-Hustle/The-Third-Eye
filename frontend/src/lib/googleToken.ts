@@ -206,6 +206,18 @@ export const GOOGLE_SIGNIN_PARAMS = {
 export const CONNECT_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].join(" ");
 
 /**
+ * Who may start Connect Google. While Google's review of the feature scopes is
+ * open the app stays "In production" but must not serve those unverified scopes
+ * to general traffic, so GOOGLE_CONNECT_USERS (comma-separated emails) limits the
+ * consent screen to the owner and the reviewers' test account. Unset = everyone,
+ * which is the setting once verification is approved.
+ */
+export function canConnectGoogle(email: string): boolean {
+  const list = process.env.GOOGLE_CONNECT_USERS?.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return !list?.length || list.includes(email.toLowerCase());
+}
+
+/**
  * Whether a granted scope string actually carries a scope.
  *
  * Asking for a scope is not the same as getting it: Google's consent screen

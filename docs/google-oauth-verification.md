@@ -107,7 +107,7 @@ Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.g
 > 2. **Justifications.** These are updated in Data Access. They describe each feature, the API call behind it and why a narrower scope is insufficient.
 > 3. **Demo video.** Link: [UNLISTED YOUTUBE URL]. It shows the fully expanded consent screen with the client ID in the address bar, then each scope in use. For gmail.send it shows the confirmation step and the message in the source account's Sent folder.
 > 4. **Test account.**
->    - Sign-in is Google, identity only (name and email). Use **[test-account@gmail.com] / [password]**. 2-Step Verification is off, and the account is listed under Test users. This sign-in does not request Gmail or Calendar.
+>    - Sign-in is Google, identity only (name and email). Use **[test-account@gmail.com] / [password]**. 2-Step Verification and phone verification are off. This sign-in does not request Gmail or Calendar.
 >
 >    Steps:
 >    1. Open https://the-third-eye.anchit-tandon.com and choose Continue with Google. The consent screen for sign-in lists profile access only.
@@ -116,18 +116,18 @@ Do **not** show creating a calendar event. "Add to calendar" opens a `calendar.g
 >    4. gmail.send: in Assistant, type "email [address] saying hello". A confirmation card appears. Nothing is sent until you click Confirm, and the message then appears in the account's Sent folder.
 >    5. calendar.events.owned.readonly: in Assistant, ask "what's on my calendar this week?".
 >
->    The connected scopes are not served to general production traffic until verification is complete; see point 5 below.
-> 5. **Unverified scopes.** Until verification completes, only test users can complete Connect Google. Everyone else uses the app without Google access.
+> 5. **Unverified scopes.** The app is In Production. Until verification completes, Connect Google is enabled only for the owner and the test account above, so the unverified scopes are not served to general traffic. Other users see that Gmail and Calendar access is under review. If you test with a different Google account, reply with its address and we will enable it.
 >
 > Kind regards,
 > Anchit Tandon
 
 ## 5. Keeping unverified scopes off production traffic
 
-Google enforces this when the app's **Audience → Publishing status** is **Testing**. Only accounts on the Test users list (max 100) can complete Connect Google. Everyone else is refused on Google's screen, and the app keeps working without Gmail and Calendar (`googleCapabilities` reports "not connected"). Sign-in asks for name and email only, so it is not affected. Do not add the three feature scopes to the sign-in request.
+Google's instruction: the publishing status **stays In Production**, and the unverified scopes must only be triggered for a limited set of users. Switching to Testing locks out the reviewers, because their accounts aren't on the Test users list.
 
-- While review is open: stay in **Testing** (or switch back to it). Add your own account, the test account and any address Trust & Safety gives you.
-- After approval: publish to **In production**.
+- **Audience → Publishing status: In production.**
+- On Vercel, set `GOOGLE_CONNECT_USERS` to a comma-separated list: your own email plus the review test account. Only those accounts can start Connect Google. Everyone else gets "under review" in Settings, and the Task Tracker's Gmail prompt is hidden.
+- After approval, delete `GOOGLE_CONNECT_USERS` so every user can connect.
 
 ## 6. Pre-flight before recording
 
