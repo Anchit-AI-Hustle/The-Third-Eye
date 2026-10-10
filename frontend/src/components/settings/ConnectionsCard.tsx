@@ -6,6 +6,7 @@ import { Mail, Calendar, MessageSquare, Check, AlertCircle, Link2, RefreshCw, Un
 interface Status {
   connected: boolean;
   scopes?: string[];
+  available?: boolean;
   updatedAt?: string | null;
 }
 
@@ -23,7 +24,7 @@ export function ConnectionsCard() {
   const [status, setStatus] = useState<Status | null>(null);
   const [github, setGithub] = useState<{ connected: boolean; login?: string | null; configured?: boolean } | null>(null);
   const [banner, setBanner] = useState<
-    "connected" | "error" | "disconnected" | "no_scopes" | "github_connected" | "github_error" | "github_disconnected" | null
+    "connected" | "error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_disconnected" | null
   >(null);
   const [disconnecting, setDisconnecting] = useState(false);
 
@@ -33,6 +34,7 @@ export function ConnectionsCard() {
     if (q === "google_connected") setBanner("connected");
     else if (q === "google_no_scopes") setBanner("no_scopes");
     else if (q === "google_error") setBanner("error");
+    else if (q === "google_pending") setBanner("pending");
     else if (q === "github_connected") setBanner("github_connected");
     else if (q === "github_error") setBanner("github_error");
     if (q) window.history.replaceState({}, "", window.location.pathname);
@@ -86,6 +88,11 @@ export function ConnectionsCard() {
           <Check size={13} /> Disconnected. Access was revoked at Google and the stored token deleted.
         </div>
       )}
+      {banner === "pending" && (
+        <div className="flex items-center gap-2 mb-4 text-xs text-text-muted">
+          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app — it opens to everyone once approved.
+        </div>
+      )}
       {banner === "no_scopes" && (
         <div className="flex items-start gap-2 mb-4 text-xs text-warning">
           <AlertCircle size={13} className="mt-px shrink-0" />
@@ -125,12 +132,18 @@ export function ConnectionsCard() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {status?.available === false && !connected ? (
+          <span className="text-xs text-text-muted">
+            Gmail and Calendar access is in Google&apos;s review and opens to everyone once it&apos;s approved.
+          </span>
+        ) : (
         <a
           href="/api/connect/google"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
         >
           {connected ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
         </a>
+        )}
         {connected && (
           <button
             type="button"
@@ -145,7 +158,7 @@ export function ConnectionsCard() {
 
       <p className="text-text-muted text-[11px] font-mono mt-3 leading-relaxed">
         Sign-in does not grant mail. Connect here when you want the assistant to read or send it.
-        While Google's review of those permissions is open, only a listed test account can finish this step.
+        While Google's review of those permissions is open, only listed accounts can start this step.
         Disconnecting revokes the permission at Google and deletes the token stored here.
       </p>
 

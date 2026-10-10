@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { CONNECT_SCOPES, originFromRequest, revokeGoogleAccess } from "@/lib/googleToken";
+import { CONNECT_SCOPES, canConnectGoogle, originFromRequest, revokeGoogleAccess } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -13,6 +13,9 @@ export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return new NextResponse("Not authenticated", { status: 401 });
+  if (!canConnectGoogle(email)) {
+    return NextResponse.redirect(`${originFromRequest(req)}/settings?connect=google_pending`);
+  }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return new NextResponse("Google client not configured", { status: 501 });

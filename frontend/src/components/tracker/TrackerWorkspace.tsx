@@ -114,7 +114,7 @@ export function TrackerWorkspace() {
 // them the scrape silently returns "not connected" and the tracker never fills
 // from email. One tap starts the opt-in OAuth flow (read-only scopes).
 function GmailConnectBanner() {
-  const [state, setState] = useState<{ connected: boolean; hasGmail: boolean; configured: boolean } | null>(null);
+  const [state, setState] = useState<{ connected: boolean; hasGmail: boolean; configured: boolean; available: boolean } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -127,6 +127,7 @@ function GmailConnectBanner() {
           connected: !!d.connected,
           hasGmail: scopes.some((s) => s.includes("gmail")),
           configured: d.configured !== false,
+          available: d.available !== false,
         });
       })
       .catch(() => setState(null));
@@ -134,7 +135,7 @@ function GmailConnectBanner() {
   }, []);
 
   // Cloud sync off → auto-capture can't run at all; stay quiet (manual still works).
-  if (!state || !state.configured) return null;
+  if (!state || !state.configured || !state.available) return null;
   if (state.connected && state.hasGmail) return null;
 
   return (
