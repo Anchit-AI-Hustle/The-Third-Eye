@@ -78,11 +78,13 @@ export function getMode(): ModeId {
 }
 
 export function useMode() {
-  const [modeId, setModeId] = useState<ModeId>(() => loadMode());
+  // Starts at the default so the first client render matches the server's.
+  const [modeId, setModeId] = useState<ModeId>(DEFAULT_MODE);
 
   // Stay in sync with switches from other components (same tab, via our custom
   // event) and other tabs (via the native storage event).
   useEffect(() => {
+    setModeId(loadMode());
     const onCustom = (e: Event) => {
       const next = (e as CustomEvent<ModeId>).detail;
       if (isModeId(next)) setModeId(next);

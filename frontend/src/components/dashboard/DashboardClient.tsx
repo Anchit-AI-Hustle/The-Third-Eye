@@ -62,9 +62,10 @@ function useUptime() {
 // "system status" claim never contradicts the Agent Activity widget, which
 // already shows "Halted" once the switch is on.
 function useKillSwitch() {
-  const [killed, setKilled] = useState(() => isAgentKilled());
+  const [killed, setKilled] = useState(false);
   useEffect(() => {
     const sync = () => setKilled(isAgentKilled());
+    sync();
     window.addEventListener(AGENT_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {

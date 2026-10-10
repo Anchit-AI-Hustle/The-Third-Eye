@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Square, Loader2, ChevronLeft, ChevronRight, Play, Pause, Sparkles, BookHeart, Radio, Calendar as CalIcon, Clock, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
 import { loadDay, saveDay, listDates, syncFromCloud, deleteDay } from "@/lib/lifelog/store";
 import { getAudio } from "@/lib/lifelog/audioStore";
-import { localDateKey, type DayLog, type LogSegment, type LogEvent } from "@/lib/lifelog/types";
+import { emptyDay, localDateKey, type DayLog, type LogSegment, type LogEvent } from "@/lib/lifelog/types";
 import { useDayRecorder } from "@/hooks/useDayRecorder";
 
 const KIND_COLORS: Record<string, string> = {
@@ -17,7 +17,7 @@ const fmtDayTitle = (date: string) => new Date(date + "T00:00:00").toLocaleDateS
 export function LifeLog() {
   const today = useMemo(() => localDateKey(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
-  const [day, setDay] = useState<DayLog>(() => loadDay(today));
+  const [day, setDay] = useState<DayLog>(() => emptyDay(today));
   const [dates, setDates] = useState<string[]>([]);
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const [extracting, setExtracting] = useState(false);

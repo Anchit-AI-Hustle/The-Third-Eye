@@ -21,6 +21,8 @@ export function LogSyncCard() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // The server has no navigator; reading it during render would mismatch hydration.
+  const [device, setDevice] = useState("this device");
 
   const refresh = useCallback(async () => {
     try {
@@ -30,6 +32,7 @@ export function LogSyncCard() {
   }, []);
 
   useEffect(() => {
+    setDevice(deviceLabel());
     refresh();
     const onUpdated = () => refresh();
     window.addEventListener("te:tasks-updated", onUpdated);
@@ -69,7 +72,7 @@ export function LogSyncCard() {
           <div className="flex items-center gap-2">
             <span className="font-semibold text-text-primary text-sm">AI Log Sync</span>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-success/40 text-success flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" /> tracking {deviceLabel()}
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" /> tracking {device}
             </span>
           </div>
           <div className="text-[11px] text-text-muted mt-0.5">

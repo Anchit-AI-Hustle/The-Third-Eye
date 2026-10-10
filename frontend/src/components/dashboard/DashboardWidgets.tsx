@@ -29,12 +29,11 @@ export function DashboardWidgets() {
 
   const root = useRef<HTMLDivElement>(null);
 
-  // Agent-safety layer state (kill switch + audit log) is localStorage-backed
-  // and readable synchronously, so seed it from the real value on mount
-  // instead of a placeholder 0/false that would flash before the effect runs.
-  const [agent, setAgent] = useState(() => ({ count: getAgentLog().length, killed: isAgentKilled() }));
+  // localStorage-backed, so read after mount: the server render can't see it.
+  const [agent, setAgent] = useState({ count: 0, killed: false });
   useEffect(() => {
     const sync = () => setAgent({ count: getAgentLog().length, killed: isAgentKilled() });
+    sync();
     window.addEventListener(AGENT_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {
