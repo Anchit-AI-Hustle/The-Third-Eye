@@ -126,4 +126,13 @@ describe("what the connect callback is allowed to store", () => {
     expect(res.headers.get("location")).toContain("connect=google_connected");
     expect(upsert).toHaveBeenCalledTimes(1);
   });
+
+  // Production ran without TOKEN_ENCRYPTION_KEY: nothing was saved, yet Settings
+  // said "Google connected successfully" above "Not connected".
+  it("reports an error, not success, when the grant could not be stored", async () => {
+    upsert.mockResolvedValueOnce({ error: { message: "write failed" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await callback(WITH_GMAIL);
+    expect(res.headers.get("location")).toContain("connect=google_error");
+  });
 });
