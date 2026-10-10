@@ -5,9 +5,9 @@
 // browser-only recording would crop them out), then adds spoken narration,
 // burned-in captions and a zoom on the consent screen's address bar.
 //
-//   cd scripts/oauth-demo && npm install
-//   TEST_EMAIL=you.test@gmail.com npm run setup     # once: sign in to Google by hand
-//   TEST_EMAIL=you.test@gmail.com RECIPIENT=other@gmail.com npm run record
+// From the repo root (installs, signs in once, then records):
+//   TEST_EMAIL=you.test@gmail.com RECIPIENT=other@gmail.com npm run demo
+// or the two halves: `npm run demo:setup`, then `npm run demo:record`.
 //
 // Needs: macOS, Google Chrome, `brew install ffmpeg`, and Terminal allowed under
 // System Settings → Privacy & Security → Screen Recording. Any step the script
