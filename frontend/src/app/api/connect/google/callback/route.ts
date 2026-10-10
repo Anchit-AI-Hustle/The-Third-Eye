@@ -100,7 +100,15 @@ export async function GET(req: Request) {
     return denied;
   }
 
-  await storeGoogleRefreshToken(email, tok.refresh_token, tok.scope, mailbox);
+  if (!(await storeGoogleRefreshToken(email, tok.refresh_token, tok.scope, mailbox))) {
+    console.error(
+      "google connect: grant not stored",
+      { refreshToken: !!tok.refresh_token, encryptionKey: !!process.env.TOKEN_ENCRYPTION_KEY, database: !!process.env.DATABASE_URL },
+    );
+    const failed = NextResponse.redirect(`${base}/settings?connect=google_error`);
+    failed.cookies.delete("g_connect_state");
+    return failed;
+  }
 
   const done = NextResponse.redirect(`${base}/settings?connect=google_connected`);
   done.cookies.delete("g_connect_state");

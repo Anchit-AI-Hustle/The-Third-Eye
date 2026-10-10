@@ -29,6 +29,7 @@ export async function GET(_req: NextRequest) {
     openweather:   !!clean(env.OPENWEATHER_API_KEY),
     database:      !!clean(env.DATABASE_URL),
     google_oauth:  !!(clean(env.GOOGLE_CLIENT_ID) && clean(env.GOOGLE_CLIENT_SECRET)),
+    token_encryption: !!clean(env.TOKEN_ENCRYPTION_KEY),
   };
 
   const llm_available =

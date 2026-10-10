@@ -63,6 +63,10 @@ async function launch() {
     channel: "chrome",
     headless: false,
     viewport: null,
+    // Playwright's default --no-sandbox puts a warning bar across every frame.
+    chromiumSandbox: true,
+    // Pre-granted so Chrome's site-permission prompts never cover the demo.
+    permissions: ["microphone", "camera", "geolocation", "notifications"],
     // Google refuses sign-in in a browser that announces automation.
     ignoreDefaultArgs: ["--enable-automation"],
     args: ["--start-maximized", "--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"],
@@ -76,7 +80,8 @@ async function setup() {
   const page = ctx.pages()[0] ?? (await ctx.newPage());
   await page.goto("https://accounts.google.com/");
   log(`Sign in to Google as ${TEST_EMAIL} in the Chrome window (password + any prompts).`);
-  log("Then open https://myaccount.google.com/connections and remove The Third Eye if it is listed, so the consent screen appears fresh.");
+  log("Then open https://myaccount.google.com/connections and remove The Third Eye if it is listed, so the consent screen appears fresh");
+  log("(otherwise it says the app \"already has some access\" instead of listing the three permissions).");
   await rl.question("Press Enter here when done… ");
   await ctx.close();
   log(`Saved. Chrome profile: ${PROFILE}`);
@@ -132,6 +137,16 @@ async function record() {
   app.on("dialog", (d) => d.accept());
   await app.goto(APP);
   await sleep(1500);
+
+  // The app's one-time "Activate Assistant" permissions dialog would cover the first scenes.
+  try { await app.getByRole("button", { name: /^Skip$/ }).first().click({ timeout: 4000 }); } catch { /* already answered */ }
+
+  // macOS asks once per session whether this terminal may capture the screen. A
+  // throwaway second of capture raises that prompt here, off camera.
+  const warm = await startRecorder(join(OUT, "warmup.mp4"));
+  await rl.question("\x1b[33m⚠ If macOS asked to allow screen recording, click Allow, then press Enter… \x1b[0m");
+  warm.ff.stdin.write("q");
+  await new Promise((r) => warm.ff.on("exit", r));
 
   const raw = join(OUT, "raw.mp4");
   const { ff, t0 } = await startRecorder(raw);
@@ -191,9 +206,10 @@ async function record() {
     await say("connect");
     await click(app, "Connect Google", app.getByRole("link", { name: /Connect Google|Reconnect/ }));
     await maybe(app.getByText(TEST_EMAIL, { exact: false }));
-    // Testing-mode apps show Google's "hasn't verified this app" notice first.
+    // Unverified apps get Google's "hasn't verified this app" notice first: Advanced → Go to … (unsafe).
     if (await app.getByText(/hasn.t verified this app/i).first().isVisible({ timeout: 5000 }).catch(() => false)) {
-      await click(app, "Continue (unverified notice)", app.getByRole("button", { name: /^Continue$/ }), app.getByText(/^Continue$/));
+      await click(app, "Advanced", app.getByText(/^Advanced$/));
+      await click(app, "Go to the-third-eye… (unsafe)", app.getByText(/^Go to .*\(unsafe\)$/), app.getByRole("button", { name: /^Continue$/ }));
     }
     await waitFor(app, "the consent screen", app.getByText(/wants (access|additional access)|Select all|Send email on your behalf/i));
     marks.zoomFrom = now();
@@ -203,6 +219,8 @@ async function record() {
       const more = app.getByText(t);
       if (await more.first().isVisible().catch(() => false)) await more.first().click();
     }
+    // Google's consent page lists the permissions below the fold; scroll so each is read on camera.
+    await app.mouse.wheel(0, 500); await sleep(1500);
     const selectAll = app.getByRole("checkbox", { name: /Select all/i });
     if (await selectAll.first().isVisible().catch(() => false)) await selectAll.first().check();
     for (const t of [/View your email messages|Read.*email/i, /Send email on your behalf/i, /events on Google calendars you own|calendars you own/i]) {
@@ -212,7 +230,8 @@ async function record() {
     await say("consent");
     await click(app, "Continue / Allow", app.getByRole("button", { name: /^(Continue|Allow)$/ }));
     await app.waitForURL(/\/settings/, { timeout: 60000 }).catch(() => {});
-    await waitFor(app, "Connected", app.getByText(/^Connected$|Connected/));
+    // Exact match: the "Google connected successfully" banner alone doesn't prove the grant was saved.
+    await waitFor(app, "Connected", app.getByText("Connected", { exact: true }));
     await app.getByText("// Connections").scrollIntoViewIfNeeded().catch(() => {});
     await say("connected");
 
