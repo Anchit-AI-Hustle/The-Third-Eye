@@ -24,7 +24,7 @@ export const CHECKLIST_TOOLS = new Set(["plan_checklist", "start_step", "complet
 // Handlers report trouble in their first words ("Couldn't …", "[News error …]",
 // "Need a …", "Not signed in"); content further in is the user's data and may
 // say "error" legitimately.
-const FAILED = /^\s*(\[|⚠|❌|error\b|failed\b|\w+ failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|need (a|an|the)\b|no \w+ named\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set)\b/i;
+const FAILED = /^\s*(\[[^\]\n]{0,60}\b(error|failed|unavailable)\b|⚠|❌|error\b|failed\b|\w+ failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|need (a|an|the)\b|no \w+ named\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set)\b/i;
 
 export function classifyResult(result: string): Outcome {
   if (/^Proposed to the user for confirmation/.test(result)) return "awaiting";

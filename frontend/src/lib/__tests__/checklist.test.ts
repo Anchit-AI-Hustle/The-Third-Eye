@@ -99,3 +99,12 @@ describe("Checklist", () => {
     expect(c.apply("complete_step", { step: 9, evidence: "whatever it is" })).toMatch(/no step 9/);
   });
 });
+
+describe("classifyResult on tool output that opens with a bracket", () => {
+  it("only fails a bracket that reports an error", () => {
+    expect(classifyResult('[{"id":"evt1","summary":"Design review"}]')).toBe("ok");
+    expect(classifyResult("[Q3 report](https://mail.google.com/x) from Priya")).toBe("ok");
+    expect(classifyResult("[Stock error: HTTP 500]")).toBe("failed");
+    expect(classifyResult("[Weather unavailable — no key]")).toBe("failed");
+  });
+});

@@ -96,6 +96,17 @@ describe("verified checklist in /api/chat", () => {
     expect(r.text).toContain("Send the email (waiting for your Confirm)");
   });
 
+  it("ends a reply that runs out of rounds with the open steps and a done event", async () => {
+    script = [
+      { calls: [{ name: "plan_checklist", args: { steps: [{ title: "Keep checking the time", verify: "never" }] } }] },
+      ...Array.from({ length: 40 }, () => ({ calls: [{ name: "get_current_time", args: {} }] })),
+    ];
+    const r = await chat({ message: "loop forever" });
+    expect(r.done.stop_reason).toBe("max_steps");
+    expect(r.text).toContain("Keep checking the time (not verified yet)");
+    expect(r.text).toContain('say "continue"');
+  });
+
   it("resumes an open checklist from the previous reply", async () => {
     script = [
       { calls: [{ name: "get_current_time", args: {} }, { name: "complete_step", args: { step: 2, evidence: "get_current_time returned the time" } }] },
