@@ -79,10 +79,10 @@ export function TasksClient() {
   const { modeId } = useMode();
   const { tags, tagItem } = useModeTags();
   const [showAllModes, setShowAllModes] = useState(false);
-  const [workspace, setWorkspace] = useState<TaskWorkspace>(() => {
-    if (typeof window === "undefined") return "office";
-    return localStorage.getItem(WS_KEY) === "personal" ? "personal" : "office";
-  });
+  const [workspace, setWorkspace] = useState<TaskWorkspace>("office");
+  useEffect(() => {
+    if (localStorage.getItem(WS_KEY) === "personal") setWorkspace("personal");
+  }, []);
 
   const [view, setView] = useState<ViewMode>("table");
   const [search, setSearch] = useState("");

@@ -552,11 +552,10 @@ async function waitForVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> 
 export function useTTS(voicePreference?: string) {
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
-  const [enabled, setEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const v = localStorage.getItem("jarvis_tts_enabled");
-    return v === null ? true : v === "true";
-  });
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => {
+    if (localStorage.getItem("jarvis_tts_enabled") === "false") setEnabled(false);
+  }, []);
   const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {

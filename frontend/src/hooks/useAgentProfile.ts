@@ -125,7 +125,6 @@ const LS_KEY = "jarvis_agent_profiles";
 const LS_ACTIVE = "jarvis_active_agent";
 
 function loadProfiles(): AgentProfile[] {
-  if (typeof window === "undefined") return PRESETS;
   const raw = localStorage.getItem(LS_KEY);
   if (!raw) return PRESETS;
   try {
@@ -147,16 +146,23 @@ function saveCustomProfiles(profiles: AgentProfile[]) {
 }
 
 function loadActiveId(): string {
-  if (typeof window === "undefined") return "jarvis";
   return localStorage.getItem(LS_ACTIVE) ?? "jarvis";
 }
 
 export function useAgentProfile() {
-  const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
-  const [activeId, setActiveId] = useState<string>(() => loadActiveId());
+  // Loaded after mount so the first render matches the server; saving waits
+  // for the load so the defaults never overwrite what's stored.
+  const [profiles, setProfiles] = useState<AgentProfile[]>(PRESETS);
+  const [activeId, setActiveId] = useState("jarvis");
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => { saveCustomProfiles(profiles); }, [profiles]);
-  useEffect(() => { localStorage.setItem(LS_ACTIVE, activeId); }, [activeId]);
+  useEffect(() => {
+    setProfiles(loadProfiles());
+    setActiveId(loadActiveId());
+    setLoaded(true);
+  }, []);
+  useEffect(() => { if (loaded) saveCustomProfiles(profiles); }, [loaded, profiles]);
+  useEffect(() => { if (loaded) localStorage.setItem(LS_ACTIVE, activeId); }, [loaded, activeId]);
 
   const active = profiles.find((p) => p.id === activeId) ?? profiles[0];
 
