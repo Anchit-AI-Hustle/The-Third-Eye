@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText } from "lucide-react";
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -44,6 +45,16 @@ interface Message {
   error?: string;
   media?: { kind?: string; url: string; alt?: string }[];
   checklist?: Step[];
+  files?: string[];
+}
+
+function readAsBase64(file: File): Promise<string> {
+  return new Promise((ok, fail) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => fail(r.error);
+    r.readAsDataURL(file);
+  });
 }
 
 interface LiveBubble {
@@ -148,6 +159,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRef = useRef<HistoryEntry[]>([]);
+  const [files, setFiles] = useState<(Attachment & { size: number })[]>([]);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function addFiles(list: FileList | null) {
+    if (!list?.length) return;
+    setFileNote(null);
+    const next = [...files];
+    for (const f of Array.from(list)) {
+      const used = next.reduce((n, a) => n + a.size, 0);
+      if (next.length >= MAX_ATTACHMENTS) { setFileNote(`Up to ${MAX_ATTACHMENTS} files per message.`); break; }
+      if (used + f.size > MAX_ATTACHMENT_BYTES) { setFileNote(`"${f.name}" is too large — files can total 3 MB per message.`); continue; }
+      next.push({ name: f.name, mimeType: f.type || "text/plain", data: await readAsBase64(f), size: f.size });
+    }
+    setFiles(next);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
   const memoryRef = useRef<Record<string, string>>({});
   const abortRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
@@ -432,7 +460,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }, [messages, liveBubble]);
 
   const sendMessage = useCallback(async (text?: string) => {
-    const msg = (text ?? input).trim();
+    const attached = text === undefined ? files : [];
+    const msg = (text ?? input).trim() || (attached.length ? "Look at the attached file(s) and tell me what matters in them." : "");
     if (!msg || isStreamingRef.current) return;
     const verdict = classifyVoiceConfirm(msg);
     const action = pendingActions.filter((a) => a.status === "pending").at(-1);
@@ -461,11 +490,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
     nudgeCountRef.current = 0;
 
     setInput("");
+    setFiles([]);
+    setFileNote(null);
     setApiError(null);
     setLiveBubble(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: msg };
+    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: msg, files: attached.map((a) => a.name) };
     const assistantId = crypto.randomUUID();
     setMessages((prev) => [...prev, userMsg, {
       id: assistantId, role: "assistant", content: "", streaming: true, toolsUsed: [],
@@ -490,6 +521,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg,
+          attachments: attached.map(({ name, mimeType, data }) => ({ name, mimeType, data })),
           checklist: openChecklist,
           history: historyRef.current,
           memory: memoryRef.current,
@@ -619,7 +651,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setIsStreaming(false);
       }
     }
-  }, [input, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction]);
+  }, [input, files, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -941,7 +973,25 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </button>
           </div>
         )}
+        {(files.length > 0 || fileNote) && (
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {files.map((f, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-badge bg-background-surface border border-border-default text-text-secondary">
+                <FileText size={11} /> <span className="max-w-[180px] truncate">{f.name}</span>
+                <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}
+                  className="text-text-muted hover:text-text-primary"><X size={11} /></button>
+              </span>
+            ))}
+            {fileNote && <span className="text-xs text-warning">{fileNote}</span>}
+          </div>
+        )}
         <div className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
+          <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
+            onChange={(e) => void addFiles(e.target.files)} />
+          <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, text" aria-label="Attach files"
+            className="flex-none self-center p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
+            <Paperclip size={15} />
+          </button>
           {/* Mode chip: Chat ▾ → Narrate */}
           <div className="relative flex-none self-stretch flex items-center">
             {modeMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />}
@@ -1041,7 +1091,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
               <X size={15} /><span className="text-[11px] font-mono">Esc</span>
             </button>
           ) : (
-            <button onClick={() => sendMessage()} disabled={!input.trim() || isStreaming}
+            <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming}
               className={cn("flex-none p-1.5 rounded-input transition-colors",
                 input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
               <Send size={15} />
@@ -1125,7 +1175,18 @@ function MessageBubble({ message, session }: { message: Message; session: any })
           : message.error ? "bg-accent-red/5 border border-accent-red/20"
           : "bg-background-surface border border-border-default text-text-primary")}>
           {isUser ? (
-            <span className="whitespace-pre-wrap">{message.content}</span>
+            <>
+              {message.files && message.files.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {message.files.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-background-base/60 border border-border-default text-text-secondary">
+                      <FileText size={10} /> {f}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <span className="whitespace-pre-wrap">{message.content}</span>
+            </>
           ) : message.error ? (
             <div className="flex items-start gap-2">
               <AlertCircle size={13} className="text-accent-red flex-none mt-0.5" />

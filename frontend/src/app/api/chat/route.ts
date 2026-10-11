@@ -15,6 +15,7 @@ import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
 import { userFacingOutage } from "@/lib/llmCascade";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
+import { attachmentsAsText, cleanAttachments, geminiParts } from "@/lib/attachments";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
 import { resolveTask } from "@/lib/tools/taskMatch";
@@ -1249,6 +1250,7 @@ function convertHistory(history: Array<{ role: string; content: any }>): Content
 
 interface ChatRequest {
   message: string;
+  attachments?: unknown;
   history?: Array<{ role: string; content: any }>;
   memory?: Record<string, string>;
   userName?: string;
@@ -1526,12 +1528,14 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as ChatRequest;
   const {
-    message, history = [], memory: clientMemory = {}, userName,
+    history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], location, deviceInfo,
     agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist,
   } = body;
+  const attachments = cleanAttachments(body.attachments);
+  const message = body.message?.trim() || (attachments.length ? "Look at the attached file(s) and tell me what matters in them." : "");
 
-  if (!message?.trim()) {
+  if (!message) {
     return new Response(JSON.stringify({ error: "Empty message" }), { status: 400 });
   }
 
@@ -1716,7 +1720,7 @@ export async function POST(req: NextRequest) {
   const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools }) : null;
   const contents: Content[] = [
     ...convertHistory(history),
-    { role: "user", parts: [{ text: message }] },
+    { role: "user", parts: [{ text: message }, ...geminiParts(attachments)] },
   ];
 
   const memoryStore = { ...memory };
@@ -1904,7 +1908,7 @@ export async function POST(req: NextRequest) {
                 content: typeof h.content === "string" ? h.content : "",
               }))
               .filter((m) => m.content),
-            { role: "user", content: message },
+            { role: "user", content: message + attachmentsAsText(attachments) },
           ];
 
           let loopGuard2 = 0;
@@ -1965,7 +1969,7 @@ export async function POST(req: NextRequest) {
                 content: typeof h.content === "string" ? h.content : "",
               }))
               .filter((m) => m.content),
-            { role: "user" as const, content: message },
+            { role: "user" as const, content: message + attachmentsAsText(attachments) },
           ];
           // This path is a plain text completion with no real function-calling —
           // the primary system prompt still lists tool names ("call open_app",
