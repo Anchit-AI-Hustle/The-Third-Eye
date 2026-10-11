@@ -91,6 +91,60 @@ export function modelFor(provider: ModelProvider): string {
   return process.env[MODEL_ENV[provider]]?.trim() || DEFAULT_MODELS[provider];
 }
 
+// Providers retire models and every call to a retired one fails, which with every
+// fallback on a retired model takes chat down entirely. When a provider says the
+// model is gone, ask it which models it serves now and switch this instance to
+// the best match. MODEL env vars still win; this only covers a stale default.
+const MODEL_PREFS: Record<string, RegExp[]> = {
+  groq: [/llama-3\.3-70b/, /gpt-oss-120b/, /llama-4-maverick/, /llama-4-scout/, /kimi-k2/, /qwen3?-32b/, /gpt-oss-20b/, /llama-3\.1-8b/],
+  cerebras: [/llama-3\.3-70b/, /gpt-oss-120b/, /qwen-3-235b/, /llama-4/, /qwen-3-32b/, /llama3\.1-8b/],
+  openrouter: [/llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /gpt-oss.*:free$/, /llama.*:free$/, /gemma.*:free$/, /:free$/],
+  mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^mistral-large-latest$/],
+  grok: [/^grok-3-mini$/, /^grok-3$/, /^grok-4/, /grok/],
+};
+const NOT_CHAT = /whisper|guard|tts|embed|moderation|playai|orpheus|compound|distil|audio|image|vision-preview/i;
+const RETIRED = /does not exist|not found|model_not_found|unavailable for free|decommissioned|no longer (supported|available)|not a valid model|invalid model/i;
+const liveModels = new Map<string, string>();
+
+export function isRetiredModel(status: number, err: string): boolean {
+  return (status === 404 || status === 400) && RETIRED.test(err);
+}
+
+export function pickModel(ids: string[], prefs: RegExp[], current: string): string | null {
+  const usable = ids.filter((id) => id && id !== current && !NOT_CHAT.test(id));
+  for (const p of prefs) {
+    const hit = usable.find((id) => p.test(id));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+async function servedModel(provider: string, base: string, key: string, current: string): Promise<string | null> {
+  const prefs = MODEL_PREFS[provider];
+  if (!prefs) return null;
+  const r = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8_000) }).catch(() => null);
+  if (!r?.ok) return null;
+  const body = await r.json().catch(() => ({}));
+  const ids: string[] = Array.isArray(body?.data) ? body.data.map((m: { id?: unknown }) => String(m?.id ?? "")) : [];
+  return pickModel(ids, prefs, current);
+}
+
+async function withLiveModel<T extends { ok: boolean; status?: number }>(
+  provider: string, base: string, key: string, configured: string, call: (model: string) => Promise<T>,
+): Promise<{ res: T; model: string }> {
+  let model = liveModels.get(provider) ?? configured;
+  let res = await call(model);
+  if (!res.ok && isRetiredModel(res.status ?? 0, "err" in res ? String((res as { err?: unknown }).err ?? "") : "")) {
+    const next = await servedModel(provider, base, key, model);
+    if (next) {
+      liveModels.set(provider, next);
+      model = next;
+      res = await call(model);
+    }
+  }
+  return { res, model };
+}
+
 /** Thrown when every provider failed; carries what each one said. */
 export class LlmCascadeError extends Error {
   constructor(readonly attempts: LlmCascadeResult["attempts"]) {
@@ -378,32 +432,27 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       if (res.ok) return { text: res.text, provider: "gemini", model, attempts };
       if (res.quota) startCooldown("gemini");
     } else if (provider === "grok" && keys.grok) {
-      const model = modelFor("grok");
-      const res = await callOpenAICompatible(GROK_BASE, keys.grok, model, opts);
+      const { res, model } = await withLiveModel("grok", GROK_BASE, keys.grok, modelFor("grok"), (m) => callOpenAICompatible(GROK_BASE, keys.grok, m, opts));
       attempts.push({ provider: "grok", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "grok", model, attempts };
       if (res.quota) startCooldown("grok");
     } else if (provider === "groq" && keys.groq) {
-      const model = modelFor("groq");
-      const res = await callOpenAICompatible(GROQ_BASE, keys.groq, model, opts);
+      const { res, model } = await withLiveModel("groq", GROQ_BASE, keys.groq, modelFor("groq"), (m) => callOpenAICompatible(GROQ_BASE, keys.groq, m, opts));
       attempts.push({ provider: "groq", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "groq", model, attempts };
       if (res.quota) startCooldown("groq");
     } else if (provider === "cerebras" && keys.cerebras) {
-      const model = modelFor("cerebras");
-      const res = await callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, model, opts);
+      const { res, model } = await withLiveModel("cerebras", CEREBRAS_BASE, keys.cerebras, modelFor("cerebras"), (m) => callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, m, opts));
       attempts.push({ provider: "cerebras", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "cerebras", model, attempts };
       if (res.quota) startCooldown("cerebras");
     } else if (provider === "openrouter" && keys.openrouter) {
-      const model = process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free";
-      const res = await callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, model, opts);
+      const { res, model } = await withLiveModel("openrouter", OPENROUTER_BASE, keys.openrouter, process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free", (m) => callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, m, opts));
       attempts.push({ provider: "openrouter", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "openrouter", model, attempts };
       if (res.quota) startCooldown("openrouter");
     } else if (provider === "mistral" && keys.mistral) {
-      const model = modelFor("mistral");
-      const res = await callOpenAICompatible(MISTRAL_BASE, keys.mistral, model, opts);
+      const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
       attempts.push({ provider: "mistral", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) return { text: res.text, provider: "mistral", model, attempts };
       if (res.quota) startCooldown("mistral");
@@ -572,8 +621,8 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
   const attempts: string[] = [];
   for (const { provider, base, model, key } of toolCapableOrder()) {
     if (inCooldown(provider)) { attempts.push(`${provider}:cooling down`); continue; }
-    const res = await callOpenAICompatibleTools(base, key, model, opts);
-    if (res.ok) return { content: res.content, tool_calls: res.tool_calls, provider, model };
+    const { res, model: used } = await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
+    if (res.ok) return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
     attempts.push(`${provider}:${res.status}`);
     if (res.quota) startCooldown(provider);
   }
