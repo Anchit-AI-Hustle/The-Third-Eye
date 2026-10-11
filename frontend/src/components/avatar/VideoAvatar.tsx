@@ -349,7 +349,7 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
     if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
     setState({ phase: "idle", script, style });
     setProgress(0);
-  }, [script, style]);
+  }, [script, style, state.videoUrl]);
 
   // Track videoUrl for cleanup on unmount
   const videoUrlRef = useRef<string | null>(null);

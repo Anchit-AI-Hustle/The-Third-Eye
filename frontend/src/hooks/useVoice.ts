@@ -432,7 +432,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
     startRecRef.current = startRec;
     startRec();
-  }, [startMeter, wakeLock]);
+  }, [startMeter, wakeLock, emitTranscript]);
 
   const disable = useCallback(() => {
     activeRef.current = false;

@@ -663,7 +663,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setIsStreaming(false);
       }
     }
-  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction]);
+  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, modeId, agent?.id, agent?.name, agent?.personality]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 

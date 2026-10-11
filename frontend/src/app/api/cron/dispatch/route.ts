@@ -1,13 +1,12 @@
 import type { NextRequest } from "next/server";
 import { getDb, type Db } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
-import { accessTokenFromRefresh, gmailAddressFor, sendGmail } from "@/lib/google";
-import { isEmailIdentity } from "@/lib/serverIdentity";
+import { sendGmail } from "@/lib/google";
 import { sendPush } from "@/lib/push";
 import { leadRecommendation } from "@/lib/digest";
 import { dispatchDaily } from "@/lib/music/daily";
 import { probeProviders } from "@/lib/llmCascade";
 import { notifyWhatsApp } from "@/lib/whatsapp";
+import { escapeHtml, logNotification, mailboxFor, runReminders, type MailboxCache } from "@/lib/reminders";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -38,86 +37,13 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-// Cache one access token, and one delivery address, per user across a run.
-type Sb = Db;
-type Mailbox = { token: string | null; to: string | null };
-type Cache = Map<string, Mailbox>;
-
-// THE USER ID IS NOT ALWAYS AN ADDRESS. It is whatever sign-in put in
-// session.user.email, and under phone sign-in that is an E.164 number — so
-// addressing mail To: it produced messages to "+919876543210" that Gmail
-// refused. The recipient here is always the user's own mailbox and we hold a
-// token for it, so when the id is not an email the mailbox is asked its name.
-async function mailboxFor(sb: Sb, cache: Cache, userId: string): Promise<Mailbox> {
-  const hit = cache.get(userId);
-  if (hit) return hit;
-  const { data } = await sb
-    .from("google_tokens")
-    .select("refresh_token_enc, email")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const refresh = data?.refresh_token_enc ? decrypt(data.refresh_token_enc) : null;
-  const token = refresh ? await accessTokenFromRefresh(refresh) : null;
-  // The address recorded when they connected is the reliable one. Asking Gmail
-  // is the fallback for grants stored before that column existed, and it only
-  // works on a scope that can read the mailbox — getProfile refuses a send-only
-  // grant, which is why the stored value comes first.
-  const to = isEmailIdentity(userId)
-    ? userId
-    : (data?.email as string | undefined) || (token ? await gmailAddressFor(token) : null);
-  const box: Mailbox = { token, to };
-  cache.set(userId, box);
-  return box;
-}
-
-async function runReminders(sb: Sb) {
-  const now = new Date().toISOString();
-  const { data: due } = await sb
-    .from("reminders")
-    .select("*")
-    .eq("status", "pending")
-    .lte("fire_at", now)
-    .limit(200);
-  if (!due?.length) return { fired: 0 };
-
-  const cache: Cache = new Map();
-  let fired = 0;
-
-  for (const r of due) {
-    const subject = `⏰ Reminder: ${r.title}`;
-    const html = `<div style="font-family:system-ui,sans-serif"><h2>${escapeHtml(r.title)}</h2>${r.body ? `<p>${escapeHtml(r.body)}</p>` : ""}<p style="color:#888;font-size:12px">— JARVIS</p></div>`;
-
-    const { token, to } = await mailboxFor(sb, cache, r.user_id);
-    let emailed = false;
-    if (token && to) emailed = await sendGmail(token, to, subject, html);
-    const pushed = await sendPush(r.user_id, r.title, r.body ?? "Reminder", "/assistant");
-    const whatsapped = await notifyWhatsApp(r.user_id, `⏰ Reminder: ${r.title}${r.body ? `\n${r.body}` : ""}`);
-
-    await logNotification(sb, r.user_id, "reminder", r.id, "email", emailed ? "sent" : "failed");
-    if (pushed) await logNotification(sb, r.user_id, "reminder", r.id, "push", "sent");
-    if (whatsapped) await logNotification(sb, r.user_id, "reminder", r.id, "whatsapp", "sent");
-
-    // Only advance the reminder once it actually reached the user through some
-    // channel; otherwise leave it pending so the next run retries it.
-    if (!(emailed || pushed || whatsapped)) continue;
-    const next = nextOccurrence(r.fire_at, r.recurrence, now);
-    if (next) {
-      await sb.from("reminders").update({ fire_at: next }).eq("id", r.id);
-    } else {
-      await sb.from("reminders").update({ status: "sent", sent_at: now }).eq("id", r.id);
-    }
-    fired++;
-  }
-  return { due: due.length, fired };
-}
-
-async function runDigest(sb: Sb) {
+async function runDigest(sb: Db) {
   const today = new Date().toISOString().slice(0, 10);
   // One digest per user per day: only users with a stored token, skip if already sent today.
   const { data: users } = await sb.from("google_tokens").select("user_id").limit(500);
   if (!users?.length) return { sent: 0 };
 
-  const cache: Cache = new Map();
+  const cache: MailboxCache = new Map();
   let sent = 0;
 
   for (const u of users) {
@@ -181,33 +107,6 @@ function digestHtml(tasks: any[], goals: any[], date: string): string {
     <h3>Tasks</h3><ul>${taskRows}</ul>${goalRows}
     <p style="color:#888;font-size:12px">— JARVIS · reply in the app to act on any of these</p>
   </div>`;
-}
-
-async function logNotification(sb: Sb, userId: string, kind: string, refId: string, channel: string, status: string) {
-  await sb.from("notification_log").insert({ user_id: userId, kind, ref_id: refId, channel, status }).select().maybeSingle();
-}
-
-function nextOccurrence(fireAt: string, recurrence: string | null, nowIso: string): string | null {
-  if (!recurrence || recurrence === "none") return null;
-  const step = (d: Date) => {
-    if (recurrence === "daily") d.setUTCDate(d.getUTCDate() + 1);
-    else if (recurrence === "weekly") d.setUTCDate(d.getUTCDate() + 7);
-    else if (recurrence === "monthly") d.setUTCMonth(d.getUTCMonth() + 1);
-    else return false;
-    return true;
-  };
-  const now = new Date(nowIso).getTime();
-  const d = new Date(fireAt);
-  // Skip past any missed intervals (cron downtime) so we don't re-fire on catch-up.
-  for (let i = 0; i < 1000; i++) {
-    if (!step(d)) return null;
-    if (d.getTime() > now) return d.toISOString();
-  }
-  return d.toISOString();
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 
 function json(body: unknown, status = 200) {

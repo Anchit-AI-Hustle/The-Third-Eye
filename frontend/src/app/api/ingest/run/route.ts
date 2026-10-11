@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { scrapeGmailForUser } from "@/lib/ingest";
+import { runReminders } from "@/lib/reminders";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,8 +30,11 @@ export async function POST() {
   }
   lastRun.set(email, now);
 
+  // Vercel Hobby runs crons once a day, so while the app is open this poll is
+  // what delivers a reminder at its time.
+  const reminders = await runReminders(sb, email).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   const gmail = await scrapeGmailForUser(sb, email).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   const { inserted = 0, merged = 0 } = gmail as { inserted?: number; merged?: number };
 
-  return Response.json({ gmail, changed: inserted + merged > 0 });
+  return Response.json({ gmail, reminders, changed: inserted + merged > 0 });
 }

@@ -168,7 +168,7 @@ export function VoiceOverlay() {
     }
     stt.enable();
     setMicOn(true);
-  }, [stt, requestCapability]);
+  }, [stt, requestCapability, agent.name]);
 
   // Continuous listening needs the microphone, and the gate is the consent
   // moment for it. This used to require the *persisted* "allow every time"
