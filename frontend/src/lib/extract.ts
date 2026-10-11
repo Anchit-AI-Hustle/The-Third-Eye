@@ -106,10 +106,11 @@ export interface ExtractionResult {
 
 export async function extractEmailTasks(input: {
   sender: string; subject: string; receivedAt: string; body: string;
-}): Promise<ExtractionResult> {
+}): Promise<ExtractionResult | null> {
   const user = `From: ${input.sender}\nSubject: ${input.subject}\nReceived: ${input.receivedAt}\n\n${input.body.slice(0, 6000)}`;
   const parsed = await runExtraction(EMAIL_SYSTEM_PROMPT, user, 1000);
-  if (!parsed) return { summary: null, isActionable: false, tasks: [] };
+  // null = the model couldn't be reached, which is not the same as "nothing actionable".
+  if (!parsed) return null;
   const rawTasks = Array.isArray(parsed.tasks) ? (parsed.tasks as Record<string, unknown>[]) : [];
   const tasks = rawTasks.map((t) => coerceTask(t, input.sender)).filter((t): t is ExtractedTask => !!t);
   return { summary: str(parsed.summary), isActionable: parsed.is_actionable === true, tasks };
