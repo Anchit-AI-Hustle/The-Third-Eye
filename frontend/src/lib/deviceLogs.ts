@@ -128,6 +128,7 @@ export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult>
       maxTokens: 1500,
       temperature: 0.1,
       stage: "log-sync",
+      background: true,
     });
     parsed = parseJsonBlock(out.text);
   } catch (e) {

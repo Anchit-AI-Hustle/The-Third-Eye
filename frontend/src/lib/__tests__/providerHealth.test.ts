@@ -53,4 +53,16 @@ describe("shared bench across instances", () => {
     expect(out.provider).toBe("mistral");
     expect(urls.some((u) => u.includes("groq"))).toBe(false);
   });
+
+  it("keeps background work off a provider for 15 minutes after its bench ends, leaving it for chat", async () => {
+    const { backgroundBlocked, benchedReason } = await import("@/lib/providerHealth");
+    const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    table.groq = { provider: "groq", status: "rate_limited", model: "m", reason: "429", benched_until: ago(1), checked_at: ago(3) };
+    table.mistral = { provider: "mistral", status: "rate_limited", model: "m", reason: "429", benched_until: ago(16), checked_at: ago(18) };
+    table.openrouter = { provider: "openrouter", status: "ok", model: "m", reason: null, benched_until: null, checked_at: ago(0) };
+    expect(await benchedReason("groq")).toBeNull();
+    expect(await backgroundBlocked("groq")).toMatch(/free for chat/);
+    expect(await backgroundBlocked("mistral")).toBeNull();
+    expect(await backgroundBlocked("openrouter")).toBeNull();
+  });
 });
