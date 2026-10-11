@@ -2,7 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder } from "lucide-react";
+import { ChatsPanel } from "./ChatsPanel";
+import { useChatLibrary } from "@/hooks/useChatLibrary";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -162,6 +164,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [files, setFiles] = useState<(Attachment & { size: number })[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const library = useChatLibrary();
+  const [showChats, setShowChats] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const project = library.projects.find((x) => x.id === projectId) ?? null;
+  // Only a turn the user started marks the chat for saving, so opening an old
+  // chat doesn't bump it to the top of the list.
+  const dirtyRef = useRef(false);
 
   async function addFiles(list: FileList | null) {
     if (!list?.length) return;
@@ -489,6 +499,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     lastActivityRef.current = Date.now();
     nudgeCountRef.current = 0;
 
+    dirtyRef.current = true;
     setInput("");
     setFiles([]);
     setFileNote(null);
@@ -521,7 +532,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: msg,
-          attachments: attached.map(({ name, mimeType, data }) => ({ name, mimeType, data })),
+          attachments: [...attached, ...(project?.files ?? [])].map(({ name, mimeType, data }) => ({ name, mimeType, data })),
+          projectInstructions: project?.instructions || undefined,
           checklist: openChecklist,
           history: historyRef.current,
           memory: memoryRef.current,
@@ -651,7 +663,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setIsStreaming(false);
       }
     }
-  }, [input, files, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction]);
+  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -699,6 +711,42 @@ export function AssistantClient({ userName }: { userName?: string }) {
     memoryRef.current = {};
     clearPending();
     setIsStreaming(false);
+    setChatId(null);
+    dirtyRef.current = false;
+  }
+
+  // Each finished turn saves the chat; the first one gives it an id and a title.
+  useEffect(() => {
+    if (isStreaming || !dirtyRef.current || !messages.length || messages.some((m) => m.streaming)) return;
+    dirtyRef.current = false;
+    const id = chatId ?? crypto.randomUUID();
+    if (!chatId) setChatId(id);
+    const first = messages.find((m) => m.role === "user")?.content ?? "New chat";
+    void library.saveChat({
+      id,
+      title: first.replace(/\s+/g, " ").slice(0, 60),
+      project_id: projectId,
+      updated_at: new Date().toISOString(),
+      messages,
+      history: historyRef.current,
+    });
+  }, [isStreaming, messages, chatId, projectId, library]);
+
+  async function openChat(id: string) {
+    const chat = await library.openChat<Message, HistoryEntry>(id);
+    if (!chat) return;
+    handleClear();
+    setMessages(chat.messages);
+    historyRef.current = chat.history;
+    setChatId(chat.id);
+    setProjectId(chat.project_id);
+    setShowChats(false);
+  }
+
+  function newChat(inProject: string | null) {
+    handleClear();
+    setProjectId(inProject);
+    setShowChats(false);
   }
 
   // Vision (E.D.I.T.H.): a captured screen/camera frame was analyzed — record
@@ -781,10 +829,37 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const persona = personaFor(agent?.name);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
+      {showChats && (
+        <>
+          <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setShowChats(false)} />
+          <ChatsPanel
+            chats={library.chats}
+            projects={library.projects}
+            activeChatId={chatId}
+            activeProjectId={projectId}
+            onOpen={(id) => void openChat(id)}
+            onNew={newChat}
+            onRename={(id, title) => void library.renameChat(id, title)}
+            onDelete={(id) => { void library.deleteChat(id); if (id === chatId) newChat(projectId); }}
+            onSaveProject={(proj) => void library.saveProject(proj)}
+            onDeleteProject={(id) => { void library.deleteProject(id); if (id === projectId) setProjectId(null); }}
+            onClose={() => setShowChats(false)}
+          />
+        </>
+      )}
       {/* Top bar */}
       <div className="flex-none flex items-center justify-between px-4 sm:px-8 py-2 border-b border-border-default bg-background-surface">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <button type="button" onClick={() => setShowChats(true)} title="Chats & projects" aria-label="Chats and projects"
+            className="flex-none p-1.5 -ml-1.5 rounded-input text-text-muted hover:text-text-primary transition-colors">
+            <PanelLeft size={16} />
+          </button>
+          {project && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-accent-blue/10 border border-accent-blue/20 text-accent-blue max-w-[160px]">
+              <Folder size={10} className="flex-none" /> <span className="truncate">{project.name}</span>
+            </span>
+          )}
           <div className="w-9 h-9 flex-none -my-1"><Persona3D color={persona.color} speaking={tts.speaking} className="w-full h-full" /></div>
           <span className={cn("w-1.5 h-1.5 rounded-full",
             tts.speaking ? "bg-accent-violet animate-pulse"

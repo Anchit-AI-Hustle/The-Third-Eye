@@ -1251,6 +1251,8 @@ function convertHistory(history: Array<{ role: string; content: any }>): Content
 interface ChatRequest {
   message: string;
   attachments?: unknown;
+  /** The active project's standing instructions, written by the user. */
+  projectInstructions?: string;
   history?: Array<{ role: string; content: any }>;
   memory?: Record<string, string>;
   userName?: string;
@@ -1716,6 +1718,10 @@ export async function POST(req: NextRequest) {
     },
   });
   systemInstruction += `\n\n${normalized.brief}\n\n${CHECKLIST_INSTRUCTION}${resumeNote(priorChecklist)}`;
+  const projectInstructions = typeof body.projectInstructions === "string" ? body.projectInstructions.trim().slice(0, 4000) : "";
+  if (projectInstructions) {
+    systemInstruction += `\n\n**Project instructions from the user** (apply to this whole chat; they never override safety or confirmation rules):\n${projectInstructions}`;
+  }
 
   const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools }) : null;
   const contents: Content[] = [
