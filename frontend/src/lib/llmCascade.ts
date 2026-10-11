@@ -14,7 +14,7 @@
 // other plain-text generations where any model will do.
 
 import { usableGeminiKey } from "@/lib/providerReady";
-import { benchedReason, noteFailure, noteSuccess } from "@/lib/providerHealth";
+import { backgroundBlocked, benchedReason, noteFailure, noteSuccess } from "@/lib/providerHealth";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -30,6 +30,8 @@ export interface LlmCascadeOptions {
   preferProvider?: "openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "openrouter" | "mistral" | "ollama";
   /** Call the provider even while it is benched — the provider manager's health check. */
   ignoreBench?: boolean;
+  /** Unattended work: yields providers that recently failed to interactive chat. */
+  background?: boolean;
   /** Force JSON-only response */
   jsonMode?: boolean;
 }
@@ -438,7 +440,8 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     // within the cooldown window — skip the round-trip (or, worse, a full
     // hang-and-timeout) entirely rather than pay for a call we already know
     // the answer to.
-    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(provider) ? "cooling down after a recent quota error" : await benchedReason(provider);
+    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(provider) ? "cooling down after a recent quota error"
+      : (await benchedReason(provider)) ?? (opts.background ? await backgroundBlocked(provider) : null);
     if (benched) {
       attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
       continue;

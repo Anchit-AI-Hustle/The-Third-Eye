@@ -90,6 +90,7 @@ async function runExtraction(system: string, user: string, maxTokens: number): P
       jsonMode: true,
       maxTokens,
       temperature: 0.1,
+      background: true,
     });
     return parseJsonBlock(out.text);
   } catch (e) {

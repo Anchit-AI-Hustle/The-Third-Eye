@@ -44,6 +44,19 @@ export async function benchedReason(provider: string): Promise<string | null> {
   return `${h.status.replace("_", " ")} until ${new Date(h.benched_until).toISOString().slice(11, 16)} UTC`;
 }
 
+// Background jobs (Gmail scan, device-log sync) run unattended every few
+// minutes; if they grab a provider the moment its bench ends they trip it
+// again before the user's next chat message, so they wait this much longer.
+const BACKGROUND_GRACE_MS = 15 * MINUTE;
+
+/** Like benchedReason, but keeps background work off a provider until well after it recovers. */
+export async function backgroundBlocked(provider: string): Promise<string | null> {
+  const h = (await healthMap()).get(provider);
+  if (!h || h.status === "ok") return null;
+  const until = new Date(h.benched_until ?? h.checked_at).getTime() + BACKGROUND_GRACE_MS;
+  return until > Date.now() ? `left free for chat after ${h.status.replace("_", " ")}` : null;
+}
+
 export async function storedModel(provider: string): Promise<string | null> {
   return (await healthMap()).get(provider)?.model ?? null;
 }
