@@ -134,11 +134,21 @@ describe("what the endpoint accepts", () => {
   });
 
   it("reports a revoked scope distinctly from a generic rejection", async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue(new Response("{}", { status: 403 }));
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(
+      '{"error":{"code":403,"message":"Request had insufficient authentication scopes.","status":"PERMISSION_DENIED"}}', { status: 403 }));
     const { body } = await post({ tool: "communicate", args: EMAIL_ARGS });
     expect(body.ok).toBe(false);
     expect(String(body.result)).toMatch(/permission isn't granted/i);
     expect(String(body.openUrl)).toContain("mail.google.com");
+  });
+
+  it("says the Gmail API is off instead of sending the user to reconnect", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(
+      '{"error":{"code":403,"message":"Gmail API has not been used in project 529553308976 before or it is disabled.","status":"PERMISSION_DENIED"}}', { status: 403 }));
+    const { body } = await post({ tool: "communicate", args: EMAIL_ARGS });
+    expect(body.ok).toBe(false);
+    expect(String(body.result)).toMatch(/Gmail API is switched off/);
+    expect(String(body.result)).not.toMatch(/Reconnect/);
   });
 });
 

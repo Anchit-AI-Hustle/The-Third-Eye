@@ -1060,7 +1060,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
             {fileNote && <span className="text-xs text-warning">{fileNote}</span>}
           </div>
         )}
-        <div className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 focus-within:border-border-hover transition-colors">
+        {/* A click anywhere on the bar that isn't a control lands in the text box. */}
+        <div onMouseDown={(e) => {
+            if ((e.target as HTMLElement).closest("button, a, input, textarea, [role=group]")) return;
+            e.preventDefault();
+            textareaRef.current?.focus();
+          }}
+          className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 cursor-text focus-within:border-border-hover transition-colors">
           <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
             onChange={(e) => void addFiles(e.target.files)} />
           <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, text" aria-label="Attach files"
@@ -1096,7 +1102,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             aria-label="Message input"
             rows={1}
             disabled={isStreaming}
-            className="flex-1 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
+            className="flex-1 self-stretch min-h-[2.25rem] py-1.5 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
             style={{ height: "auto" }}
             onInput={(e) => {
               const t = e.currentTarget;
