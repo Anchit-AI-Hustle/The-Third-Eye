@@ -6,6 +6,7 @@ import { isEmailIdentity } from "@/lib/serverIdentity";
 import { sendPush } from "@/lib/push";
 import { leadRecommendation } from "@/lib/digest";
 import { dispatchDaily } from "@/lib/music/daily";
+import { probeProviders } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
   if (job === "all" || job === "reminders") out.reminders = await runReminders(sb);
   if (job === "all" || job === "digest") out.digest = await runDigest(sb);
   if (job === "all" || job === "music") out.music = await dispatchDaily(sb);
+  if (job === "all" || job === "providers") out.providers = await probeProviders();
   return json(out);
 }
 

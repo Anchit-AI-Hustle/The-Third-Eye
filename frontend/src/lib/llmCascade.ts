@@ -14,6 +14,7 @@
 // other plain-text generations where any model will do.
 
 import { usableGeminiKey } from "@/lib/providerReady";
+import { benchedReason, noteFailure, noteSuccess } from "@/lib/providerHealth";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -27,6 +28,8 @@ export interface LlmCascadeOptions {
   stage?: string;            // for logging
   /** Pin a single provider; skip the rest. */
   preferProvider?: "openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "openrouter" | "mistral" | "ollama";
+  /** Call the provider even while it is benched — the provider manager's health check. */
+  ignoreBench?: boolean;
   /** Force JSON-only response */
   jsonMode?: boolean;
 }
@@ -37,6 +40,7 @@ export interface LlmCascadeResult {
   model: string;
   attempts: { provider: string; model: string; ok: boolean; status?: number; reason?: string }[];
 }
+
 
 const OPENAI_BASE    = "https://api.openai.com/v1";
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
@@ -143,6 +147,34 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
     }
   }
   return { res, model };
+}
+
+const CLOUD_PROVIDERS = ["openai", "anthropic", "gemini", "grok", "groq", "cerebras", "openrouter", "mistral"] as const;
+
+/** Providers with a key on this deployment. */
+export function configuredProviders(): string[] {
+  const keys = loadKeys();
+  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : !!keys[p]));
+}
+
+/**
+ * The provider manager's health check: one tiny call to each configured
+ * provider, past any bench, so results refresh the shared health table (a
+ * success clears a bench early; a failure benches or keeps it benched).
+ */
+export async function probeProviders(): Promise<Array<{ provider: string; ok: boolean; model?: string; reason?: string }>> {
+  const out: Array<{ provider: string; ok: boolean; model?: string; reason?: string }> = [];
+  for (const p of configuredProviders() as (typeof CLOUD_PROVIDERS)[number][]) {
+    cooldownUntil.delete(p);
+    try {
+      const r = await llmCascade({ preferProvider: p, ignoreBench: true, messages: [{ role: "user", content: "Reply with: OK" }], maxTokens: 8, temperature: 0, timeoutMs: 15_000 });
+      out.push({ provider: p, ok: true, model: r.model });
+    } catch (e) {
+      const last = e instanceof LlmCascadeError ? e.attempts.at(-1) : undefined;
+      out.push({ provider: p, ok: false, model: last?.model, reason: last?.reason ?? (e instanceof Error ? e.message : String(e)) });
+    }
+  }
+  return out;
 }
 
 /** Thrown when every provider failed; carries what each one said. */
@@ -406,16 +438,18 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     // within the cooldown window — skip the round-trip (or, worse, a full
     // hang-and-timeout) entirely rather than pay for a call we already know
     // the answer to.
-    if (provider !== "ollama" && inCooldown(provider)) {
-      attempts.push({ provider, model: "-", ok: false, reason: "skipped: cooling down after a recent quota error" });
+    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(provider) ? "cooling down after a recent quota error" : await benchedReason(provider);
+    if (benched) {
+      attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
       continue;
     }
+    const before = attempts.length;
     if (provider === "openai" && keys.openai.length > 0) {
       for (const key of keys.openai) {
         const model = modelFor("openai");
         const res = await callOpenAI(key, model, opts);
         attempts.push({ provider: "openai", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-        if (res.ok) return { text: res.text, provider: "openai", model, attempts };
+        if (res.ok) { await noteSuccess("openai", model); return { text: res.text, provider: "openai", model, attempts }; }
         if (!res.quota) break; // non-quota error → try next provider, not next key
         startCooldown("openai");
       }
@@ -423,44 +457,47 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       const model = modelFor("anthropic");
       const res = await callAnthropic(keys.anthropic, model, opts);
       attempts.push({ provider: "anthropic", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "anthropic", model, attempts };
+      if (res.ok) { await noteSuccess("anthropic", model); return { text: res.text, provider: "anthropic", model, attempts }; }
       if (res.quota) startCooldown("anthropic");
     } else if (provider === "gemini" && keys.gemini) {
       const model = modelFor("gemini");
       const res = await callGemini(keys.gemini, model, opts);
       attempts.push({ provider: "gemini", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "gemini", model, attempts };
+      if (res.ok) { await noteSuccess("gemini", model); return { text: res.text, provider: "gemini", model, attempts }; }
       if (res.quota) startCooldown("gemini");
     } else if (provider === "grok" && keys.grok) {
       const { res, model } = await withLiveModel("grok", GROK_BASE, keys.grok, modelFor("grok"), (m) => callOpenAICompatible(GROK_BASE, keys.grok, m, opts));
       attempts.push({ provider: "grok", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "grok", model, attempts };
+      if (res.ok) { await noteSuccess("grok", model); return { text: res.text, provider: "grok", model, attempts }; }
       if (res.quota) startCooldown("grok");
     } else if (provider === "groq" && keys.groq) {
       const { res, model } = await withLiveModel("groq", GROQ_BASE, keys.groq, modelFor("groq"), (m) => callOpenAICompatible(GROQ_BASE, keys.groq, m, opts));
       attempts.push({ provider: "groq", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "groq", model, attempts };
+      if (res.ok) { await noteSuccess("groq", model); return { text: res.text, provider: "groq", model, attempts }; }
       if (res.quota) startCooldown("groq");
     } else if (provider === "cerebras" && keys.cerebras) {
       const { res, model } = await withLiveModel("cerebras", CEREBRAS_BASE, keys.cerebras, modelFor("cerebras"), (m) => callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, m, opts));
       attempts.push({ provider: "cerebras", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "cerebras", model, attempts };
+      if (res.ok) { await noteSuccess("cerebras", model); return { text: res.text, provider: "cerebras", model, attempts }; }
       if (res.quota) startCooldown("cerebras");
     } else if (provider === "openrouter" && keys.openrouter) {
       const { res, model } = await withLiveModel("openrouter", OPENROUTER_BASE, keys.openrouter, process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free", (m) => callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, m, opts));
       attempts.push({ provider: "openrouter", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "openrouter", model, attempts };
+      if (res.ok) { await noteSuccess("openrouter", model); return { text: res.text, provider: "openrouter", model, attempts }; }
       if (res.quota) startCooldown("openrouter");
     } else if (provider === "mistral" && keys.mistral) {
       const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
       attempts.push({ provider: "mistral", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "mistral", model, attempts };
+      if (res.ok) { await noteSuccess("mistral", model); return { text: res.text, provider: "mistral", model, attempts }; }
       if (res.quota) startCooldown("mistral");
     } else if (provider === "ollama" && keys.ollama) {
       const model = modelFor("ollama");
       const res = await callOllama(model, opts);
       attempts.push({ provider: "ollama", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
-      if (res.ok) return { text: res.text, provider: "ollama", model, attempts };
+      if (res.ok) { await noteSuccess("ollama", model); return { text: res.text, provider: "ollama", model, attempts }; }
+    }
+    for (const a of attempts.slice(before)) {
+      if (!a.ok && a.status) await noteFailure(a.provider, a.model, a.status, a.reason ?? "");
     }
   }
 
@@ -620,9 +657,14 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
   const attempts: string[] = [];
   for (const { provider, base, model, key } of toolCapableOrder()) {
-    if (inCooldown(provider)) { attempts.push(`${provider}:cooling down`); continue; }
+    const benched = inCooldown(provider) ? "cooling down" : await benchedReason(provider);
+    if (benched) { attempts.push(`${provider}:${benched}`); continue; }
     const { res, model: used } = await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
-    if (res.ok) return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
+    if (res.ok) {
+      await noteSuccess(provider, used);
+      return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
+    }
+    await noteFailure(provider, used, res.status, res.err);
     attempts.push(`${provider}:${res.status}`);
     if (res.quota) startCooldown(provider);
   }
