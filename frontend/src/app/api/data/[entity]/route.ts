@@ -27,6 +27,8 @@ interface EntityCfg {
   patchFields?: string[];
   /** POST replaces the row on this conflict target instead of failing on a repeat id. */
   upsertOn?: string;
+  /** Columns a list read returns; a read with ?id= returns the whole row. For rows too big to list in full. */
+  listColumns?: string;
 }
 
 const ENTITIES: Record<string, EntityCfg> = {
@@ -39,6 +41,9 @@ const ENTITIES: Record<string, EntityCfg> = {
   music_tracks: { table: "music_tracks", order: [{ col: "created_at", asc: false }] },
   // One row per local day, re-saved as the day goes on.
   lifelog_days: { table: "lifelog_days", order: [{ col: "date", asc: false }], upsertOn: "user_id,id" },
+  // Assistant chat history: listed without messages, opened one at a time.
+  conversations: { table: "conversations", order: [{ col: "updated_at", asc: false }], upsertOn: "user_id,id", listColumns: "id,title,project_id,updated_at" },
+  projects: { table: "projects", order: [{ col: "updated_at", asc: false }], upsertOn: "user_id,id" },
   // Pause/resume/delete for automations (lib/automations.ts) and plain reminders —
   // listing with joined last-run status is server-computed at /api/automations.
   // Creation and any change to what fires (body/fire_at/recurrence) must go
@@ -89,11 +94,13 @@ function scrub(row: Record<string, unknown>, email: string) {
   return { ...rest, user_id: email };
 }
 
-export async function GET(_req: NextRequest, props: { params: Promise<{ entity: string }> }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ entity: string }> }) {
   const params = await props.params;
   const c = await resolve(params.entity);
   if (!c.ok) return fail(c);
-  let q = c.sb.from(c.cfg.table).select("*").eq("user_id", c.email);
+  const id = new URL(req.url).searchParams.get("id");
+  let q = c.sb.from(c.cfg.table).select(id ? "*" : c.cfg.listColumns ?? "*").eq("user_id", c.email);
+  if (id) q = q.eq("id", id);
   for (const o of c.cfg.order ?? []) q = q.order(o.col, { ascending: o.asc ?? true });
   const { data, error } = await q;
   if (error) {
