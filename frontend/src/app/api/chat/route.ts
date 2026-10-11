@@ -15,6 +15,7 @@ import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
 import { userFacingOutage } from "@/lib/llmCascade";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
+import { benchedReason, noteFailure } from "@/lib/providerHealth";
 import { attachmentsAsText, cleanAttachments, geminiParts } from "@/lib/attachments";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
@@ -1813,6 +1814,8 @@ export async function POST(req: NextRequest) {
 
         // No Gemini key → skip the tool-calling path and use the cascade below.
         if (!model) throw new Error("Gemini not configured — using fallback provider.");
+        const geminiBenched = await benchedReason("gemini");
+        if (geminiBenched) throw new Error(`Gemini skipped (${geminiBenched}) — using fallback provider.`);
         let loopGuard = 0;
         let currentContents = contents;
 
@@ -1894,6 +1897,8 @@ export async function POST(req: NextRequest) {
         }
         controller.close();
       } catch (err) {
+        const geminiStatus = Number(String(err).match(/\[(\d{3})/)?.[1] ?? 0);
+        if (geminiStatus) await noteFailure("gemini", MODEL, geminiStatus, String(err));
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
         // Tier 2: try a tool-capable fallback (Groq/Cerebras/Mistral all speak
         // OpenAI-style function calling) so live actions — send an email, add

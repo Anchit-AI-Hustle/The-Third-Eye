@@ -5,6 +5,9 @@ import { logActivity } from "@/lib/activity";
 import { alreadyProcessed, markProcessed, type Sb } from "@/lib/cron";
 
 const GMAIL_MAX_PER_USER = 25;
+// One model call per email; a full inbox in one burst trips every free tier's
+// per-minute limit and leaves nothing for chat. The rest wait for the next run.
+const EXTRACTIONS_PER_RUN = 8;
 const GMAIL_QUERY = "is:unread newer_than:2d";
 
 // ─── Gmail ───────────────────────────────────────────────────────────────────
@@ -63,9 +66,10 @@ export async function scrapeGmailForUser(sb: Sb, email: string) {
   const list = (await listRes.json()) as { messages?: { id: string }[] };
   const ids = (list.messages ?? []).map((m) => m.id);
 
-  let processed = 0, inserted = 0, merged = 0;
+  let processed = 0, inserted = 0, merged = 0, deferred = false;
   for (const id of ids) {
     if (await alreadyProcessed(sb, email, "gmail", id)) continue;
+    if (processed >= EXTRACTIONS_PER_RUN) { deferred = true; break; }
     const msg = await fetchMessage(tok.accessToken, id);
     if (msg) {
       const ex = await extractEmailTasks({
@@ -74,6 +78,9 @@ export async function scrapeGmailForUser(sb: Sb, email: string) {
         receivedAt: msg.receivedAt,
         body: msg.body,
       });
+      // The model is unavailable: stop, and leave this email unmarked so the next
+      // run reads it, instead of skipping it forever and hammering every provider.
+      if (!ex) { deferred = true; break; }
       if (ex.isActionable && ex.tasks.length) {
         const r = await saveExtractedTasks(
           {
@@ -100,5 +107,5 @@ export async function scrapeGmailForUser(sb: Sb, email: string) {
       context: { processed, inserted, merged },
     });
   }
-  return { processed, inserted, merged, capped: ids.length >= GMAIL_MAX_PER_USER };
+  return { processed, inserted, merged, capped: deferred || ids.length >= GMAIL_MAX_PER_USER };
 }
