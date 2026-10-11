@@ -7,6 +7,7 @@ import { sendPush } from "@/lib/push";
 import { leadRecommendation } from "@/lib/digest";
 import { dispatchDaily } from "@/lib/music/daily";
 import { probeProviders } from "@/lib/llmCascade";
+import { notifyWhatsApp } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -90,13 +91,15 @@ async function runReminders(sb: Sb) {
     let emailed = false;
     if (token && to) emailed = await sendGmail(token, to, subject, html);
     const pushed = await sendPush(r.user_id, r.title, r.body ?? "Reminder", "/assistant");
+    const whatsapped = await notifyWhatsApp(r.user_id, `⏰ Reminder: ${r.title}${r.body ? `\n${r.body}` : ""}`);
 
     await logNotification(sb, r.user_id, "reminder", r.id, "email", emailed ? "sent" : "failed");
     if (pushed) await logNotification(sb, r.user_id, "reminder", r.id, "push", "sent");
+    if (whatsapped) await logNotification(sb, r.user_id, "reminder", r.id, "whatsapp", "sent");
 
     // Only advance the reminder once it actually reached the user through some
     // channel; otherwise leave it pending so the next run retries it.
-    if (!(emailed || pushed)) continue;
+    if (!(emailed || pushed || whatsapped)) continue;
     const next = nextOccurrence(r.fire_at, r.recurrence, now);
     if (next) {
       await sb.from("reminders").update({ fire_at: next }).eq("id", r.id);
@@ -150,8 +153,11 @@ async function runDigest(sb: Sb) {
       lead ? lead.text : `${(tasks ?? []).length} open tasks today`,
       "/dashboard",
     );
+    const top = (tasks ?? []).slice(0, 5).map((t) => `• ${t.title}${t.due_date ? ` (due ${t.due_date})` : ""}`).join("\n");
+    const whatsapped = await notifyWhatsApp(email, `🗓️ Daily briefing — ${today}\n${lead ? `${lead.text}\n` : ""}${top || "No open tasks — clear runway."}`);
     await logNotification(sb, email, "daily_digest", today, "email", ok ? "sent" : "failed");
-    if (ok) sent++;
+    if (whatsapped) await logNotification(sb, email, "daily_digest", today, "whatsapp", "sent");
+    if (ok || whatsapped) sent++;
   }
   return { users: users.length, sent };
 }

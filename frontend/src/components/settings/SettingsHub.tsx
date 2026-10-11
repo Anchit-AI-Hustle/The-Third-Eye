@@ -10,6 +10,7 @@ import { PermissionsCard } from "@/components/settings/PermissionsCard";
 import { AgentProfileManager } from "@/components/settings/AgentProfileManager";
 import { ActivationSettings } from "@/components/settings/ActivationSettings";
 import { ProvidersCard } from "@/components/settings/ProvidersCard";
+import { WhatsAppCard } from "@/components/settings/WhatsAppCard";
 
 interface Props {
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -43,6 +44,7 @@ export function SettingsHub({ user }: Props) {
         <>
           <SettingsClient user={user} />
           <ConnectionsCard />
+          <WhatsAppCard />
           <AutomationsCard />
           <PermissionsCard />
         </>

@@ -1,6 +1,5 @@
-import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
-import { authOptions } from "@/lib/auth";
+import { identify } from "@/lib/serverIdentity";
 import { isSensitive } from "@/lib/actions";
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
@@ -13,8 +12,8 @@ export const runtime = "nodejs";
 
 // Executes a single user-confirmed action, exactly as it was shown for approval.
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
+  // A browser session, or the scoped token WhatsApp acts with when the user replies YES.
+  const { email } = await identify(req.headers, "chat");
   if (!email) return json({ error: "Not authenticated" }, 401);
   // The confirmed send needs a token carrying gmail.send. Google sign-in asks
   // for it, and Settings → Connections can grant it again if it was declined.
