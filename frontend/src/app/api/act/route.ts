@@ -5,7 +5,7 @@ import { isSensitive } from "@/lib/actions";
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
 import { getGoogleAccessToken } from "@/lib/googleToken";
-import { emailRecipients, gmailComposeUrl } from "@/lib/liveActions";
+import { emailRecipients, gmailComposeUrl, gmailSendError } from "@/lib/liveActions";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
 
@@ -65,14 +65,8 @@ export async function POST(req: NextRequest) {
       }
       const sent = await sendGmail(accessToken, to, subject, body);
       if (sent.ok) return json({ ok: true, result: `Email sent to ${to}.` });
-      if (sent.status === 401 || sent.status === 403) {
-        return json({
-          ok: false,
-          openUrl: compose,
-          result: "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access). No email was sent. You can open the Gmail draft below.",
-        });
-      }
-      return json({ ok: false, openUrl: compose, result: "Gmail rejected the send. No email was sent. You can open the Gmail draft below." });
+      console.error("gmail send failed", sent.status, sent.error.slice(0, 400));
+      return json({ ok: false, openUrl: compose, result: `${gmailSendError(sent.status, sent.error)} You can open the Gmail draft below.` });
     }
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));
@@ -94,7 +88,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function sendGmail(accessToken: string, to: string, subject: string, body: string): Promise<{ ok: boolean; status?: number }> {
+async function sendGmail(accessToken: string, to: string, subject: string, body: string): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const header = (s: string) => s.replace(/[\r\n]/g, " ").trim();
   const raw = [`To: ${header(to)}`, `Subject: ${header(subject)}`, "Content-Type: text/plain; charset=utf-8", "", body].join("\r\n");
   const encoded = Buffer.from(raw).toString("base64url");
@@ -104,9 +98,10 @@ async function sendGmail(accessToken: string, to: string, subject: string, body:
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: encoded }),
     });
-    return { ok: res.ok, status: res.status };
-  } catch {
-    return { ok: false };
+    if (res.ok) return { ok: true };
+    return { ok: false, status: res.status, error: await res.text().catch(() => "") };
+  } catch (e) {
+    return { ok: false, status: 0, error: e instanceof Error ? e.message : "network error" };
   }
 }
 

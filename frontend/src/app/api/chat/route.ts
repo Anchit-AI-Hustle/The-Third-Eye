@@ -6,7 +6,7 @@ import { getDb } from "@/lib/db";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
-import { directTurn } from "@/lib/liveActions";
+import { directTurn, gmailSendError } from "@/lib/liveActions";
 import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
@@ -320,10 +320,10 @@ async function sendEmail(accessToken: string | undefined, to: string, subject: s
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: encoded }),
     });
-    if (res.status === 401 || res.status === 403) return "Email sending failed — Gmail send permission isn't granted. Reconnect from Settings → Connections (grant Gmail send access).";
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return `Failed to send: ${err.error?.message ?? res.statusText}`;
+      const err = await res.text().catch(() => "");
+      console.error("gmail send failed", res.status, err.slice(0, 400));
+      return gmailSendError(res.status, err);
     }
     return `Email sent to ${to} with subject "${subject}".`;
   } catch {

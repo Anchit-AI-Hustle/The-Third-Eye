@@ -121,3 +121,24 @@ describe("classifyResult on tool output that opens with a bracket", () => {
     expect(classifyResult("[Weather unavailable — no key]")).toBe("failed");
   });
 });
+
+describe("failed Gmail sends never read as done", () => {
+  it("classifies every send-failure message as failed", async () => {
+    const { gmailSendError } = await import("@/lib/liveActions");
+    for (const [status, body] of [
+      [403, '{"error":{"message":"Gmail API has not been used in project 1 before or it is disabled."}}'],
+      [403, '{"error":{"message":"Request had insufficient authentication scopes."}}'],
+      [401, "{}"],
+      [400, '{"error":{"message":"Invalid To header"}}'],
+    ] as const) {
+      expect(classifyResult(gmailSendError(status, body))).toBe("failed");
+    }
+  });
+
+  it("names the real cause", async () => {
+    const { gmailSendError } = await import("@/lib/liveActions");
+    expect(gmailSendError(403, "Gmail API has not been used in project 1 before or it is disabled")).toMatch(/switched off/);
+    expect(gmailSendError(403, "Request had insufficient authentication scopes.")).toMatch(/permission isn't granted/);
+    expect(gmailSendError(401, "")).toMatch(/signed this connection out/);
+  });
+});
