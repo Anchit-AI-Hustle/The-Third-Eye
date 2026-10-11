@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Folder, FolderPlus, MessageSquarePlus, Pencil, Search, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { FileText, Folder, FolderPlus, MessageSquarePlus, Pencil, Plug, Search, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
 import type { ChatSummary, Project, ProjectFile } from "@/hooks/useChatLibrary";
@@ -164,6 +165,9 @@ export function ChatsPanel(p: Props) {
           {!loose.length && <p className="px-2 text-[11px] text-text-muted">{q ? "No matching chats." : "Your chats will appear here."}</p>}
         </section>
       </div>
+      <Link href="/connectors" className="flex items-center gap-2 px-4 py-3 border-t border-border-default text-xs text-text-secondary hover:text-text-primary">
+        <Plug size={13} /> Connectors — Gmail, Calendar, GitHub and more
+      </Link>
     </aside>
   );
 }

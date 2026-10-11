@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { signOutAndClear } from "@/lib/signOutClean";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
-  BarChart2, Settings, LogOut, PanelLeftClose, PanelLeftOpen,
+  BarChart2, Settings, LogOut, Plug, PanelLeftClose, PanelLeftOpen,
   FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -71,10 +71,25 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Capabilities", href: "/capabilities", icon: Sparkles },
       { label: "Agent Activity", href: "/activity", icon: Activity },
       { label: "App Audit", href: "/audit", icon: ShieldCheck },
-      { label: "Settings", href: "/settings", icon: Settings },
+      { label: "Connectors", href: "/connectors", icon: Plug },
     ],
   },
 ];
+
+function SettingsLink({ collapsed }: { collapsed?: boolean }) {
+  const active = usePathname()?.startsWith("/settings");
+  return (
+    <Link href="/settings" title="Settings" aria-label="Settings"
+      className={cn(
+        "flex items-center gap-3 rounded-input text-sm transition-all duration-150 w-full",
+        active ? "text-[#4FC3F7] bg-[#4FC3F7]/8" : "text-text-secondary hover:text-text-primary hover:bg-background-elevated",
+        collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
+      )}>
+      <Settings size={16} className="flex-none" />
+      {!collapsed && <span className="flex-1 text-left font-mono text-xs tracking-wide">Settings</span>}
+    </Link>
+  );
+}
 
 function SignOutButton({ collapsed }: { collapsed?: boolean }) {
   return (
@@ -279,6 +294,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
             )}
           </div>
         )}
+        <SettingsLink collapsed={collapsed} />
         <SignOutButton collapsed={collapsed} />
       </div>
     </aside>

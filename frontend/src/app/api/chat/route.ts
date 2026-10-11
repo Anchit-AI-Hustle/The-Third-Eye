@@ -1686,7 +1686,7 @@ export async function POST(req: NextRequest) {
   // Built-in declarations plus whatever the configured MCP servers publish.
   // Discovery is cached and failure-tolerant, so an unreachable server costs
   // its own tools rather than the request.
-  const mcpDeclarations = await mcpToolDeclarations();
+  const mcpDeclarations = await mcpToolDeclarations(email);
   const tools = mcpDeclarations.length
     ? [{ functionDeclarations: [...geminiTools[0].functionDeclarations, ...mcpDeclarations] }]
     : geminiTools;

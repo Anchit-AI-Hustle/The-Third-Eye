@@ -17,6 +17,8 @@
 //   * Two methods, tools/list and tools/call. Prompts and resources can follow
 //     if something needs them.
 
+import { checkConnectorUrl, userServers } from "./userConnectors";
+
 const PREFIX = "mcp__";
 const LIST_TIMEOUT_MS = 4_000;
 const CALL_TIMEOUT_MS = 25_000;
@@ -40,6 +42,8 @@ export interface McpServer {
    * knowing who is asking.
    */
   internal?: boolean;
+  /** Added by a user on the Connectors page: URL re-checked before every request, redirects refused. */
+  user?: boolean;
 }
 
 interface McpTool {
@@ -48,7 +52,8 @@ interface McpTool {
   inputSchema?: Record<string, unknown>;
 }
 
-let cache: { at: number; tools: Array<{ server: McpServer; tool: McpTool }> } | null = null;
+// Keyed by user: the deploy-wide servers plus that user's own connectors.
+const cache = new Map<string, { at: number; tools: Array<{ server: McpServer; tool: McpTool }> }>();
 
 /**
  * Configured servers, as JSON in MCP_SERVERS:
@@ -79,12 +84,17 @@ async function rpc(
   timeoutMs: number,
   userEmail?: string,
 ): Promise<any> {
+  if (server.user) {
+    const check = await checkConnectorUrl(server.url);
+    if (!check.ok) throw new Error(`${server.name}: ${check.error}`);
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const res = await fetch(server.url, {
       method: "POST",
       signal: ctl.signal,
+      redirect: server.user ? "error" : "follow",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
@@ -108,10 +118,12 @@ async function rpc(
  * own tools, not the whole list — a broken MCP endpoint must not take chat down
  * with it.
  */
-export async function discoverTools(): Promise<Array<{ server: McpServer; tool: McpTool }>> {
-  const servers = configuredServers();
+export async function discoverTools(userEmail?: string): Promise<Array<{ server: McpServer; tool: McpTool }>> {
+  const servers = [...configuredServers(), ...(await userServers(userEmail))];
   if (!servers.length) return [];
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.tools;
+  const key = userEmail ?? "";
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.tools;
 
   const results = await Promise.allSettled(
     servers.map(async (server) => {
@@ -125,7 +137,7 @@ export async function discoverTools(): Promise<Array<{ server: McpServer; tool: 
   for (const r of results) {
     if (r.status === "rejected") console.error("mcp: tools/list failed:", r.reason);
   }
-  cache = { at: Date.now(), tools };
+  cache.set(key, { at: Date.now(), tools });
   return tools;
 }
 
@@ -142,10 +154,10 @@ export function isMcpTool(name: string): boolean {
  * Declarations in Gemini's functionDeclarations shape, ready to concatenate
  * onto the built-in ones.
  */
-export async function mcpToolDeclarations(): Promise<
+export async function mcpToolDeclarations(userEmail?: string): Promise<
   Array<{ name: string; description: string; parameters: Record<string, unknown> }>
 > {
-  const found = await discoverTools();
+  const found = await discoverTools(userEmail);
   return found.map(({ server, tool }) => ({
     name: qualifiedName(server.name, tool.name),
     description: tool.description ?? `${tool.name} (via ${server.name})`,
@@ -159,7 +171,7 @@ export async function mcpToolDeclarations(): Promise<
  * rather than thrown, so one bad tool call does not end the conversation.
  */
 export async function callMcpTool(qualified: string, args: unknown, userEmail?: string): Promise<string> {
-  const found = await discoverTools();
+  const found = await discoverTools(userEmail);
   const match = found.find(({ server, tool }) => qualifiedName(server.name, tool.name) === qualified);
   if (!match) return `No MCP tool named ${qualified} is available.`;
 
@@ -186,6 +198,13 @@ export async function callMcpTool(qualified: string, args: unknown, userEmail?: 
 }
 
 /** Test seam — discovery is cached for a minute, which tests must not inherit. */
-export function resetMcpCache() {
-  cache = null;
+export function resetMcpCache(userEmail?: string) {
+  if (userEmail === undefined) cache.clear();
+  else cache.delete(userEmail);
+}
+
+/** tools/list against one server — how the Connectors page checks a new connector works. */
+export async function probeServer(server: McpServer): Promise<number> {
+  const result = await rpc(server, "tools/list", {}, LIST_TIMEOUT_MS);
+  return Array.isArray(result?.tools) ? result.tools.length : 0;
 }
