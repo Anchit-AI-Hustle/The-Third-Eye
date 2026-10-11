@@ -18,6 +18,10 @@ vi.mock("next-auth", () => ({
   getServerSession: () => Promise.resolve(sessionEmail ? { user: { email: sessionEmail } } : null),
 }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
+vi.mock("@/lib/gatewayAuth", () => ({
+  bearerFrom: (h: Headers) => h.get("authorization")?.replace("Bearer ", "") ?? null,
+  emailForToken: async (t: string, scope: string) => (t === "te_gw_whatsapp" && scope === "chat" ? "wa-user@x.com" : null),
+}));
 
 let enforced = false;
 vi.mock("@/lib/entitlements", () => ({
@@ -40,9 +44,9 @@ vi.mock("@/lib/mcp/client", () => ({
   isMcpTool: (t: string) => t.startsWith("mcp__"),
 }));
 
-async function post(body: unknown) {
+async function post(body: unknown, headers: Record<string, string> = {}) {
   const { POST } = await import("@/app/api/act/route");
-  const res = await POST({ json: () => Promise.resolve(body) } as any);
+  const res = await POST({ json: () => Promise.resolve(body), headers: new Headers(headers) } as any);
   return { status: res.status, body: await res.json() };
 }
 
@@ -105,6 +109,13 @@ describe("what the endpoint accepts", () => {
     sessionEmail = null;
     const { status } = await post({ tool: "communicate", args: EMAIL_ARGS });
     expect(status).toBe(401);
+  });
+
+  it("accepts the scoped token WhatsApp confirms with", async () => {
+    sessionEmail = null;
+    const { status, body } = await post({ tool: "communicate", args: EMAIL_ARGS }, { authorization: "Bearer te_gw_whatsapp" });
+    expect(status).toBe(200);
+    expect(body).toHaveProperty("result");
   });
 
   it("rejects a non-confirmable action", async () => {
