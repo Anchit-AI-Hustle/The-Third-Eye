@@ -10,7 +10,7 @@ const LABEL: Record<string, string> = {
   ok: "Working", unknown: "Not checked yet", rate_limited: "Rate limited", quota: "Daily quota used up", credit: "Out of credit", error: "Error",
 };
 const NAME: Record<string, string> = {
-  openai: "OpenAI", anthropic: "Anthropic (Claude)", gemini: "Google Gemini", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter", mistral: "Mistral",
+  openai: "OpenAI", anthropic: "Anthropic (Claude)", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter", mistral: "Mistral",
 };
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

@@ -14,7 +14,7 @@
 // other plain-text generations where any model will do.
 
 import { usableGeminiKey } from "@/lib/providerReady";
-import { backgroundBlocked, benchedReason, noteFailure, noteSuccess } from "@/lib/providerHealth";
+import { backgroundBlocked, benchedReason, classifyFailure, noteFailure, noteSuccess } from "@/lib/providerHealth";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -27,7 +27,7 @@ export interface LlmCascadeOptions {
   timeoutMs?: number;
   stage?: string;            // for logging
   /** Pin a single provider; skip the rest. */
-  preferProvider?: "openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "openrouter" | "mistral" | "ollama";
+  preferProvider?: CloudProvider | "ollama";
   /** Call the provider even while it is benched — the provider manager's health check. */
   ignoreBench?: boolean;
   /** Unattended work: yields providers that recently failed to interactive chat. */
@@ -112,12 +112,24 @@ const NOT_CHAT = /whisper|guard|tts|embed|moderation|playai|orpheus|compound|dis
 const RETIRED = /does not exist|not found|model_not_found|unavailable for free|decommissioned|no longer (supported|available)|not a valid model|invalid model/i;
 const liveModels = new Map<string, string>();
 
+// Gemini's free quota is counted per model, so Flash-Lite and 2.0 Flash keep
+// answering after 2.5 Flash's daily allowance is gone. It runs as its own
+// provider, "gemini-lite", so a quota bench on one doesn't bench the other.
+const GEMINI_OPENAI_BASE = `${GEMINI_BASE}/openai`;
+const GEMINI_LITE_MODEL = "gemini-2.5-flash-lite";
+const STATIC_MODELS: Record<string, string[]> = {
+  "gemini-lite": [GEMINI_LITE_MODEL, "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+};
+const MAX_ALTERNATES = 3;
+const MODEL_LIST_TTL_MS = 10 * 60_000;
+const modelLists = new Map<string, { at: number; ids: string[] }>();
+
 export function isRetiredModel(status: number, err: string): boolean {
   return (status === 404 || status === 400) && RETIRED.test(err);
 }
 
-export function pickModel(ids: string[], prefs: RegExp[], current: string): string | null {
-  const usable = ids.filter((id) => id && id !== current && !NOT_CHAT.test(id));
+export function pickModel(ids: string[], prefs: RegExp[], tried: Set<string>): string | null {
+  const usable = ids.filter((id) => id && !tried.has(id) && !NOT_CHAT.test(id));
   for (const p of prefs) {
     const hit = usable.find((id) => p.test(id));
     if (hit) return hit;
@@ -125,38 +137,53 @@ export function pickModel(ids: string[], prefs: RegExp[], current: string): stri
   return null;
 }
 
-async function servedModel(provider: string, base: string, key: string, current: string): Promise<string | null> {
+async function servedModel(provider: string, base: string, key: string, tried: Set<string>): Promise<string | null> {
+  const fixed = STATIC_MODELS[provider];
+  if (fixed) return fixed.find((m) => !tried.has(m)) ?? null;
   const prefs = MODEL_PREFS[provider];
   if (!prefs) return null;
-  const r = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8_000) }).catch(() => null);
-  if (!r?.ok) return null;
-  const body = await r.json().catch(() => ({}));
-  const ids: string[] = Array.isArray(body?.data) ? body.data.map((m: { id?: unknown }) => String(m?.id ?? "")) : [];
-  return pickModel(ids, prefs, current);
+  let list = modelLists.get(provider);
+  if (!list || Date.now() - list.at > MODEL_LIST_TTL_MS) {
+    const r = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8_000) }).catch(() => null);
+    if (!r?.ok) return null;
+    const body = await r.json().catch(() => ({}));
+    list = { at: Date.now(), ids: Array.isArray(body?.data) ? body.data.map((m: { id?: unknown }) => String(m?.id ?? "")) : [] };
+    modelLists.set(provider, list);
+  }
+  return pickModel(list.ids, prefs, tried);
 }
 
+// Free tiers rate-limit each model separately, so a 429 on one model says little
+// about the next: try a few others the provider serves before giving up on it.
+// A retired model is replaced for good; a rate-limited one only for this call.
 async function withLiveModel<T extends { ok: boolean; status?: number }>(
   provider: string, base: string, key: string, configured: string, call: (model: string) => Promise<T>,
 ): Promise<{ res: T; model: string }> {
   let model = liveModels.get(provider) ?? configured;
   let res = await call(model);
-  if (!res.ok && isRetiredModel(res.status ?? 0, "err" in res ? String((res as { err?: unknown }).err ?? "") : "")) {
-    const next = await servedModel(provider, base, key, model);
-    if (next) {
-      liveModels.set(provider, next);
-      model = next;
-      res = await call(model);
-    }
+  const tried = new Set([model]);
+  for (let i = 0; !res.ok && i < MAX_ALTERNATES; i++) {
+    const status = res.status ?? 0;
+    const err = "err" in res ? String((res as { err?: unknown }).err ?? "") : "";
+    const retired = isRetiredModel(status, err);
+    if (!retired && (status !== 429 || classifyFailure(status, err)?.status === "credit")) break;
+    const next = await servedModel(provider, base, key, tried);
+    if (!next) break;
+    if (retired) liveModels.set(provider, next);
+    tried.add(next);
+    model = next;
+    res = await call(model);
   }
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["openai", "anthropic", "gemini", "grok", "groq", "cerebras", "openrouter", "mistral"] as const;
+const CLOUD_PROVIDERS = ["openai", "anthropic", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "mistral"] as const;
+type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
 /** Providers with a key on this deployment. */
 export function configuredProviders(): string[] {
   const keys = loadKeys();
-  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : !!keys[p]));
+  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : !!keys[p]));
 }
 
 /**
@@ -166,7 +193,7 @@ export function configuredProviders(): string[] {
  */
 export async function probeProviders(): Promise<Array<{ provider: string; ok: boolean; model?: string; reason?: string }>> {
   const out: Array<{ provider: string; ok: boolean; model?: string; reason?: string }> = [];
-  for (const p of configuredProviders() as (typeof CLOUD_PROVIDERS)[number][]) {
+  for (const p of configuredProviders() as CloudProvider[]) {
     cooldownUntil.delete(p);
     try {
       const r = await llmCascade({ preferProvider: p, ignoreBench: true, messages: [{ role: "user", content: "Reply with: OK" }], maxTokens: 8, temperature: 0, timeoutMs: 15_000 });
@@ -432,8 +459,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const attempts: LlmCascadeResult["attempts"] = [];
   const pref = opts.preferProvider;
 
-  const order: ("openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "openrouter" | "mistral" | "ollama")[] =
-    pref ? [pref] : ["openai", "anthropic", "gemini", "grok", "groq", "cerebras", "openrouter", "mistral", "ollama"];
+  const order: (CloudProvider | "ollama")[] = pref ? [pref] : [...CLOUD_PROVIDERS, "ollama"];
 
   for (const provider of order) {
     // A provider that just failed on quota grounds is certain to fail again
@@ -468,6 +494,11 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       attempts.push({ provider: "gemini", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
       if (res.ok) { await noteSuccess("gemini", model); return { text: res.text, provider: "gemini", model, attempts }; }
       if (res.quota) startCooldown("gemini");
+    } else if (provider === "gemini-lite" && keys.gemini) {
+      const { res, model } = await withLiveModel("gemini-lite", GEMINI_OPENAI_BASE, keys.gemini, GEMINI_LITE_MODEL, (m) => callGemini(keys.gemini, m, opts));
+      attempts.push({ provider: "gemini-lite", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      if (res.ok) { await noteSuccess("gemini-lite", model); return { text: res.text, provider: "gemini-lite", model, attempts }; }
+      if (res.quota) startCooldown("gemini-lite");
     } else if (provider === "grok" && keys.grok) {
       const { res, model } = await withLiveModel("grok", GROK_BASE, keys.grok, modelFor("grok"), (m) => callOpenAICompatible(GROK_BASE, keys.grok, m, opts));
       attempts.push({ provider: "grok", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
@@ -649,6 +680,7 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   const keys = loadKeys();
   const rows: { provider: string; base: string; model: string; key: string }[] = [];
   if (keys.openai[0]) rows.push({ provider: "openai", base: OPENAI_BASE, model: modelFor("openai"), key: keys.openai[0] });
+  if (keys.gemini) rows.push({ provider: "gemini-lite", base: GEMINI_OPENAI_BASE, model: GEMINI_LITE_MODEL, key: keys.gemini });
   if (keys.groq) rows.push({ provider: "groq", base: GROQ_BASE, model: modelFor("groq"), key: keys.groq });
   if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });

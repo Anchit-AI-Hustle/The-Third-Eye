@@ -12,10 +12,10 @@ describe("recovering from a retired model", () => {
 
   it("picks the best chat model the provider serves now", () => {
     const groq = ["whisper-large-v3", "meta-llama/llama-guard-4-12b", "openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.1-8b-instant"];
-    expect(pickModel(groq, [/llama-3\.3-70b/, /gpt-oss-120b/, /gpt-oss-20b/], "llama-3.3-70b-versatile")).toBe("openai/gpt-oss-120b");
+    expect(pickModel(groq, [/llama-3\.3-70b/, /gpt-oss-120b/, /gpt-oss-20b/], new Set(["llama-3.3-70b-versatile"]))).toBe("openai/gpt-oss-120b");
     const or = ["openai/gpt-4o", "deepseek/deepseek-chat-v3:free", "qwen/qwen3-32b:free"];
-    expect(pickModel(or, [/llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /:free$/], "meta-llama/llama-3.3-70b-instruct:free")).toBe("deepseek/deepseek-chat-v3:free");
-    expect(pickModel(["whisper-large-v3"], [/./], "x")).toBeNull();
+    expect(pickModel(or, [/llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /:free$/], new Set(["meta-llama/llama-3.3-70b-instruct:free"]))).toBe("deepseek/deepseek-chat-v3:free");
+    expect(pickModel(["whisper-large-v3"], [/./], new Set(["x"]))).toBeNull();
   });
 });
 
@@ -40,5 +40,55 @@ describe("toolCallCascade switches off a retired model", () => {
     const out = await toolCallCascade({ messages: [{ role: "user", content: "hello" }], tools: [] });
     expect(out).toMatchObject({ provider: "groq", model: "openai/gpt-oss-120b", content: "hi" });
     expect(calls).toEqual(["llama-3.3-70b-versatile", "models", "openai/gpt-oss-120b"]);
+  });
+});
+
+describe("free-tier rate limits are per model", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules(); });
+
+  it("tries another served model on a 429 before giving up on the provider", async () => {
+    vi.stubEnv("GROQ_API_KEY", "k");
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/models")) return new Response(JSON.stringify({ data: [{ id: "llama-3.3-70b-versatile" }, { id: "openai/gpt-oss-120b" }] }));
+      const model = JSON.parse(String(init?.body)).model;
+      calls.push(model);
+      if (model === "llama-3.3-70b-versatile") return new Response("Rate limit reached for model `llama-3.3-70b-versatile`", { status: 429 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "hi" } }] }));
+    }));
+    const { llmCascade } = await import("@/lib/llmCascade");
+    const out = await llmCascade({ preferProvider: "groq", messages: [{ role: "user", content: "hello" }] });
+    expect(out).toMatchObject({ provider: "groq", model: "openai/gpt-oss-120b", text: "hi" });
+    expect(calls).toEqual(["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]);
+  });
+
+  it("does not shop for models when the account is out of credit", async () => {
+    vi.stubEnv("GROQ_API_KEY", "k");
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(url);
+      return new Response("Your credit balance is too low", { status: 429 });
+    }));
+    const { llmCascade } = await import("@/lib/llmCascade");
+    await expect(llmCascade({ preferProvider: "groq", ignoreBench: true, messages: [{ role: "user", content: "hello" }] })).rejects.toThrow();
+    expect(calls).toHaveLength(1);
+  });
+
+  it("falls back to Gemini Flash-Lite when 2.5 Flash's daily quota is spent", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "g");
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const models: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const model = decodeURIComponent(url.match(/models\/([^:]+):/)?.[1] ?? "");
+      models.push(model);
+      if (model === "gemini-2.5-flash") return new Response("You exceeded your current quota", { status: 429 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "lite" }] } }] }));
+    }));
+    const { llmCascade } = await import("@/lib/llmCascade");
+    const out = await llmCascade({ messages: [{ role: "user", content: "hello" }] });
+    expect(out).toMatchObject({ provider: "gemini-lite", model: "gemini-2.5-flash-lite", text: "lite" });
+    expect(models).toEqual(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
   });
 });
