@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { freeNearby, freeNews, freeStockQuote, freeWebSearch, rssItems } from "@/lib/freeSearch";
+import { duckDuckGoHits, freeNearby, freeNews, freeStockQuote, freeWebSearch, relevantHits, rssItems } from "@/lib/freeSearch";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -53,5 +53,28 @@ describe("keyless search sources", () => {
     }));
     const out = await freeNearby("cafe", { latitude: 28.6, longitude: 77.2 });
     expect(out).toContain("**Blue Tokai** — Blue Tokai, Connaught Place, Delhi");
+  });
+
+  it("drops results that never mention what was searched for", () => {
+    const hits = [
+      { title: "Unum login", link: "https://members.unum.com/", description: "Sign in to your benefits" },
+      { title: "Stripe | Financial infrastructure", link: "https://stripe.com/", description: "Payments" },
+    ];
+    expect(relevantHits(hits, "Stripe company overview").map((h) => h.link)).toEqual(["https://stripe.com/"]);
+  });
+
+  it("falls back to DuckDuckGo when Bing's results are off-topic", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("bing.com")) return new Response(rss(`<item><title>Unum login</title><link>https://members.unum.com/</link><description>Benefits</description></item>`));
+      return new Response(`<a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fstripe.com%2Fabout&rut=x">About Stripe</a><a class="result__snippet" href="#">Stripe builds payments infrastructure</a>`);
+    }));
+    const out = await freeWebSearch("Stripe company overview");
+    expect(out).toContain("https://stripe.com/about");
+    expect(out).not.toContain("unum");
+  });
+
+  it("reads DuckDuckGo's redirect links back to the real address", () => {
+    expect(duckDuckGoHits(`<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fa.example%2Fx">A &amp; B</a> <a class="result__snippet">snip</a>`))
+      .toEqual([{ title: "A & B", link: "https://a.example/x", description: "snip" }]);
   });
 });
