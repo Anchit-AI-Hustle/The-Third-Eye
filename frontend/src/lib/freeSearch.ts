@@ -23,10 +23,43 @@ export function rssItems(xml: string): { title: string; link: string; descriptio
   });
 }
 
+type Hit = { title: string; link: string; description: string };
+
+const STOP = new Set(["the", "and", "for", "with", "what", "how", "best", "company", "overview", "news", "latest", "2025", "2026", "vs"]);
+
+/** Words a relevant result should mention: the query minus filler. */
+function keyTerms(query: string): string[] {
+  return query.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP.has(w));
+}
+
+// Bing's keyless feed sometimes answers a query with pages that never mention
+// it (asked about Stripe, it returned an insurer's login pages), and the
+// agents then read those pages as evidence. Only keep hits that name a key
+// term in their title, text or address.
+export function relevantHits(hits: Hit[], query: string): Hit[] {
+  const terms = keyTerms(query);
+  if (!terms.length) return hits;
+  return hits.filter((h) => {
+    const hay = `${h.title} ${h.description} ${h.link}`.toLowerCase();
+    return terms.some((t) => hay.includes(t));
+  });
+}
+
+export function duckDuckGoHits(html: string): Hit[] {
+  return [...html.matchAll(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)].map(([, href, title, snippet]) => {
+    const uddg = href.match(/[?&]uddg=([^&]+)/)?.[1];
+    return { title: decode(title), link: uddg ? decodeURIComponent(uddg) : href.replace(/^\/\//, "https://"), description: decode(snippet) };
+  });
+}
+
 export async function freeWebSearch(query: string): Promise<string> {
-  const r = await get(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`);
-  const items = r ? rssItems(await r.text()).slice(0, 5) : [];
-  return items.map((i) => `• **${i.title}**\n  ${i.description}\n  ${i.link}`).join("\n\n");
+  const bing = await get(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`);
+  let hits = relevantHits(bing ? rssItems(await bing.text()) : [], query);
+  if (hits.length < 2) {
+    const ddg = await get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+    hits = [...hits, ...relevantHits(ddg ? duckDuckGoHits(await ddg.text()) : [], query)];
+  }
+  return hits.slice(0, 5).map((i) => `• **${i.title}**\n  ${i.description}\n  ${i.link}`).join("\n\n");
 }
 
 export async function freeNews(query: string): Promise<string> {
