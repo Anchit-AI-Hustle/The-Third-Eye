@@ -91,4 +91,22 @@ describe("free-tier rate limits are per model", () => {
     expect(out).toMatchObject({ provider: "gemini-lite", model: "gemini-2.5-flash-lite", text: "lite" });
     expect(models).toEqual(["gemini-2.5-flash", "gemini-2.5-flash-lite"]);
   });
+
+  it("finds a current Flash-Lite from Google's model list when the default one is retired", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "g");
+    const used: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/openai/models")) {
+        return new Response(JSON.stringify({ data: [{ id: "models/gemini-2.5-flash" }, { id: "models/gemini-3.0-flash-lite" }, { id: "models/gemini-3.0-flash-lite-tts" }] }));
+      }
+      const model = decodeURIComponent(url.match(/models\/([^:]+):/)?.[1] ?? "");
+      used.push(model);
+      if (model === "gemini-2.5-flash-lite") return new Response("This model models/gemini-2.5-flash-lite is no longer available.", { status: 404 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }));
+    }));
+    const { llmCascade } = await import("@/lib/llmCascade");
+    const out = await llmCascade({ preferProvider: "gemini-lite", messages: [{ role: "user", content: "hello" }] });
+    expect(out).toMatchObject({ provider: "gemini-lite", model: "gemini-3.0-flash-lite" });
+    expect(used).toEqual(["gemini-2.5-flash-lite", "gemini-3.0-flash-lite"]);
+  });
 });
