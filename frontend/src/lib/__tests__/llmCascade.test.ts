@@ -67,14 +67,14 @@ describe("llmCascade: per-provider cooldown after a quota error", () => {
 
     const first = await llmCascade({ messages: [{ role: "user", content: "hi" }] });
     expect(first.provider).toBe("groq");
-    const geminiCallsAfterFirst = calls.filter((u) => hostIs(u, GEMINI_HOST)).length;
+    const geminiCallsAfterFirst = calls.filter((u) => hostIs(u, GEMINI_HOST) && u.includes("gemini-2.5-flash:")).length;
     expect(geminiCallsAfterFirst).toBe(1);
 
     const second = await llmCascade({ messages: [{ role: "user", content: "hi again" }] });
     expect(second.provider).toBe("groq");
     // Still just the one Gemini call from before — the second run skipped it
     // via the cooldown instead of hitting the (still-429) endpoint again.
-    const geminiCallsAfterSecond = calls.filter((u) => hostIs(u, GEMINI_HOST)).length;
+    const geminiCallsAfterSecond = calls.filter((u) => hostIs(u, GEMINI_HOST) && u.includes("gemini-2.5-flash:")).length;
     expect(geminiCallsAfterSecond).toBe(1);
 
     const geminiAttempt = second.attempts.find((a) => a.provider === "gemini");
@@ -94,7 +94,7 @@ describe("llmCascade: per-provider cooldown after a quota error", () => {
     resetCooldowns();
     await llmCascade({ messages: [{ role: "user", content: "hi again" }] });
 
-    const geminiCalls = calls.filter((u) => hostIs(u, GEMINI_HOST)).length;
+    const geminiCalls = calls.filter((u) => hostIs(u, GEMINI_HOST) && u.includes("gemini-2.5-flash:")).length;
     expect(geminiCalls).toBe(2);
   });
 
@@ -111,7 +111,7 @@ describe("llmCascade: per-provider cooldown after a quota error", () => {
     await llmCascade({ messages: [{ role: "user", content: "hi again" }] });
 
     // A 500 isn't a quota error, so no cooldown — Gemini gets tried both times.
-    const geminiCalls = calls.filter((u) => hostIs(u, GEMINI_HOST)).length;
+    const geminiCalls = calls.filter((u) => hostIs(u, GEMINI_HOST) && u.includes("gemini-2.5-flash:")).length;
     expect(geminiCalls).toBe(2);
   });
 });

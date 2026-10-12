@@ -24,6 +24,7 @@ import { todayBlock } from "@/lib/tools/today";
 import { callMcpTool, isMcpTool, mcpToolDeclarations } from "@/lib/mcp/client";
 import { scheduleAutomation } from "@/lib/automations";
 import { identify } from "@/lib/serverIdentity";
+import { freeNearby, freeNews, freeStockQuote, freeWebSearch } from "@/lib/freeSearch";
 import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
 import { FORMULAS, gstBreakup, toGstSlab } from "@/lib/calculators/formulas";
@@ -209,6 +210,8 @@ async function webSearch(query: string): Promise<string> {
       return [box, organic].filter(Boolean).join("\n\n---\n\n") || "No results found.";
     } catch {}
   }
+  const free = await freeWebSearch(query);
+  if (free) return free;
   // DuckDuckGo instant answers fallback (no key required)
   try {
     const res = await fetch(
@@ -223,7 +226,7 @@ async function webSearch(query: string): Promise<string> {
   if (fromGemini) return fromGemini;
   const wiki = await wikiSnippets(query);
   if (wiki) return wiki;
-  return `No instant answer found for "${query}". Set SERPER_API_KEY for full web search results.`;
+  return `No web results found for "${query}" right now.`;
 }
 
 async function getWeather(location: string): Promise<string> {
@@ -793,7 +796,7 @@ async function runTool(
 
 async function getNews(query: string): Promise<string> {
   const key = process.env.SERPER_API_KEY;
-  if (!key) return (await grounded(query ? `${query} news` : "top news today")) ?? "[News unavailable — SERPER_API_KEY not set.]";
+  if (!key) return (await freeNews(query)) || ((await grounded(query ? `${query} news` : "top news today")) ?? "[News unavailable right now.]");
   try {
     const res = await fetch("https://google.serper.dev/news", {
       method: "POST",
@@ -812,8 +815,10 @@ async function getNews(query: string): Promise<string> {
 }
 
 async function getStockQuote(symbol: string): Promise<string> {
+  const quote = await freeStockQuote(symbol);
+  if (quote) return quote;
   const key = process.env.SERPER_API_KEY;
-  if (!key) return (await grounded(`${symbol} stock price`)) ?? "[Stock lookup unavailable — SERPER_API_KEY not set.]";
+  if (!key) return (await grounded(`${symbol} stock price`)) ?? `[No quote found for "${symbol}".]`;
   try {
     const res = await fetch("https://google.serper.dev/search", {
       method: "POST",
@@ -835,8 +840,10 @@ async function getStockQuote(symbol: string): Promise<string> {
 async function getNearby(query: string, location?: { latitude: number; longitude: number }): Promise<string> {
   const key = process.env.SERPER_API_KEY;
   if (!key) {
+    const free = await freeNearby(query, location);
+    if (free) return free;
     const where = location ? ` near ${location.latitude.toFixed(3)},${location.longitude.toFixed(3)}` : "";
-    return (await grounded(`${query}${where}`)) ?? "[Nearby unavailable — SERPER_API_KEY not set.]";
+    return (await grounded(`${query}${where}`)) ?? `[No places found for "${query}"${location ? " nearby" : " — share your location for nearby results"}.]`;
   }
   if (!location) return "[Nearby: grant location access first.]";
   try {
@@ -1715,7 +1722,7 @@ export async function POST(req: NextRequest) {
       gmailRead: !!accessToken && google.gmailRead,
       calendar: !!accessToken && google.calendarRead,
       reminders: !!getDb(),
-      webSearch: !!process.env.SERPER_API_KEY,
+      webSearch: true,
     },
   });
   systemInstruction += `\n\n${normalized.brief}\n\n${CHECKLIST_INSTRUCTION}${resumeNote(priorChecklist)}`;
