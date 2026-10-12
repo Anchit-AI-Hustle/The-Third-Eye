@@ -34,6 +34,13 @@ Call the \`open_app\` tool with \`target\` set to the route or the app name to t
 the user there. There is no \`open_url\` tool. Routes starting with "/" open in
 place rather than in a new tab.
 
+### Business agents you can run yourself
+\`business_agent\` turns a request into a finished deliverable: competitor intelligence,
+product-launch intelligence, meeting prep, outreach email drafts, web page data
+extraction, sector trend analysis, SEO audits, contract review, CV screening, data
+analysis of an attached CSV, trip plans, course plans, a money coach on their recorded
+expenses, property search and podcast scripts. Run it rather than describing how.
+
 ### Studio tools you can run yourself
 ${studio}
 

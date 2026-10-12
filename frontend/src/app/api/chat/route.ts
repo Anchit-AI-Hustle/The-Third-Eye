@@ -16,7 +16,8 @@ import { getGithubAccessToken, runGithub } from "@/lib/github";
 import { userFacingOutage } from "@/lib/llmCascade";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { benchedReason, noteFailure } from "@/lib/providerHealth";
-import { attachmentsAsText, cleanAttachments, geminiParts } from "@/lib/attachments";
+import { attachedText, attachmentsAsText, cleanAttachments, geminiParts } from "@/lib/attachments";
+import { runBusinessAgent } from "@/lib/businessAgents";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
 import { resolveTask } from "@/lib/tools/taskMatch";
@@ -348,6 +349,8 @@ interface RunContext {
   location?: { latitude: number; longitude: number; label?: string };
   tier: Tier;
   email?: string;
+  /** Text of the files attached to this message, for tools that work on them. */
+  attachedText: string;
 }
 
 async function runTool(
@@ -745,6 +748,20 @@ async function runTool(
 
     case "deep_research":
       return { result: await deepResearch(input.topic ?? "", input.depth ?? "standard", input.format ?? "report") };
+
+    case "business_agent":
+      return {
+        result: await runBusinessAgent(
+          { ...input, document: input.document || ctx.attachedText || undefined },
+          {
+            search: webSearch,
+            news: getNews,
+            appData: ctx.expenses.length
+              ? ctx.expenses.slice(0, 300).map((e) => `${e.spent_on ?? ""} ${e.category ?? "Other"} ${e.amount}${e.note ? ` — ${e.note}` : ""}`).join("\n")
+              : undefined,
+          },
+        ),
+      };
 
     case "play_music": {
       const link = resolveMusicLink(input.query ?? "", input.service ?? "spotify", input.mood);
@@ -1739,7 +1756,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, accessToken, location, tier: effectiveTier, email };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, accessToken, location, tier: effectiveTier, email, attachedText: attachedText(attachments) };
   const checklist = Checklist.resume(priorChecklist);
 
   const stream = new ReadableStream({

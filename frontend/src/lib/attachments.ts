@@ -33,6 +33,12 @@ export function geminiParts(atts: Attachment[]) {
   return atts.map((a) => ({ inlineData: { mimeType: a.mimeType, data: a.data } }));
 }
 
+/** The readable text of text attachments, for tools that work on the user's file. */
+export function attachedText(atts: Attachment[]): string {
+  return atts.filter((a) => isText(a.mimeType))
+    .map((a) => `# ${a.name}\n${Buffer.from(a.data, "base64").toString("utf8")}`).join("\n\n");
+}
+
 // Text-only fallback models can still read text files; for the rest they are told
 // what was attached so they don't answer as if nothing was.
 export function attachmentsAsText(atts: Attachment[]): string {

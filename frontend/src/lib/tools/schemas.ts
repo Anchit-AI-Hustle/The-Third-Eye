@@ -477,6 +477,22 @@ export const geminiTools = [
         },
       },
       {
+        name: "business_agent",
+        description: "Run a multi-step business agent that researches and writes a finished deliverable. Kinds: competitor_intel (competitors, comparison table, gaps, pricing angles), launch_intel (how a product launch is landing), meeting_prep (company research, strategy, agenda, one-page brief), outreach_drafts (find matching companies and draft personalised emails — drafts only), web_scrape (extract structured data from a URL), trend_analysis (sector patterns, gaps, opportunities), seo_audit (score and fix list for a URL), contract_review, cv_screen and data_analysis (work on the user's attached text/CSV file), travel_plan, course_plan, financial_coach (uses their recorded expenses), property_search, podcast_script (two-host script from a topic or URL). Prefer this over web_search/deep_research whenever the request matches one of these jobs.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            kind: { type: "STRING", enum: ["competitor_intel", "launch_intel", "meeting_prep", "outreach_drafts", "web_scrape", "trend_analysis", "seo_audit", "contract_review", "cv_screen", "data_analysis", "travel_plan", "course_plan", "financial_coach", "property_search", "podcast_script"], description: "Which agent" },
+            subject: { type: "STRING", description: "Company, product, sector, destination, role or topic" },
+            url: { type: "STRING", description: "A page to read (their site, a competitor, the page to audit or scrape)" },
+            goal: { type: "STRING", description: "What they want out of it: the meeting goal, the data to extract, the questions to answer, the review type" },
+            details: { type: "STRING", description: "Anything else: attendees and duration, budget and dates, outreach style and offer, role requirements" },
+            document: { type: "STRING", description: "Text the user pasted to work on, when no file is attached" },
+          },
+          required: ["kind"],
+        },
+      },
+      {
         name: "play_music",
         description: "Open music on Spotify, YouTube Music, Apple Music, or JioSaavn with search ready.",
         parameters: {

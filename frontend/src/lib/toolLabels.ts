@@ -42,6 +42,7 @@ const BASE_LABELS: Record<string, string> = {
   create_asset: "Creating that asset",
   anchor: "Checking ANCHOR",
   deep_research: "Researching",
+  business_agent: "Running business agent",
   play_music: "Queuing up music",
   initiate_protocol: "Activating the protocol",
   get_health_data: "Checking your health data",
