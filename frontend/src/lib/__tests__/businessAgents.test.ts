@@ -54,6 +54,14 @@ describe("running an agent", () => {
     expect(messages[0].content).toContain("We sell widgets");
   });
 
+  it("skips sign-in pages when choosing which results to read", async () => {
+    const search = vi.fn(async () => "• **Acme login**\n  https://dashboard.acme.com/login\n\n• **Acme**\n  https://acme.com/about");
+    await runBusinessAgent({ kind: "competitor_intel", subject: "Acme" }, { ...deps, search });
+    const evidence = cascade.mock.calls[0][0].messages[0].content;
+    expect(evidence).toContain("## Page: https://acme.com/about");
+    expect(evidence).not.toContain("## Page: https://dashboard.acme.com/login");
+  });
+
   it("refuses to read pages on private networks", async () => {
     expect(await readPage("http://intranet.example/admin")).toBe("");
     expect(await readPage("http://localhost:3000")).toBe("");
