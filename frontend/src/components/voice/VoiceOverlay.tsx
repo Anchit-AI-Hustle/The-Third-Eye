@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { useWakeWord, stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
-import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
+import { useMicReady } from "@/hooks/useMicReady";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
@@ -146,9 +146,8 @@ export function VoiceOverlay() {
   // App-wide wake word: passively listen for the agent's name while the mic is
   // off (so it never fights the main recognizer). Saying "JARVIS" opens the
   // panel and starts listening — true hands-free entry.
-  const onWake = useCallback(async (trigger: string, transcript: string) => {
+  const onWake = useCallback((trigger: string, transcript: string) => {
     if (isStreamingRef.current) return;
-    if (!(await requestCapability("microphone"))) return;
     setExpanded(true);
     // "Hey JARVIS, what's the weather" carries its command in the same breath.
     // Answer it instead of opening a mic and making them say it again; wake
@@ -168,31 +167,19 @@ export function VoiceOverlay() {
     }
     stt.enable();
     setMicOn(true);
-  }, [stt, requestCapability, agent.name]);
+  }, [stt, agent.name]);
 
-  // Continuous listening needs the microphone, and the gate is the consent
-  // moment for it. This used to require the *persisted* "allow every time"
-  // policy, which nothing sets unless the user goes looking for it — so the
-  // wake toggle sat green while nothing was listening. Now any live grant
-  // counts: the persisted policy, or the user allowing it in this session.
-  const [micAlways, setMicAlways] = useState(false);
-  const [micGranted, setMicGranted] = useState(false);
-  useEffect(() => {
-    const read = () => setMicAlways(getPolicy("microphone") === "always");
-    read();
-    window.addEventListener(PERM_POLICY_EVENT, read);
-    return () => window.removeEventListener(PERM_POLICY_EVENT, read);
-  }, []);
-  const micReady = micAlways || micGranted;
+  const mic = useMicReady();
+  const micReady = mic.ready;
 
   // Ask for the microphone the moment the user turns the wake word on, rather
   // than silently doing nothing until they happen to use the mic button.
   const toggleWake = useCallback(async () => {
     if (wakeEnabled) { updateActivation("wakeWordEnabled", false); return; }
     if (!micReady && !(await requestCapability("microphone"))) return;
-    setMicGranted(true);
+    mic.markGranted();
     updateActivation("wakeWordEnabled", true);
-  }, [wakeEnabled, micReady, requestCapability, updateActivation]);
+  }, [wakeEnabled, micReady, mic, requestCapability, updateActivation]);
 
   const extraTriggers = useMemo(
     () => phraseTriggers(activation.selectedWakeWord),
@@ -206,7 +193,9 @@ export function VoiceOverlay() {
     agentName: agent.name,
     extraTriggers,
     sensitivity: activation.wakeWordSensitivity,
-    enabled: wakeEnabled && micReady && !micOn && !tts.speaking,
+    // The Assistant page runs its own wake listener, and a browser allows one
+    // speech recognizer at a time: two would keep aborting each other.
+    enabled: wakeEnabled && micReady && !micOn && !tts.speaking && pathname !== "/assistant",
     onWake,
     cooldownMs: 2000,
   });
@@ -259,7 +248,7 @@ export function VoiceOverlay() {
       if (!(await requestCapability("microphone"))) return;
       // Granting here also unblocks the wake word for the rest of the session,
       // so the user does not have to authorise the same microphone twice.
-      setMicGranted(true);
+      mic.markGranted();
       stt.enable();
       setMicOn(true);
     }

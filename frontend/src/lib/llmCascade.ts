@@ -105,6 +105,7 @@ const MODEL_PREFS: Record<string, RegExp[]> = {
   groq: [/llama-3\.3-70b/, /gpt-oss-120b/, /llama-4-maverick/, /llama-4-scout/, /kimi-k2/, /qwen3?-32b/, /gpt-oss-20b/, /llama-3\.1-8b/],
   cerebras: [/llama-3\.3-70b/, /gpt-oss-120b/, /qwen-3-235b/, /llama-4/, /qwen-3-32b/, /llama3\.1-8b/],
   openrouter: [/llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /gpt-oss.*:free$/, /llama.*:free$/, /gemma.*:free$/, /:free$/],
+  "gemini-lite": [/^gemini-[\d.]+-flash-lite$/, /^gemini-flash-lite-latest$/, /flash-lite/],
   mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^mistral-large-latest$/],
   grok: [/^grok-3-mini$/, /^grok-3$/, /^grok-4/, /grok/],
 };
@@ -117,9 +118,6 @@ const liveModels = new Map<string, string>();
 // provider, "gemini-lite", so a quota bench on one doesn't bench the other.
 const GEMINI_OPENAI_BASE = `${GEMINI_BASE}/openai`;
 const GEMINI_LITE_MODEL = "gemini-2.5-flash-lite";
-const STATIC_MODELS: Record<string, string[]> = {
-  "gemini-lite": [GEMINI_LITE_MODEL, "gemini-2.0-flash", "gemini-2.0-flash-lite"],
-};
 const MAX_ALTERNATES = 3;
 const MODEL_LIST_TTL_MS = 10 * 60_000;
 const modelLists = new Map<string, { at: number; ids: string[] }>();
@@ -138,8 +136,6 @@ export function pickModel(ids: string[], prefs: RegExp[], tried: Set<string>): s
 }
 
 async function servedModel(provider: string, base: string, key: string, tried: Set<string>): Promise<string | null> {
-  const fixed = STATIC_MODELS[provider];
-  if (fixed) return fixed.find((m) => !tried.has(m)) ?? null;
   const prefs = MODEL_PREFS[provider];
   if (!prefs) return null;
   let list = modelLists.get(provider);
@@ -147,7 +143,7 @@ async function servedModel(provider: string, base: string, key: string, tried: S
     const r = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8_000) }).catch(() => null);
     if (!r?.ok) return null;
     const body = await r.json().catch(() => ({}));
-    list = { at: Date.now(), ids: Array.isArray(body?.data) ? body.data.map((m: { id?: unknown }) => String(m?.id ?? "")) : [] };
+    list = { at: Date.now(), ids: Array.isArray(body?.data) ? body.data.map((m: { id?: unknown }) => String(m?.id ?? "").replace(/^models\//, "")) : [] };
     modelLists.set(provider, list);
   }
   return pickModel(list.ids, prefs, tried);
