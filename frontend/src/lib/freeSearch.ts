@@ -34,14 +34,17 @@ function keyTerms(query: string): string[] {
 
 // Bing's keyless feed sometimes answers a query with pages that never mention
 // it (asked about Stripe, it returned an insurer's login pages), and the
-// agents then read those pages as evidence. Only keep hits that name a key
-// term in their title, text or address.
+// agents then read those pages as evidence. Only keep hits that name the
+// query's key terms in their title, text or address.
 export function relevantHits(hits: Hit[], query: string): Hit[] {
   const terms = keyTerms(query);
   if (!terms.length) return hits;
+  // A multi-word query must match at least half its terms: "dental clinics in
+  // Texas" matched on "dental" alone returned a clinic in New York.
+  const need = Math.max(1, Math.ceil(terms.length / 2));
   return hits.filter((h) => {
     const hay = `${h.title} ${h.description} ${h.link}`.toLowerCase();
-    return terms.some((t) => hay.includes(t));
+    return terms.filter((t) => hay.includes(t)).length >= need;
   });
 }
 

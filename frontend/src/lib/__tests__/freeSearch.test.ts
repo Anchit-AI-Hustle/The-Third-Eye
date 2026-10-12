@@ -61,6 +61,11 @@ describe("keyless search sources", () => {
       { title: "Stripe | Financial infrastructure", link: "https://stripe.com/", description: "Payments" },
     ];
     expect(relevantHits(hits, "Stripe company overview").map((h) => h.link)).toEqual(["https://stripe.com/"]);
+    const clinics = [
+      { title: "West Hempstead Dental", link: "https://westhempsteaddental.com/", description: "Dentist in New York" },
+      { title: "Austin Dental Clinic", link: "https://austin.example/", description: "Family dentistry in Texas" },
+    ];
+    expect(relevantHits(clinics, "dental clinics in Texas").map((h) => h.title)).toEqual(["Austin Dental Clinic"]);
   });
 
   it("falls back to DuckDuckGo when Bing's results are off-topic", async () => {

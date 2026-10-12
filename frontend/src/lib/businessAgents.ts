@@ -189,6 +189,8 @@ export async function readPage(url: string): Promise<string> {
 }
 
 const isWebUrl = (u: string) => /^https?:\/\//i.test(u);
+// Sign-in and sign-up screens say nothing about a company and use up the page budget.
+const isAccountPage = (u: string) => /^https?:\/\/(app|dashboard|accounts?|login|auth)\.|\/(log-?in|sign-?in|sign-?up|register|auth)\b/i.test(u);
 
 /** Column-by-column profile of a CSV so totals come from arithmetic, not the model. */
 export function profileCsv(csv: string): string | null {
@@ -263,7 +265,7 @@ export async function runBusinessAgent(input: BusinessAgentInput, deps: AgentDep
   const urls: string[] = [];
   if (input.url && recipe.pages && recipe.pages !== "results") urls.push(input.url);
   if (recipe.pages === "results" || recipe.pages === "url_and_results") {
-    const found = (results[0]?.r.match(/https?:\/\/[^\s)\]>"']+/g) ?? []).filter(isWebUrl);
+    const found = (results[0]?.r.match(/https?:\/\/[^\s)\]>"']+/g) ?? []).filter((u) => isWebUrl(u) && !isAccountPage(u));
     for (const u of found) if (!urls.includes(u) && urls.length < MAX_RESULT_PAGES + (input.url ? 1 : 0)) urls.push(u);
   }
   const pages = (await Promise.all(urls.map(async (u) => ({ u, text: await readPage(u) })))).filter((p) => p.text);
