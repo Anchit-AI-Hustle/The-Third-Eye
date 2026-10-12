@@ -199,11 +199,16 @@ export function useWakeWord({
     triggersRef.current = buildTriggerSet(agentName, [...DEFAULT_TRIGGERS, ...(extraTriggers ?? [])]);
   }, [agentName, extraTriggers]);
 
+  // Without SpeechRecognition (Firefox, an iPhone home-screen app) the
+  // microphone-chunk path that covers hidden tabs listens all the time instead.
+  const [chunkOnly, setChunkOnly] = useState(false);
   useEffect(() => {
     const SR = typeof window !== "undefined"
       ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
       : null;
-    setSupported(!!SR);
+    const canRecord = typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+    setSupported(!!SR || canRecord);
+    setChunkOnly(!SR && canRecord);
   }, []);
 
   const clearSettle = useCallback(() => {
@@ -280,11 +285,11 @@ export function useWakeWord({
   }, [fire]);
 
   const startBackground = useCallback(() => {
-    if (!backgroundListening || bgActiveRef.current || !streamRef.current) return;
+    if ((!backgroundListening && !chunkOnly) || bgActiveRef.current || !streamRef.current) return;
     bgActiveRef.current = true;
     setHearingInBackground(true);
     recordBackgroundChunk();
-  }, [backgroundListening, recordBackgroundChunk]);
+  }, [backgroundListening, chunkOnly, recordBackgroundChunk]);
 
   // ─── SpeechRecognition (used while the tab is visible) ─────────────────────
 
@@ -308,15 +313,14 @@ export function useWakeWord({
 
   const start = useCallback(() => {
     if (!supported || activeRef.current) return;
-    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-    if (!SRClass) return;
-
     activeRef.current = true;
     setListening(true);
     lastEventRef.current = Date.now();
     // Keep the screen awake: a slept/locked screen is what suspends
     // SpeechRecognition, so this is what lets a phone on a desk keep listening.
     wakeLock.acquire();
+    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SRClass) return;
 
     const launchInstance = () => {
       if (!activeRef.current) return;
@@ -459,11 +463,11 @@ export function useWakeWord({
       } catch { /* loudness gating is an optimisation, not a requirement */ }
 
       // Already hidden when permission resolved — start the fallback now.
-      if (document.visibilityState === "hidden") startBackground();
+      if (chunkOnly || document.visibilityState === "hidden") startBackground();
     }).catch(() => { /* denied: the visible-tab recognizer still works */ });
 
     return () => { cancelled = true; };
-  }, [enabled, supported, startBackground]);
+  }, [enabled, supported, chunkOnly, startBackground]);
 
   // Recovery and handover. The recognizer is suspended while hidden, so hand
   // over to microphone chunks on hide and back to the recognizer on show.
@@ -471,6 +475,7 @@ export function useWakeWord({
     if (!enabled || !supported) return;
 
     const onVisibility = () => {
+      if (chunkOnly) return;
       if (document.visibilityState === "visible") {
         stopBackground();
         forceRestart();
@@ -484,8 +489,8 @@ export function useWakeWord({
       // Deliberately runs while hidden too. It used to return early when the
       // tab was not visible, which meant a recognizer that died in the
       // background was never revived and listening simply stopped.
-      if (document.visibilityState !== "visible") {
-        if (backgroundListening && !bgActiveRef.current) startBackground();
+      if (chunkOnly || document.visibilityState !== "visible") {
+        if (!bgActiveRef.current) startBackground();
         return;
       }
       if (Date.now() - lastEventRef.current > WATCHDOG_MS) forceRestart();
@@ -495,7 +500,7 @@ export function useWakeWord({
       document.removeEventListener("visibilitychange", onVisibility);
       clearInterval(watchdog);
     };
-  }, [enabled, supported, forceRestart, startBackground, stopBackground, backgroundListening]);
+  }, [enabled, supported, chunkOnly, forceRestart, startBackground, stopBackground]);
 
   return { listening, supported, hearingInBackground };
 }

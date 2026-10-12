@@ -30,9 +30,9 @@ import { ChecklistCard } from "./ChecklistCard";
 import { CHECKLIST_TOOLS, type Step } from "@/lib/checklist";
 import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
+import { useMicReady } from "@/hooks/useMicReady";
 import { phraseTriggers } from "@/lib/activation";
 import { useCapability } from "@/components/permission/PermissionProvider";
-import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
@@ -126,7 +126,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // is NOT sent until the user presses send.
   const [voiceMode, setVoiceMode] = useState<"dictate" | "call">("call");
   const { config: activation, update: updateActivation } = useActivationConfig();
-  const [wakeEnabled, setWakeEnabled] = useState(false);
   // Conversation checkpoints (inspired by Opcode rewind): save/restore snapshots
   const [checkpoints, setCheckpoints] = useState<{ id: string; label: string; messages: Message[]; history: HistoryEntry[]; timestamp: number }[]>([]);
   // Persist checkpoints to localStorage
@@ -144,15 +143,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
     localStorage.setItem(`jarvis_checkpoints_v1_${email}`, JSON.stringify(checkpoints.slice(0, 20)));
   }, [checkpoints, session?.user?.email]);
   const [showCheckpoints, setShowCheckpoints] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // Restoring "on" from a previous session is only real if the persistent
-    // mic grant is still there too — e.g. a different browser/device, or the
-    // grant was revoked, would otherwise show the icon lit with the hook
-    // silently never listening (getPolicy, not the micAlways state, since
-    // that effect may not have committed yet on this same mount).
-    setWakeEnabled(activation.wakeWordEnabled && getPolicy("microphone") === "always");
-  }, [activation.wakeWordEnabled]);
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
@@ -302,18 +292,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // is OFF, so it never fights the main recognizer for the microphone; saying
   // "JARVIS" (or the active agent's name) flips into hands-free call mode.
   const requestCapability = useCapability();
-  // Passive wake-word listening = continuous mic access, so gate it on the
-  // explicit "every time" mic grant; the mic buttons ask through the gate otherwise.
-  const [micAlways, setMicAlways] = useState(false);
-  useEffect(() => {
-    const read = () => setMicAlways(getPolicy("microphone") === "always");
-    read();
-    window.addEventListener(PERM_POLICY_EVENT, read);
-    return () => window.removeEventListener(PERM_POLICY_EVENT, read);
-  }, []);
+  const mic = useMicReady();
+  // The icon only shows "on" when it can actually listen.
+  const wakeEnabled = activation.wakeWordEnabled && mic.ready;
   const onWake = useCallback(async (trigger: string, transcript: string) => {
     if (isStreamingRef.current) return;
-    if (!(await requestCapability("microphone"))) return;
     setVoiceMode("call");
     // "Hey JARVIS, what's the weather" carries its command in the same breath
     // as the name — answer it instead of opening the mic and making the user
@@ -325,12 +308,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (command) { sendRef.current(command); return; }
     stt.enable();
     setMicOn(true);
-  }, [stt, requestCapability, agent?.name]);
+  }, [stt, agent?.name]);
   useWakeWord({
     agentName: agent?.name ?? "JARVIS",
     extraTriggers: useMemo(() => phraseTriggers(activation.selectedWakeWord), [activation.selectedWakeWord]),
     sensitivity: activation.wakeWordSensitivity,
-    enabled: wakeEnabled && micAlways && !micOn,
+    enabled: wakeEnabled && !micOn && !tts.speaking,
     onWake,
     cooldownMs: 2000,
   });
@@ -785,7 +768,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
     else {
       if (!(await requestCapability("microphone"))) return;
-      stt.enable(); setMicOn(true);
+      mic.markGranted(); stt.enable(); setMicOn(true);
     }
   }
 
@@ -794,7 +777,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
     else {
       if (!(await requestCapability("microphone"))) return;
-      setVoiceMode("dictate"); stt.enable(); setMicOn(true);
+      mic.markGranted(); setVoiceMode("dictate"); stt.enable(); setMicOn(true);
     }
   }
 
@@ -1138,28 +1121,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
           <button
             onClick={async () => {
               if (wakeEnabled) {
-                setWakeEnabled(false);
                 updateActivation("wakeWordEnabled", false);
                 return;
               }
-              // useWakeWord only ever actually listens when micAlways is true — a
-              // separate, persistent grant from the ordinary once-off mic prompt.
-              // Toggling this on used to just flip localStorage, so the icon lit
-              // up blue while the hook silently never started: no error, no
-              // sound, nothing to explain why "hey JARVIS" did nothing. Route
-              // through the real capability request so "Allow every time" is
-              // actually asked for here, and don't claim success if it wasn't.
-              if (getPolicy("microphone") !== "always") {
-                await requestCapability("microphone");
-                if (getPolicy("microphone") !== "always") return;
-              }
-              setWakeEnabled(true);
+              if (!mic.ready && !(await requestCapability("microphone"))) return;
+              mic.markGranted();
               updateActivation("wakeWordEnabled", true);
             }}
             title={
               wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`
-                : micAlways ? "Enable wake word (\"Hey JARVIS\")"
-                : "Enable wake word — needs \"Allow every time\" on the microphone prompt"
+                : "Enable wake word (\"Hey JARVIS\")"
             }
             className={cn("flex-none p-1.5 rounded-input transition-colors",
               wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>

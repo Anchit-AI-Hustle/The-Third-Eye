@@ -416,9 +416,20 @@ describe("teardown", () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
-  it("reports unsupported when the browser has no SpeechRecognition", () => {
+  it("listens through microphone chunks, tab visible, when the browser has no SpeechRecognition", async () => {
     delete (window as any).SpeechRecognition;
     delete (window as any).webkitSpeechRecognition;
+    const { hook } = mount();
+    await act(async () => { await Promise.resolve(); });
+    expect(hook.result.current.supported).toBe(true);
+    expect(FakeMediaRecorder.instances.length).toBeGreaterThan(0);
+    expect(FakeRecognition.instances?.length ?? 0).toBe(0);
+  });
+
+  it("reports unsupported when the browser can neither recognise nor record", () => {
+    delete (window as any).SpeechRecognition;
+    delete (window as any).webkitSpeechRecognition;
+    delete (globalThis as any).MediaRecorder;
     const { hook } = mount();
     expect(hook.result.current.supported).toBe(false);
   });
