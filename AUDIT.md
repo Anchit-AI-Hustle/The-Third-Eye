@@ -217,8 +217,8 @@ No regressions found.
 ## 7. Severity counts
 
 - P0: 1 (F-01, decided: deploy; blocked on gcloud auth and Upstash) - F-02 fixed 2026-08-19
-- P1: 2 (F-03, F-04)
-- P2: 4 (F-05, F-06, F-07, F-10)
+- P1: 1 (F-03) - F-04 resolved 2026-10-13 (Next 16, 0 production advisories)
+- P2: 3 (F-05, F-06, F-07) - F-10 fixed 2026-10-13 (narrow Dependabot ignore, npm audit gate)
 - P3: 2 (F-08 — done, F-09)
 
 ## 8. Critical path to live (ordered)
