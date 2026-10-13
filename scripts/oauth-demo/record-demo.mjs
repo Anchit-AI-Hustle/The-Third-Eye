@@ -85,6 +85,8 @@ async function setup() {
   await rl.question("Press Enter here when done… ");
   await ctx.close();
   log(`Saved. Chrome profile: ${PROFILE}`);
+  // An open readline keeps stdin alive, so `npm run demo` would never reach the record step.
+  rl.close();
 }
 
 // ─── narration: rendered before recording so each line's length is known ────
