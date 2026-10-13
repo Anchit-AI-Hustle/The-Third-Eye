@@ -34,6 +34,50 @@ const SILENCE_MS = 700;
 const NOISE_MARGIN = 2.5;
 const MIN_SPEECH_FRAMES = 18;
 const BARGE_HOLD_MS = 280;
+// The assistant speaks through the OS voice (speechSynthesis), which Chrome's
+// echo cancellation does not hear, so its own voice comes back through the
+// mic. Learn how loud that echo is at the start of each reply, then count
+// only sustained sound clearly above it as the user talking over it.
+const ECHO_LEARN_MS = 600;
+const ECHO_MARGIN = 1.6;
+const ECHO_DECAY = 0.998;
+const BARGE_FRAMES = 15;
+
+const words = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+
+/** A transcript that is mostly words the assistant just said is its own voice heard back, not the user. */
+export function isEchoOf(transcript: string, spoken: string): boolean {
+  const heard = words(transcript);
+  if (heard.length < 3) return false;
+  const said = new Set(words(spoken));
+  return heard.filter((w) => said.has(w)).length / heard.length >= 0.7;
+}
+
+// What the assistant last said, and until when a transcript of it counts as echo.
+const ECHO_TEXT_MS = 8_000;
+const lastSpoken = { text: "", until: 0 };
+
+export function createBargeDetector(now: () => number = Date.now) {
+  let since = 0;
+  let echo = 0;
+  let loud = 0;
+  return {
+    reset() { since = 0; echo = 0; loud = 0; },
+    /** True once the user has spoken over the assistant's own voice. */
+    check(peak: number): boolean {
+      const t = now();
+      if (!since) since = t;
+      if (t - since < ECHO_LEARN_MS) { echo = Math.max(echo, peak); return false; }
+      if (peak >= Math.max(BARGE_PEAK, echo * ECHO_MARGIN)) {
+        if (++loud >= BARGE_FRAMES) { loud = 0; return true; }
+        return false;
+      }
+      loud = 0;
+      echo = Math.max(echo * ECHO_DECAY, peak);
+      return false;
+    },
+  };
+}
 
 export function pcmPeak(buf: Uint8Array): number {
   let peak = 0;
@@ -70,6 +114,7 @@ function armUtteranceRecorder(
   let barged = false;
   let floor = 0;
   let speechFrames = 0;
+  const barge = createBargeDetector();
 
   const drop = () => {
     parts = [];
@@ -135,23 +180,27 @@ function armUtteranceRecorder(
     if (stopped || !active()) return;
     analyser.getByteTimeDomainData(time);
     const peak = pcmPeak(time);
-    const quiet = suppressed();
-    const threshold = Math.max(quiet ? BARGE_PEAK : SPEECH_PEAK, floor * NOISE_MARGIN);
-    if (!voiced) floor = floor ? floor * 0.98 + peak * 0.02 : peak;
-    if (peak >= threshold) {
-      if (voiced) speechFrames++;
-      if (quiet && !barged) {
+    if (suppressed()) {
+      if (!barged && barge.check(peak)) {
         barged = true;
         onBarge();
         drop();
         holdUntil = Date.now() + BARGE_HOLD_MS;
       }
-      if (!suppressed() && Date.now() >= holdUntil) {
+      raf = requestAnimationFrame(tick);
+      return;
+    }
+    barge.reset();
+    barged = false;
+    const threshold = Math.max(SPEECH_PEAK, floor * NOISE_MARGIN);
+    if (!voiced) floor = floor ? floor * 0.98 + peak * 0.02 : peak;
+    if (peak >= threshold) {
+      if (voiced) speechFrames++;
+      if (Date.now() >= holdUntil) {
         if (!voiced) { voiced = true; begin(); }
         silenceAt = 0;
       }
     } else {
-      barged = false;
       if (voiced && Date.now() >= holdUntil) {
         if (!silenceAt) silenceAt = Date.now();
         else if (Date.now() - silenceAt > SILENCE_MS) end();
@@ -209,6 +258,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const emitTranscript = useCallback((text: string) => {
     const t = text.trim();
     if (!t || cbRef.current.shouldSuppress?.()) return;
+    if (Date.now() < lastSpoken.until && isEchoOf(t, lastSpoken.text)) return;
     const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
     const now = Date.now();
     if (norm(t) && norm(t) === norm(lastTranscriptRef.current.text) && now - lastTranscriptRef.current.at < 6000) return;
@@ -640,8 +690,18 @@ export function useTTS(voicePreference?: string) {
       voices[0];
     if (preferred) u.voice = preferred;
 
-    u.onstart = () => { setSpeaking(true); startKeepalive(); };
-    const finish = () => { setSpeaking(false); stopKeepalive(); onEnd?.(); };
+    u.onstart = () => {
+      lastSpoken.text = clean;
+      lastSpoken.until = Infinity;
+      setSpeaking(true);
+      startKeepalive();
+    };
+    const finish = () => {
+      lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+      setSpeaking(false);
+      stopKeepalive();
+      onEnd?.();
+    };
     u.onend = finish;
     u.onerror = finish;
 
@@ -654,6 +714,7 @@ export function useTTS(voicePreference?: string) {
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }
+    if (lastSpoken.until === Infinity) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
     stopKeepalive();
     setSpeaking(false);
   }, [supported, stopKeepalive]);
