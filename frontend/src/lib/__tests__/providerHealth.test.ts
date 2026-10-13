@@ -23,7 +23,8 @@ describe("classifying provider failures", () => {
     expect(classifyFailure(400, "Your credit balance is too low to access the Anthropic API")?.status).toBe("credit");
     expect(classifyFailure(429, "You exceeded your current quota, please check your plan")?.status).toBe("quota");
     expect(classifyFailure(429, "Rate limit reached for model `openai/gpt-oss-120b`")).toMatchObject({ status: "rate_limited", ms: 120_000 });
-    expect(classifyFailure(404, "model does not exist")).toBeNull();
+    expect(classifyFailure(404, "model does not exist")?.status).toBe("misconfigured");
+    expect(classifyFailure(401, "Invalid API Key")?.status).toBe("misconfigured");
     expect(classifyFailure(500, "internal")).toBeNull();
   });
 });

@@ -14,7 +14,7 @@
 // other plain-text generations where any model will do.
 
 import { usableGeminiKey } from "@/lib/providerReady";
-import { backgroundBlocked, benchedReason, classifyFailure, noteFailure, noteSuccess } from "@/lib/providerHealth";
+import { backgroundBlocked, benchedReason, classifyFailure, healthMap, noteFailure, noteSuccess } from "@/lib/providerHealth";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -40,7 +40,7 @@ export interface LlmCascadeResult {
   text: string;
   provider: string;
   model: string;
-  attempts: { provider: string; model: string; ok: boolean; status?: number; reason?: string }[];
+  attempts: { provider: string; model: string; ok: boolean; status?: number; reason?: string; retryAfterMs?: number }[];
 }
 
 
@@ -79,19 +79,20 @@ function loadKeys() {
 // settings change, not a code release.
 const DEFAULT_MODELS = {
   openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5-20251001",
+  anthropic: "claude-haiku-5-5",
   gemini: "gemini-2.5-flash",
   geminiPro: "gemini-2.5-pro",
   grok: "grok-2-latest",
-  groq: "llama-3.3-70b-versatile",
-  cerebras: "llama-3.3-70b",
+  groq: "openai/gpt-oss-120b",
+  cerebras: "gpt-oss-120b",
   mistral: "mistral-small-latest",
+  openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
   ollama: "llama3.1:8b",
 } as const;
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
   openai: "OPENAI_MODEL", anthropic: "ANTHROPIC_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
-  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", ollama: "OLLAMA_MODEL",
+  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
 };
 export function modelFor(provider: ModelProvider): string {
   return process.env[MODEL_ENV[provider]]?.trim() || DEFAULT_MODELS[provider];
@@ -102,9 +103,9 @@ export function modelFor(provider: ModelProvider): string {
 // model is gone, ask it which models it serves now and switch this instance to
 // the best match. MODEL env vars still win; this only covers a stale default.
 const MODEL_PREFS: Record<string, RegExp[]> = {
-  groq: [/llama-3\.3-70b/, /gpt-oss-120b/, /llama-4-maverick/, /llama-4-scout/, /kimi-k2/, /qwen3?-32b/, /gpt-oss-20b/, /llama-3\.1-8b/],
-  cerebras: [/llama-3\.3-70b/, /gpt-oss-120b/, /qwen-3-235b/, /llama-4/, /qwen-3-32b/, /llama3\.1-8b/],
-  openrouter: [/llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /gpt-oss.*:free$/, /llama.*:free$/, /gemma.*:free$/, /:free$/],
+  groq: [/gpt-oss-120b/, /qwen3\.\d+-27b/, /kimi-k2/, /gpt-oss-20b/],
+  cerebras: [/gpt-oss-120b/, /qwen-3/, /zai-glm/],
+  openrouter: [/nemotron-3-super.*:free$/, /gemma-4-31b.*:free$/, /nemotron-3-ultra.*:free$/, /gpt-oss.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /:free$/],
   "gemini-lite": [/^gemini-[\d.]+-flash-lite$/, /^gemini-flash-lite-latest$/, /flash-lite/],
   mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^mistral-large-latest$/],
   grok: [/^grok-3-mini$/, /^grok-3$/, /^grok-4/, /grok/],
@@ -176,10 +177,35 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
 const CLOUD_PROVIDERS = ["openai", "anthropic", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "mistral"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
+// The first link of the cascade. Set LLM_PRIMARY_PROVIDER to a paid provider
+// whose key has credit (for example "anthropic" or "openai") and every chat,
+// extraction and tool call tries it before the free tiers.
+export function cascadeOrder(): CloudProvider[] {
+  const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
+  return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
+}
+
 /** Providers with a key on this deployment. */
 export function configuredProviders(): string[] {
   const keys = loadKeys();
   return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : !!keys[p]));
+}
+
+export type LlmProviderState = "ok" | "quota" | "misconfigured";
+
+/** Per-provider state for /api/health: no key or a rejected key/model is misconfigured, any other bench is quota. */
+export async function llmStatus(): Promise<{ status: "ok" | "degraded" | "down"; providers: Record<string, LlmProviderState> }> {
+  const configured = new Set(configuredProviders());
+  const health = await healthMap();
+  const providers: Record<string, LlmProviderState> = {};
+  for (const p of CLOUD_PROVIDERS) {
+    const h = health.get(p);
+    const benched = !!h?.benched_until && new Date(h.benched_until).getTime() > Date.now();
+    providers[p] = !configured.has(p) || (benched && h.status === "misconfigured") ? "misconfigured" : benched ? "quota" : "ok";
+  }
+  const states = [...configured].map((p) => providers[p]);
+  const up = states.filter((s) => s === "ok").length + (process.env.OLLAMA_ENABLED === "1" ? 1 : 0);
+  return { status: up === 0 ? "down" : up < states.length ? "degraded" : "ok", providers };
 }
 
 /**
@@ -205,7 +231,7 @@ export async function probeProviders(): Promise<Array<{ provider: string; ok: bo
 /** Thrown when every provider failed; carries what each one said. */
 export class LlmCascadeError extends Error {
   constructor(readonly attempts: LlmCascadeResult["attempts"]) {
-    super(`All LLM providers failed. Attempts: ${JSON.stringify(attempts)}`);
+    super(`No AI provider could answer (${summarizeAttempts(attempts)}).`);
   }
 }
 
@@ -242,14 +268,49 @@ export function userFacingOutage(raw: string): string {
   const overloaded = /\b503\b|UNAVAILABLE|overloaded/i.test(raw);
   if (outOfCredit) return "I'm temporarily unable to respond right now. Please try again in a little while.";
   if (rateLimited) return "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute.";
-  if (overloaded) return "I'm at capacity right now — this should clear on its own within a minute or two. Please try again shortly.";
+  if (overloaded) return "I'm at capacity right now. This should clear on its own within a minute or two, so please try again shortly.";
   return "Something went wrong on my end. Please try again in a moment.";
 }
 
-/** The user-facing reason a generation failed — which provider said what, not "all unavailable". */
+/** The user-facing reason a generation failed: which provider said what, not "all unavailable". */
 export function generationFailure(e: unknown): string {
-  if (e instanceof LlmCascadeError) return `No AI provider answered — ${summarizeAttempts(e.attempts)}.`;
-  return "Generation failed — please try again.";
+  if (e instanceof LlmCascadeError) return `No AI provider answered: ${summarizeAttempts(e.attempts)}.`;
+  return "Generation failed. Please try again.";
+}
+
+/** One plain sentence for a person when the cascade failed; never a stack trace or a provider body. */
+export function userFacingLlmError(e: unknown): string {
+  const raw = e instanceof LlmCascadeError
+    ? e.attempts.map((a) => `${a.status ?? ""} ${a.reason ?? ""}`).join(" ")
+    : e instanceof Error ? e.message : "";
+  return userFacingOutage(raw);
+}
+
+// How long the provider asked us to wait: the retry-after header (seconds or
+// an HTTP date, sent by Groq and Anthropic on a 429), else Gemini's
+// RetryInfo retryDelay in the error body.
+export function retryAfterMs(headers: Headers | undefined, body: string): number | undefined {
+  const h = headers?.get("retry-after");
+  if (h) {
+    const secs = Number(h);
+    const ms = Number.isFinite(secs) ? secs * 1000 : Date.parse(h) - Date.now();
+    if (ms > 0) return ms;
+  }
+  const delay = body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)?.[1];
+  return delay ? Number(delay) * 1000 : undefined;
+}
+
+async function failed(r: Response) {
+  const err = await r.text().catch(() => "");
+  return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err), retryAfterMs: retryAfterMs(r.headers, err) };
+}
+
+type CallResult = { ok: true; text: string } | { ok: false; status: number; err: string; retryAfterMs?: number };
+
+function attempt(provider: string, model: string, res: CallResult): LlmCascadeResult["attempts"][number] {
+  return res.ok
+    ? { provider, model, ok: true, status: 200 }
+    : { provider, model, ok: false, status: res.status, reason: res.err.slice(0, 120), retryAfterMs: res.retryAfterMs };
 }
 
 function isQuotaError(status: number, body: string): boolean {
@@ -274,8 +335,9 @@ function inCooldown(provider: string): boolean {
   return until !== undefined && Date.now() < until;
 }
 
-function startCooldown(provider: string): void {
-  cooldownUntil.set(provider, Date.now() + COOLDOWN_MS);
+// A provider's own retry-after wins over the default when it sent one.
+function startCooldown(provider: string, retryAfter?: number): void {
+  cooldownUntil.set(provider, Date.now() + (retryAfter ?? COOLDOWN_MS));
 }
 
 /** Test-only: clear cooldown state between test cases. */
@@ -316,14 +378,13 @@ async function callOpenAI(key: string, model: string, opts: LlmCascadeOptions) {
       signal,
     });
     if (!r.ok) {
-      const err = await r.text().catch(() => "");
-      return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) };
+      return failed(r);
     }
     const data = await r.json();
     const text = data.choices?.[0]?.message?.content ?? "";
     return { ok: true as const, text, model };
   } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
   } finally { clear(); }
 }
 
@@ -345,14 +406,13 @@ async function callAnthropic(key: string, model: string, opts: LlmCascadeOptions
       signal,
     });
     if (!r.ok) {
-      const err = await r.text().catch(() => "");
-      return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) };
+      return failed(r);
     }
     const data = await r.json();
     const text = data.content?.[0]?.text ?? "";
     return { ok: true as const, text, model };
   } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
   } finally { clear(); }
 }
 
@@ -379,14 +439,13 @@ async function callGemini(key: string, model: string, opts: LlmCascadeOptions) {
       },
     );
     if (!r.ok) {
-      const err = await r.text().catch(() => "");
-      return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) };
+      return failed(r);
     }
     const data = await r.json();
     const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
     return { ok: true as const, text, model };
   } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
   } finally { clear(); }
 }
 
@@ -409,14 +468,13 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
       signal,
     });
     if (!r.ok) {
-      const err = await r.text().catch(() => "");
-      return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) };
+      return failed(r);
     }
     const data = await r.json();
     const text = data.choices?.[0]?.message?.content ?? "";
     return { ok: true as const, text, model };
   } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
   } finally { clear(); }
 }
 
@@ -438,13 +496,12 @@ async function callOllama(model: string, opts: LlmCascadeOptions) {
       signal,
     });
     if (!r.ok) {
-      const err = await r.text().catch(() => "");
-      return { ok: false as const, status: r.status, err, quota: false };
+      return { ...(await failed(r)), quota: false };
     }
     const data = await r.json();
     return { ok: true as const, text: data.message?.content ?? "", model };
   } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
   } finally { clear(); }
 }
 
@@ -455,7 +512,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const attempts: LlmCascadeResult["attempts"] = [];
   const pref = opts.preferProvider;
 
-  const order: (CloudProvider | "ollama")[] = pref ? [pref] : [...CLOUD_PROVIDERS, "ollama"];
+  const order: (CloudProvider | "ollama")[] = pref ? [pref] : [...cascadeOrder(), "ollama"];
 
   for (const provider of order) {
     // A provider that just failed on quota grounds is certain to fail again
@@ -473,61 +530,61 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       for (const key of keys.openai) {
         const model = modelFor("openai");
         const res = await callOpenAI(key, model, opts);
-        attempts.push({ provider: "openai", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+        attempts.push(attempt("openai", model, res));
         if (res.ok) { await noteSuccess("openai", model); return { text: res.text, provider: "openai", model, attempts }; }
         if (!res.quota) break; // non-quota error → try next provider, not next key
-        startCooldown("openai");
+        startCooldown("openai", res.retryAfterMs);
       }
     } else if (provider === "anthropic" && keys.anthropic) {
       const model = modelFor("anthropic");
       const res = await callAnthropic(keys.anthropic, model, opts);
-      attempts.push({ provider: "anthropic", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("anthropic", model, res));
       if (res.ok) { await noteSuccess("anthropic", model); return { text: res.text, provider: "anthropic", model, attempts }; }
-      if (res.quota) startCooldown("anthropic");
+      if (res.quota) startCooldown("anthropic", res.retryAfterMs);
     } else if (provider === "gemini" && keys.gemini) {
       const model = modelFor("gemini");
       const res = await callGemini(keys.gemini, model, opts);
-      attempts.push({ provider: "gemini", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("gemini", model, res));
       if (res.ok) { await noteSuccess("gemini", model); return { text: res.text, provider: "gemini", model, attempts }; }
-      if (res.quota) startCooldown("gemini");
+      if (res.quota) startCooldown("gemini", res.retryAfterMs);
     } else if (provider === "gemini-lite" && keys.gemini) {
       const { res, model } = await withLiveModel("gemini-lite", GEMINI_OPENAI_BASE, keys.gemini, GEMINI_LITE_MODEL, (m) => callGemini(keys.gemini, m, opts));
-      attempts.push({ provider: "gemini-lite", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("gemini-lite", model, res));
       if (res.ok) { await noteSuccess("gemini-lite", model); return { text: res.text, provider: "gemini-lite", model, attempts }; }
-      if (res.quota) startCooldown("gemini-lite");
+      if (res.quota) startCooldown("gemini-lite", res.retryAfterMs);
     } else if (provider === "grok" && keys.grok) {
       const { res, model } = await withLiveModel("grok", GROK_BASE, keys.grok, modelFor("grok"), (m) => callOpenAICompatible(GROK_BASE, keys.grok, m, opts));
-      attempts.push({ provider: "grok", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("grok", model, res));
       if (res.ok) { await noteSuccess("grok", model); return { text: res.text, provider: "grok", model, attempts }; }
-      if (res.quota) startCooldown("grok");
+      if (res.quota) startCooldown("grok", res.retryAfterMs);
     } else if (provider === "groq" && keys.groq) {
       const { res, model } = await withLiveModel("groq", GROQ_BASE, keys.groq, modelFor("groq"), (m) => callOpenAICompatible(GROQ_BASE, keys.groq, m, opts));
-      attempts.push({ provider: "groq", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("groq", model, res));
       if (res.ok) { await noteSuccess("groq", model); return { text: res.text, provider: "groq", model, attempts }; }
-      if (res.quota) startCooldown("groq");
+      if (res.quota) startCooldown("groq", res.retryAfterMs);
     } else if (provider === "cerebras" && keys.cerebras) {
       const { res, model } = await withLiveModel("cerebras", CEREBRAS_BASE, keys.cerebras, modelFor("cerebras"), (m) => callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, m, opts));
-      attempts.push({ provider: "cerebras", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("cerebras", model, res));
       if (res.ok) { await noteSuccess("cerebras", model); return { text: res.text, provider: "cerebras", model, attempts }; }
-      if (res.quota) startCooldown("cerebras");
+      if (res.quota) startCooldown("cerebras", res.retryAfterMs);
     } else if (provider === "openrouter" && keys.openrouter) {
-      const { res, model } = await withLiveModel("openrouter", OPENROUTER_BASE, keys.openrouter, process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free", (m) => callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, m, opts));
-      attempts.push({ provider: "openrouter", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      const { res, model } = await withLiveModel("openrouter", OPENROUTER_BASE, keys.openrouter, modelFor("openrouter"), (m) => callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, m, opts));
+      attempts.push(attempt("openrouter", model, res));
       if (res.ok) { await noteSuccess("openrouter", model); return { text: res.text, provider: "openrouter", model, attempts }; }
-      if (res.quota) startCooldown("openrouter");
+      if (res.quota) startCooldown("openrouter", res.retryAfterMs);
     } else if (provider === "mistral" && keys.mistral) {
       const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
-      attempts.push({ provider: "mistral", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("mistral", model, res));
       if (res.ok) { await noteSuccess("mistral", model); return { text: res.text, provider: "mistral", model, attempts }; }
-      if (res.quota) startCooldown("mistral");
+      if (res.quota) startCooldown("mistral", res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
       const model = modelFor("ollama");
       const res = await callOllama(model, opts);
-      attempts.push({ provider: "ollama", model, ok: res.ok, status: res.ok ? 200 : res.status, reason: res.ok ? undefined : ("err" in res ? res.err.slice(0, 120) : undefined) });
+      attempts.push(attempt("ollama", model, res));
       if (res.ok) { await noteSuccess("ollama", model); return { text: res.text, provider: "ollama", model, attempts }; }
     }
     for (const a of attempts.slice(before)) {
-      if (!a.ok && a.status) await noteFailure(a.provider, a.model, a.status, a.reason ?? "");
+      if (!a.ok && a.status) await noteFailure(a.provider, a.model, a.status, a.reason ?? "", a.retryAfterMs);
     }
   }
 
@@ -559,10 +616,10 @@ async function visionGemini(key: string, model: string, o: VisionCascadeOptions)
         generationConfig: { maxOutputTokens: o.maxTokens ?? 1200 },
       }),
     });
-    if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) }; }
+    if (!r.ok) return failed(r);
     const d = await r.json();
     return { ok: true as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "" };
-  } catch (e) { return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false }; }
+  } catch (e) { return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined }; }
   finally { clear(); }
 }
 
@@ -582,10 +639,10 @@ async function visionOpenAICompatible(base: string, key: string, model: string, 
         ],
       }),
     });
-    if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) }; }
+    if (!r.ok) return failed(r);
     const d = await r.json();
     return { ok: true as const, text: d.choices?.[0]?.message?.content ?? "" };
-  } catch (e) { return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false }; }
+  } catch (e) { return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined }; }
   finally { clear(); }
 }
 
@@ -659,14 +716,13 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
       signal,
     });
     if (!r.ok) {
-      const err = await r.text().catch(() => "");
-      return { ok: false as const, status: r.status, err, quota: isQuotaError(r.status, err) };
+      return failed(r);
     }
     const data = await r.json();
     const msg = data.choices?.[0]?.message ?? {};
     return { ok: true as const, content: (msg.content as string | null) ?? null, tool_calls: msg.tool_calls as OpenAIToolCall[] | undefined, model };
   } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false };
+    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
   } finally { clear(); }
 }
 
@@ -676,13 +732,16 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   const keys = loadKeys();
   const rows: { provider: string; base: string; model: string; key: string }[] = [];
   if (keys.openai[0]) rows.push({ provider: "openai", base: OPENAI_BASE, model: modelFor("openai"), key: keys.openai[0] });
+  // Anthropic's OpenAI-compatible endpoint takes the same tools payload.
+  if (keys.anthropic) rows.push({ provider: "anthropic", base: ANTHROPIC_BASE, model: modelFor("anthropic"), key: keys.anthropic });
   if (keys.gemini) rows.push({ provider: "gemini-lite", base: GEMINI_OPENAI_BASE, model: GEMINI_LITE_MODEL, key: keys.gemini });
   if (keys.groq) rows.push({ provider: "groq", base: GROQ_BASE, model: modelFor("groq"), key: keys.groq });
   if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
-  if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free", key: keys.openrouter });
-  return rows;
+  if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
+  const rank = cascadeOrder();
+  return rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
 }
 
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
@@ -695,9 +754,9 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
       await noteSuccess(provider, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
     }
-    await noteFailure(provider, used, res.status, res.err);
+    await noteFailure(provider, used, res.status, res.err, res.retryAfterMs);
     attempts.push(`${provider}:${res.status}`);
-    if (res.quota) startCooldown(provider);
+    if (res.quota) startCooldown(provider, res.retryAfterMs);
   }
   throw new Error(`All tool-capable fallback providers failed. Attempts: ${attempts.join(", ") || "no keys configured"}`);
 }
