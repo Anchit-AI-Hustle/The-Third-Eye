@@ -1,6 +1,6 @@
 import { X509Certificate } from "node:crypto";
 import { rootCertificates } from "node:tls";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pgConnection } from "@/lib/pgConnection.mjs";
 
 describe("pgConnection", () => {
@@ -15,8 +15,23 @@ describe("pgConnection", () => {
     expect(pgConnection("postgres://postgres:pw@db.hlcjghpzxzatgjfwcoav.supabase.co:5432/postgres")).toHaveProperty("ssl");
   });
 
-  it("leaves every other database's connection string alone", () => {
-    for (const url of ["postgres://u:p@ep-x.us-east-2.aws.neon.tech/db?sslmode=require", "postgres://owner:pw@localhost:5432/neontest"]) {
+  it("names verify-full explicitly where the URL used an alias pg already treats as verify-full", () => {
+    for (const mode of ["prefer", "require", "verify-ca"]) {
+      expect(pgConnection(`postgres://u:p@ep-x.us-east-2.aws.neon.tech/db?sslmode=${mode}&channel_binding=require`))
+        .toEqual({ connectionString: "postgres://u:p@ep-x.us-east-2.aws.neon.tech/db?sslmode=verify-full&channel_binding=require" });
+    }
+  });
+
+  it("does not trigger pg's sslmode alias warning", async () => {
+    const { parse } = await import("pg-connection-string");
+    const warn = vi.spyOn(process, "emitWarning");
+    parse(pgConnection("postgres://u:p@ep-x.us-east-2.aws.neon.tech/db?sslmode=require").connectionString);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("leaves other connection strings alone", () => {
+    for (const url of ["postgres://u:p@ep-x.us-east-2.aws.neon.tech/db?sslmode=verify-full", "postgres://owner:pw@localhost:5432/neontest", "postgres://u:p@h/db?sslmode=disable"]) {
       expect(pgConnection(url)).toEqual({ connectionString: url });
     }
     expect(pgConnection("postgres://u:p@evil-supabase.co.example.com/db")).not.toHaveProperty("ssl");
