@@ -8,8 +8,13 @@ import { fileURLToPath } from "node:url";
 const SERIOUS = new Set(["high", "critical"]);
 
 function advisories(report) {
+  // An npm/registry failure prints {error} or {message} JSON and exits non-zero;
+  // reading that as "no vulnerabilities" would turn an outage into a green run.
+  if (!report || report.error || typeof report.vulnerabilities !== "object") {
+    throw new Error(`npm audit did not return a report: ${JSON.stringify(report?.error ?? report).slice(0, 300)}`);
+  }
   const out = [];
-  for (const [pkg, v] of Object.entries(report.vulnerabilities ?? {})) {
+  for (const [pkg, v] of Object.entries(report.vulnerabilities)) {
     for (const a of v.via) {
       if (typeof a === "object" && SERIOUS.has(a.severity)) out.push({ id: a.url.split("/").pop(), severity: a.severity, pkg });
     }

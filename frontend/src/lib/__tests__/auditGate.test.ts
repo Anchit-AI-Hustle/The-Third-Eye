@@ -26,4 +26,9 @@ describe("npm audit gate", () => {
   it("reports baseline entries that no longer appear so the list shrinks", () => {
     expect(gate(report({}), report({}), ["GHSA-gone"]).stale).toEqual(["GHSA-gone"]);
   });
+
+  it("fails closed when npm audit itself errors instead of reporting", () => {
+    expect(() => gate({ error: { code: "ENOAUDIT", summary: "registry unreachable" } }, report({}), [])).toThrow(/npm audit did not return a report/);
+    expect(() => gate(report({}), { message: "500" }, [])).toThrow(/npm audit did not return a report/);
+  });
 });
