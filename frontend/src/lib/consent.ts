@@ -50,11 +50,11 @@ export function resetConsents() {
 // once* (we ask again next time). Anything not set to "always" is re-requested
 // on every use, which is the behaviour we want when permission wasn't granted.
 
-export type PermissionCapability = "microphone" | "camera" | "screen" | "location" | "notifications";
+export type PermissionCapability = "microphone" | "camera" | "screen" | "location" | "notifications" | "files";
 export type PermissionPolicy = "always" | "ask";
 
 export const CAPABILITIES: PermissionCapability[] = [
-  "microphone", "camera", "screen", "location", "notifications",
+  "microphone", "camera", "screen", "location", "notifications", "files",
 ];
 
 const LS_POLICY = "te_perm_policy_";

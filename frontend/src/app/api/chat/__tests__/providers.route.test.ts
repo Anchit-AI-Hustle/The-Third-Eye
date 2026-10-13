@@ -37,6 +37,7 @@ async function chat(body: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  vi.resetModules();
   vi.stubEnv("GEMINI_API_KEY", "x".repeat(39));
   vi.stubEnv("GROQ_API_KEY", "gsk_test");
   geminiCalls.mockReset();
@@ -72,6 +73,15 @@ describe("/api/chat provider path", () => {
     expect(r.text).toMatch(/get_current_time/);
     expect(r.text).not.toMatch(/temporarily unavailable|cannot|can't/i);
     expect(r.done).toMatchObject({ stop_reason: "partial" });
+  });
+
+  it("hands a file JARVIS wrote to the browser to save and open, instead of pasting it", async () => {
+    groqTurns = [
+      { choices: [{ message: { content: null, tool_calls: [{ id: "f1", type: "function", function: { name: "save_file", arguments: JSON.stringify({ filename: "../index.html", mime: "text/html", content: "<h1>Yoga</h1>" }) } }] } }] },
+      { choices: [{ message: { content: "Saved index.html to your Downloads and opened it." } }] },
+    ];
+    const r = await chat({ message: "download this page and open it" });
+    expect(r.done.sideEffects).toContainEqual({ type: "file", data: { filename: "index.html", mime: "text/html", content: "<h1>Yoga</h1>" } });
   });
 
   it("uses native Gemini first for an image, which only it can read", async () => {

@@ -308,6 +308,19 @@ export const geminiTools = [
         },
       },
       {
+        name: "save_file",
+        description: "Save a file you wrote (a web page, CSV, JSON, script, notes) to the user's Downloads folder and open it in a new tab. Use when the user asks to download, save, export or open something you made, instead of pasting the code and asking them to copy it. The app asks the user's permission first.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            filename: { type: "STRING", description: "File name with extension, e.g. index.html, report.csv" },
+            content: { type: "STRING", description: "The complete file contents" },
+            mime: { type: "STRING", description: "MIME type, e.g. text/html, text/csv, application/json, text/plain" },
+          },
+          required: ["filename", "content"],
+        },
+      },
+      {
         name: "remember",
         description: "Persist a key-value fact about the user. Use when user shares name, location, preferences, or any context worth recalling.",
         parameters: {
