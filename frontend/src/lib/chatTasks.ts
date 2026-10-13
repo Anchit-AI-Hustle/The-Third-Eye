@@ -13,8 +13,11 @@ import { logActivity } from "@/lib/activity";
 
 const SOURCE = "Assistant";
 const CONTEXT_MESSAGES = 4;
-const MAX_MESSAGE_CHARS = 800;
-const MAX_TRANSCRIPT_CHARS = 8000;
+// Sized for Groq's free 8K tokens-per-minute budget, with room for the reply.
+const MAX_MESSAGE_CHARS = 600;
+const MAX_TRANSCRIPT_CHARS = 6000;
+const MAX_OPEN_TASKS = 40;
+const RANK: Record<string, number> = { todo: 0, in_progress: 1, done: 2 };
 
 const SYSTEM_PROMPT = `
 You keep the user's Task Tracker in step with their chats with JARVIS, their AI assistant.
@@ -78,7 +81,20 @@ export interface ChatSyncResult { created: number; updated: number; skipped?: st
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}...` : s);
 const line = (m: ChatMessage) => `${m.role === "user" ? "USER" : "JARVIS"}: ${clip((m.content ?? "").replace(/\s+/g, " ").trim(), MAX_MESSAGE_CHARS)}`;
-const taskLine = (t: TaskRow) => `- id=${t.id} [${t.workspace === "personal" ? "personal" : "office"} · ${t.status}] ${t.title}`;
+const taskLine = (t: TaskRow) => `- id=${t.id} [${t.workspace === "personal" ? "personal" : "office"} · ${t.status}] ${clip(t.title, 80)}`;
+
+// Keeps the first new line (usually the request itself) and as many of the
+// latest lines as fit.
+function fitTranscript(earlier: string[], fresh: string[]): string {
+  const [first, ...rest] = fresh;
+  const pool = [...earlier, ...rest];
+  let budget = MAX_TRANSCRIPT_CHARS - first.length;
+  let start = pool.length;
+  while (start > 0 && pool[start - 1].length + 1 <= budget) budget -= pool[--start].length + 1;
+  const kept = pool.slice(start);
+  const keptEarlier = Math.max(0, earlier.length - start);
+  return [...kept.slice(0, keptEarlier), first, ...kept.slice(keptEarlier)].join("\n");
+}
 
 export async function syncChatTasks(email: string, chatId: string): Promise<ChatSyncResult> {
   const sb = getDb();
@@ -91,26 +107,31 @@ export async function syncChatTasks(email: string, chatId: string): Promise<Chat
   if (!chat) return { created: 0, updated: 0, skipped: "no chat" };
 
   const messages = (chat.messages ?? []).filter((m) => (m.content ?? "").trim());
-  const from = Math.min(chat.tasks_synced_n ?? 0, messages.length);
+  const synced = chat.tasks_synced_n ?? 0;
+  // A chat shorter than what was read was rewound; read it again from the top.
+  const from = synced > messages.length ? 0 : synced;
   const fresh = messages.slice(from);
   if (!fresh.some((m) => m.role === "user") || !fresh.some((m) => m.role === "assistant")) {
+    await sb.from("conversations").update({ tasks_synced_at: new Date().toISOString() }).eq("user_id", email).eq("id", chatId);
     return { created: 0, updated: 0, skipped: "nothing new" };
   }
 
   const { data: openData } = await sb
     .from("tasks").select("id, title, status, workspace")
     .eq("user_id", email).in("status", ["todo", "in_progress"])
-    .order("created_at", { ascending: false }).limit(100);
+    .order("created_at", { ascending: false }).limit(MAX_OPEN_TASKS);
   const open = (openData as TaskRow[] | null) ?? [];
-  const { data: ownData } = chat.task_id
-    ? await sb.from("tasks").select("id, title, status, workspace, all_updates").eq("user_id", email).eq("id", chat.task_id).maybeSingle()
-    : { data: null };
+  // By key as well as by link: a sync that died between creating the task and
+  // saving the link must not create a second one.
+  const hash = dedupeHash(SOURCE, chatId, "chat");
+  const ownQuery = sb.from("tasks").select("id, title, status, workspace").eq("user_id", email);
+  const { data: ownData } = await (chat.task_id ? ownQuery.eq("id", chat.task_id) : ownQuery.eq("dedupe_hash", hash)).maybeSingle();
   const own = ownData as TaskRow | null;
 
-  const transcript = [
-    ...messages.slice(Math.max(0, from - CONTEXT_MESSAGES), from).map((m) => `(earlier) ${line(m)}`),
-    ...fresh.map(line),
-  ].join("\n");
+  const transcript = fitTranscript(
+    messages.slice(Math.max(0, from - CONTEXT_MESSAGES), from).map((m) => `(earlier) ${line(m)}`),
+    fresh.map(line),
+  );
   const prompt = [
     "OPEN TASKS:",
     open.filter((t) => t.id !== own?.id).map(taskLine).join("\n") || "(none)",
@@ -119,7 +140,7 @@ export async function syncChatTasks(email: string, chatId: string): Promise<Chat
     own ? taskLine(own) : "(none yet)",
     "",
     `CHAT "${chat.title}", NEW MESSAGES:`,
-    transcript.slice(-MAX_TRANSCRIPT_CHARS),
+    transcript,
   ].join("\n");
 
   let parsed: Record<string, unknown>;
@@ -148,20 +169,23 @@ export async function syncChatTasks(email: string, chatId: string): Promise<Chat
   const known = new Map([...open, ...(own ? [own] : [])].map((t) => [t.id, t]));
   let created = 0, updated = 0;
 
+  // Tasks only move forward, and one the user finished or cancelled is left alone.
   async function progress(id: string, text: string | null | undefined, status: string | null | undefined) {
+    const current = known.get(id)?.status ?? "";
+    if (!(current in RANK) || current === "done") return;
     const { data: row } = await sb!.from("tasks").select("all_updates").eq("user_id", email).eq("id", id).maybeSingle();
     const existing = ((row as { all_updates?: string } | null)?.all_updates || "").trim();
     const patch: Record<string, unknown> = { updated_at: now };
     if (text) patch.all_updates = `${existing ? `${existing}\n` : ""}[${stamp} · ${SOURCE}] ${text}`;
-    if (status && status !== known.get(id)?.status) {
+    if (status && RANK[status] > RANK[current]) {
       patch.status = status;
-      patch.completed_at = status === "done" ? now.slice(0, 10) : null;
+      if (status === "done") patch.completed_at = now.slice(0, 10);
     }
     await sb!.from("tasks").update(patch).eq("user_id", email).eq("id", id);
     updated++;
   }
 
-  let taskId = chat.task_id;
+  let taskId = own?.id ?? chat.task_id;
   if (parsed.chat_task) {
     const c = ChatTask.safeParse(parsed.chat_task);
     if (!c.success) reasons.push("chat task invalid");
@@ -172,9 +196,9 @@ export async function syncChatTasks(email: string, chatId: string): Promise<Chat
         await progress(target, t.update ?? t.description, t.status);
         taskId = target;
       } else {
-        taskId = randomUUID();
-        await sb.from("tasks").insert({
-          id: taskId,
+        const id = randomUUID();
+        const { error } = await sb.from("tasks").insert({
+          id,
           user_id: email,
           title: t.heading.slice(0, 500),
           description: t.description,
@@ -187,12 +211,13 @@ export async function syncChatTasks(email: string, chatId: string): Promise<Chat
           source_detail: `Assistant chat · ${clip(chat.title, 80)}`,
           source_link: `/assistant?chat=${encodeURIComponent(chatId)}`,
           normalized_heading: normalizeHeading(t.heading),
-          dedupe_hash: dedupeHash(SOURCE, chatId, "chat"),
+          dedupe_hash: hash,
           workspace: t.workspace === "office" ? "office" : "personal",
           date_given: now,
           all_updates: t.update ? `[${stamp} · ${SOURCE}] ${t.update}` : null,
         });
-        created++;
+        if (error) reasons.push(`chat task not saved: ${error.message}`);
+        else { taskId = id; created++; }
       }
     }
   }
@@ -243,7 +268,7 @@ export async function syncChatTasks(email: string, chatId: string): Promise<Chat
 
 // Daily catch-up for chats the browser never synced (tab killed mid-chat).
 // Bounded per run so it never eats the free tiers' daily quota.
-const CATCH_UP_PER_RUN = 15;
+const CATCH_UP_PER_RUN = 8;
 const CATCH_UP_DAYS = 3;
 
 export async function syncStaleChats(sb: Db): Promise<{ checked: number; synced: number }> {

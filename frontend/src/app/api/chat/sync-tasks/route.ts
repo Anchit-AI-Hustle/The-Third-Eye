@@ -5,8 +5,9 @@ import { syncChatTasks } from "@/lib/chatTasks";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const COOLDOWN_MS = 20_000;
-const lastRun = new Map<string, number>();
+// One sync per chat at a time on this instance; a request that arrives
+// mid-sync runs after it, so the turn that triggered it is still read.
+const running = new Map<string, Promise<unknown>>();
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -18,10 +19,11 @@ export async function POST(req: Request) {
   if (!chatId) return Response.json({ error: "chatId required" }, { status: 400 });
 
   const key = `${email}:${chatId}`;
-  const now = Date.now();
-  if (now - (lastRun.get(key) ?? 0) < COOLDOWN_MS) return Response.json({ skipped: "cooldown" });
-  if (lastRun.size > 1000) for (const [k, t] of lastRun) if (now - t >= COOLDOWN_MS) lastRun.delete(k);
-  lastRun.set(key, now);
-
-  return Response.json(await syncChatTasks(email, chatId));
+  const run = (running.get(key) ?? Promise.resolve()).catch(() => {}).then(() => syncChatTasks(email, chatId));
+  running.set(key, run);
+  try {
+    return Response.json(await run);
+  } finally {
+    if (running.get(key) === run) running.delete(key);
+  }
 }

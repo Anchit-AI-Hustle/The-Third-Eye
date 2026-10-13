@@ -292,7 +292,7 @@ the self-built ones so they don't get buried in the third-party directory.
   update the same task. Small talk is skipped, and follow-ups become separate tasks.
   `conversations.tasks_synced_n` records how many messages have been read, so each
   message is read only once. A daily cron (`/api/cron/dispatch?job=chat_tasks`)
-  syncs up to 15 chats that the browser never synced.
+  syncs up to 8 chats that the browser never synced.
 
 ---
 

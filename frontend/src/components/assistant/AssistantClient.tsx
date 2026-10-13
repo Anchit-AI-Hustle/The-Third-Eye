@@ -738,9 +738,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }).then(() => taskSync.schedule(id));
   }, [isStreaming, messages, chatId, projectId, library, taskSync]);
 
-  async function openChat(id: string) {
+  // fromLink: opened from a task's link on page load; skipped if the user has
+  // already started talking, so their turn is never thrown away.
+  async function openChat(id: string, fromLink = false) {
     const chat = await library.openChat<Message, HistoryEntry>(id);
-    if (!chat) return;
+    if (!chat || (fromLink && (messagesRef.current.length || isStreamingRef.current))) return;
     resetThread();
     setMessages(settleMessages(chat.messages));
     historyRef.current = chat.history;
@@ -759,7 +761,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (!id) return;
     url.searchParams.delete("chat");
     window.history.replaceState(null, "", url.pathname + url.search);
-    void openChat(id);
+    void openChat(id, true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [library.ready]);
 

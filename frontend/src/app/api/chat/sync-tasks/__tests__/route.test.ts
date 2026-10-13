@@ -30,11 +30,13 @@ describe("POST /api/chat/sync-tasks", () => {
     expect((await post({})).status).toBe(400);
   });
 
-  it("runs a chat at most once per cooldown, so retries and double triggers cost nothing", async () => {
+  it("runs one sync per chat at a time, and still runs one queued behind it", async () => {
     const { POST } = await import("@/app/api/chat/sync-tasks/route");
+    let running = 0, most = 0;
+    sync.mockImplementation(async () => { most = Math.max(most, ++running); await new Promise((r) => setTimeout(r, 5)); running--; return { created: 0, updated: 0 }; });
     const req = () => new Request("https://x.test", { method: "POST", body: JSON.stringify({ chatId: "c1" }) });
-    await POST(req());
-    expect(await (await POST(req())).json()).toMatchObject({ skipped: "cooldown" });
-    expect(sync).toHaveBeenCalledTimes(1);
+    await Promise.all([POST(req()), POST(req())]);
+    expect(sync).toHaveBeenCalledTimes(2);
+    expect(most).toBe(1);
   });
 });

@@ -17,9 +17,10 @@ let tables: Record<string, Row[]> = {};
 function from(table: string) {
   const filters: ((r: Row) => boolean)[] = [];
   let patch: Row | null = null;
-  const rows = () => (tables[table] ??= []).filter((r) => filters.every((f) => f(r)));
+  let lim = Infinity;
+  const rows = () => (tables[table] ??= []).filter((r) => filters.every((f) => f(r))).slice(0, lim);
   const q: Record<string, unknown> = {
-    select: () => q, order: () => q, limit: () => q,
+    select: () => q, order: () => q, limit: (n: number) => { lim = n; return q; },
     eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return q; },
     in: (c: string, v: unknown[]) => { filters.push((r) => v.includes(r[c])); return q; },
     gt: (c: string, v: string) => { filters.push((r) => String(r[c]) > v); return q; },
@@ -128,5 +129,56 @@ describe("assistant chats sync to the Task Tracker", () => {
     expect(await syncStaleChats(db)).toEqual({ checked: 1, synced: 1 });
     expect(tables.conversations[0].tasks_synced_at).toBeTruthy();
     expect(await syncStaleChats(db)).toEqual({ checked: 0, synced: 0 });
+  });
+
+  it("never reopens a task the user cancelled or finished, and never moves one backwards", async () => {
+    tables.tasks.push({ id: "t2", user_id: U, title: "Old site", status: "cancelled", all_updates: "" });
+    tables.conversations[0].task_id = "t2";
+    reply({ chat_task: { task_id: null, heading: "Old site", status: "in_progress", update: "More work" }, task_updates: [], follow_ups: [] });
+    await syncChatTasks(U, "c1");
+    expect(tables.tasks.find((t) => t.id === "t2")).toMatchObject({ status: "cancelled", all_updates: "" });
+
+    tables.tasks[0].status = "in_progress";
+    tables.conversations[0].messages = msgs("a", "b", "c", "d");
+    reply({ chat_task: { task_id: "t1", heading: "Launch yoga studio website", status: "todo", update: "Talked about it" }, task_updates: [], follow_ups: [] });
+    await syncChatTasks(U, "c1");
+    expect(tables.tasks[0]).toMatchObject({ status: "in_progress" });
+    expect(String(tables.tasks[0].all_updates)).toMatch(/Talked about it/);
+  });
+
+  it("finds the chat's task by its key when the link was never saved, instead of failing to insert a second", async () => {
+    reply({ chat_task: { task_id: null, heading: "Build yoga landing page", status: "in_progress", update: "Draft" }, task_updates: [], follow_ups: [] });
+    await syncChatTasks(U, "c1");
+    tables.conversations[0].task_id = null;
+    tables.conversations[0].messages = msgs("a", "b", "c", "d");
+    reply({ chat_task: { task_id: null, heading: "Build yoga landing page", status: "done", update: "Finished" }, task_updates: [], follow_ups: [] });
+    expect(await syncChatTasks(U, "c1")).toMatchObject({ created: 0, updated: 1 });
+    expect(chatTask()).toHaveLength(1);
+    expect(chatTask()[0].status).toBe("done");
+    expect(tables.conversations[0].task_id).toBe(chatTask()[0].id);
+  });
+
+  it("marks a chat with nothing new as checked, so the catch-up does not keep picking it", async () => {
+    tables.conversations[0].messages = msgs("hello");
+    expect(await syncChatTasks(U, "c1")).toMatchObject({ skipped: "nothing new" });
+    expect(tables.conversations[0].tasks_synced_at).toBeTruthy();
+  });
+
+  it("rereads a chat that was rewound to an earlier point", async () => {
+    tables.conversations[0].tasks_synced_n = 10;
+    reply({ chat_task: null, task_updates: [], follow_ups: [] });
+    await syncChatTasks(U, "c1");
+    expect(cascade).toHaveBeenCalledTimes(1);
+    expect(tables.conversations[0].tasks_synced_n).toBe(2);
+  });
+
+  it("keeps the prompt small enough for free tiers, and keeps the user's first request in a long chat", async () => {
+    tables.tasks = Array.from({ length: 100 }, (_, i) => ({ id: `t${i}`, user_id: U, title: `${"x".repeat(400)} ${i}`, status: "todo" }));
+    tables.conversations[0].messages = msgs("FIRST REQUEST build the site", ...Array.from({ length: 59 }, (_, i) => `turn ${i} ${"y".repeat(900)}`));
+    reply({ chat_task: null, task_updates: [], follow_ups: [] });
+    await syncChatTasks(U, "c1");
+    const prompt: string = cascade.mock.calls[0][0].messages[0].content;
+    expect(prompt.length).toBeLessThan(14_000);
+    expect(prompt).toContain("FIRST REQUEST");
   });
 });
