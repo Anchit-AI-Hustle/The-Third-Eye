@@ -1,4 +1,5 @@
 import { llmCascade } from "@/lib/llmCascade";
+import { parseLlmJson } from "@/lib/llmJson";
 import { GROWTH_PILLARS, type ExtractedTask } from "@/lib/tasks";
 
 // Ported from Personal-AI-OS ai/prompts.py + ai/extractor.py. The Vahdam-only
@@ -41,13 +42,6 @@ ${TASK_SHAPE_HINT}
 is_actionable is true ONLY when there is a concrete required action for Anchit.
 Newsletters, receipts, digests, mass announcements, cold outreach, FYIs, and
 auto-replies are NOT actionable → is_actionable=false, tasks=[].`;
-
-export function parseJsonBlock(text: string): Record<string, unknown> {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1] : (text.match(/\{[\s\S]*\}/)?.[0] ?? "");
-  if (!candidate) throw new Error("no JSON in LLM output");
-  return JSON.parse(candidate) as Record<string, unknown>;
-}
 
 function str(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -92,7 +86,7 @@ async function runExtraction(system: string, user: string, maxTokens: number): P
       temperature: 0.1,
       background: true,
     });
-    return parseJsonBlock(out.text);
+    return parseLlmJson(out.text).value;
   } catch (e) {
     console.error("extraction failed:", e);
     return null;
