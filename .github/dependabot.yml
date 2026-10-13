@@ -5,21 +5,24 @@ updates:
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
     ignore:
-      # Every major bump that merged unattended tonight broke main:
-      #   typescript 7  — Next resolves typescript/lib/typescript.js, which the
-      #                   native rewrite does not ship, so lint reports it as
-      #                   uninstalled.
-      #   vitest 4      — two .tsx files stopped parsing, so ten tests quietly
-      #                   stopped being collected rather than failing.
-      #   next 16 + react 19 + tailwind 4 — cannot even install
-      #                   (@types/react-dom@18 vs @types/react@19), and Vercel
-      #                   builds with --legacy-peer-deps, so they would have
-      #                   reached production without CI validating anything.
-      #
-      # A major version is a migration, not an upgrade. They are still wanted —
-      # just as deliberate work with someone watching, rather than as a PR that
-      # merges at midnight. Minor and patch updates continue to flow normally.
-      - dependency-name: "*"
+      # These majors broke main when they merged unattended:
+      #   typescript 7: Next resolves typescript/lib/typescript.js, which the
+      #                 native rewrite does not ship, so lint reports it as
+      #                 uninstalled.
+      #   vitest 4:     two .tsx files stopped parsing, so ten tests quietly
+      #                 stopped being collected rather than failing.
+      #   tailwindcss 4: a config and CSS migration, not a version bump.
+      # Each is a planned migration on its own branch. Every other package gets
+      # major-version PRs again (the blanket "*" ignore hid the Next.js CVE fix,
+      # AUDIT F-10), and .github/workflows/npm-audit.yml fails on new
+      # high/critical advisories either way.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
