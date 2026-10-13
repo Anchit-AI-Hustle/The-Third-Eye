@@ -14,9 +14,10 @@ there, not `ARCHITECTURE.md` (see note below).
 > FastAPI + agents + RAG backend (`backend/`, described in
 > [ARCHITECTURE.md](ARCHITECTURE.md)). It is well-tested but **not deployed
 > anywhere** and the live frontend does not call it — the frontend talks
-> directly to Supabase and the AI providers instead. See
-> [AUDIT.md](AUDIT.md) (finding F-01) for the retire-vs-deploy decision that
-> is still open. Don't build against `backend/` expecting it to be live.
+> directly to Supabase and the AI providers instead. The retire-vs-deploy
+> question is decided (2026-08-22, [AUDIT.md](AUDIT.md) F-01): deploy it on a free stack (Supabase schema, Upstash Redis, Cloud Run scale-to-zero); code done, the deploy itself is blocked on `gcloud` auth and a free Upstash signup.
+> Steps are in [PROJECT_STATUS.md](PROJECT_STATUS.md). Until that runs,
+> don't build against `backend/` expecting it to be live.
 
 ## Quick Start (the live product)
 

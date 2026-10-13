@@ -7,8 +7,8 @@ This file used to track `backend/`'s internal phase checklist (Phase
 1–2 "complete", Phase 3 "in progress") as if it were the product roadmap.
 It wasn't accurate: `backend/` is a separately-developed FastAPI + agents +
 RAG service that is well-tested internally but **was never deployed**, and
-the live app doesn't call it (see [AUDIT.md](AUDIT.md), finding F-01, still
-open as of this writing). The sections below reflect actual state.
+the live app doesn't call it (see [AUDIT.md](AUDIT.md), finding F-01:
+decided 2026-08-22 to deploy on a free stack, deploy not yet run). The sections below reflect actual state.
 
 ---
 
@@ -37,8 +37,8 @@ agent registry/orchestrator with delegation, Research/Knowledge/Productivity
 agents, a document ingestion → chunk → embed → retrieve pipeline, nightly
 memory consolidation. All real, all tested — but it has no hosting target
 (no `fly.toml`/`railway.json`/`render.yaml`, no second Vercel project), and
-the one integration point in the frontend (`lib/api.ts`, `auth.ts`'s
-`BACKEND_URL` POST) is imported nowhere and fails silently. See
+the frontend has no integration point with it (the old `lib/api.ts` and
+`auth.ts`'s `BACKEND_URL` POST were removed). See
 [ARCHITECTURE.md](ARCHITECTURE.md) for its design and ADRs.
 
 **Decision (2026-08-22, AUDIT.md F-01):** deploy it, on a genuinely free

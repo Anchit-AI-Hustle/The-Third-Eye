@@ -175,7 +175,7 @@ This is the first thing Gate 1 needs a decision on.
 
 | ID | Severity | Category | File:line | Evidence | Why it blocks/degrades "live" | Proposed fix | Risk of fixing | Effort |
 |---|---|---|---|---|---|---|---|---|
-| F-01 | P0 | Pending | `frontend/src/lib/auth.ts:7`, `frontend/src/lib/api.ts` | No backend deployment exists; the one integration point fails silently; the client is imported nowhere | Live criteria #3/#4 are false; the entire `backend/` investment is disconnected from the product | **Decided 2026-08-22: (B) deploy, on a free stack.** Code done: dedicated Postgres schema on the existing Supabase project (`app/bootstrap_schema.py`, `Settings.db_schema`), Upstash Redis, Cloud Run scale-to-zero, GitHub Actions cron replacing in-process APScheduler (`.github/workflows/backend-consolidation-cron.yml`, `POST /internal/run-consolidation`). Full steps in PROJECT_STATUS.md. Deploy itself blocked on `gcloud` auth (not available in this environment) and a free Upstash signup — both need you | Low for standing it up alone; cutover (if pursued later) is higher | M, code done — deploy pending your steps |
+| F-01 | P0 | Decided, deploy pending | `backend/` (the former `frontend/src/lib/auth.ts` `BACKEND_URL` call and `frontend/src/lib/api.ts` client have since been removed) | No backend deployment exists, and the frontend has no integration point with it | Live criteria #3/#4 are false; the entire `backend/` investment is disconnected from the product | **Decided 2026-08-22: (B) deploy, on a free stack.** Code done: dedicated Postgres schema on the existing Supabase project (`app/bootstrap_schema.py`, `Settings.db_schema`), Upstash Redis, Cloud Run scale-to-zero, GitHub Actions cron replacing in-process APScheduler (`.github/workflows/backend-consolidation-cron.yml`, `POST /internal/run-consolidation`). Full steps in PROJECT_STATUS.md. Deploy itself blocked on `gcloud` auth (not available in this environment) and a free Upstash signup, both need you | Low for standing it up alone; cutover (if pursued later) is higher | M, code done, deploy pending your steps |
 | F-02 | ~~P0~~ Fixed | Inaccurate/Pending | `supabase/config.toml` (root) vs `frontend/supabase/migrations/*` | **Fixed 2026-08-19.** `config.toml` lives at repo root, so `supabase db push` only ever reads `./supabase/migrations/`; 5 migrations sat in `frontend/supabase/migrations/` and were never applied — confirmed as the live cause of Gmail/Chat ingestion producing zero tasks (`tasks_ingestion_columns.sql`'s own comment names this exact symptom) | RLS hardening, Chat's `conversation_sources` opt-in table, and the `tasks` ingestion columns were all live-missing. Live criterion #5 failed for these 5 | Moved all 5 files into `supabase/migrations/` (filenames already sort in correct chronological order alongside the existing 6, no renumbering needed); verified each is idempotent / has no destructive statements before moving. Takes effect on merge to `main` via the existing `supabase-deploy.yml` | Low (file move; each migration individually reviewed for safety) | S — done |
 | F-03 | P1 | Inaccurate | `backend/app/agents/research.py:44` vs `backend/app/config.py` | `SERPER_API_KEY` is read via bare `os.getenv()`, not through the `Settings` model. Every other key in `.env.example` (incl. `SERPER_API_KEY` itself, documented at line 76) is loaded through `Settings(env_file=".env")`. `os.getenv` does **not** see values that live only in a `.env` file — nothing in `app/` calls `load_dotenv()` | A developer following the documented `.env` workflow sets `SERPER_API_KEY` and it is silently never read; web search silently falls back to Google grounding (or reports "unavailable") with no error pointing at the real cause. (Moot for the live product per F-01 — this only matters if backend/ is kept per path B) | Add `serper_api_key: str = ""` to `Settings`, read via `settings.serper_api_key` | Low | XS |
 | F-04 | ~~P1~~ Resolved | Dependency health | `frontend/package.json` | **Resolved.** The app is on `next@16.3.8`; `npm audit --omit=dev` reports 0 advisories in production dependencies (re-checked 2026-10-13). The remaining high/critical advisories are in dev-only tooling (vitest 2, tailwindcss 3) and are tracked in `frontend/audit-baseline.json` | None for production | Planned majors: vitest 5 and tailwindcss 4, each on its own branch with a full test pass | Medium per migration | M |
@@ -212,15 +212,15 @@ No regressions found.
 
 ## 7. Severity counts
 
-- P0: 1 (F-01) — F-02 fixed 2026-08-19
+- P0: 1 (F-01, decided: deploy; blocked on gcloud auth and Upstash) - F-02 fixed 2026-08-19
 - P1: 2 (F-03, F-04)
 - P2: 4 (F-05, F-06, F-07, F-10)
 - P3: 2 (F-08 — done, F-09)
 
 ## 8. Critical path to live (ordered)
 
-1. **Decide F-01** (retire vs. deploy the backend) — everything about "target
-   hosting" and criteria #3/#4 depends on this answer.
+1. **F-01** - decided 2026-08-22: deploy `backend/` on a free stack. Code
+   done; the deploy is blocked on `gcloud` auth and a free Upstash signup.
 2. **F-02** — reconcile the split Supabase migrations; confirm RLS hardening
    is actually applied to the live DB.
 3. **F-04** — schedule the Next.js 14→16 migration to close the 2 high CVEs
