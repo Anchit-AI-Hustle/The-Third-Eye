@@ -3,7 +3,7 @@ import { rootCertificates } from "node:tls";
 // Supabase's Postgres (direct and pooler) presents a certificate chained to its
 // own root, which is not in Node's trust store. pg treats sslmode=require as
 // verify-full, so a plain Supabase connection string fails with "self-signed
-// certificate in certificate chain" — and dropping verification would send the
+// certificate in certificate chain", and dropping verification would send the
 // database password over an unauthenticated channel. The root is pinned here
 // alongside the system roots instead. Source:
 // https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
@@ -33,11 +33,18 @@ o/bKiIz+Fq8=
 -----END CERTIFICATE-----`;
 
 const SUPABASE_HOST = /\.supabase\.(co|com)$/;
+// pg 8 already treats these as verify-full and warns on every connect that pg 9
+// will switch them to libpq semantics (require = encrypt without verifying).
+const VERIFY_FULL_ALIASES = new Set(["prefer", "require", "verify-ca"]);
 
 /** pg client config for a connection string; Supabase hosts get verified TLS. */
 export function pgConnection(url) {
   const u = new URL(url);
-  if (!SUPABASE_HOST.test(u.hostname)) return { connectionString: url };
+  if (!SUPABASE_HOST.test(u.hostname)) {
+    if (!VERIFY_FULL_ALIASES.has(u.searchParams.get("sslmode")) || u.searchParams.has("uselibpqcompat")) return { connectionString: url };
+    u.searchParams.set("sslmode", "verify-full");
+    return { connectionString: u.toString() };
+  }
   // ssl params in the URL would override the ssl object below.
   for (const k of ["sslmode", "sslrootcert", "sslcert", "sslkey", "uselibpqcompat"]) u.searchParams.delete(k);
   return { connectionString: u.toString(), ssl: { ca: [...rootCertificates, SUPABASE_ROOT_CA] } };
