@@ -22,6 +22,17 @@ function readLocal<T>(key: string): T[] {
 function writeLocal(key: string, rows: unknown[]) {
   try { localStorage.setItem(key, JSON.stringify(rows)); } catch { /* quota — keep what's in memory */ }
 }
+/** A chat saved while a reply was streaming reopens finished: no spinner, no empty bubble. */
+export function settleMessages<M extends { content: string; streaming?: boolean }>(messages: M[]): M[] {
+  return messages
+    .filter((m) => !(m.streaming && !m.content.trim()))
+    .map((m) => {
+      if (!m.streaming) return m;
+      const { streaming: _done, ...rest } = m;
+      return rest as M;
+    });
+}
+
 const byRecent = <T extends { updated_at: string }>(a: T, b: T) => b.updated_at.localeCompare(a.updated_at);
 const summary = ({ id, title, project_id, updated_at }: SavedChat): ChatSummary => ({ id, title, project_id, updated_at });
 
