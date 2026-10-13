@@ -67,15 +67,37 @@ describe("JSON mode reaches every OpenAI-compatible provider", () => {
   });
 });
 
-describe("a paid provider chosen by env goes first", () => {
-  it("LLM_PRIMARY_PROVIDER moves that provider to the front of the text cascade", async () => {
-    process.env.GEMINI_API_KEY = "x".repeat(39); process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "a";
-    process.env.LLM_PRIMARY_PROVIDER = "groq";
+describe("free tiers first by default", () => {
+  it("orders free providers by daily headroom, paid ones last", async () => {
+    const { cascadeOrder } = await import("@/lib/llmCascade");
+    expect(cascadeOrder()).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "anthropic", "grok"]);
+  });
+
+  it("sends tool calls to Groq before any paid key, with no env var set", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENAI_API_KEY = "sk-oai";
     stubFetch({ "api.groq.com": okChat });
-    const { llmCascade } = await import("@/lib/llmCascade");
-    const out = await llmCascade({ messages: [{ role: "user", content: "x" }] });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const out = await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] });
     expect(out.provider).toBe("groq");
     expect(calls.map((c) => c.host)).toEqual(["api.groq.com"]);
+  });
+
+  it("keeps chat off native Gemini unless it is the primary or the message carries media", async () => {
+    const { nativeGeminiFirst } = await import("@/lib/llmCascade");
+    expect(nativeGeminiFirst(false)).toBe(false);
+    expect(nativeGeminiFirst(true)).toBe(true);
+    process.env.LLM_PRIMARY_PROVIDER = "gemini";
+    expect(nativeGeminiFirst(false)).toBe(true);
+    process.env.LLM_PRIMARY_PROVIDER = "groq";
+    expect(nativeGeminiFirst(false)).toBe(false);
+  });
+});
+
+describe("a provider chosen by env goes first", () => {
+  it("LLM_PRIMARY_PROVIDER moves that provider to the front, the free order follows", async () => {
+    process.env.LLM_PRIMARY_PROVIDER = "anthropic";
+    const { cascadeOrder } = await import("@/lib/llmCascade");
+    expect(cascadeOrder()).toEqual(["anthropic", "groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"]);
   });
 
   it("puts the primary first for tool calls too, Anthropic through its OpenAI-compatible endpoint", async () => {
@@ -104,7 +126,7 @@ describe("every failure type falls through, then one clear message", () => {
     const { llmCascade, LlmCascadeError, userFacingLlmError } = await import("@/lib/llmCascade");
     const err = await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch((e) => e);
     expect(err).toBeInstanceOf(LlmCascadeError);
-    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["anthropic", "gemini", "gemini-lite", "groq", "cerebras", "openrouter", "mistral"]);
+    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "anthropic"]);
     const msg = userFacingLlmError(err);
     expect(msg).toMatch(/^[A-Z][^{}[\]]+\.$/);
     expect(msg).not.toMatch(/\bat \w|Error:|\{/);

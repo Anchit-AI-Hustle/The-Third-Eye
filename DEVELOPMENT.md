@@ -43,9 +43,13 @@ otherwise undocumented outside this file and the code itself.
 - **Data:** Supabase Postgres (project `hlcjghpzxzatgjfwcoav`) with **pgvector** for
   memory/RAG, reached server-side through `lib/db.ts` (`pg`). The browser never talks
   to the database, and Supabase's Data API is locked out of it (see §4).
-- **LLM:** a 7-provider server-side cascade (`lib/llmCascade.ts`) — openai →
-  anthropic → gemini → grok → groq → cerebras → ollama — with quota fallback. The
-  assistant loop uses Gemini function-calling and falls back to the cascade.
+- **LLM:** a server-side cascade (`lib/llmCascade.ts`), free tiers first: groq,
+  gemini-lite, gemini, cerebras, openrouter, mistral, then the paid openai,
+  anthropic and grok, then ollama. Each provider is benched for as long as its
+  429 or retry-after says; `LLM_PRIMARY_PROVIDER` moves one to the front. Chat
+  runs its tool loop on the first tool-capable provider (Groq by default) and
+  uses native Gemini function-calling first only for images and other media,
+  or when Gemini is the primary.
 - **Styling:** Tailwind; a HUD/arc-reactor visual language. Three.js + GSAP for the
   cinematic layer.
 - **Hosting:** Vercel (Root Directory = `frontend`). `vercel.json` sets
@@ -74,7 +78,8 @@ Key behaviours:
 - **Undo.** Agent-created items surface a short-lived Undo in the client
   (`hooks/useAgentActions.ts`).
 - **Streaming SSE** with a text/`tool`/`confirm`/`done`/`error` event protocol; on
-  a Gemini failure it falls back to a plain-text answer via `llmCascade`.
+  a failure of every tool-capable provider it falls back to a plain-text answer
+  via `llmCascade`.
 - **Server-derived identity.** Email + OAuth token come from the server session, not
   the request body, so a caller can't act as another user. Metering via `consume()`.
 

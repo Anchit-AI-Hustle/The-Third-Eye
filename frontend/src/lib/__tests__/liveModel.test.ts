@@ -81,6 +81,7 @@ describe("free-tier rate limits are per model", () => {
   it("falls back to Gemini Flash-Lite when 2.5 Flash's daily quota is spent", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g");
     vi.stubEnv("OPENAI_API_KEY", "");
+    vi.stubEnv("LLM_PRIMARY_PROVIDER", "gemini");
     const models: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       const model = decodeURIComponent(url.match(/models\/([^:]+):/)?.[1] ?? "");

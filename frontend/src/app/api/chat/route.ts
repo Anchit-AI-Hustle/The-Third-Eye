@@ -13,10 +13,10 @@ import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
-import { cascadeOrder, LlmCascadeError, userFacingOutage } from "@/lib/llmCascade";
+import { cascadeOrder, LlmCascadeError, nativeGeminiFirst, userFacingOutage } from "@/lib/llmCascade";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { benchedReason, noteFailure } from "@/lib/providerHealth";
-import { attachedText, attachmentsAsText, cleanAttachments, geminiParts } from "@/lib/attachments";
+import { attachedText, attachmentsAsText, cleanAttachments, geminiParts, isTextAttachment } from "@/lib/attachments";
 import { runBusinessAgent } from "@/lib/businessAgents";
 import { geminiTools } from "@/lib/tools/schemas";
 import { appInventory } from "@/lib/tools/inventory";
@@ -1838,8 +1838,7 @@ export async function POST(req: NextRequest) {
 
         // No Gemini key → skip the tool-calling path and use the cascade below.
         if (!model) throw new Error("Gemini not configured — using fallback provider.");
-        const primary = process.env.LLM_PRIMARY_PROVIDER ? cascadeOrder()[0] : "gemini";
-        if (!primary.startsWith("gemini")) throw new Error(`Primary provider is ${primary}, using it first.`);
+        if (!nativeGeminiFirst(attachments.some((a) => !isTextAttachment(a.mimeType)))) throw new Error(`Primary provider is ${cascadeOrder()[0]}, using it first.`);
         const geminiBenched = await benchedReason("gemini");
         if (geminiBenched) throw new Error(`Gemini skipped (${geminiBenched}) — using fallback provider.`);
         let loopGuard = 0;

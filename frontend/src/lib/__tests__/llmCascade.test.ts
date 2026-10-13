@@ -10,7 +10,7 @@ import { generationFailure, geminiToolsToOpenAI, llmCascade, resetCooldowns, too
 const ENV_KEYS = [
   "OPENAI_API_KEY", "OPENAI_API_KEY_2", "OPENAI_API_KEY_3", "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY", "GROQ_API_KEY",
-  "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "OLLAMA_ENABLED",
+  "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "OLLAMA_ENABLED", "LLM_PRIMARY_PROVIDER",
 ];
 
 function clearKeys() {
@@ -56,6 +56,9 @@ function fetchStub(handlers: { match: (url: string) => boolean; status: number; 
 }
 
 describe("llmCascade: per-provider cooldown after a quota error", () => {
+  // Gemini goes first here so its failure is what the cooldown acts on.
+  beforeEach(() => { process.env.LLM_PRIMARY_PROVIDER = "gemini"; });
+
   it("skips a recently-quota-exhausted provider on the next call, without a new fetch", async () => {
     process.env.GEMINI_API_KEY = "test-gemini-key";
     process.env.GROQ_API_KEY = "test-groq-key";
@@ -228,7 +231,7 @@ describe("llmCascade: when every provider fails", () => {
     process.env.GEMINI_API_KEY = "k1";
     process.env.GEMINI_MODEL = "gemini-flash-latest";
     const { calls } = fetchStub([{ match: (u) => hostIs(u, GEMINI_HOST), status: 200, body: { candidates: [{ content: { parts: [{ text: "ok" }] } }] } }]);
-    const out = await llmCascade({ messages: [{ role: "user", content: "hi" }] });
+    const out = await llmCascade({ preferProvider: "gemini", messages: [{ role: "user", content: "hi" }] });
     expect(calls[0]).toContain("/models/gemini-flash-latest:");
     expect(out.model).toBe("gemini-flash-latest");
   });

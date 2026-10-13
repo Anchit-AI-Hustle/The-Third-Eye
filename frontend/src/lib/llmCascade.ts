@@ -174,15 +174,24 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["openai", "anthropic", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "mistral"] as const;
+const CLOUD_PROVIDERS = ["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "anthropic", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
-// The first link of the cascade. Set LLM_PRIMARY_PROVIDER to a paid provider
-// whose key has credit (for example "anthropic" or "openai") and every chat,
-// extraction and tool call tries it before the free tiers.
+// Free tiers first, ordered by daily headroom: Groq's free plan serves
+// gpt-oss-120b with per-model quotas (withLiveModel rotates models on a 429);
+// Flash-Lite goes before Flash so Flash's small daily quota stays free for
+// images, which only the native Gemini path can read; Cerebras' trial and
+// OpenRouter's :free models (50 requests a day) and Mistral follow. Paid
+// providers come last, so a key without credit costs nothing until the free
+// ones are exhausted. LLM_PRIMARY_PROVIDER moves one provider to the front.
 export function cascadeOrder(): CloudProvider[] {
   const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
   return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
+}
+
+/** Chat starts on native Gemini only when it is the primary or the message has media only Gemini can read. */
+export function nativeGeminiFirst(hasMedia: boolean): boolean {
+  return hasMedia || cascadeOrder()[0].startsWith("gemini");
 }
 
 /** Providers with a key on this deployment. */

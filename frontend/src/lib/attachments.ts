@@ -12,7 +12,7 @@ export const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 export const ATTACHMENT_ACCEPT = "image/*,application/pdf,text/*,.md,.csv,.json";
 
 const READABLE = /^(image\/(png|jpeg|webp|heic|heif|gif)|application\/pdf|text\/[\w.+-]+|application\/json)$/;
-const isText = (m: string) => m.startsWith("text/") || m === "application/json";
+export const isTextAttachment = (m: string) => m.startsWith("text/") || m === "application/json";
 
 export function cleanAttachments(raw: unknown): Attachment[] {
   if (!Array.isArray(raw)) return [];
@@ -35,14 +35,14 @@ export function geminiParts(atts: Attachment[]) {
 
 /** The readable text of text attachments, for tools that work on the user's file. */
 export function attachedText(atts: Attachment[]): string {
-  return atts.filter((a) => isText(a.mimeType))
+  return atts.filter((a) => isTextAttachment(a.mimeType))
     .map((a) => `# ${a.name}\n${Buffer.from(a.data, "base64").toString("utf8")}`).join("\n\n");
 }
 
 // Text-only fallback models can still read text files; for the rest they are told
 // what was attached so they don't answer as if nothing was.
 export function attachmentsAsText(atts: Attachment[]): string {
-  return atts.map((a) => isText(a.mimeType)
+  return atts.map((a) => isTextAttachment(a.mimeType)
     ? `\n\n[Attached file "${a.name}"]\n${Buffer.from(a.data, "base64").toString("utf8").slice(0, 20_000)}`
     : `\n\n[Attached ${a.mimeType} "${a.name}" — this model can't open it; say so if the answer depends on it]`).join("");
 }
