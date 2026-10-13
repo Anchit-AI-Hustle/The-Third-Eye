@@ -1,0 +1,2 @@
+# tiktoken checks this file by sha256; any line-ending conversion breaks it.
+backend/tests/fixtures/tiktoken/* binary

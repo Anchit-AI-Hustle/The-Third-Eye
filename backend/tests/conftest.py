@@ -17,7 +17,7 @@ os.environ.setdefault("NEXTAUTH_SECRET", "test-nextauth-secret-with-32-chars")
 os.environ.setdefault("GOOGLE_AI_API_KEY", "test-google-ai-key")
 # Vendored cl100k_base encoding (see test_tiktoken_fixture.py), so the chunker
 # tests need no network access to openaipublic.blob.core.windows.net.
-os.environ.setdefault("TIKTOKEN_CACHE_DIR", os.path.join(os.path.dirname(__file__), "fixtures", "tiktoken"))
+os.environ["TIKTOKEN_CACHE_DIR"] = os.path.join(os.path.dirname(__file__), "fixtures", "tiktoken")
 
 # ─── pgvector compatibility shim for SQLite ───────────────────────────────────
 # pyrefly: ignore [missing-import]
