@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Mic, Camera, Monitor, MapPin, Bell, ShieldCheck } from "lucide-react";
+import { Mic, Camera, Monitor, MapPin, Bell, ShieldCheck, FileDown } from "lucide-react";
 import {
   PermissionCapability, getPolicy, setPolicy,
 } from "@/lib/consent";
@@ -21,6 +21,8 @@ interface CapMeta {
   label: string;
   icon: typeof Mic;
   reason: string;
+  /** False when the browser shows no prompt of its own (the app's choice is the only gate). */
+  devicePrompt?: false;
 }
 
 export const CAP_META: Record<PermissionCapability, CapMeta> = {
@@ -29,6 +31,7 @@ export const CAP_META: Record<PermissionCapability, CapMeta> = {
   screen:        { label: "Screen",        icon: Monitor, reason: "Read a window or tab you share so the assistant can analyse it." },
   location:      { label: "Location",      icon: MapPin,  reason: "Use where you are for local weather, traffic and nearby search." },
   notifications: { label: "Notifications", icon: Bell,    reason: "Send reminders, daily briefings and urgent task alerts." },
+  files:         { label: "Save & open files", icon: FileDown, reason: "Save files JARVIS makes for you to your Downloads folder and open them in a new tab.", devicePrompt: false },
 };
 
 type Resolver = (ok: boolean) => void;
@@ -88,7 +91,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
               </div>
               <p className="text-sm text-text-secondary leading-relaxed">{meta.reason}</p>
               <p className="text-[11px] text-text-muted mt-2 leading-relaxed">
-                Your device will ask you to confirm too. Choose how The Third Eye should remember it:
+                {meta.devicePrompt === false ? "" : "Your device will ask you to confirm too. "}Choose how The Third Eye should remember it:
               </p>
             </div>
             <div className="px-4 pb-4 space-y-2">

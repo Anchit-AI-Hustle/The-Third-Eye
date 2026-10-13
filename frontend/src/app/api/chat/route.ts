@@ -28,6 +28,7 @@ import { identify } from "@/lib/serverIdentity";
 import { freeNearby, freeNews, freeStockQuote, freeWebSearch } from "@/lib/freeSearch";
 import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
+import { MAX_FILE_CHARS, safeFilename } from "@/lib/fileSave";
 import { FORMULAS, gstBreakup, toGstSlab } from "@/lib/calculators/formulas";
 import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
 import { normalizePrompt } from "@/lib/promptNormalizer";
@@ -672,6 +673,18 @@ async function runTool(
       } catch {
         return { result: JSON.stringify({ iso: now.toISOString(), formatted: now.toString(), timezone: "UTC" }) };
       }
+    }
+
+    case "save_file": {
+      const content = String(input.content ?? "");
+      if (!content) return { result: "No file content was given, so nothing was saved." };
+      if (content.length > MAX_FILE_CHARS) return { result: `That file is ${Math.round(content.length / 1000)} KB; files are limited to ${MAX_FILE_CHARS / 1000} KB. Make it smaller or split it.` };
+      const mime = String(input.mime ?? "") || "text/plain";
+      const filename = safeFilename(String(input.filename ?? ""), mime);
+      return {
+        result: `${filename} is ready. The app saves it to the user's Downloads folder and opens it, after asking their permission. Tell them it is saved; do not paste the contents.`,
+        sideEffect: { type: "file", data: { filename, mime, content } },
+      };
     }
 
     case "remember": {

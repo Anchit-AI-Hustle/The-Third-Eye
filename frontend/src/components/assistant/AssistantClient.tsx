@@ -28,6 +28,8 @@ import { useMode } from "@/hooks/useMode";
 import { VisionButton } from "./VisionButton";
 import { ActionCard } from "./ActionCard";
 import { ChecklistCard } from "./ChecklistCard";
+import { FileCard } from "./FileCard";
+import type { SavedFile } from "@/lib/fileSave";
 import { CHECKLIST_TOOLS, type Step } from "@/lib/checklist";
 import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
@@ -39,6 +41,10 @@ import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
 import { toolLabel } from "@/lib/toolLabels";
 
+// Replies whose files should save and open on arrival (after the permission
+// check); files in reopened chats only act when their buttons are clicked.
+const freshFiles = new Set<string>();
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -49,6 +55,7 @@ interface Message {
   media?: { kind?: string; url: string; alt?: string }[];
   checklist?: Step[];
   files?: string[];
+  saved?: SavedFile[];
 }
 
 function readAsBase64(file: File): Promise<string> {
@@ -616,6 +623,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 const media = (parsed.sideEffects ?? [])
                   .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)
                   .map((fx: { data: { kind?: string; url: string; alt?: string } }) => fx.data);
+                const saved = (parsed.sideEffects ?? [])
+                  .filter((fx: { type?: string }) => fx.type === "file")
+                  .map((fx: { data: SavedFile }) => fx.data);
+                if (saved.length) {
+                  freshFiles.add(assistantId);
+                  setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, saved } : m)));
+                }
                 if (media.length) {
                   setMessages((prev) => prev.map((m) => {
                     if (m.id !== assistantId) return m;
@@ -1277,6 +1291,7 @@ function MessageBubble({ message, session }: { message: Message; session: any })
               {message.streaming && message.content && (
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
+              {message.saved?.map((f) => <FileCard key={f.filename} file={f} auto={freshFiles.has(message.id)} />)}
               {message.media?.map((item) => (
                 <div key={item.url} className="mt-2">
                   {item.kind === "audio" ? (
