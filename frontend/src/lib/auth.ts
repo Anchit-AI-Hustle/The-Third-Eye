@@ -44,9 +44,11 @@ export const authOptions: NextAuthOptions = {
       if (account?.refresh_token && email) {
         try {
           await storeGoogleRefreshToken(email, account.refresh_token, account.scope, email);
-        } catch {
+        } catch (e) {
           // Saving the refresh token is optional. A database error here used to
           // fail the whole callback and drop the browser back on the sign-in page.
+          const reason = (e instanceof Error ? e.message : String(e)).split(email).join("[user]");
+          console.warn(`auth: Google refresh token not saved, Gmail/Calendar stay disconnected until the next grant: ${reason}`);
         }
       }
       return token;
