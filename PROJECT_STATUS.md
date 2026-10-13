@@ -37,8 +37,9 @@ agent registry/orchestrator with delegation, Research/Knowledge/Productivity
 agents, a document ingestion → chunk → embed → retrieve pipeline, nightly
 memory consolidation. All real, all tested — but it has no hosting target
 (no `fly.toml`/`railway.json`/`render.yaml`, no second Vercel project), and
-the frontend has no integration point with it (the old `lib/api.ts` and
-`auth.ts`'s `BACKEND_URL` POST were removed). See
+nothing in the frontend calls it (the old `lib/api.ts` and `auth.ts`'s
+`BACKEND_URL` POST were removed; only an unused `/api/backend` rewrite in
+`next.config.js` remains). See
 [ARCHITECTURE.md](ARCHITECTURE.md) for its design and ADRs.
 
 **Decision (2026-08-22, AUDIT.md F-01):** deploy it, on a genuinely free

@@ -120,11 +120,15 @@ than buried in the table.
 - No `fly.toml`, `railway.json/toml`, or `render.yaml` exists in the repo.
 - Vercel (`list_projects` on this team) has no second project for a backend
   service — only `the-third-eye` (the frontend).
-- `frontend/src/lib/auth.ts:7` — `BACKEND_URL` defaults to
-  `http://backend:8000`, a `docker-compose`-only hostname that resolves to
-  nothing outside that compose network.
+- Update 2026-10-13: `auth.ts` no longer references `BACKEND_URL`. The only
+  remaining reference is the `/api/backend/:path*` rewrite in
+  `frontend/next.config.js`, which nothing in `frontend/src` calls.
 
-### 4.2 — The one wire that exists is dead-ended and fails silently
+### 4.2 — The one wire that existed (historical)
+
+Update 2026-10-13: the sign-in POST and `frontend/src/lib/api.ts` described
+below were removed (commit `89cf95a`); the frontend no longer calls the
+backend at all. Kept for the record.
 
 `frontend/src/lib/auth.ts:78-90` — on sign-in, NextAuth POSTs the Google
 `id_token` to `${BACKEND_URL}/api/v1/auth/session` to get a `backendToken`,
@@ -175,7 +179,7 @@ This is the first thing Gate 1 needs a decision on.
 
 | ID | Severity | Category | File:line | Evidence | Why it blocks/degrades "live" | Proposed fix | Risk of fixing | Effort |
 |---|---|---|---|---|---|---|---|---|
-| F-01 | P0 | Decided, deploy pending | `backend/` (the former `frontend/src/lib/auth.ts` `BACKEND_URL` call and `frontend/src/lib/api.ts` client have since been removed) | No backend deployment exists, and the frontend has no integration point with it | Live criteria #3/#4 are false; the entire `backend/` investment is disconnected from the product | **Decided 2026-08-22: (B) deploy, on a free stack.** Code done: dedicated Postgres schema on the existing Supabase project (`app/bootstrap_schema.py`, `Settings.db_schema`), Upstash Redis, Cloud Run scale-to-zero, GitHub Actions cron replacing in-process APScheduler (`.github/workflows/backend-consolidation-cron.yml`, `POST /internal/run-consolidation`). Full steps in PROJECT_STATUS.md. Deploy itself blocked on `gcloud` auth (not available in this environment) and a free Upstash signup, both need you | Low for standing it up alone; cutover (if pursued later) is higher | M, code done, deploy pending your steps |
+| F-01 | P0 | Decided, deploy pending | `backend/` (the former `frontend/src/lib/auth.ts` `BACKEND_URL` call and `frontend/src/lib/api.ts` client have since been removed) | No backend deployment exists, and nothing in the frontend calls it (only an unused `/api/backend` rewrite in `next.config.js` remains) | Live criteria #3/#4 are false; the entire `backend/` investment is disconnected from the product | **Decided 2026-08-22: (B) deploy, on a free stack.** Code done: dedicated Postgres schema on the existing Supabase project (`app/bootstrap_schema.py`, `Settings.db_schema`), Upstash Redis, Cloud Run scale-to-zero, GitHub Actions cron replacing in-process APScheduler (`.github/workflows/backend-consolidation-cron.yml`, `POST /internal/run-consolidation`). Full steps in PROJECT_STATUS.md. Deploy itself blocked on `gcloud` auth (not available in this environment) and a free Upstash signup, both need you | Low for standing it up alone; cutover (if pursued later) is higher | M, code done, deploy pending your steps |
 | F-02 | ~~P0~~ Fixed | Inaccurate/Pending | `supabase/config.toml` (root) vs `frontend/supabase/migrations/*` | **Fixed 2026-08-19.** `config.toml` lives at repo root, so `supabase db push` only ever reads `./supabase/migrations/`; 5 migrations sat in `frontend/supabase/migrations/` and were never applied — confirmed as the live cause of Gmail/Chat ingestion producing zero tasks (`tasks_ingestion_columns.sql`'s own comment names this exact symptom) | RLS hardening, Chat's `conversation_sources` opt-in table, and the `tasks` ingestion columns were all live-missing. Live criterion #5 failed for these 5 | Moved all 5 files into `supabase/migrations/` (filenames already sort in correct chronological order alongside the existing 6, no renumbering needed); verified each is idempotent / has no destructive statements before moving. Takes effect on merge to `main` via the existing `supabase-deploy.yml` | Low (file move; each migration individually reviewed for safety) | S — done |
 | F-03 | P1 | Inaccurate | `backend/app/agents/research.py:44` vs `backend/app/config.py` | `SERPER_API_KEY` is read via bare `os.getenv()`, not through the `Settings` model. Every other key in `.env.example` (incl. `SERPER_API_KEY` itself, documented at line 76) is loaded through `Settings(env_file=".env")`. `os.getenv` does **not** see values that live only in a `.env` file — nothing in `app/` calls `load_dotenv()` | A developer following the documented `.env` workflow sets `SERPER_API_KEY` and it is silently never read; web search silently falls back to Google grounding (or reports "unavailable") with no error pointing at the real cause. (Moot for the live product per F-01 — this only matters if backend/ is kept per path B) | Add `serper_api_key: str = ""` to `Settings`, read via `settings.serper_api_key` | Low | XS |
 | F-04 | ~~P1~~ Resolved | Dependency health | `frontend/package.json` | **Resolved.** The app is on `next@16.3.8`; `npm audit --omit=dev` reports 0 advisories in production dependencies (re-checked 2026-10-13). The remaining high/critical advisories are in dev-only tooling (vitest 2, tailwindcss 3) and are tracked in `frontend/audit-baseline.json` | None for production | Planned majors: vitest 5 and tailwindcss 4, each on its own branch with a full test pass | Medium per migration | M |
@@ -236,10 +240,10 @@ No regressions found.
 | 1 | `main` builds clean from fresh clone | ✅ PASS (frontend verified this session; backend verified in a fresh venv) |
 | 2 | Frontend loads over HTTPS, no console errors | ⚠️ UNVERIFIED — needs a real browser check against the live URL, which this sandbox cannot reach (egress-blocked to the production domain) |
 | 3 | Backend deploys, `/health` returns 200, OpenAPI loads | ❌ FAIL — not deployed anywhere (F-01) |
-| 4 | Frontend↔backend round-trip in production | ❌ FAIL — the only wire is dead (F-01) |
+| 4 | Frontend↔backend round-trip in production | ❌ FAIL - the frontend does not call the backend; deploy decided, pending (F-01) |
 | 5 | Supabase migrations applied & reproducible | ✅ FIXED (F-02) — all 11 migration files now live in `supabase/migrations/`; applies to the live DB once merged to `main` |
 | 6 | Auth end-to-end in production | ⚠️ UNVERIFIED — same egress block as #2; code review says it should work (NextAuth + Google, independent of the dead backend bridge) |
-| 7 | Every required env var documented + validated at boot | ✅ PASS for backend (`Settings` fields with no default raise a clear `ValidationError` at boot) — ⚠️ PARTIAL for frontend, which has no equivalent single boot-time validator (env vars are read ad hoc per route; a missing one degrades a feature rather than failing loudly) |
+| 7 | Every required env var documented + validated at boot | ✅ PASS - backend via `Settings`; frontend via `src/lib/env.ts`, checked by `src/instrumentation.ts`, which fails a production boot on a missing or malformed required var and logs missing optional ones |
 | 8 | No committed secrets | ✅ PASS (pattern scan, not exhaustive — see Unknowns) |
 | 9 | Billing fully working (test) or safely disabled | ⚠️ UNVERIFIED — code is real and complete; live-vs-test key mode needs your confirmation |
 | 10 | Rollback procedure exists and tested | ⚠️ **Documented 2026-08-22** — manual procedure now in [DEVELOPMENT.md](DEVELOPMENT.md) §13 (Vercel promote/rollback for bad deploys, forward-only reversal migrations + point-in-time restore for bad schema changes, env var revert). Not yet exercised in a real drill — "tested" still open |
@@ -260,7 +264,8 @@ No regressions found.
   I checked for a *second deployed project* and found none, which is strong
   evidence, but I didn't enumerate Vercel's env var values for the frontend
   project directly. **Need:** you check, or grant access to read (not just
-  list) that project's env vars.
+  list) that project's env vars. (Update 2026-10-13: moot for the live app,
+  since nothing in the frontend calls the backend.)
 - **Full secret-history scan** — my git-history scan was pattern-based
   (common key prefixes, PEM headers), not a dedicated tool like
   `gitleaks`/`trufflehog`. **Need:** run one of those for full assurance;
@@ -268,13 +273,16 @@ No regressions found.
 - **Domain** — not yet told what to confirm here (⬅ CONFIRM in the brief was
   left blank). Currently serving from `the-third-eye.anchit-tandon.com` per
   code references; confirm this is the intended production domain.
-- **Target hosting for the backend** — genuinely can't recommend Railway vs.
-  Fly vs. Render vs. Vercel Python functions until F-01 is decided; if the
-  answer is "deploy it," I'll research and justify one, with real
-  zero-traffic pricing, before touching anything.
+- **Target hosting for the backend** - decided with F-01 (2026-08-22):
+  Cloud Run scale-to-zero, Postgres in a dedicated schema on the existing
+  Supabase project, Upstash Redis. Deploy blocked on `gcloud` auth and a
+  free Upstash signup.
 
 ---
 
-**GATE 1.** Nothing has been fixed. Waiting for: (a) the F-01 decision, (b)
+Update 2026-10-13: Gate 1 is passed; F-01 is decided (see its row) and the
+fixes since are tracked in the table above.
+
+**GATE 1 (historical).** Nothing has been fixed. Waiting for: (a) the F-01 decision, (b)
 which severities to approve for Phase 2, (c) answers to whatever Unknowns you
 can resolve on your end.
