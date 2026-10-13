@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from
 import { useSession } from "next-auth/react";
 import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder } from "lucide-react";
 import { ChatsPanel } from "./ChatsPanel";
-import { useChatLibrary } from "@/hooks/useChatLibrary";
+import { RecentChats } from "./RecentChats";
+import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -682,20 +683,25 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setShowCheckpoints(false);
   }, [checkpoints, saveCheckpoint, clearPending, tts]);
 
-  function handleClear() {
+  // Leave the current thread. What JARVIS remembers about the user stays.
+  function resetThread() {
     if (isStreaming) abortRef.current?.abort();
     tts.stop();
-    if (messages.length > 0) saveCheckpoint("Before clear");
     isStreamingRef.current = false;
     setMessages([]);
     setLiveBubble(null);
     setApiError(null);
     historyRef.current = [];
-    memoryRef.current = {};
     clearPending();
     setIsStreaming(false);
     setChatId(null);
     dirtyRef.current = false;
+  }
+
+  function handleClear() {
+    if (messages.length > 0) saveCheckpoint("Before clear");
+    resetThread();
+    memoryRef.current = {};
   }
 
   // Each finished turn saves the chat; the first one gives it an id and a title.
@@ -718,8 +724,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
   async function openChat(id: string) {
     const chat = await library.openChat<Message, HistoryEntry>(id);
     if (!chat) return;
-    handleClear();
-    setMessages(chat.messages);
+    resetThread();
+    setMessages(settleMessages(chat.messages));
     historyRef.current = chat.history;
     setChatId(chat.id);
     setProjectId(chat.project_id);
@@ -727,7 +733,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   }
 
   function newChat(inProject: string | null) {
-    handleClear();
+    resetThread();
     setProjectId(inProject);
     setShowChats(false);
   }
@@ -966,7 +972,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
       {/* Conversation */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-5" role="log" aria-label="Conversation" aria-live={isStreaming ? "off" : "polite"} aria-relevant="additions">
-        {isEmpty && <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} persona={persona} speaking={tts.speaking} />}
+        {isEmpty && (
+          <EmptyState userName={userName} supported={stt.supported} onSuggest={sendMessage} persona={persona} speaking={tts.speaking}>
+            <RecentChats chats={library.chats} onOpen={(id) => void openChat(id)} onShowAll={() => setShowChats(true)} />
+          </EmptyState>
+        )}
 
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
 
@@ -1180,7 +1190,7 @@ function VoiceWaveform({ level }: { level: number }) {
   );
 }
 
-function EmptyState({ userName, supported, onSuggest, persona, speaking }: { userName?: string; supported: boolean; onSuggest: (t: string) => void; persona: { name: string; color: string }; speaking: boolean }) {
+function EmptyState({ userName, supported, onSuggest, persona, speaking, children }: { userName?: string; supported: boolean; onSuggest: (t: string) => void; persona: { name: string; color: string }; speaking: boolean; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
@@ -1193,6 +1203,7 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking }: { use
           {supported ? "Just speak — or tap a suggestion below." : "Type below to begin."}
         </p>
       </div>
+      {children}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
         {SUGGESTIONS.map((s) => (
           <button key={s} onClick={() => onSuggest(s)}
