@@ -16,6 +16,10 @@
       "schedule": "30 1 * * *"
     },
     {
+      "path": "/api/cron/dispatch?job=chat_tasks",
+      "schedule": "45 2 * * *"
+    },
+    {
       "path": "/api/cron/scrape-gmail",
       "schedule": "15 2 * * *"
     }

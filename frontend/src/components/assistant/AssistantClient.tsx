@@ -6,6 +6,7 @@ import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Se
 import { ChatsPanel } from "./ChatsPanel";
 import { RecentChats } from "./RecentChats";
 import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
+import { useChatTaskSync } from "@/hooks/useChatTaskSync";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -163,6 +164,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [fileNote, setFileNote] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const library = useChatLibrary();
+  const taskSync = useChatTaskSync();
   const [showChats, setShowChats] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -699,6 +701,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
   // Leave the current thread. What JARVIS remembers about the user stays.
   function resetThread() {
+    taskSync.flush();
     if (isStreaming) abortRef.current?.abort();
     tts.stop();
     isStreamingRef.current = false;
@@ -732,8 +735,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
       updated_at: new Date().toISOString(),
       messages: messages.map((m) => (m.saved ? { ...m, saved: forHistory(m.saved) } : m)),
       history: historyRef.current,
-    });
-  }, [isStreaming, messages, chatId, projectId, library]);
+    }).then(() => taskSync.schedule(id));
+  }, [isStreaming, messages, chatId, projectId, library, taskSync]);
 
   async function openChat(id: string) {
     const chat = await library.openChat<Message, HistoryEntry>(id);
@@ -745,6 +748,20 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setProjectId(chat.project_id);
     setShowChats(false);
   }
+
+  // A task in the tracker links back here with ?chat=<id>.
+  const linkedChat = useRef(false);
+  useEffect(() => {
+    if (!library.ready || linkedChat.current) return;
+    linkedChat.current = true;
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get("chat");
+    if (!id) return;
+    url.searchParams.delete("chat");
+    window.history.replaceState(null, "", url.pathname + url.search);
+    void openChat(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library.ready]);
 
   function newChat(inProject: string | null) {
     resetThread();
