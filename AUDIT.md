@@ -124,7 +124,7 @@ than buried in the table.
   remaining reference is the `/api/backend/:path*` rewrite in
   `frontend/next.config.js`, which nothing in `frontend/src` calls.
 
-### 4.2 — The one wire that existed (historical)
+### 4.2 - The one wire that existed (historical)
 
 Update 2026-10-13: the sign-in POST and `frontend/src/lib/api.ts` described
 below were removed (commit `89cf95a`); the frontend no longer calls the
