@@ -24,6 +24,7 @@ describe("toolCallCascade switches off a retired model", () => {
 
   it("lists the provider's models and retries with a served one", async () => {
     vi.stubEnv("GROQ_API_KEY", "k");
+    vi.stubEnv("GROQ_MODEL", "llama-3.3-70b-versatile");
     vi.stubEnv("OPENAI_API_KEY", "");
     const calls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -50,6 +51,7 @@ describe("free-tier rate limits are per model", () => {
     vi.stubEnv("GROQ_API_KEY", "k");
     vi.stubEnv("OPENAI_API_KEY", "");
     vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("GROQ_MODEL", "llama-3.3-70b-versatile");
     const calls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/models")) return new Response(JSON.stringify({ data: [{ id: "llama-3.3-70b-versatile" }, { id: "openai/gpt-oss-120b" }] }));

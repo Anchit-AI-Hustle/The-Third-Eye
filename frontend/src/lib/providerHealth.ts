@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 // did, so a quota or credit failure seen once benches it everywhere until it can
 // recover, and a model found to work is the one every instance starts with.
 
-export type ProviderStatus = "ok" | "rate_limited" | "quota" | "credit" | "error";
+export type ProviderStatus = "ok" | "rate_limited" | "quota" | "credit" | "misconfigured" | "error";
 
 export interface ProviderHealth {
   provider: string;
@@ -24,6 +24,11 @@ export function classifyFailure(status: number, body: string): { status: Provide
   if (status === 402 || /credit balance|payment required|billing tab|insufficient_quota/i.test(body)) return { status: "credit", ms: 360 * MINUTE };
   if (/exceeded your current quota|per ?day|daily/i.test(body)) return { status: "quota", ms: 60 * MINUTE };
   if (status === 429) return { status: "rate_limited", ms: 2 * MINUTE };
+  // A rejected key, or a model the provider no longer serves even after the
+  // live-model lookup, will not fix itself in minutes; it needs a settings change.
+  if (status === 401 || status === 403 || (status === 404 && /does not exist|not found|no longer|unavailable/i.test(body))) {
+    return { status: "misconfigured", ms: 30 * MINUTE };
+  }
   return null;
 }
 
@@ -69,10 +74,12 @@ async function write(row: Omit<ProviderHealth, "checked_at">) {
   await db.from("provider_health").upsert(full, { onConflict: "provider" });
 }
 
-export async function noteFailure(provider: string, model: string, status: number, body: string) {
+/** retryAfterMs, when the provider sent one, replaces the default wait for a rate limit and can only lengthen the others. */
+export async function noteFailure(provider: string, model: string, status: number, body: string, retryAfterMs?: number) {
   const f = classifyFailure(status, body);
   if (!f) return;
-  await write({ provider, status: f.status, model, reason: body.slice(0, 300), benched_until: new Date(Date.now() + f.ms).toISOString() });
+  const ms = retryAfterMs === undefined ? f.ms : f.status === "rate_limited" ? retryAfterMs : Math.max(f.ms, retryAfterMs);
+  await write({ provider, status: f.status, model, reason: body.slice(0, 300), benched_until: new Date(Date.now() + ms).toISOString() });
 }
 
 /** A success clears any bench; only written when something changed, to keep the hot path cheap. */

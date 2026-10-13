@@ -1,7 +1,7 @@
-import { NextRequest } from "next/server";
+import { llmStatus } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
-// Must reflect the running deployment, not the build that prerendered it —
+// Must reflect the running deployment, not the build that prerendered it -
 // the `commit` field below is how CI proves which code is actually live.
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // Also reports the git commit this deployment was built from, so a stalled
 // Vercel Git integration is detectable in one request instead of by eye.
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const env = process.env;
   const clean = (s?: string) => (s ?? "").replace(/[​‎‏﻿]/g, "").trim();
 
@@ -40,6 +40,8 @@ export async function GET(_req: NextRequest) {
   // Git integration built the deployment. CLI deploys pass the sha in as a
   // build env var instead — written out in full here because Next.js inlines
   // NEXT_PUBLIC_* by literal text match, not through the `env` alias above.
+  const llm = await llmStatus().catch(() => null);
+
   const commit = clean(env.VERCEL_GIT_COMMIT_SHA) || clean(process.env.NEXT_PUBLIC_BUILD_SHA);
 
   return new Response(JSON.stringify({
@@ -47,6 +49,7 @@ export async function GET(_req: NextRequest) {
     ai: llm_available,                 // legacy alias for SettingsClient
     llm_available,
     providers,
+    llm,
     services,
     commit,
     commit_short: commit.slice(0, 7),
