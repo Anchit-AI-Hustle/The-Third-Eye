@@ -464,6 +464,7 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
         model, messages,
         max_tokens: opts.maxTokens ?? 2000,
         temperature: opts.temperature ?? 0.7,
+        ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
       signal,
     });

@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { llmCascade } from "@/lib/llmCascade";
-import { parseJsonBlock } from "@/lib/extract";
+import { z } from "zod";
+import { parseLlmJson, validItems } from "@/lib/llmJson";
 import { saveExtractedTasks, type ExtractedTask, type TaskWorkspace } from "@/lib/tasks";
 import { logActivity } from "@/lib/activity";
 
@@ -76,6 +77,17 @@ function fmtLogLine(l: DeviceLogRow): string {
   return `[${when} · ${l.device}${dur}] ${l.title}${extra ? ` (${extra})` : ""}`;
 }
 
+const nonEmpty = z.string().trim().min(1);
+const TaskUpdate = z.object({ task_id: nonEmpty, update: nonEmpty, status: z.string().optional().catch(undefined) });
+const NewTask = z.object({
+  task_heading: nonEmpty,
+  task_description: z.string().nullish().catch(null),
+  urgency: z.string().nullish().catch(null),
+  deadline: z.string().nullish().catch(null),
+  owner: z.string().nullish().catch(null),
+  workspace: z.string().nullish().catch(null),
+});
+
 export interface LogSyncResult {
   processed: number;
   updated: number;
@@ -83,6 +95,7 @@ export interface LogSyncResult {
   merged: number;
   summary: string | null;
   skipped?: string;
+  partial?: string;
 }
 
 export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult> {
@@ -119,22 +132,42 @@ export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult>
     logs.map(fmtLogLine).join("\n"),
   ].join("\n");
 
-  let parsed: Record<string, unknown>;
+  let raw: string;
   try {
     const out = await llmCascade({
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: user }],
       jsonMode: true,
-      maxTokens: 1500,
+      // 400 log lines can yield many updates; 1500 tokens cut answers off mid-array.
+      maxTokens: 4000,
       temperature: 0.1,
       stage: "log-sync",
       background: true,
     });
-    parsed = parseJsonBlock(out.text);
+    raw = out.text;
   } catch (e) {
-    console.error("log sync extraction failed:", e);
+    console.error("log sync extraction failed:", e instanceof Error ? e.message : e);
     return { processed: 0, updated: 0, inserted: 0, merged: 0, summary: null, skipped: "extraction failed" };
   }
+
+  // Unreadable output leaves the logs pending for the next run; a repaired or
+  // partly invalid one is applied for what it holds, with the reason logged.
+  let parsed: Record<string, unknown>;
+  const reasons: string[] = [];
+  try {
+    const p = parseLlmJson(raw);
+    parsed = p.value;
+    if (p.repaired) reasons.push("output repaired");
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    console.warn("log sync unreadable:", reason);
+    return { processed: 0, updated: 0, inserted: 0, merged: 0, summary: null, skipped: `extraction failed: ${reason}` };
+  }
+  const updates = validItems(parsed.task_updates, TaskUpdate);
+  const created = validItems(parsed.new_tasks, NewTask);
+  if (updates.dropped + created.dropped) reasons.push(`${updates.dropped + created.dropped} invalid item(s) dropped`);
+  const partial = reasons.join("; ") || undefined;
+  if (partial) console.warn("log sync partial:", partial);
 
   const summary = str(parsed.summary);
   const openById = new Map(openTasks.map((t) => [t.id, t]));
@@ -143,12 +176,10 @@ export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult>
 
   // ── apply updates to existing tasks ────────────────────────────────────────
   let updated = 0;
-  const rawUpdates = Array.isArray(parsed.task_updates) ? (parsed.task_updates as Record<string, unknown>[]) : [];
-  for (const u of rawUpdates) {
-    const id = str(u.task_id);
-    const text = str(u.update);
-    const task = id ? openById.get(id) : undefined;
-    if (!task || !text) continue;
+  for (const u of updates.items) {
+    const task = openById.get(u.task_id);
+    if (!task) continue;
+    const text = u.update;
 
     const { data: row } = await sb
       .from("tasks").select("all_updates").eq("id", task.id).eq("user_id", email).maybeSingle();
@@ -170,14 +201,11 @@ export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult>
   }
 
   // ── create new tasks, classified per workspace ─────────────────────────────
-  const rawNew = Array.isArray(parsed.new_tasks) ? (parsed.new_tasks as Record<string, unknown>[]) : [];
   const newTasks: ExtractedTask[] = [];
-  for (const t of rawNew) {
-    const heading = str(t.task_heading);
-    if (!heading) continue;
+  for (const t of created.items) {
     const ws = str(t.workspace);
     newTasks.push({
-      taskHeading: heading,
+      taskHeading: t.task_heading,
       taskDescription: str(t.task_description),
       urgency: str(t.urgency),
       deadline: str(t.deadline),
@@ -206,5 +234,5 @@ export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult>
     context: { processed: logs.length, updated, inserted: saved.inserted, merged: saved.merged, devices },
   });
 
-  return { processed: logs.length, updated, inserted: saved.inserted, merged: saved.merged, summary };
+  return { processed: logs.length, updated, inserted: saved.inserted, merged: saved.merged, summary, partial };
 }

@@ -52,6 +52,21 @@ describe("model IDs come from the providers' current lists", () => {
   });
 });
 
+describe("JSON mode reaches every OpenAI-compatible provider", () => {
+  it("sends response_format json_object to Groq, Cerebras, OpenRouter and Mistral", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c"; process.env.OPENROUTER_API_KEY = "o"; process.env.MISTRAL_API_KEY = "m";
+    const formats: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/models")) return new Response(JSON.stringify({ data: [] }));
+      formats.push(JSON.parse(String(init?.body)).response_format);
+      return new Response(JSON.stringify(okChat.body));
+    }));
+    const { llmCascade } = await import("@/lib/llmCascade");
+    for (const p of ["groq", "cerebras", "openrouter", "mistral"] as const) await llmCascade({ preferProvider: p, jsonMode: true, messages: [{ role: "user", content: "x" }] });
+    expect(formats).toEqual(Array(4).fill({ type: "json_object" }));
+  });
+});
+
 describe("a paid provider chosen by env goes first", () => {
   it("LLM_PRIMARY_PROVIDER moves that provider to the front of the text cascade", async () => {
     process.env.GEMINI_API_KEY = "x".repeat(39); process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "a";
