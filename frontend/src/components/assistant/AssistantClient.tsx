@@ -29,7 +29,7 @@ import { VisionButton } from "./VisionButton";
 import { ActionCard } from "./ActionCard";
 import { ChecklistCard } from "./ChecklistCard";
 import { FileCard } from "./FileCard";
-import type { SavedFile } from "@/lib/fileSave";
+import { forHistory, type SavedFile } from "@/lib/fileSave";
 import { CHECKLIST_TOOLS, type Step } from "@/lib/checklist";
 import { useWakeWord, isNameTrigger, stripWakeTrigger } from "@/hooks/useWakeWord";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
@@ -627,7 +627,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   .filter((fx: { type?: string }) => fx.type === "file")
                   .map((fx: { data: SavedFile }) => fx.data);
                 if (saved.length) {
-                  freshFiles.add(assistantId);
+                  saved.forEach((_: SavedFile, i: number) => freshFiles.add(`${assistantId}:${i}`));
                   setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, saved } : m)));
                 }
                 if (media.length) {
@@ -730,7 +730,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
       title: first.replace(/\s+/g, " ").slice(0, 60),
       project_id: projectId,
       updated_at: new Date().toISOString(),
-      messages,
+      messages: messages.map((m) => (m.saved ? { ...m, saved: forHistory(m.saved) } : m)),
       history: historyRef.current,
     });
   }, [isStreaming, messages, chatId, projectId, library]);
@@ -1291,7 +1291,7 @@ function MessageBubble({ message, session }: { message: Message; session: any })
               {message.streaming && message.content && (
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
-              {message.saved?.map((f) => <FileCard key={f.filename} file={f} auto={freshFiles.has(message.id)} />)}
+              {message.saved?.map((f, i) => <FileCard key={i} file={f} claimAuto={() => freshFiles.delete(`${message.id}:${i}`)} />)}
               {message.media?.map((item) => (
                 <div key={item.url} className="mt-2">
                   {item.kind === "audio" ? (

@@ -6,6 +6,13 @@
 export interface SavedFile { filename: string; mime: string; content: string }
 
 export const MAX_FILE_CHARS = 1_000_000;
+// Chats persist to localStorage (about 5 MB per site), so only small files
+// stay downloadable from history.
+export const KEEP_FILE_CHARS = 200_000;
+
+export function forHistory(files: SavedFile[]): SavedFile[] {
+  return files.map((f) => (f.content.length > KEEP_FILE_CHARS ? { ...f, content: "" } : f));
+}
 
 const EXT: Record<string, string> = {
   "text/html": "html", "text/plain": "txt", "text/csv": "csv", "text/markdown": "md",

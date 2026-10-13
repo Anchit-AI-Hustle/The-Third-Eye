@@ -30,6 +30,7 @@ const BASE_LABELS: Record<string, string> = {
   calculate: "Running the numbers",
   get_current_time: "Checking the time",
   remember: "Remembering that",
+  save_file: "Saving the file",
   web_search: "Searching the web",
   open_app: "Opening the app",
   pay: "Setting up the payment",

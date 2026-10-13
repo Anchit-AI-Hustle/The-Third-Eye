@@ -682,7 +682,7 @@ async function runTool(
       const mime = String(input.mime ?? "") || "text/plain";
       const filename = safeFilename(String(input.filename ?? ""), mime);
       return {
-        result: `${filename} is ready. The app saves it to the user's Downloads folder and opens it, after asking their permission. Tell them it is saved; do not paste the contents.`,
+        result: `${filename} is ready. The app saves it to the user's Downloads folder and opens it once they allow file saving; the chat also shows Save & open and Download buttons for it. Tell them that; do not paste the contents.`,
         sideEffect: { type: "file", data: { filename, mime, content } },
       };
     }

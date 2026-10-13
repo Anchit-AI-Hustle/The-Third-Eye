@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeFilename, viewerHtml, MAX_FILE_CHARS } from "@/lib/fileSave";
+import { safeFilename, viewerHtml, MAX_FILE_CHARS, forHistory, KEEP_FILE_CHARS } from "@/lib/fileSave";
 
 describe("files JARVIS saves for the user", () => {
   it("keeps a plain name and its extension, and strips any path", () => {
@@ -26,5 +26,11 @@ describe("files JARVIS saves for the user", () => {
 
   it("caps file size so a runaway reply cannot fill the browser", () => {
     expect(MAX_FILE_CHARS).toBe(1_000_000);
+  });
+
+  it("keeps small files in chat history and drops the contents of big ones", () => {
+    const small = { filename: "a.csv", mime: "text/csv", content: "a,b" };
+    const big = { filename: "b.html", mime: "text/html", content: "x".repeat(KEEP_FILE_CHARS + 1) };
+    expect(forHistory([small, big])).toEqual([small, { ...big, content: "" }]);
   });
 });

@@ -23,6 +23,8 @@ import { toolLabel } from "@/lib/toolLabels";
 import { classifyOpenUrl } from "@/lib/liveActions";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { saveWithConsent } from "@/components/assistant/FileCard";
+import type { SavedFile } from "@/lib/fileSave";
 
 interface LiveBubble {
   phase: "recording" | "transcribing" | "interim";
@@ -372,6 +374,9 @@ export function VoiceOverlay() {
                   ];
                   applyActions(parsed.sideEffects);
                   openLinks(parsed.sideEffects);
+                  for (const fx of parsed.sideEffects ?? []) {
+                    if (fx.type === "file") void saveWithConsent(fx.data as SavedFile);
+                  }
                   const media = (parsed.sideEffects ?? [])
                     .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)
                     .map((fx: { data: { url: string } }) => fx.data.url)
