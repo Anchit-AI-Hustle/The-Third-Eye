@@ -93,6 +93,52 @@ describe("free tiers first by default", () => {
   });
 });
 
+describe("requests too big for a provider's free per-minute token cap", () => {
+  const tooLarge = { status: 413, body: { error: { message: "Request too large for model `openai/gpt-oss-120b` in organization `org_x` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Requested 12345, please reduce your message size and try again." } } };
+  const big = [{ role: "user" as const, content: "x".repeat(40_000) }];
+  const small = [{ role: "user" as const, content: "hi" }];
+  const lite = { status: 200, body: { choices: [{ message: { content: "from gemini" } }] } };
+
+  it("go to the next provider without benching the one that refused", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.GEMINI_API_KEY = "x".repeat(39);
+    stubFetch({ "api.groq.com": tooLarge, "generativelanguage.googleapis.com": lite });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const out = await toolCallCascade({ messages: big, tools: [] });
+    expect(out.provider).toBe("gemini-lite");
+    expect(health.groq?.benched_until ?? null).toBeNull();
+    expect(calls.filter((c) => c.host === "api.groq.com")).toHaveLength(1);
+  });
+
+  it("skip that provider for requests as big next time, but still use it for small ones", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.GEMINI_API_KEY = "x".repeat(39);
+    let groqHits = 0;
+    stubFetch({ "api.groq.com": () => (groqHits++ === 0 ? tooLarge : okChat), "generativelanguage.googleapis.com": lite });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    await toolCallCascade({ messages: big, tools: [] });
+    calls = [];
+    expect((await toolCallCascade({ messages: big, tools: [] })).provider).toBe("gemini-lite");
+    expect(calls.some((c) => c.host === "api.groq.com")).toBe(false);
+    expect((await toolCallCascade({ messages: small, tools: [] })).provider).toBe("groq");
+  });
+
+  it("treats a 429 that says the request is too large the same way, not as a rate limit", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.GEMINI_API_KEY = "x".repeat(39);
+    stubFetch({ "api.groq.com": { ...tooLarge, status: 429 }, "generativelanguage.googleapis.com": lite });
+    const { llmCascade } = await import("@/lib/llmCascade");
+    expect((await llmCascade({ messages: big })).provider).toBe("gemini-lite");
+    expect(health.groq?.benched_until ?? null).toBeNull();
+    expect(calls.filter((c) => c.host === "api.groq.com")).toHaveLength(1);
+  });
+
+  it("keeps tools working on Gemini Flash when Flash-Lite's quota is spent", async () => {
+    process.env.GEMINI_API_KEY = "x".repeat(39);
+    stubFetch({ "generativelanguage.googleapis.com": (m) => (m.includes("lite") ? { status: 429, body: { error: { message: "You exceeded your current quota" } } } : lite) });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const out = await toolCallCascade({ messages: small, tools: [] });
+    expect(out.provider).toBe("gemini");
+  });
+});
+
 describe("a provider chosen by env goes first", () => {
   it("LLM_PRIMARY_PROVIDER moves that provider to the front, the free order follows", async () => {
     process.env.LLM_PRIMARY_PROVIDER = "anthropic";

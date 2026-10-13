@@ -1931,6 +1931,7 @@ export async function POST(req: NextRequest) {
         // long as Gemini stays rate-limited. Only if every one of those is
         // also unavailable does this drop to the tools-less text cascade below.
         let tier2Handled = false;
+        const toolsRun: string[] = [];
         try {
           const { toolCallCascade, geminiToolsToOpenAI } = await import("@/lib/llmCascade");
           const openAiTools = geminiToolsToOpenAI(tools[0].functionDeclarations);
@@ -1961,6 +1962,7 @@ export async function POST(req: NextRequest) {
               for (const tc of out.tool_calls) send("tool", { name: tc.function.name, input: parseArgs(tc.function.arguments) });
 
               const results = await execute(out.tool_calls.map((tc) => ({ name: tc.function.name, args: parseArgs(tc.function.arguments) })));
+              toolsRun.push(...out.tool_calls.map((tc) => tc.function.name));
               results.forEach((tr, i) => {
                 if (tr.sideEffect) {
                   if (tr.sideEffect.type === "batch" && Array.isArray(tr.sideEffect.data)) sideEffects.push(...tr.sideEffect.data);
@@ -1987,8 +1989,15 @@ export async function POST(req: NextRequest) {
           tier2Handled = true;
           controller.close();
         } catch {
-          // Tier 2 also unavailable (no Groq/Cerebras/Mistral key, or all
-          // rate-limited too) — fall through to tier 3 below.
+          // Tools already ran (a mail may be sent): say so rather than let the
+          // tools-less tier 3 tell the user it cannot act.
+          if (toolsRun.length) {
+            send("text", { text: `Done so far: ${[...new Set(toolsRun)].join(", ")}. No AI provider is free to write the rest of the reply right now, so ask again in a minute to continue.` });
+            send("done", { stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+            tier2Handled = true;
+            controller.close();
+          }
+          // Otherwise tier 2 is unavailable too; fall through to tier 3.
         }
         if (tier2Handled) return;
 

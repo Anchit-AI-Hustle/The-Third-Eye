@@ -48,6 +48,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const u = new URL(url);
     if (u.hostname !== "api.groq.com") return new Response("{}", { status: 500 });
+    if (!groqTurns.length) return new Response(JSON.stringify({ error: { message: "Rate limit reached" } }), { status: 429 });
     if (u.pathname.endsWith("/models")) return new Response(JSON.stringify({ data: [] }));
     groqModels.push(JSON.parse(String(init?.body)).model);
     return new Response(JSON.stringify(groqTurns.shift()));
@@ -63,6 +64,14 @@ describe("/api/chat provider path", () => {
     expect(r.text).toBe("It is evening in Kolkata.");
     expect(r.done).toMatchObject({ stop_reason: "fallback_tools", model: "groq:openai/gpt-oss-120b" });
     expect(groqModels).toEqual(["openai/gpt-oss-120b", "openai/gpt-oss-120b"]);
+  });
+
+  it("says which actions already ran when the provider fails mid-reply, instead of claiming it can't act", async () => {
+    groqTurns = groqTurns.slice(0, 1);
+    const r = await chat({ message: "what time is it?" });
+    expect(r.text).toMatch(/get_current_time/);
+    expect(r.text).not.toMatch(/temporarily unavailable|cannot|can't/i);
+    expect(r.done).toMatchObject({ stop_reason: "partial" });
   });
 
   it("uses native Gemini first for an image, which only it can read", async () => {
