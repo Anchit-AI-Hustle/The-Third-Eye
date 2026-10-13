@@ -30,8 +30,8 @@ that before making frontend changes, it's more current than this file.**
 Redis Streams, pgvector, APScheduler; package `jarvis-backend`) is a
 separately-developed agent/RAG service. It is **not deployed anywhere and
 the live frontend does not call it** — see
-[PROJECT_STATUS.md](PROJECT_STATUS.md) and `AUDIT.md` finding F-01 for the
-open retire-vs-deploy decision. Its architecture below is accurate to
+[PROJECT_STATUS.md](PROJECT_STATUS.md) and `AUDIT.md` finding F-01: decided
+2026-08-22 to deploy on a free stack, deploy blocked on `gcloud` auth and Upstash. Its architecture below is accurate to
 itself but should not be assumed to describe the live app.
 
 `docker-compose.yml` orchestrates Postgres 16, Redis 7, Nginx, n8n,
