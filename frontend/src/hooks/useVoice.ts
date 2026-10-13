@@ -45,17 +45,31 @@ const BARGE_FRAMES = 15;
 
 const words = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
 
-/** A transcript that is mostly words the assistant just said is its own voice heard back, not the user. */
+/**
+ * A transcript that is the assistant's own words heard back: every word but
+ * one in ten appears, in order, in what it just said. A user reply adds words
+ * of its own ("yes, send the email to John") or reorders them, so it passes.
+ */
 export function isEchoOf(transcript: string, spoken: string): boolean {
   const heard = words(transcript);
   if (heard.length < 3) return false;
-  const said = new Set(words(spoken));
-  return heard.filter((w) => said.has(w)).length / heard.length >= 0.7;
+  const said = words(spoken);
+  // Longest common subsequence of the two word lists.
+  let prev = new Array(said.length + 1).fill(0);
+  for (const h of heard) {
+    const row = [0];
+    for (let j = 0; j < said.length; j++) row.push(h === said[j] ? prev[j] + 1 : Math.max(prev[j + 1], row[j]));
+    prev = row;
+  }
+  return heard.length - prev[said.length] <= Math.floor(heard.length * 0.1);
 }
 
-// What the assistant last said, and until when a transcript of it counts as echo.
-const ECHO_TEXT_MS = 8_000;
-const lastSpoken = { text: "", until: 0 };
+// What the assistant last said, when it started, and until when a transcript
+// of it counts as echo (Infinity while it is still speaking). The recognizer
+// hands back its last words within a second or so of the voice stopping.
+const ECHO_TEXT_MS = 1_500;
+const lastSpoken = { text: "", startedAt: 0, until: 0 };
+const ttsSpeaking = () => lastSpoken.until === Infinity;
 
 export function createBargeDetector(now: () => number = Date.now) {
   let since = 0;
@@ -63,8 +77,13 @@ export function createBargeDetector(now: () => number = Date.now) {
   let loud = 0;
   return {
     reset() { since = 0; echo = 0; loud = 0; },
-    /** True once the user has spoken over the assistant's own voice. */
-    check(peak: number): boolean {
+    /**
+     * True once the user has spoken over the assistant. While it is speaking
+     * that means clearly above its own echo; in the short pause after it stops
+     * there is no echo left, so a normal voice counts at once.
+     */
+    check(peak: number, speaking = true): boolean {
+      if (!speaking) return peak >= BARGE_PEAK;
       const t = now();
       if (!since) since = t;
       if (t - since < ECHO_LEARN_MS) { echo = Math.max(echo, peak); return false; }
@@ -115,6 +134,7 @@ function armUtteranceRecorder(
   let floor = 0;
   let speechFrames = 0;
   const barge = createBargeDetector();
+  let replyStart = 0;
 
   const drop = () => {
     parts = [];
@@ -181,7 +201,11 @@ function armUtteranceRecorder(
     analyser.getByteTimeDomainData(time);
     const peak = pcmPeak(time);
     if (suppressed()) {
-      if (!barged && barge.check(peak)) {
+      // A phrase still recording when the reply starts would capture the
+      // assistant's voice along with the user's.
+      if (voiced) drop();
+      if (lastSpoken.startedAt !== replyStart) { replyStart = lastSpoken.startedAt; barge.reset(); }
+      if (!barged && barge.check(peak, ttsSpeaking())) {
         barged = true;
         onBarge();
         drop();
@@ -675,6 +699,9 @@ export function useTTS(voicePreference?: string) {
 
     try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     try { window.speechSynthesis.resume(); } catch { /* noop */ }
+    // A cancelled utterance may never fire onend, which would leave the
+    // "still speaking" marker set.
+    if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
 
     const voices = await waitForVoices(1500);
     const u = new SpeechSynthesisUtterance(clean);
@@ -692,12 +719,13 @@ export function useTTS(voicePreference?: string) {
 
     u.onstart = () => {
       lastSpoken.text = clean;
+      lastSpoken.startedAt = Date.now();
       lastSpoken.until = Infinity;
       setSpeaking(true);
       startKeepalive();
     };
     const finish = () => {
-      lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
       setSpeaking(false);
       stopKeepalive();
       onEnd?.();
@@ -714,7 +742,7 @@ export function useTTS(voicePreference?: string) {
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }
-    if (lastSpoken.until === Infinity) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+    if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
     stopKeepalive();
     setSpeaking(false);
   }, [supported, stopKeepalive]);

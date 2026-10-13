@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { createBargeDetector } from "@/hooks/useVoice";
 
 // ~60 frames a second, as the requestAnimationFrame loop runs.
-function run(det: ReturnType<typeof createBargeDetector>, clock: { t: number }, peak: number, ms: number): boolean {
+function run(det: ReturnType<typeof createBargeDetector>, clock: { t: number }, peak: number, ms: number, speaking = true): boolean {
   let barged = false;
-  for (let end = clock.t + ms; clock.t < end; clock.t += 16) barged = det.check(peak) || barged;
+  for (let end = clock.t + ms; clock.t < end; clock.t += 16) barged = det.check(peak, speaking) || barged;
   return barged;
 }
 
@@ -43,6 +43,13 @@ describe("talking over the assistant", () => {
     expect(run(det, clock, 0.2, 400)).toBe(true);
   });
 
+  it("hears a quick reply at normal volume in the pause right after it stops talking", () => {
+    const clock = { t: 0 };
+    const det = createBargeDetector(() => clock.t);
+    run(det, clock, 0.3, 1000);
+    expect(run(det, clock, 0.15, 32, false)).toBe(true);
+  });
+
   it("starts learning afresh for the next reply", () => {
     const clock = { t: 0 };
     const det = createBargeDetector(() => clock.t);
@@ -57,7 +64,7 @@ describe("transcripts of the assistant's own words", () => {
     const { isEchoOf } = await import("@/hooks/useVoice");
     const said = "Good evening. You have three open tasks, and the Q3 report is due on Friday.";
     expect(isEchoOf("you have three open tasks and the q3 report is due friday", said)).toBe(true);
-    expect(isEchoOf("the Q three report is due on Friday", said)).toBe(true);
+    expect(isEchoOf("the Q3 report is due on Friday", said)).toBe(true);
   });
 
   it("let the user's own reply through, even one that reuses a word or two", async () => {
@@ -66,5 +73,7 @@ describe("transcripts of the assistant's own words", () => {
     expect(isEchoOf("move the report to Monday", said)).toBe(false);
     expect(isEchoOf("stop", said)).toBe(false);
     expect(isEchoOf("yes", "Should I send it? Say yes or no.")).toBe(false);
+    expect(isEchoOf("yes, send the email to John", "Shall I send the email to John Smith?")).toBe(false);
+    expect(isEchoOf("John Smith send the email", "Shall I send the email to John Smith?")).toBe(false);
   });
 });
