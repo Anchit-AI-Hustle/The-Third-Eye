@@ -127,6 +127,31 @@ export function isRetiredModel(status: number, err: string): boolean {
   return (status === 404 || status === 400) && RETIRED.test(err);
 }
 
+// Free tiers cap tokens per minute (Groq's free gpt-oss-120b: 8K), and one chat
+// request with every tool declared is bigger than that. Such a request fails
+// the same way every time, so it is not a reason to bench the provider for
+// everyone: remember the cap and send only requests that fit.
+const TOO_LARGE = /request too large|reduce your message size|request entity too large/i;
+const requestCaps = new Map<string, number>();
+
+export function tooLargeLimit(status: number, err: string): number | null {
+  if (status !== 413 && !TOO_LARGE.test(err)) return null;
+  return Number(err.match(/Limit (\d+)/)?.[1] ?? 0);
+}
+
+export function estimateTokens(payload: unknown): number {
+  return Math.ceil(JSON.stringify(payload).length / 4);
+}
+
+function overCap(provider: string, tokens: number): boolean {
+  const cap = requestCaps.get(provider);
+  return cap !== undefined && tokens > cap;
+}
+
+function noteTooLarge(provider: string, tokens: number, limit: number) {
+  requestCaps.set(provider, Math.min(requestCaps.get(provider) ?? Infinity, limit || tokens - 1, tokens - 1));
+}
+
 export function pickModel(ids: string[], prefs: RegExp[], tried: Set<string>): string | null {
   const usable = ids.filter((id) => id && !tried.has(id) && !NOT_CHAT.test(id));
   for (const p of prefs) {
@@ -163,6 +188,7 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
     const status = res.status ?? 0;
     const err = "err" in res ? String((res as { err?: unknown }).err ?? "") : "";
     const retired = isRetiredModel(status, err);
+    if (tooLargeLimit(status, err) !== null) break;
     if (!retired && (status !== 429 || classifyFailure(status, err)?.status === "credit")) break;
     const next = await servedModel(provider, base, key, tried);
     if (!next) break;
@@ -174,15 +200,24 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["openai", "anthropic", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "mistral"] as const;
+const CLOUD_PROVIDERS = ["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "anthropic", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
-// The first link of the cascade. Set LLM_PRIMARY_PROVIDER to a paid provider
-// whose key has credit (for example "anthropic" or "openai") and every chat,
-// extraction and tool call tries it before the free tiers.
+// Free tiers first, ordered by daily headroom: Groq's free plan serves
+// gpt-oss-120b with per-model quotas (withLiveModel rotates models on a 429);
+// Flash-Lite goes before Flash so Flash's small daily quota stays free for
+// images, which only the native Gemini path can read; Cerebras' trial and
+// OpenRouter's :free models (50 requests a day) and Mistral follow. Paid
+// providers come last, so a key without credit costs nothing until the free
+// ones are exhausted. LLM_PRIMARY_PROVIDER moves one provider to the front.
 export function cascadeOrder(): CloudProvider[] {
   const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
   return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
+}
+
+/** Chat starts on native Gemini only when it is the primary or the message has media only Gemini can read. */
+export function nativeGeminiFirst(hasMedia: boolean): boolean {
+  return hasMedia || cascadeOrder()[0].startsWith("gemini");
 }
 
 /** Providers with a key on this deployment. */
@@ -514,8 +549,13 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const pref = opts.preferProvider;
 
   const order: (CloudProvider | "ollama")[] = pref ? [pref] : [...cascadeOrder(), "ollama"];
+  const tokens = estimateTokens([opts.system, opts.messages]);
 
   for (const provider of order) {
+    if (overCap(provider, tokens)) {
+      attempts.push({ provider, model: "-", ok: false, reason: "skipped: request larger than its per-minute token cap" });
+      continue;
+    }
     // A provider that just failed on quota grounds is certain to fail again
     // within the cooldown window — skip the round-trip (or, worse, a full
     // hang-and-timeout) entirely rather than pay for a call we already know
@@ -585,7 +625,10 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       if (res.ok) { await noteSuccess("ollama", model); return { text: res.text, provider: "ollama", model, attempts }; }
     }
     for (const a of attempts.slice(before)) {
-      if (!a.ok && a.status) await noteFailure(a.provider, a.model, a.status, a.reason ?? "", a.retryAfterMs);
+      if (a.ok || !a.status) continue;
+      const limit = tooLargeLimit(a.status, a.reason ?? "");
+      if (limit !== null) noteTooLarge(a.provider, tokens, limit);
+      else await noteFailure(a.provider, a.model, a.status, a.reason ?? "", a.retryAfterMs);
     }
   }
 
@@ -727,15 +770,17 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
   } finally { clear(); }
 }
 
-// OpenAI-compatible tool callers. Order prefers a paid key that is actually
-// present, then the free tiers, so a Gemini 429 still has somewhere to land.
+// OpenAI-compatible tool callers, sorted by cascadeOrder (free tiers first).
 function toolCapableOrder(): { provider: string; base: string; model: string; key: string }[] {
   const keys = loadKeys();
   const rows: { provider: string; base: string; model: string; key: string }[] = [];
   if (keys.openai[0]) rows.push({ provider: "openai", base: OPENAI_BASE, model: modelFor("openai"), key: keys.openai[0] });
   // Anthropic's OpenAI-compatible endpoint takes the same tools payload.
   if (keys.anthropic) rows.push({ provider: "anthropic", base: ANTHROPIC_BASE, model: modelFor("anthropic"), key: keys.anthropic });
-  if (keys.gemini) rows.push({ provider: "gemini-lite", base: GEMINI_OPENAI_BASE, model: GEMINI_LITE_MODEL, key: keys.gemini });
+  if (keys.gemini) {
+    rows.push({ provider: "gemini-lite", base: GEMINI_OPENAI_BASE, model: GEMINI_LITE_MODEL, key: keys.gemini });
+    rows.push({ provider: "gemini", base: GEMINI_OPENAI_BASE, model: modelFor("gemini"), key: keys.gemini });
+  }
   if (keys.groq) rows.push({ provider: "groq", base: GROQ_BASE, model: modelFor("groq"), key: keys.groq });
   if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
@@ -747,14 +792,17 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
 
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
   const attempts: string[] = [];
+  const tokens = estimateTokens([opts.messages, opts.tools]);
   for (const { provider, base, model, key } of toolCapableOrder()) {
-    const benched = inCooldown(provider) ? "cooling down" : await benchedReason(provider);
+    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(provider) ? "cooling down" : await benchedReason(provider);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
     const { res, model: used } = await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
     if (res.ok) {
       await noteSuccess(provider, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
     }
+    const limit = tooLargeLimit(res.status, res.err);
+    if (limit !== null) { noteTooLarge(provider, tokens, limit); attempts.push(`${provider}:too large`); continue; }
     await noteFailure(provider, used, res.status, res.err, res.retryAfterMs);
     attempts.push(`${provider}:${res.status}`);
     if (res.quota) startCooldown(provider, res.retryAfterMs);

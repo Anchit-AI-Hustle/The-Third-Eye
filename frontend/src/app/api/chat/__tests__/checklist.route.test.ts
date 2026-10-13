@@ -46,6 +46,8 @@ async function chat(body: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.stubEnv("GEMINI_API_KEY", "test");
+  // These script the native Gemini loop, which chat uses first only as primary.
+  vi.stubEnv("LLM_PRIMARY_PROVIDER", "gemini");
   script = [];
 });
 

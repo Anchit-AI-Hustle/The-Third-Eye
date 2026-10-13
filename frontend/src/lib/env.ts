@@ -25,7 +25,7 @@ export const ENV_SCHEMA: EnvVar[] = [
   llm("CEREBRAS_API_KEY", "Cerebras"),
   llm("OPENROUTER_API_KEY", "OpenRouter"),
   llm("MISTRAL_API_KEY", "Mistral"),
-  { name: "LLM_PRIMARY_PROVIDER", required: false, purpose: "paid provider tried first", valid: (v) => PROVIDERS.includes(v.toLowerCase()) },
+  { name: "LLM_PRIMARY_PROVIDER", required: false, purpose: "provider tried first; free tiers lead by default", valid: (v) => PROVIDERS.includes(v.toLowerCase()) },
   { name: "GOOGLE_CLIENT_ID", required: false, purpose: "Google sign-in and Gmail/Calendar connect" },
   { name: "GOOGLE_CLIENT_SECRET", required: false, purpose: "Google sign-in and Gmail/Calendar connect" },
   { name: "CRON_SECRET", required: false, purpose: "scheduled jobs and reminders while the app is closed" },

@@ -67,15 +67,83 @@ describe("JSON mode reaches every OpenAI-compatible provider", () => {
   });
 });
 
-describe("a paid provider chosen by env goes first", () => {
-  it("LLM_PRIMARY_PROVIDER moves that provider to the front of the text cascade", async () => {
-    process.env.GEMINI_API_KEY = "x".repeat(39); process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "a";
-    process.env.LLM_PRIMARY_PROVIDER = "groq";
+describe("free tiers first by default", () => {
+  it("orders free providers by daily headroom, paid ones last", async () => {
+    const { cascadeOrder } = await import("@/lib/llmCascade");
+    expect(cascadeOrder()).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "anthropic", "grok"]);
+  });
+
+  it("sends tool calls to Groq before any paid key, with no env var set", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENAI_API_KEY = "sk-oai";
     stubFetch({ "api.groq.com": okChat });
-    const { llmCascade } = await import("@/lib/llmCascade");
-    const out = await llmCascade({ messages: [{ role: "user", content: "x" }] });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const out = await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] });
     expect(out.provider).toBe("groq");
     expect(calls.map((c) => c.host)).toEqual(["api.groq.com"]);
+  });
+
+  it("keeps chat off native Gemini unless it is the primary or the message carries media", async () => {
+    const { nativeGeminiFirst } = await import("@/lib/llmCascade");
+    expect(nativeGeminiFirst(false)).toBe(false);
+    expect(nativeGeminiFirst(true)).toBe(true);
+    process.env.LLM_PRIMARY_PROVIDER = "gemini";
+    expect(nativeGeminiFirst(false)).toBe(true);
+    process.env.LLM_PRIMARY_PROVIDER = "groq";
+    expect(nativeGeminiFirst(false)).toBe(false);
+  });
+});
+
+describe("requests too big for a provider's free per-minute token cap", () => {
+  const tooLarge = { status: 413, body: { error: { message: "Request too large for model `openai/gpt-oss-120b` in organization `org_x` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Requested 12345, please reduce your message size and try again." } } };
+  const big = [{ role: "user" as const, content: "x".repeat(40_000) }];
+  const small = [{ role: "user" as const, content: "hi" }];
+  const lite = { status: 200, body: { choices: [{ message: { content: "from gemini" } }] } };
+
+  it("go to the next provider without benching the one that refused", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.GEMINI_API_KEY = "x".repeat(39);
+    stubFetch({ "api.groq.com": tooLarge, "generativelanguage.googleapis.com": lite });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const out = await toolCallCascade({ messages: big, tools: [] });
+    expect(out.provider).toBe("gemini-lite");
+    expect(health.groq?.benched_until ?? null).toBeNull();
+    expect(calls.filter((c) => c.host === "api.groq.com")).toHaveLength(1);
+  });
+
+  it("skip that provider for requests as big next time, but still use it for small ones", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.GEMINI_API_KEY = "x".repeat(39);
+    let groqHits = 0;
+    stubFetch({ "api.groq.com": () => (groqHits++ === 0 ? tooLarge : okChat), "generativelanguage.googleapis.com": lite });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    await toolCallCascade({ messages: big, tools: [] });
+    calls = [];
+    expect((await toolCallCascade({ messages: big, tools: [] })).provider).toBe("gemini-lite");
+    expect(calls.some((c) => c.host === "api.groq.com")).toBe(false);
+    expect((await toolCallCascade({ messages: small, tools: [] })).provider).toBe("groq");
+  });
+
+  it("treats a 429 that says the request is too large the same way, not as a rate limit", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.GEMINI_API_KEY = "x".repeat(39);
+    stubFetch({ "api.groq.com": { ...tooLarge, status: 429 }, "generativelanguage.googleapis.com": lite });
+    const { llmCascade } = await import("@/lib/llmCascade");
+    expect((await llmCascade({ messages: big })).provider).toBe("gemini-lite");
+    expect(health.groq?.benched_until ?? null).toBeNull();
+    expect(calls.filter((c) => c.host === "api.groq.com")).toHaveLength(1);
+  });
+
+  it("keeps tools working on Gemini Flash when Flash-Lite's quota is spent", async () => {
+    process.env.GEMINI_API_KEY = "x".repeat(39);
+    stubFetch({ "generativelanguage.googleapis.com": (m) => (m.includes("lite") ? { status: 429, body: { error: { message: "You exceeded your current quota" } } } : lite) });
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const out = await toolCallCascade({ messages: small, tools: [] });
+    expect(out.provider).toBe("gemini");
+  });
+});
+
+describe("a provider chosen by env goes first", () => {
+  it("LLM_PRIMARY_PROVIDER moves that provider to the front, the free order follows", async () => {
+    process.env.LLM_PRIMARY_PROVIDER = "anthropic";
+    const { cascadeOrder } = await import("@/lib/llmCascade");
+    expect(cascadeOrder()).toEqual(["anthropic", "groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"]);
   });
 
   it("puts the primary first for tool calls too, Anthropic through its OpenAI-compatible endpoint", async () => {
@@ -104,7 +172,7 @@ describe("every failure type falls through, then one clear message", () => {
     const { llmCascade, LlmCascadeError, userFacingLlmError } = await import("@/lib/llmCascade");
     const err = await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch((e) => e);
     expect(err).toBeInstanceOf(LlmCascadeError);
-    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["anthropic", "gemini", "gemini-lite", "groq", "cerebras", "openrouter", "mistral"]);
+    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "anthropic"]);
     const msg = userFacingLlmError(err);
     expect(msg).toMatch(/^[A-Z][^{}[\]]+\.$/);
     expect(msg).not.toMatch(/\bat \w|Error:|\{/);
