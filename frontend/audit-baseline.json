@@ -1,0 +1,10 @@
+{
+  "note": "High/critical advisories in dev-only tooling, known and waiting on a major upgrade. Production dependencies are never baselined. Remove an entry once its fix lands; the audit job lists entries that no longer appear.",
+  "known": [
+    { "id": "GHSA-5xrq-8626-4rwp", "package": "vitest", "fix": "vitest 5 (major)" },
+    { "id": "GHSA-5gmw-xhrv-c9v3", "package": "tinypool (via vitest)", "fix": "vitest 5 (major)" },
+    { "id": "GHSA-85c8-ppgw-ccpr", "package": "tinypool (via vitest)", "fix": "vitest 5 (major)" },
+    { "id": "GHSA-fx2h-pf6j-xcff", "package": "vite (via vitest)", "fix": "vitest 5 (major)" },
+    { "id": "GHSA-vfj7-8cjw-p6xm", "package": "braces (via tailwindcss 3, eslint-config-next)", "fix": "tailwindcss 4 (major)" }
+  ]
+}
