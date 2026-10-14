@@ -1,7 +1,22 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Mic, Camera, Monitor, MapPin, Bell, ShieldCheck, FileDown } from "lucide-react";
+import {
+  Mic,
+  Camera,
+  Monitor,
+  MapPin,
+  Bell,
+  ShieldCheck,
+  FileDown,
+  Clipboard,
+  Activity,
+  Eye,
+  Vibrate,
+  Radio,
+  BatteryCharging,
+  Contact,
+} from "lucide-react";
 import {
   PermissionCapability, getPolicy, setPolicy,
 } from "@/lib/consent";
@@ -32,6 +47,13 @@ export const CAP_META: Record<PermissionCapability, CapMeta> = {
   location:      { label: "Location",      icon: MapPin,  reason: "Use where you are for local weather, traffic and nearby search." },
   notifications: { label: "Notifications", icon: Bell,    reason: "Send reminders, daily briefings and urgent task alerts." },
   files:         { label: "Save & open files", icon: FileDown, reason: "Save files JARVIS makes for you to your Downloads folder and open them in a new tab.", devicePrompt: false },
+  clipboard:     { label: "Clipboard & Quick Actions", icon: Clipboard, reason: "Read copied text to analyze, and copy code or links directly for you." },
+  motion:        { label: "Motion & Physical Gestures", icon: Activity, reason: "Detect physical gestures (e.g. shake to activate JARVIS, double tap, device tilts)." },
+  wakeLock:      { label: "Stay Awake / Wake Lock", icon: Eye, reason: "Keep the screen active during hands-free calls, voice briefings, and active protocols.", devicePrompt: false },
+  vibration:     { label: "Haptic Alerts & Vibration", icon: Vibrate, reason: "Vibrate your device for timer alarms, critical alerts, and voice confirmations.", devicePrompt: false },
+  bluetooth:     { label: "Bluetooth & Smart Hub", icon: Radio, reason: "Connect to local smart home hubs, IoT devices, and Bluetooth peripherals." },
+  battery:       { label: "Battery & Power Diagnostics", icon: BatteryCharging, reason: "Monitor device battery levels to warn of low power and optimize tasks.", devicePrompt: false },
+  contacts:      { label: "Contacts & Direct Outreach", icon: Contact, reason: "Access contacts for instant phone dialing, WhatsApp, and SMS outreach." },
 };
 
 type Resolver = (ok: boolean) => void;
