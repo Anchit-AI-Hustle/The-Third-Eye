@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder, ExternalLink, ArrowUpRight, MessageCircle, Mail } from "lucide-react";
 import { ChatsPanel } from "./ChatsPanel";
 import { RecentChats } from "./RecentChats";
 import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
@@ -46,6 +46,15 @@ import { toolLabel } from "@/lib/toolLabels";
 // check); files in reopened chats only act when their buttons are clicked.
 const freshFiles = new Set<string>();
 
+export interface MessageLink {
+  url: string;
+  nativeUrl?: string;
+  label?: string;
+  action?: string;
+  to?: string;
+  message?: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -57,6 +66,7 @@ interface Message {
   checklist?: Step[];
   files?: string[];
   saved?: SavedFile[];
+  links?: MessageLink[];
 }
 
 function readAsBase64(file: File): Promise<string> {
@@ -173,11 +183,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
   // chat doesn't bump it to the top of the list.
   const dirtyRef = useRef(false);
 
-  async function addFiles(list: FileList | null) {
-    if (!list?.length) return;
+  const addFiles = useCallback(async (list: FileList | File[] | null) => {
+    if (!list) return;
+    const array = Array.from(list);
+    if (!array.length) return;
     setFileNote(null);
     const next = [...files];
-    for (const f of Array.from(list)) {
+    for (const f of array) {
       const used = next.reduce((n, a) => n + a.size, 0);
       if (next.length >= MAX_ATTACHMENTS) { setFileNote(`Up to ${MAX_ATTACHMENTS} files per message.`); break; }
       if (used + f.size > MAX_ATTACHMENT_BYTES) { setFileNote(`"${f.name}" is too large — files can total 3 MB per message.`); continue; }
@@ -185,7 +197,45 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }
     setFiles(next);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }
+  }, [files]);
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items || items.length === 0) return;
+    const filesToUpload: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) filesToUpload.push(file);
+      }
+    }
+    if (filesToUpload.length > 0) {
+      e.preventDefault();
+      await addFiles(filesToUpload);
+    }
+  }, [addFiles]);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer?.files?.length) {
+      await addFiles(e.dataTransfer.files);
+    }
+  }, [addFiles]);
+
   const memoryRef = useRef<Record<string, string>>({});
   const abortRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
@@ -615,10 +665,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     localStorage.setItem(`jarvis_memory_v1_${email}`, JSON.stringify(parsed.memory));
                   }
                 }
+                const links: MessageLink[] = (parsed.sideEffects ?? [])
+                  .filter((fx: any) => fx.type === "open_url" && fx.data?.url)
+                  .map((fx: any) => ({
+                    url: String(fx.data.url),
+                    nativeUrl: fx.data.nativeUrl ? String(fx.data.nativeUrl) : undefined,
+                    label: fx.data.label ? String(fx.data.label) : undefined,
+                    action: fx.data.action ? String(fx.data.action) : undefined,
+                    to: fx.data.to ? String(fx.data.to) : undefined,
+                    message: fx.data.message ? String(fx.data.message) : undefined,
+                  }));
+
+                let effectiveContent = fullText;
+                if (!effectiveContent.trim() || effectiveContent.trim() === "...") {
+                  if (links.length) {
+                    effectiveContent = `I've prepared ${links.map((l) => l.label || "the action").join(", ")}. Tap below to proceed:`;
+                  }
+                  fullText = effectiveContent;
+                }
+
                 historyRef.current = [
                   ...historyRef.current,
                   { role: "user", content: msg },
-                  { role: "assistant", content: fullText },
+                  { role: "assistant", content: effectiveContent },
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
                 openLinks(parsed.sideEffects);
@@ -639,7 +708,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     return { ...m, media, content: missing.length ? `${m.content}\n\n${missing.join("\n")}` : m.content };
                   }));
                 }
-                tts.speak(fullText);
+                if (links.length || effectiveContent !== fullText) {
+                  setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: effectiveContent, links } : m)));
+                }
+                tts.speak(effectiveContent);
               }
             } catch { /* non-JSON */ }
             eventType = "";
@@ -1050,7 +1122,15 @@ export function AssistantClient({ userName }: { userName?: string }) {
       </div>
 
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
-      <div className="flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base">
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "flex-none px-4 sm:px-8 py-4 border-t border-border-default bg-background-base transition-colors",
+          isDragging && "bg-accent-blue/10 border-accent-blue/50 ring-2 ring-accent-blue/30"
+        )}
+      >
         {pendingOpens.length > 0 && (
           <div className="flex items-center flex-wrap gap-2 mb-2 px-3 py-2 rounded-input bg-success/10 border border-success/25 animate-fade-in">
             <span className="text-xs text-text-secondary flex-none">Tap to open:</span>
@@ -1078,7 +1158,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {files.map((f, i) => (
               <span key={i} className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-badge bg-background-surface border border-border-default text-text-secondary">
-                <FileText size={11} /> <span className="max-w-[180px] truncate">{f.name}</span>
+                {f.mimeType.startsWith("image/") ? (
+                  <img src={`data:${f.mimeType};base64,${f.data}`} alt="" className="w-4 h-4 rounded object-cover flex-none" />
+                ) : (
+                  <FileText size={11} />
+                )}
+                <span className="max-w-[180px] truncate">{f.name}</span>
                 <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}
                   className="text-text-muted hover:text-text-primary"><X size={11} /></button>
               </span>
@@ -1095,7 +1180,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 cursor-text focus-within:border-border-hover transition-colors">
           <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
             onChange={(e) => void addFiles(e.target.files)} />
-          <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, text" aria-label="Attach files"
+          <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, code, text" aria-label="Attach files"
             className="flex-none self-center p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
             <Paperclip size={15} />
           </button>
@@ -1124,6 +1209,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
             aria-label="Message input"
             rows={1}
@@ -1326,6 +1412,62 @@ function MessageBubble({ message, session }: { message: Message; session: any })
                   </button>
                 </div>
               ))}
+              {message.links && message.links.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3 pt-2.5 border-t border-border-default/60">
+                  {message.links.map((link, idx) => {
+                    const isWhatsApp = link.action === "whatsapp" || link.url.includes("wa.me") || link.url.startsWith("whatsapp:");
+                    const isCall = link.action === "call" || link.url.startsWith("tel:");
+                    const isSms = link.action === "sms" || link.url.startsWith("sms:");
+                    const isEmail = link.action === "email" || link.url.startsWith("mailto:");
+
+                    const handleClick = () => {
+                      if (link.nativeUrl) {
+                        try { window.location.href = link.nativeUrl; } catch {}
+                        setTimeout(() => {
+                          try { window.open(link.url, "_blank", "noopener,noreferrer"); } catch {}
+                        }, 600);
+                      } else if (/^https?:/i.test(link.url)) {
+                        window.open(link.url, "_blank", "noopener,noreferrer");
+                      } else {
+                        window.location.href = link.url;
+                      }
+                    };
+
+                    let btnClass = "bg-accent-blue/15 hover:bg-accent-blue/25 text-accent-blue border-accent-blue/30";
+                    let IconComp = ExternalLink;
+
+                    if (isWhatsApp) {
+                      btnClass = "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border-emerald-500/40";
+                      IconComp = MessageCircle;
+                    } else if (isCall) {
+                      btnClass = "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border-emerald-500/40";
+                      IconComp = Phone;
+                    } else if (isSms) {
+                      btnClass = "bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border-sky-500/40";
+                      IconComp = MessageSquare;
+                    } else if (isEmail) {
+                      btnClass = "bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border-purple-500/40";
+                      IconComp = Mail;
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={handleClick}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-card text-xs font-medium border transition-colors shadow-sm",
+                          btnClass
+                        )}
+                      >
+                        <IconComp size={13} />
+                        <span>{link.label || "Open"}</span>
+                        <ArrowUpRight size={11} className="opacity-70" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
         </div>
