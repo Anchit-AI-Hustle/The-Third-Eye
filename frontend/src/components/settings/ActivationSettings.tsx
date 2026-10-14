@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Mic, Smartphone, Keyboard, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
@@ -32,10 +32,10 @@ export function ActivationSettings() {
     return () => clearTimeout(t);
   }, [saved]);
 
-  function set<K extends keyof typeof config>(key: K, value: (typeof config)[K]) {
+  const set = useCallback(<K extends keyof typeof config>(key: K, value: (typeof config)[K]) => {
     update(key, value);
     setSaved(true);
-  }
+  }, [update]);
 
   useEffect(() => {
     if (!recording) return;
@@ -59,7 +59,8 @@ export function ActivationSettings() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [recording]);
+  }, [recording, set]);
+
 
   return (
     <div className="space-y-4">
