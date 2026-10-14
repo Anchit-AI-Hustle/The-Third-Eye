@@ -2,7 +2,7 @@ import { isInternalLink, resolveAppLink } from "@/lib/appLinks";
 
 export type OpenKind = "internal" | "web" | "scheme" | "reject";
 
-const SCHEME = /^(mailto|tel|sms|upi):/i;
+const SCHEME = /^(mailto|tel|sms|upi|whatsapp):/i;
 
 /** How the client should open a side-effect URL. */
 export function classifyOpenUrl(url: string): OpenKind {

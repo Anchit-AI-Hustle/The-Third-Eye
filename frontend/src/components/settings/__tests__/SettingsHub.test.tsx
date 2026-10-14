@@ -6,6 +6,8 @@ vi.mock("@/components/settings/SettingsClient", () => ({
   SettingsClient: () => <div>Account body</div>,
 }));
 vi.mock("@/components/settings/ConnectionsCard", () => ({ ConnectionsCard: () => null }));
+vi.mock("@/components/settings/WhatsAppCard", () => ({ WhatsAppCard: () => null }));
+vi.mock("@/components/settings/DeviceSyncCard", () => ({ DeviceSyncCard: () => null }));
 vi.mock("@/components/settings/AutomationsCard", () => ({ AutomationsCard: () => null }));
 vi.mock("@/components/settings/PermissionsCard", () => ({ PermissionsCard: () => null }));
 vi.mock("@/components/settings/AgentProfileManager", () => ({

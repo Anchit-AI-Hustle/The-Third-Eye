@@ -38,6 +38,7 @@ import { gatherResearchRounds } from "@/lib/deepResearch";
 import { anchorStatus } from "@/lib/anchor";
 import { modelFor } from "@/lib/llmCascade";
 import { CHECKLIST_INSTRUCTION, CHECKLIST_TOOLS, Checklist, classifyResult, resumeNote } from "@/lib/checklist";
+import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -353,6 +354,7 @@ interface RunContext {
   notes: Array<{ id: string; title: string; content: string }>;
   goals: any[];
   expenses: Array<{ id?: string; amount: number; category?: string; note?: string; gst_rate?: number | null; spent_on?: string }>;
+  contacts?: Array<{ id?: string; name: string; phone?: string; email?: string; relationship?: string; notes?: string }>;
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
   tier: Tier;
@@ -567,14 +569,46 @@ async function runTool(
 
     case "communicate": {
       const action = input.action ?? "email";
+      let raw = String(input.to || input.number || "").trim();
+      const message = String(input.message ?? "").trim();
+
+      // Resolve contact from synced device contacts if raw is a name/relationship
+      if (raw && ctx.contacts && ctx.contacts.length > 0) {
+        const rawLower = raw.toLowerCase();
+        const matched = ctx.contacts.find((c) =>
+          c.name.toLowerCase() === rawLower ||
+          c.name.toLowerCase().includes(rawLower) ||
+          (c.relationship && c.relationship.toLowerCase() === rawLower)
+        );
+        if (matched) {
+          if (action === "email" && matched.email) {
+            raw = matched.email;
+          } else if (matched.phone) {
+            raw = matched.phone;
+          }
+        }
+      }
+
       if (action === "whatsapp") {
-        const raw = String(input.to || input.number || "").trim();
-        const message = String(input.message ?? "").trim();
         // Normalize phone number for wa.me / whatsapp:// (strip non-digits, auto-prepend 91 if 10 digits)
         let cleanDigits = raw.replace(/[^\d+]/g, "");
         if (/^0\d{10}$/.test(cleanDigits)) cleanDigits = "91" + cleanDigits.slice(1);
         else if (/^\d{10}$/.test(cleanDigits)) cleanDigits = "91" + cleanDigits;
         else if (cleanDigits.startsWith("+")) cleanDigits = cleanDigits.slice(1);
+
+        // If WhatsApp Cloud API is configured, dispatch directly via Meta Graph API
+        if (whatsappConfigured() && cleanDigits && message) {
+          try {
+            const sent = await sendWhatsAppText(cleanDigits, message);
+            if (sent) {
+              return {
+                result: `WhatsApp message successfully sent directly to +${cleanDigits}: "${message}".`,
+              };
+            }
+          } catch (err) {
+            console.error("WhatsApp direct send failed, falling back to deep link:", err);
+          }
+        }
 
         const webUrl = cleanDigits
           ? `https://wa.me/${cleanDigits}?text=${encodeURIComponent(message)}`
@@ -1341,6 +1375,7 @@ interface ChatRequest {
   goals?: any[];
   notes?: Array<{ id: string; title: string; content: string }>;
   expenses?: Array<{ id?: string; amount: number; category?: string; note?: string; gst_rate?: number | null; spent_on?: string }>;
+  contacts?: Array<{ id?: string; name: string; phone?: string; email?: string; relationship?: string; notes?: string }>;
   accessToken?: string;
   location?: { latitude: number; longitude: number; label?: string };
   deviceInfo?: Record<string, unknown>;
@@ -1610,7 +1645,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json()) as ChatRequest;
   const {
     history = [], memory: clientMemory = {}, userName,
-    tasks = [], docs = [], goals = [], notes = [], expenses = [], location, deviceInfo,
+    tasks = [], docs = [], goals = [], notes = [], expenses = [], contacts = [], location, deviceInfo,
     agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist,
   } = body;
   const attachments = cleanAttachments(body.attachments);
@@ -1757,6 +1792,13 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Knowledge base** (${docs.length} docs — use search_knowledge):\n${docList}`;
   }
 
+  if (contacts.length > 0) {
+    const contactSummary = contacts.slice(0, 50).map((c: any) =>
+      `- ${c.name}${c.relationship ? ` (${c.relationship})` : ""}: ${[c.phone ? `Phone: ${c.phone}` : null, c.email ? `Email: ${c.email}` : null].filter(Boolean).join(" · ")}`
+    ).join("\n");
+    systemInstruction += `\n\n**Synced Device Contacts** (${contacts.length}):\n${contactSummary}\nWhen the user asks to call, text, WhatsApp, or email someone by name or relationship (e.g. "Mom", "Rohit"), look up their contact details here or pass their name to communicate.`;
+  }
+
   if (location) {
     const where = location.label ? ` (${location.label})` : "";
     systemInstruction += `\n\n**Operator location:** ${location.latitude.toFixed(3)}, ${location.longitude.toFixed(3)}${where}. Use this for nearby/weather/traffic-style queries without asking for coords. Never reveal raw coordinates unless asked.`;
@@ -1810,7 +1852,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, accessToken, location, tier: effectiveTier, email, attachedText: attachedText(attachments) };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, contacts, accessToken, location, tier: effectiveTier, email, attachedText: attachedText(attachments) };
   const checklist = Checklist.resume(priorChecklist);
 
   const stream = new ReadableStream({

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Check, ExternalLink, Loader2, Plug, Plus, Trash2 } from "lucide-react";
 import { ConnectionsCard } from "@/components/settings/ConnectionsCard";
+import { WhatsAppCard } from "@/components/settings/WhatsAppCard";
+import { DeviceSyncCard } from "@/components/settings/DeviceSyncCard";
 import { cn } from "@/lib/utils";
 
 interface Connector { id: string; name: string; host: string; enabled: boolean; tool_count: number }
@@ -60,6 +62,10 @@ export function ConnectorsClient() {
       <section>
         <h2 className="hud-label text-text-muted mb-2">Built in</h2>
         <ConnectionsCard />
+        <div className="mt-5">
+          <WhatsAppCard />
+        </div>
+        <DeviceSyncCard />
       </section>
 
       <section className="rounded-card border border-border-default bg-background-surface/30 p-4 sm:p-5">

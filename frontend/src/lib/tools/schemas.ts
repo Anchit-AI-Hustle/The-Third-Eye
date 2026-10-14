@@ -198,8 +198,8 @@ export const geminiTools = [
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["whatsapp", "sms", "email", "call", "read_emails"], description: "Communication channel" },
-            to: { type: "STRING", description: "Recipient (phone number or email)" },
-            number: { type: "STRING", description: "Phone number (for sms/call)" },
+            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Mom')" },
+            number: { type: "STRING", description: "Phone number or contact name (for sms/call/whatsapp)" },
             message: { type: "STRING", description: "Message text" },
             subject: { type: "STRING", description: "Email subject (for email)" },
             body: { type: "STRING", description: "Email body (for email)" },

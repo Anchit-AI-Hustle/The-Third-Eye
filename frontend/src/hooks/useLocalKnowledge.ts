@@ -34,7 +34,8 @@ function chunkText(text: string): string[] {
   return chunks.length > 0 ? chunks : [text];
 }
 
-const TEXT_TYPES = new Set([".txt", ".md", ".markdown", ".csv", ".json", ".js", ".ts", ".py", ".html", ".xml", ".yaml", ".yml"]);
+const TEXT_TYPES = new Set([".txt", ".md", ".markdown", ".csv", ".json", ".js", ".ts", ".py", ".html", ".xml", ".yaml", ".yml", ".sh", ".env", ".sql"]);
+const IMAGE_TYPES = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"]);
 
 function getExt(name: string): string {
   const i = name.lastIndexOf(".");
@@ -47,6 +48,15 @@ function readFileAsText(file: File): Promise<string> {
     reader.onload = (e) => resolve(e.target?.result as string ?? "");
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
+  });
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target?.result as string ?? "");
+    reader.onerror = () => reject(new Error("Failed to read photo/image"));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -106,6 +116,26 @@ export function useLocalKnowledge() {
       const id = crypto.randomUUID();
       const title = file.name;
 
+      if (IMAGE_TYPES.has(ext)) {
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          const sizeKb = Math.round(file.size / 1024);
+          const description = `[Photo/Image: ${title} (${sizeKb} KB, ${file.type || "image"})]\nEmbedded image data: ${dataUrl.slice(0, 150)}...`;
+          newDocs.push({
+            id, title, content: description, file_type: ext.replace(".", "") || "image",
+            file_size_bytes: file.size, created_at: new Date().toISOString(),
+            chunk_count: 1, processing_status: "ready",
+          });
+        } catch {
+          newDocs.push({
+            id, title, content: "", file_type: ext.replace(".", ""),
+            file_size_bytes: file.size, created_at: new Date().toISOString(),
+            chunk_count: 0, processing_status: "failed", error: "Failed to read photo.",
+          });
+        }
+        continue;
+      }
+
       if (!TEXT_TYPES.has(ext) && ext !== "") {
         newDocs.push({
           id, title, content: "", file_type: ext.replace(".", ""),
@@ -152,6 +182,41 @@ export function useLocalKnowledge() {
     return newDocs;
   }, []);
 
+  const syncDeviceFolder = useCallback(async (): Promise<{ count: number; error?: string }> => {
+    if (typeof window === "undefined") return { count: 0, error: "Window not available" };
+    try {
+      const w = window as any;
+      if (!("showDirectoryPicker" in w)) {
+        return { count: 0, error: "Directory picker is only supported on Chromium browsers (Chrome, Edge, Opera, Brave) and Desktop Safari." };
+      }
+      const dirHandle = await w.showDirectoryPicker();
+      const collectedFiles: File[] = [];
+      async function scanDir(handle: any, depth = 0) {
+        if (depth > 3) return;
+        for await (const entry of handle.values()) {
+          if (entry.kind === "file") {
+            const ext = getExt(entry.name);
+            if (TEXT_TYPES.has(ext) || IMAGE_TYPES.has(ext)) {
+              try {
+                const file = await entry.getFile();
+                collectedFiles.push(file);
+              } catch {}
+            }
+          } else if (entry.kind === "directory" && !entry.name.startsWith(".")) {
+            await scanDir(entry, depth + 1);
+          }
+        }
+      }
+      await scanDir(dirHandle);
+      if (!collectedFiles.length) return { count: 0, error: "No readable documents, code files, or photos found in the selected folder." };
+      const uploaded = await upload(collectedFiles);
+      return { count: uploaded.length };
+    } catch (err: any) {
+      if (err?.name === "AbortError") return { count: 0 };
+      return { count: 0, error: err?.message || "Folder selection cancelled or failed." };
+    }
+  }, [upload]);
+
   const remove = useCallback(async (id: string) => {
     setDocs((prev) => {
       const next = prev.filter((d) => d.id !== id);
@@ -162,5 +227,5 @@ export function useLocalKnowledge() {
     fetch(`/api/cortex/ingest?docId=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
   }, []);
 
-  return { docs, ready, uploading, upload, remove };
+  return { docs, ready, uploading, upload, remove, syncDeviceFolder };
 }
