@@ -127,7 +127,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
       onMobileClose();
     }
     prevPathnameRef.current = pathname;
-  }, [pathname]);
+  }, [pathname, mobileOpen, onMobileClose]);
+
 
   return (
     <>

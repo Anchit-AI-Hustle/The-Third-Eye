@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 // Route-segment error boundary. Without one, any thrown error in a client
 // component collapses the whole app into Next.js's opaque "a client-side
@@ -14,7 +15,6 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // eslint-disable-next-line no-console
     console.error("App error boundary:", error);
   }, [error]);
 
@@ -39,14 +39,15 @@ export default function Error({
           >
             Try again
           </button>
-          <button
-            onClick={() => { if (typeof window !== "undefined") window.location.href = "/"; }}
-            className="px-4 py-2 rounded-input border border-border-default text-text-secondary text-sm hover:text-text-primary transition-colors"
+          <Link
+            href="/"
+            className="px-4 py-2 rounded-input border border-border-default text-text-secondary text-sm hover:text-text-primary transition-colors inline-block text-center"
           >
             Go home
-          </button>
+          </Link>
         </div>
       </div>
     </div>
   );
 }
+
