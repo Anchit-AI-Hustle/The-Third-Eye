@@ -573,14 +573,31 @@ async function runTool(
       const message = String(input.message ?? "").trim();
 
       // Resolve contact from synced device contacts if raw is a name/relationship
-      if (raw && ctx.contacts && ctx.contacts.length > 0) {
+      let resolvedName = "";
+      let contactPool: any[] = ctx.contacts || [];
+
+      // If client contacts didn't match or were empty, also check server-side jarvis_memory
+      if (ctx.email && (!contactPool || contactPool.length === 0)) {
+        try {
+          const db = getDb();
+          if (db) {
+            const row = await db.from("jarvis_memory").select("value").eq("user_id", ctx.email).eq("key", "device_contacts").maybeSingle();
+            if (row?.data?.value) {
+              const parsed = JSON.parse(row.data.value);
+              if (Array.isArray(parsed)) contactPool = parsed;
+            }
+          }
+        } catch {}
+      }
+
+      if (raw && contactPool.length > 0) {
         const rawLower = raw.toLowerCase();
-        const matched = ctx.contacts.find((c) =>
-          c.name.toLowerCase() === rawLower ||
-          c.name.toLowerCase().includes(rawLower) ||
+        const matched = contactPool.find((c: any) =>
+          (c.name && (c.name.toLowerCase() === rawLower || c.name.toLowerCase().includes(rawLower))) ||
           (c.relationship && c.relationship.toLowerCase() === rawLower)
         );
         if (matched) {
+          resolvedName = matched.name;
           if (action === "email" && matched.email) {
             raw = matched.email;
           } else if (matched.phone) {
@@ -596,13 +613,19 @@ async function runTool(
         else if (/^\d{10}$/.test(cleanDigits)) cleanDigits = "91" + cleanDigits;
         else if (cleanDigits.startsWith("+")) cleanDigits = cleanDigits.slice(1);
 
+        // If cleanDigits is empty, check if input.number has digits
+        if (!cleanDigits && input.number) {
+          const d = String(input.number).replace(/[^\d+]/g, "");
+          if (d.length >= 7) cleanDigits = d.startsWith("+") ? d.slice(1) : d;
+        }
+
         // If WhatsApp Cloud API is configured, dispatch directly via Meta Graph API
         if (whatsappConfigured() && cleanDigits && message) {
           try {
             const sent = await sendWhatsAppText(cleanDigits, message);
             if (sent) {
               return {
-                result: `WhatsApp message successfully sent directly to +${cleanDigits}: "${message}".`,
+                result: `WhatsApp message successfully sent directly to ${resolvedName ? `${resolvedName} (+${cleanDigits})` : `+${cleanDigits}`}: "${message}".`,
               };
             }
           } catch (err) {
@@ -617,11 +640,17 @@ async function runTool(
           ? `whatsapp://send?phone=${cleanDigits}&text=${encodeURIComponent(message)}`
           : `whatsapp://send?text=${encodeURIComponent(message)}`;
 
+        const displayRecipient = resolvedName
+          ? `${resolvedName} (+${cleanDigits})`
+          : (cleanDigits ? `+${cleanDigits}` : raw || "recipient");
+
         return {
-          result: `WhatsApp link ready: ${webUrl}. Prepared WhatsApp message to ${raw || cleanDigits || "recipient"}: "${message}". Click the WhatsApp button or link to send.`,
+          result: cleanDigits
+            ? `WhatsApp link ready: ${webUrl}. Prepared WhatsApp message to ${displayRecipient}: "${message}". Click the WhatsApp button or link to send.`
+            : `Prepared WhatsApp message for ${raw || "recipient"}: "${message}". Click Open WhatsApp to select ${raw || "recipient"} from your chat list, or add their phone number in Settings → Device Connectors. WhatsApp link: ${webUrl}`,
           sideEffect: {
             type: "open_url",
-            data: { url: webUrl, nativeUrl, label: "Open WhatsApp", action: "whatsapp", to: raw || cleanDigits, message }
+            data: { url: webUrl, nativeUrl, label: "Open WhatsApp", action: "whatsapp", to: raw || cleanDigits, message, missingPhone: !cleanDigits }
           },
         };
       }

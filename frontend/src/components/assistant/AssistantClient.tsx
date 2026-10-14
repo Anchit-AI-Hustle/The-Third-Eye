@@ -54,6 +54,7 @@ export interface MessageLink {
   action?: string;
   to?: string;
   message?: string;
+  missingPhone?: boolean;
 }
 
 interface Message {
@@ -251,7 +252,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { notes } = useLocalNotes();
   const { goals } = useLocalGoals();
   const { expenses } = useLocalExpenses();
-  const { contacts } = useLocalContacts();
+  const { contacts, addContact } = useLocalContacts();
   const applyActions = useAgentActions();
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
   const {
@@ -1095,7 +1096,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
           </EmptyState>
         )}
 
-        {messages.map((msg) => <MessageBubble key={msg.id} message={msg} session={session} />)}
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} />
+        ))}
 
         {pendingActions.map((a) => (
           <ActionCard key={a.id} action={a} onConfirm={() => confirmAction(a)} onCancel={() => cancelAction(a.id)} />
@@ -1189,107 +1192,123 @@ export function AssistantClient({ userName }: { userName?: string }) {
             e.preventDefault();
             textareaRef.current?.focus();
           }}
-          className="flex items-end gap-2 bg-background-surface border border-border-default rounded-card px-3 py-2.5 cursor-text focus-within:border-border-hover transition-colors">
-          <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
-            onChange={(e) => void addFiles(e.target.files)} />
-          <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, code, text" aria-label="Attach files"
-            className="flex-none self-center p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
-            <Paperclip size={15} />
-          </button>
-          {/* Mode chip: Chat ▾ → Narrate */}
-          <div className="relative flex-none self-stretch flex items-center">
-            {modeMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />}
-            <button type="button" onClick={() => setModeMenuOpen((v) => !v)} aria-haspopup="true" aria-expanded={modeMenuOpen}
-              className="flex items-center gap-1.5 text-accent-blue bg-accent-blue/10 border border-accent-blue/25 rounded-input px-2.5 py-1.5 text-xs font-medium transition-colors hover:border-accent-blue/50">
-              <MessageSquare size={13} /> Chat <ChevronDown size={11} className="opacity-70" />
-            </button>
-            {modeMenuOpen && (
-              <div className="absolute bottom-10 left-0 z-50 w-52 bg-background-elevated border border-border-default rounded-card shadow-xl p-1.5">
-                <button type="button" onClick={() => setModeMenuOpen(false)}
-                  className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-accent-blue hover:bg-background-surface">
-                  <MessageSquare size={14} /><span><span className="block text-[13px] font-medium">Chat</span><span className="block text-[11px] text-text-muted">Type &amp; read answers</span></span>
-                </button>
-                <button type="button" onClick={narrateLastReply}
-                  className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-text-secondary hover:bg-background-surface">
-                  <Volume2 size={14} /><span><span className="block text-[13px] font-medium text-text-primary">Narrate</span><span className="block text-[11px] text-text-muted">Read the last reply aloud</span></span>
-                </button>
-              </div>
-            )}
+          className="bg-background-surface border border-border-default rounded-card p-2 sm:px-3 sm:py-2.5 cursor-text focus-within:border-border-hover transition-colors flex flex-col sm:flex-row sm:items-end gap-2">
+          
+          {/* Top row on mobile, inline on desktop: Textarea takes full width */}
+          <div className="flex-1 w-full min-w-0 order-1 sm:order-2">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
+              aria-label="Message input"
+              rows={1}
+              disabled={isStreaming}
+              className="w-full min-h-[2.25rem] py-1.5 px-1 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
+              style={{ height: "auto" }}
+              onInput={(e) => {
+                const t = e.currentTarget;
+                t.style.height = "auto";
+                t.style.height = `${Math.min(t.scrollHeight, 128)}px`;
+              }}
+            />
           </div>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
-            aria-label="Message input"
-            rows={1}
-            disabled={isStreaming}
-            className="flex-1 self-stretch min-h-[2.25rem] py-1.5 bg-transparent text-text-primary placeholder:text-text-muted text-base sm:text-sm resize-none outline-none max-h-32 leading-relaxed disabled:opacity-60"
-            style={{ height: "auto" }}
-            onInput={(e) => {
-              const t = e.currentTarget;
-              t.style.height = "auto";
-              t.style.height = `${Math.min(t.scrollHeight, 128)}px`;
-            }}
-          />
-          {/* Reply selector: how answers come back */}
-          <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5 self-stretch" role="group" aria-label="How replies come back">
-            <button type="button" onClick={() => setReplyMode("text")} title="Text only — silent answers"
-              className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
-              <Type size={13} />
-            </button>
-            <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply — answers read aloud"
-              className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "voice" ? "bg-accent-violet/15 text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
-              <Volume2 size={13} />
-            </button>
-            {stt.supported && (
-              <button type="button" onClick={() => setReplyMode("call")} title="Call — hands-free voice conversation"
-                className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "call" ? "bg-success/15 text-success" : "text-text-muted hover:text-text-secondary")}>
-                <Phone size={13} />
+
+          {/* Action toolbar: on mobile sits below input; on sm+ sits inline */}
+          <div className="flex items-center justify-between w-full sm:w-auto gap-1.5 order-2 sm:order-1 sm:self-center">
+            {/* Left toolbar: Attach & Mode */}
+            <div className="flex items-center gap-1">
+              <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
+                onChange={(e) => void addFiles(e.target.files)} />
+              <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, code, text" aria-label="Attach files"
+                className="flex-none p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
+                <Paperclip size={15} />
               </button>
-            )}
+
+              {/* Mode chip: Chat ▾ → Narrate */}
+              <div className="relative flex-none flex items-center">
+                {modeMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />}
+                <button type="button" onClick={() => setModeMenuOpen((v) => !v)} aria-haspopup="true" aria-expanded={modeMenuOpen}
+                  className="flex items-center gap-1 text-accent-blue bg-accent-blue/10 border border-accent-blue/25 rounded-input px-2 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium transition-colors hover:border-accent-blue/50">
+                  <MessageSquare size={13} /> Chat <ChevronDown size={11} className="opacity-70" />
+                </button>
+                {modeMenuOpen && (
+                  <div className="absolute bottom-10 left-0 z-50 w-52 bg-background-elevated border border-border-default rounded-card shadow-xl p-1.5">
+                    <button type="button" onClick={() => setModeMenuOpen(false)}
+                      className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-accent-blue hover:bg-background-surface">
+                      <MessageSquare size={14} /><span><span className="block text-[13px] font-medium">Chat</span><span className="block text-[11px] text-text-muted">Type &amp; read answers</span></span>
+                    </button>
+                    <button type="button" onClick={narrateLastReply}
+                      className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-text-secondary hover:bg-background-surface">
+                      <Volume2 size={14} /><span><span className="block text-[13px] font-medium text-text-primary">Narrate</span><span className="block text-[11px] text-text-muted">Read the last reply aloud</span></span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right actions: tools + send button */}
+            <div className="flex items-center gap-1 sm:order-3">
+              {/* Reply selector: how answers come back */}
+              <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5" role="group" aria-label="How replies come back">
+                <button type="button" onClick={() => setReplyMode("text")} title="Text only — silent answers"
+                  className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
+                  <Type size={13} />
+                </button>
+                <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply — answers read aloud"
+                  className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "voice" ? "bg-accent-violet/15 text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
+                  <Volume2 size={13} />
+                </button>
+                {stt.supported && (
+                  <button type="button" onClick={() => setReplyMode("call")} title="Call — hands-free voice conversation"
+                    className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "call" ? "bg-success/15 text-success" : "text-text-muted hover:text-text-secondary")}>
+                    <Phone size={13} />
+                  </button>
+                )}
+              </div>
+              {stt.supported && (
+                <button onClick={toggleDictate}
+                  title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate — speech fills the box, doesn't send"}
+                  className={cn("flex-none p-1.5 rounded-input transition-colors",
+                    micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
+                  {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  if (wakeEnabled) {
+                    updateActivation("wakeWordEnabled", false);
+                    return;
+                  }
+                  if (!mic.ready && !(await requestCapability("microphone"))) return;
+                  mic.markGranted();
+                  updateActivation("wakeWordEnabled", true);
+                }}
+                title={
+                  wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`
+                    : "Enable wake word (\"Hey JARVIS\")"
+                }
+                className={cn("flex-none p-1.5 rounded-input transition-colors",
+                  wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
+                <Ear size={15} />
+              </button>
+              <VisionButton question={input} disabled={isStreaming} onResult={handleVisionResult} />
+              {(isStreaming || tts.speaking) ? (
+                <button onClick={interrupt} title="Stop (Esc)"
+                  className="flex-none flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-input text-accent-red hover:bg-accent-red/10 transition-colors shrink-0">
+                  <X size={15} /><span className="text-[11px] font-mono">Esc</span>
+                </button>
+              ) : (
+                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming}
+                  className={cn("flex-none p-1.5 rounded-input transition-colors shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center",
+                    input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
+                  <Send size={15} />
+                </button>
+              )}
+            </div>
           </div>
-          {stt.supported && (
-            <button onClick={toggleDictate}
-              title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate — speech fills the box, doesn't send"}
-              className={cn("flex-none p-1.5 rounded-input transition-colors",
-                micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
-              {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
-            </button>
-          )}
-          <button
-            onClick={async () => {
-              if (wakeEnabled) {
-                updateActivation("wakeWordEnabled", false);
-                return;
-              }
-              if (!mic.ready && !(await requestCapability("microphone"))) return;
-              mic.markGranted();
-              updateActivation("wakeWordEnabled", true);
-            }}
-            title={
-              wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`
-                : "Enable wake word (\"Hey JARVIS\")"
-            }
-            className={cn("flex-none p-1.5 rounded-input transition-colors",
-              wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
-            <Ear size={15} />
-          </button>
-          <VisionButton question={input} disabled={isStreaming} onResult={handleVisionResult} />
-          {(isStreaming || tts.speaking) ? (
-            <button onClick={interrupt} title="Stop (Esc)"
-              className="flex-none flex items-center gap-1 px-2 py-1.5 rounded-input text-accent-red hover:bg-accent-red/10 transition-colors">
-              <X size={15} /><span className="text-[11px] font-mono">Esc</span>
-            </button>
-          ) : (
-            <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming}
-              className={cn("flex-none p-1.5 rounded-input transition-colors",
-                input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
-              <Send size={15} />
-            </button>
-          )}
         </div>
         <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted")}>
           {stt.permissionDenied
@@ -1347,7 +1366,15 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking, childre
   );
 }
 
-function MessageBubble({ message, session }: { message: Message; session: any }) {
+function MessageBubble({
+  message,
+  session,
+  onAddContact,
+}: {
+  message: Message;
+  session: any;
+  onAddContact?: (c: { name: string; phone?: string; email?: string; notes?: string }) => void;
+}) {
   const isUser = message.role === "user";
   return (
     <div className={cn("flex items-start gap-3 animate-slide-in", isUser && "flex-row-reverse")}>
@@ -1425,59 +1452,67 @@ function MessageBubble({ message, session }: { message: Message; session: any })
                 </div>
               ))}
               {message.links && message.links.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-2.5 border-t border-border-default/60">
-                  {message.links.map((link, idx) => {
-                    const isWhatsApp = link.action === "whatsapp" || link.url.includes("wa.me") || link.url.startsWith("whatsapp:");
-                    const isCall = link.action === "call" || link.url.startsWith("tel:");
-                    const isSms = link.action === "sms" || link.url.startsWith("sms:");
-                    const isEmail = link.action === "email" || link.url.startsWith("mailto:");
+                <div className="flex flex-col gap-2.5 mt-3 pt-2.5 border-t border-border-default/60">
+                  <div className="flex flex-wrap gap-2">
+                    {message.links.map((link, idx) => {
+                      const isWhatsApp = link.action === "whatsapp" || link.url.includes("wa.me") || link.url.startsWith("whatsapp:");
+                      const isCall = link.action === "call" || link.url.startsWith("tel:");
+                      const isSms = link.action === "sms" || link.url.startsWith("sms:");
+                      const isEmail = link.action === "email" || link.url.startsWith("mailto:");
 
-                    const handleClick = () => {
-                      if (link.nativeUrl) {
-                        try { window.location.href = link.nativeUrl; } catch {}
-                        setTimeout(() => {
-                          try { window.open(link.url, "_blank", "noopener,noreferrer"); } catch {}
-                        }, 600);
-                      } else if (/^https?:/i.test(link.url)) {
-                        window.open(link.url, "_blank", "noopener,noreferrer");
-                      } else {
-                        window.location.href = link.url;
+                      const handleClick = () => {
+                        if (link.nativeUrl) {
+                          try { window.location.href = link.nativeUrl; } catch {}
+                          setTimeout(() => {
+                            try { window.open(link.url, "_blank", "noopener,noreferrer"); } catch {}
+                          }, 600);
+                        } else if (/^https?:/i.test(link.url)) {
+                          window.open(link.url, "_blank", "noopener,noreferrer");
+                        } else {
+                          window.location.href = link.url;
+                        }
+                      };
+
+                      let btnClass = "bg-accent-blue/15 hover:bg-accent-blue/25 text-accent-blue border-accent-blue/30";
+                      let IconComp = ExternalLink;
+
+                      if (isWhatsApp) {
+                        btnClass = "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border-emerald-500/40";
+                        IconComp = MessageCircle;
+                      } else if (isCall) {
+                        btnClass = "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border-emerald-500/40";
+                        IconComp = Phone;
+                      } else if (isSms) {
+                        btnClass = "bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border-sky-500/40";
+                        IconComp = MessageSquare;
+                      } else if (isEmail) {
+                        btnClass = "bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border-purple-500/40";
+                        IconComp = Mail;
                       }
-                    };
 
-                    let btnClass = "bg-accent-blue/15 hover:bg-accent-blue/25 text-accent-blue border-accent-blue/30";
-                    let IconComp = ExternalLink;
-
-                    if (isWhatsApp) {
-                      btnClass = "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border-emerald-500/40";
-                      IconComp = MessageCircle;
-                    } else if (isCall) {
-                      btnClass = "bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border-emerald-500/40";
-                      IconComp = Phone;
-                    } else if (isSms) {
-                      btnClass = "bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border-sky-500/40";
-                      IconComp = MessageSquare;
-                    } else if (isEmail) {
-                      btnClass = "bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border-purple-500/40";
-                      IconComp = Mail;
-                    }
-
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={handleClick}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-card text-xs font-medium border transition-colors shadow-sm",
-                          btnClass
-                        )}
-                      >
-                        <IconComp size={13} />
-                        <span>{link.label || "Open"}</span>
-                        <ArrowUpRight size={11} className="opacity-70" />
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={handleClick}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-card text-xs font-medium border transition-colors shadow-sm",
+                            btnClass
+                          )}
+                        >
+                          <IconComp size={13} />
+                          <span>{link.label || "Open"}</span>
+                          <ArrowUpRight size={11} className="opacity-70" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Inline quick WhatsApp phone input if phone number was missing */}
+                  {message.links
+                    .filter((l) => (l.action === "whatsapp" || l.url.includes("wa.me") || l.url.startsWith("whatsapp:")) && (l.missingPhone || !l.url.match(/wa\.me\/\d+/)))
+                    .map((link, idx) => (
+                      <WhatsAppPhonePicker key={idx} link={link} onSaveContact={onAddContact} />
+                    ))}
                 </div>
               )}
             </>
@@ -1516,3 +1551,90 @@ function ThinkingDots() {
     </div>
   );
 }
+
+function WhatsAppPhonePicker({
+  link,
+  onSaveContact,
+}: {
+  link: MessageLink;
+  onSaveContact?: (c: { name: string; phone?: string; email?: string; notes?: string }) => void;
+}) {
+  const [phone, setPhone] = useState("");
+  const [name] = useState(link.to || "");
+  const [sent, setSent] = useState(false);
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    let clean = phone.replace(/[^\d+]/g, "");
+    if (!clean) return;
+    if (/^\d{10}$/.test(clean)) clean = "91" + clean;
+    else if (clean.startsWith("+")) clean = clean.slice(1);
+
+    const contactName = name.trim() || link.to || `Contact ${clean}`;
+    if (onSaveContact) {
+      onSaveContact({ name: contactName, phone: clean });
+    }
+
+    const text = link.message || "";
+    const webUrl = `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
+    const nativeUrl = `whatsapp://send?phone=${clean}&text=${encodeURIComponent(text)}`;
+
+    setSent(true);
+    try {
+      window.location.href = nativeUrl;
+    } catch {}
+    setTimeout(() => {
+      try {
+        window.open(webUrl, "_blank", "noopener,noreferrer");
+      } catch {}
+    }, 600);
+  };
+
+  if (sent) {
+    return (
+      <div className="p-2.5 rounded-card bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-400 flex items-center justify-between animate-fade-in">
+        <span>✓ WhatsApp opened & contact saved to device sync!</span>
+        <button
+          type="button"
+          onClick={() => setSent(false)}
+          className="text-text-muted hover:text-text-primary text-[11px] underline ml-2"
+        >
+          Resend
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSend}
+      className="p-3 rounded-card bg-background-elevated/80 border border-emerald-500/30 space-y-2 text-left animate-fade-in"
+    >
+      <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+        <MessageCircle size={13} />
+        <span>Send WhatsApp to {name || "recipient"}:</span>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="tel"
+          placeholder="Phone number (e.g. +91 98765 43210)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="flex-1 px-2.5 py-1.5 text-xs rounded-input bg-background-base border border-border-default focus:border-emerald-500/60 focus:outline-none text-text-primary placeholder:text-text-muted"
+        />
+        <button
+          type="submit"
+          disabled={!phone.trim()}
+          className="px-3 py-1.5 text-xs font-medium rounded-input bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition-colors flex items-center justify-center gap-1 shadow-sm"
+        >
+          <Send size={11} />
+          <span>Send & Save</span>
+        </button>
+      </div>
+      <p className="text-[11px] text-text-muted">
+        Entering phone once saves it to your synced contacts across laptop & phone.
+      </p>
+    </form>
+  );
+}
+
