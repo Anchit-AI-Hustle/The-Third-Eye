@@ -20,6 +20,7 @@ import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
 import { useLocalGoals } from "@/hooks/useLocalGoals";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
+import { useLocalContacts } from "@/hooks/useLocalContacts";
 import { useAgentActions, type UndoableAction } from "@/hooks/useAgentActions";
 import { useAgentConfirm, classifyVoiceConfirm } from "@/hooks/useAgentConfirm";
 import { classifyOpenUrl } from "@/lib/liveActions";
@@ -250,6 +251,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const { notes } = useLocalNotes();
   const { goals } = useLocalGoals();
   const { expenses } = useLocalExpenses();
+  const { contacts } = useLocalContacts();
   const applyActions = useAgentActions();
   const [undoable, setUndoable] = useState<UndoableAction[]>([]);
   const {
@@ -588,6 +590,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           goals,
           notes: notes.map((n) => ({ id: n.id, title: n.title, content: n.content })),
           expenses: expenses.map((e) => ({ id: e.id, amount: e.amount, category: e.category, gst_rate: e.gst_rate, spent_on: e.spent_on })),
+          contacts: contacts.map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email, relationship: c.relationship, notes: c.notes })),
           accessToken: (session as any)?.accessToken ?? undefined,
           location: typeof window !== "undefined" && (window as any).__teLocation
             ? (window as any).__teLocation
@@ -676,6 +679,15 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     message: fx.data.message ? String(fx.data.message) : undefined,
                   }));
 
+                // Auto-dispatch outreach deep links (WhatsApp, dialer, SMS) directly without waiting for manual tap
+                const autoOutreach = links.find((l) => l.action === "whatsapp" || l.action === "call" || l.action === "sms");
+                if (autoOutreach) {
+                  const targetUri = autoOutreach.nativeUrl || autoOutreach.url;
+                  if (/^(whatsapp|tel|sms):/i.test(targetUri)) {
+                    try { window.location.href = targetUri; } catch {}
+                  }
+                }
+
                 let effectiveContent = fullText;
                 if (!effectiveContent.trim() || effectiveContent.trim() === "...") {
                   if (links.length) {
@@ -735,7 +747,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setIsStreaming(false);
       }
     }
-  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, modeId, agent]);
+  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, contacts, modeId, agent]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 

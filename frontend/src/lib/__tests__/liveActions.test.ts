@@ -124,9 +124,10 @@ describe("classifyOpenUrl", () => {
     expect(classifyOpenUrl("//evil.example")).toBe("reject");
   });
 
-  it("treats https as a new tab and tel as a scheme", () => {
+  it("treats https as a new tab, and tel / whatsapp as schemes", () => {
     expect(classifyOpenUrl("https://youtube.com")).toBe("web");
     expect(classifyOpenUrl("tel:+15551212")).toBe("scheme");
+    expect(classifyOpenUrl("whatsapp://send?phone=919873945238")).toBe("scheme");
   });
 });
 
