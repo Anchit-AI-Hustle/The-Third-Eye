@@ -57,6 +57,7 @@ export type PermissionCapability =
   | "location"
   | "notifications"
   | "files"
+  | "photos"
   | "clipboard"
   | "motion"
   | "wakeLock"
@@ -73,6 +74,7 @@ export const CAPABILITIES: PermissionCapability[] = [
   "location",
   "notifications",
   "files",
+  "photos",
   "clipboard",
   "motion",
   "wakeLock",

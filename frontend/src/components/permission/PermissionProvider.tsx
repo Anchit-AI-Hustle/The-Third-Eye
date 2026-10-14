@@ -16,6 +16,8 @@ import {
   Radio,
   BatteryCharging,
   Contact,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   PermissionCapability, getPolicy, setPolicy,
@@ -41,19 +43,20 @@ interface CapMeta {
 }
 
 export const CAP_META: Record<PermissionCapability, CapMeta> = {
-  microphone:    { label: "Microphone",    icon: Mic,     reason: "Hear you for voice commands, dictation and live capture." },
-  camera:        { label: "Camera",        icon: Camera,  reason: "See what you point it at, so the assistant can describe or act on it." },
-  screen:        { label: "Screen",        icon: Monitor, reason: "Read a window or tab you share so the assistant can analyse it." },
-  location:      { label: "Location",      icon: MapPin,  reason: "Use where you are for local weather, traffic and nearby search." },
-  notifications: { label: "Notifications", icon: Bell,    reason: "Send reminders, daily briefings and urgent task alerts." },
-  files:         { label: "Save & open files", icon: FileDown, reason: "Save files JARVIS makes for you to your Downloads folder and open them in a new tab.", devicePrompt: false },
-  clipboard:     { label: "Clipboard & Quick Actions", icon: Clipboard, reason: "Read copied text to analyze, and copy code or links directly for you." },
-  motion:        { label: "Motion & Physical Gestures", icon: Activity, reason: "Detect physical gestures (e.g. shake to activate JARVIS, double tap, device tilts)." },
-  wakeLock:      { label: "Stay Awake / Wake Lock", icon: Eye, reason: "Keep the screen active during hands-free calls, voice briefings, and active protocols.", devicePrompt: false },
-  vibration:     { label: "Haptic Alerts & Vibration", icon: Vibrate, reason: "Vibrate your device for timer alarms, critical alerts, and voice confirmations.", devicePrompt: false },
-  bluetooth:     { label: "Bluetooth & Smart Hub", icon: Radio, reason: "Connect to local smart home hubs, IoT devices, and Bluetooth peripherals." },
-  battery:       { label: "Battery & Power Diagnostics", icon: BatteryCharging, reason: "Monitor device battery levels to warn of low power and optimize tasks.", devicePrompt: false },
-  contacts:      { label: "Contacts & Direct Outreach", icon: Contact, reason: "Access contacts for instant phone dialing, WhatsApp, and SMS outreach." },
+  microphone:    { label: "Microphone & Voice",  icon: Mic,     reason: "Hear you for voice commands, dictation and live audio capture." },
+  camera:        { label: "Camera & Vision",     icon: Camera,  reason: "See what you point it at to inspect objects, OCR documents, and provide visual assistance." },
+  screen:        { label: "Screen Sharing",      icon: Monitor, reason: "Read a window or tab you share so the assistant can analyse it." },
+  location:      { label: "Location & Spatial",  icon: MapPin,  reason: "Use where you are for navigation, local weather, commute alerts, and nearby search." },
+  notifications: { label: "Notifications",       icon: Bell,    reason: "Send reminders, daily briefings and urgent task alerts." },
+  files:         { label: "Documents & Files",   icon: FileText, reason: "Store, inspect, and organize offline documents, PDFs, and workspace knowledge.", devicePrompt: false },
+  photos:        { label: "Photos & Media",      icon: ImageIcon, reason: "Access and sync photos, visual assets, and device gallery for visual intelligence.", devicePrompt: false },
+  clipboard:     { label: "Clipboard Actions",   icon: Clipboard, reason: "Read copied text to analyze, and copy code or links directly for you." },
+  motion:        { label: "Motion & Gestures",   icon: Activity, reason: "Detect physical gestures (e.g. shake to activate JARVIS, double tap, device tilts)." },
+  wakeLock:      { label: "Stay Awake",          icon: Eye, reason: "Keep the screen active during hands-free calls, voice briefings, and active protocols.", devicePrompt: false },
+  vibration:     { label: "Haptic Alerts",       icon: Vibrate, reason: "Vibrate your device for timer alarms, critical alerts, and voice confirmations.", devicePrompt: false },
+  bluetooth:     { label: "Bluetooth & IoT",     icon: Radio, reason: "Connect to local smart home hubs, IoT devices, and Bluetooth peripherals." },
+  battery:       { label: "Battery Diagnostics", icon: BatteryCharging, reason: "Monitor device battery levels to warn of low power and optimize tasks.", devicePrompt: false },
+  contacts:      { label: "Contacts & People",   icon: Contact, reason: "Access contacts for instant phone dialing, WhatsApp, and SMS outreach." },
 };
 
 type Resolver = (ok: boolean) => void;
