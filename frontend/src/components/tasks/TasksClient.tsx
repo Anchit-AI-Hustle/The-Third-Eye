@@ -703,6 +703,7 @@ const SOURCE_META: Record<string, { label: string; icon: typeof Mail; color: str
   voice:   { label: "Voice", icon: Mic,           color: "#34D399" },
   meeting: { label: "Meeting", icon: MessageSquare, color: "#F0C94E" },
   devicelog: { label: "Log Sync", icon: MonitorSmartphone, color: "#A78BFA" },
+  assistant: { label: "JARVIS chat", icon: MessageSquare, color: "#4FC3F7" },
 };
 
 function PillarBadge({ pillar }: { pillar?: string }) {
@@ -727,8 +728,9 @@ function SourceBadge({ type, link, detail }: { type?: string; link?: string; det
       <Icon size={10} /> {meta.label}
     </span>
   );
+  const internal = link?.startsWith("/");
   return link ? (
-    <a href={link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-none">
+    <a href={link} target={internal ? undefined : "_blank"} rel={internal ? undefined : "noopener noreferrer"} onClick={(e) => e.stopPropagation()} className="flex-none">
       {inner}
     </a>
   ) : inner;

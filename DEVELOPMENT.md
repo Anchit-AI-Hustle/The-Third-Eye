@@ -283,6 +283,16 @@ the self-built ones so they don't get buried in the third-party directory.
 - Google Chat ingestion was removed (Oct 2026) to drop its restricted scope from OAuth
   verification. The `conversation_sources` table is left in place; account deletion
   still clears it.
+- **Assistant chats → tasks** (`lib/chatTasks.ts`, `/api/chat/sync-tasks`,
+  `hooks/useChatTaskSync.ts`): once a chat has been quiet for 60 s, or the user
+  leaves it, the new messages are sent to the LLM with the open tasks. A chat that
+  did real work becomes one task of its own with a status (todo, in progress or done)
+  and a "JARVIS chat" badge that links back to `/assistant?chat=<id>`. If the chat is
+  about a task that is already open, it is filed under that task instead. Later turns
+  update the same task. Small talk is skipped, and follow-ups become separate tasks.
+  `conversations.tasks_synced_n` records how many messages have been read, so each
+  message is read only once. A daily cron (`/api/cron/dispatch?job=chat_tasks`)
+  syncs up to 8 chats that the browser never synced.
 
 ---
 
