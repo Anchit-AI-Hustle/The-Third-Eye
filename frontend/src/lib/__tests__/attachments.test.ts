@@ -32,4 +32,18 @@ describe("chat attachments", () => {
     expect(text).toContain("Ship by Friday");
     expect(text).toContain('application/pdf "scan.pdf"');
   });
+
+  it("accepts code files and svg images as readable attachments", () => {
+    const atts = cleanAttachments([
+      { name: "script.py", mimeType: "text/x-python", data: b64("print('hello')") },
+      { name: "server.ts", mimeType: "video/mp2t", data: b64("export const port = 3000;") },
+      { name: "query.sql", mimeType: "application/sql", data: b64("SELECT 1;") },
+      { name: "vector.svg", mimeType: "image/svg+xml", data: b64("<svg></svg>") },
+    ]);
+    expect(atts.map((a) => a.name)).toEqual(["script.py", "server.ts", "query.sql", "vector.svg"]);
+    const text = attachmentsAsText(atts);
+    expect(text).toContain("print('hello')");
+    expect(text).toContain("export const port = 3000;");
+    expect(text).toContain("SELECT 1;");
+  });
 });
