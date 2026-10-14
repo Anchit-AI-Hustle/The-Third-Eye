@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 
 export interface DeviceContact {
   id: string;
@@ -9,7 +10,7 @@ export interface DeviceContact {
   email?: string;
   relationship?: string;
   notes?: string;
-  source?: "device" | "manual" | "imported";
+  source?: "device" | "manual" | "imported" | "vcf";
   updated_at: string;
 }
 
@@ -33,18 +34,163 @@ function saveLocalContacts(contacts: DeviceContact[]) {
   } catch {}
 }
 
+/** Robust vCard parser (v2.1, v3.0, v4.0) */
+export function parseVCard(vcfText: string): Omit<DeviceContact, "id" | "updated_at">[] {
+  const contacts: Omit<DeviceContact, "id" | "updated_at">[] = [];
+  // Unfold lines: lines starting with space or tab are continuations
+  const unfolded = vcfText.replace(/\r?\n[ \t]/g, "");
+  const cards = unfolded.split(/BEGIN:VCARD/i);
+
+  for (const card of cards) {
+    if (!card.includes("END:VCARD")) continue;
+    let name = "";
+    let phone = "";
+    let email = "";
+    let notes = "";
+    let relationship = "";
+
+    const lines = card.split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      if (/^FN[;: ]/i.test(line)) {
+        name = line.replace(/^FN[^:]*:/i, "").trim();
+      } else if (!name && /^N[;: ]/i.test(line)) {
+        // N:Last;First;Middle;Prefix;Suffix
+        const parts = line.replace(/^N[^:]*:/i, "").split(";").map((p) => p.trim()).filter(Boolean);
+        if (parts.length >= 2) name = `${parts[1]} ${parts[0]}`.trim();
+        else if (parts.length === 1) name = parts[0];
+      } else if (/^TEL[;: ]/i.test(line)) {
+        if (!phone) {
+          phone = line.replace(/^TEL[^:]*:/i, "").trim();
+        }
+      } else if (/^EMAIL[;: ]/i.test(line)) {
+        if (!email) {
+          email = line.replace(/^EMAIL[^:]*:/i, "").trim();
+        }
+      } else if (/^NOTE[;: ]/i.test(line)) {
+        notes = line.replace(/^NOTE[^:]*:/i, "").trim();
+      } else if (/^(X-RELATIONSHIP|ROLE|TITLE)[;: ]/i.test(line)) {
+        relationship = line.replace(/^[A-Z-]+[^:]*:/i, "").trim();
+      }
+    }
+
+    if (name || phone || email) {
+      contacts.push({
+        name: name || phone || email || "Unknown Contact",
+        phone: phone || undefined,
+        email: email || undefined,
+        relationship: relationship || undefined,
+        notes: notes || undefined,
+        source: "vcf",
+      });
+    }
+  }
+
+  return contacts;
+}
+
+/** Parses CSV formatted contacts */
+export function parseCSVContacts(csvText: string): Omit<DeviceContact, "id" | "updated_at">[] {
+  const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+
+  const headers = lines[0].toLowerCase().split(",").map((h) => h.trim().replace(/^["']|["']$/g, ""));
+  const nameIdx = headers.findIndex((h) => h.includes("name"));
+  const phoneIdx = headers.findIndex((h) => h.includes("phone") || h.includes("mobile") || h.includes("tel"));
+  const emailIdx = headers.findIndex((h) => h.includes("email"));
+  const relIdx = headers.findIndex((h) => h.includes("relationship") || h.includes("tag") || h.includes("role"));
+
+  const results: Omit<DeviceContact, "id" | "updated_at">[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
+    const name = nameIdx >= 0 ? cols[nameIdx] : cols[0];
+    const phone = phoneIdx >= 0 ? cols[phoneIdx] : cols[1];
+    const email = emailIdx >= 0 ? cols[emailIdx] : undefined;
+    const rel = relIdx >= 0 ? cols[relIdx] : undefined;
+
+    if (name || phone) {
+      results.push({
+        name: name || phone || "Unknown",
+        phone: phone || undefined,
+        email: email || undefined,
+        relationship: rel || undefined,
+        source: "imported",
+      });
+    }
+  }
+  return results;
+}
+
+export function hasNativeContactsPicker(): boolean {
+  if (typeof window === "undefined") return false;
+  const nav = navigator as any;
+  return !!("contacts" in nav && "ContactsManager" in window);
+}
+
 export function useLocalContacts() {
+  const { data: session } = useSession();
+  const userId = session?.user?.email ?? null;
+
   const [contacts, setContacts] = useState<DeviceContact[]>([]);
   const [syncing, setSyncing] = useState(false);
 
+  // Sync to remote cloud API
+  const pushToCloud = useCallback(async (list: DeviceContact[]) => {
+    if (!userId) return;
+    try {
+      await fetch("/api/user/sync/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts: list }),
+      });
+    } catch {}
+  }, [userId]);
+
+  // Initial load: local first, then merge cloud
   useEffect(() => {
-    setContacts(loadLocalContacts());
+    const local = loadLocalContacts();
+    setContacts(local);
+
     const onUpdate = (e: Event) => {
       setContacts((e as CustomEvent<DeviceContact[]>).detail ?? loadLocalContacts());
     };
     window.addEventListener("jarvis:contacts", onUpdate);
+
+    // If logged in, fetch cloud contacts and merge
+    if (userId) {
+      fetch("/api/user/sync/contacts")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.ok && Array.isArray(data.contacts) && data.contacts.length > 0) {
+            setContacts((prev) => {
+              const currentPhones = new Set(prev.map((c) => c.phone?.replace(/\D/g, "")).filter(Boolean));
+              const currentNames = new Set(prev.map((c) => c.name.toLowerCase().trim()));
+
+              const freshFromCloud = (data.contacts as DeviceContact[]).filter((c) => {
+                const p = c.phone?.replace(/\D/g, "");
+                const n = c.name.toLowerCase().trim();
+                return (!p || !currentPhones.has(p)) && !currentNames.has(n);
+              });
+
+              if (freshFromCloud.length > 0) {
+                const merged = [...prev, ...freshFromCloud];
+                saveLocalContacts(merged);
+                return merged;
+              }
+              return prev;
+            });
+          } else if (local.length > 0) {
+            // Upload local contacts to cloud on first sync
+            pushToCloud(local);
+          }
+        })
+        .catch(() => {});
+    }
+
     return () => window.removeEventListener("jarvis:contacts", onUpdate);
-  }, []);
+  }, [userId, pushToCloud]);
 
   const addContact = useCallback((contact: Omit<DeviceContact, "id" | "updated_at">) => {
     setContacts((prev) => {
@@ -55,19 +201,86 @@ export function useLocalContacts() {
       };
       const next = [item, ...prev];
       saveLocalContacts(next);
+      pushToCloud(next);
       return next;
     });
-  }, []);
+  }, [pushToCloud]);
 
   const removeContact = useCallback((id: string) => {
     setContacts((prev) => {
       const next = prev.filter((c) => c.id !== id);
       saveLocalContacts(next);
+      pushToCloud(next);
       return next;
     });
-  }, []);
+  }, [pushToCloud]);
 
-  const syncDeviceContacts = useCallback(async (): Promise<{ count: number; error?: string }> => {
+  const importBatch = useCallback((items: Omit<DeviceContact, "id" | "updated_at">[]) => {
+    if (!items.length) return 0;
+    let count = 0;
+    setContacts((prev) => {
+      const existingPhones = new Set(prev.map((c) => c.phone?.replace(/\D/g, "")).filter(Boolean));
+      const existingNames = new Set(prev.map((c) => c.name.toLowerCase().trim()));
+
+      const fresh: DeviceContact[] = [];
+      const now = new Date().toISOString();
+
+      for (const item of items) {
+        const cleanP = item.phone?.replace(/\D/g, "");
+        const cleanN = item.name.toLowerCase().trim();
+        if ((cleanP && existingPhones.has(cleanP)) || (cleanN && existingNames.has(cleanN))) {
+          continue;
+        }
+        if (cleanP) existingPhones.add(cleanP);
+        if (cleanN) existingNames.add(cleanN);
+
+        fresh.push({
+          ...item,
+          id: crypto.randomUUID(),
+          updated_at: now,
+        });
+      }
+
+      count = fresh.length;
+      const next = [...fresh, ...prev];
+      saveLocalContacts(next);
+      pushToCloud(next);
+      return next;
+    });
+    return count;
+  }, [pushToCloud]);
+
+  const importContactsFromFile = useCallback(async (file: File): Promise<{ count: number; error?: string }> => {
+    setSyncing(true);
+    try {
+      const text = await file.text();
+      const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      let parsed: Omit<DeviceContact, "id" | "updated_at">[] = [];
+
+      if (ext === ".vcf" || ext === ".vcard" || text.includes("BEGIN:VCARD")) {
+        parsed = parseVCard(text);
+      } else if (ext === ".csv") {
+        parsed = parseCSVContacts(text);
+      } else {
+        // Try vcard then CSV
+        parsed = parseVCard(text);
+        if (!parsed.length) parsed = parseCSVContacts(text);
+      }
+
+      if (!parsed.length) {
+        return { count: 0, error: "No contacts could be found in this file. Please ensure it is a .vcf (vCard) or .csv file." };
+      }
+
+      const count = importBatch(parsed);
+      return { count };
+    } catch (err: any) {
+      return { count: 0, error: err?.message || "Failed to read contact file." };
+    } finally {
+      setSyncing(false);
+    }
+  }, [importBatch]);
+
+  const syncDeviceContacts = useCallback(async (): Promise<{ count: number; supported: boolean; error?: string }> => {
     setSyncing(true);
     try {
       const nav = navigator as any;
@@ -75,38 +288,40 @@ export function useLocalContacts() {
         const props = ["name", "email", "tel"];
         const selected = await nav.contacts.select(props, { multiple: true });
         if (Array.isArray(selected) && selected.length > 0) {
-          const imported: DeviceContact[] = selected.map((s: any) => ({
-            id: crypto.randomUUID(),
+          const imported: Omit<DeviceContact, "id" | "updated_at">[] = selected.map((s: any) => ({
             name: Array.isArray(s.name) ? s.name[0] : s.name || "Unknown",
             phone: Array.isArray(s.tel) ? s.tel[0] : s.tel || undefined,
             email: Array.isArray(s.email) ? s.email[0] : s.email || undefined,
             source: "device",
-            updated_at: new Date().toISOString(),
           }));
 
-          setContacts((prev) => {
-            const existingPhones = new Set(prev.map((c) => c.phone?.replace(/\D/g, "")).filter(Boolean));
-            const fresh = imported.filter((i) => !i.phone || !existingPhones.has(i.phone.replace(/\D/g, "")));
-            const next = [...fresh, ...prev];
-            saveLocalContacts(next);
-            return next;
-          });
-          return { count: imported.length };
+          const count = importBatch(imported);
+          return { count, supported: true };
         }
+        return { count: 0, supported: true };
       }
-      return { count: 0, error: "Contacts Picker API is only available in Chrome/Android or supported browsers." };
+
+      // Not supported natively on this browser (e.g. iOS Safari, Firefox, Mac Safari)
+      return {
+        count: 0,
+        supported: false,
+        error: "Native Contacts Picker is available in Chrome/Android. On iOS / Mac / Safari, use the 'Import Contacts (.vcf / iCloud)' button below.",
+      };
     } catch (err: any) {
-      return { count: 0, error: err?.message || "Sync cancelled or not allowed." };
+      return { count: 0, supported: true, error: err?.message || "Sync cancelled or not allowed." };
     } finally {
       setSyncing(false);
     }
-  }, []);
+  }, [importBatch]);
 
   return {
     contacts,
     syncing,
     addContact,
     removeContact,
+    importBatch,
+    importContactsFromFile,
     syncDeviceContacts,
+    hasNativePicker: hasNativeContactsPicker(),
   };
 }
