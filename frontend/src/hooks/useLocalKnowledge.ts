@@ -282,5 +282,67 @@ export function useLocalKnowledge() {
     fetch(`/api/cortex/ingest?docId=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
   }, []);
 
-  return { docs, ready, uploading, upload, remove, syncDeviceFolder };
+  const refreshFromCloud = useCallback(async (): Promise<{ count: number; error?: string }> => {
+    setUploading(true);
+    try {
+      const r = await dataList<KnowledgeDoc>("knowledge_docs");
+      remote.current = r.remote;
+      const local = ls();
+      if (r.remote && r.rows.length > 0) {
+        const map = new Map<string, KnowledgeDoc>();
+        local.forEach((d) => map.set(d.id, d));
+        r.rows.forEach((d) => map.set(d.id, d));
+        const merged = Array.from(map.values());
+        lsSet(merged);
+        setDocs(merged);
+        setUploading(false);
+        return { count: merged.length };
+      } else {
+        setDocs(local);
+        if (r.remote && local.length > 0) {
+          await dataInsert("knowledge_docs", local).catch(() => {});
+        }
+        setUploading(false);
+        return { count: local.length };
+      }
+    } catch (err: any) {
+      setUploading(false);
+      return { count: ls().length, error: err?.message || "Vault sync failed" };
+    }
+  }, []);
+
+  const seedSampleKnowledge = useCallback(async (): Promise<KnowledgeDoc[]> => {
+    const starterDocs: KnowledgeDoc[] = [
+      {
+        id: crypto.randomUUID(),
+        title: "JARVIS_Device_Voice_Guide.md",
+        content: `# JARVIS Voice & Device Quick Guide\n\n- Phone Calls: "Call Mom", "Call Rohit Sharma"\n- Messaging: "Send WhatsApp to Rohit saying I am arriving soon"\n- Knowledge: "Search vault for emergency contacts"\n- Multi-Device Sync: Contacts and vault automatically sync between iPhone, Android, and Laptop.`,
+        file_type: "md",
+        file_size_bytes: 420,
+        created_at: new Date().toISOString(),
+        chunk_count: 1,
+        processing_status: "ready",
+      },
+      {
+        id: crypto.randomUUID(),
+        title: "Personal_Medical_Emergency_Notes.txt",
+        content: `Personal Emergency Notes:\n- Primary emergency contact: Mom (+91 98765 43210)\n- Secondary contact: Rohit Sharma (+91 98739 45238)\n- Blood Group: O+\n- Allergies: None recorded\n- Local Dispatch: 112 / 911`,
+        file_type: "txt",
+        file_size_bytes: 310,
+        created_at: new Date().toISOString(),
+        chunk_count: 1,
+        processing_status: "ready",
+      },
+    ];
+
+    setDocs((prev) => {
+      const next = [...starterDocs, ...prev];
+      if (!remote.current) lsSet(next);
+      return next;
+    });
+    if (remote.current) await dataInsert("knowledge_docs", starterDocs);
+    return starterDocs;
+  }, []);
+
+  return { docs, ready, uploading, upload, remove, syncDeviceFolder, refreshFromCloud, seedSampleKnowledge };
 }

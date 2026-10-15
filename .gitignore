@@ -17,3 +17,6 @@ build/
 
 # Supabase CLI cache (written by `supabase link`)
 supabase/.temp/
+
+# Native app builds output
+dist-apps/

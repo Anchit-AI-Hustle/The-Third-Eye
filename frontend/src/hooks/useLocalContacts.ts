@@ -319,6 +319,69 @@ export function useLocalContacts() {
     }
   }, [importBatch]);
 
+  const refreshFromCloud = useCallback(async (): Promise<{ count: number; error?: string }> => {
+    setSyncing(true);
+    try {
+      const local = loadLocalContacts();
+      if (!userId) {
+        setContacts(local);
+        return { count: local.length };
+      }
+      const res = await fetch("/api/user/sync/contacts");
+      if (!res.ok) {
+        return { count: local.length, error: `Cloud sync returned status ${res.status}` };
+      }
+      const data = await res.json();
+      const cloudContacts: DeviceContact[] = Array.isArray(data?.contacts) ? data.contacts : [];
+
+      const phoneMap = new Map<string, DeviceContact>();
+      const nameMap = new Map<string, DeviceContact>();
+
+      for (const c of cloudContacts) {
+        if (c.phone) phoneMap.set(c.phone.replace(/\D/g, ""), c);
+        if (c.name) nameMap.set(c.name.toLowerCase().trim(), c);
+      }
+
+      const toUpload: DeviceContact[] = [];
+      for (const l of local) {
+        const cleanP = l.phone?.replace(/\D/g, "");
+        const cleanN = l.name.toLowerCase().trim();
+        const hasPhone = cleanP && phoneMap.has(cleanP);
+        const hasName = cleanN && nameMap.has(cleanN);
+        if (!hasPhone && !hasName) {
+          toUpload.push(l);
+          if (cleanP) phoneMap.set(cleanP, l);
+          if (cleanN) nameMap.set(cleanN, l);
+        }
+      }
+
+      const merged = [...cloudContacts, ...toUpload];
+      saveLocalContacts(merged);
+      setContacts(merged);
+
+      if (toUpload.length > 0 || (cloudContacts.length === 0 && local.length > 0)) {
+        await pushToCloud(merged);
+      }
+
+      return { count: merged.length };
+    } catch (err: any) {
+      return { count: loadLocalContacts().length, error: err?.message || "Cloud contact sync failed." };
+    } finally {
+      setSyncing(false);
+    }
+  }, [userId, pushToCloud]);
+
+  const seedEssentialContacts = useCallback(() => {
+    const essentials: Omit<DeviceContact, "id" | "updated_at">[] = [
+      { name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact", source: "manual" },
+      { name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact", source: "manual" },
+      { name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact", source: "manual" },
+      { name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging", source: "manual" },
+      { name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line", source: "manual" },
+    ];
+    return importBatch(essentials);
+  }, [importBatch]);
+
   return {
     contacts,
     syncing,
@@ -327,6 +390,8 @@ export function useLocalContacts() {
     importBatch,
     importContactsFromFile,
     syncDeviceContacts,
+    refreshFromCloud,
+    seedEssentialContacts,
     hasNativePicker: hasNativeContactsPicker(),
   };
 }
