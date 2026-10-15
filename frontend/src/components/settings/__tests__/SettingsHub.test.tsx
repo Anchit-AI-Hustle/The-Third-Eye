@@ -9,7 +9,7 @@ vi.mock("@/components/settings/ConnectionsCard", () => ({ ConnectionsCard: () =>
 vi.mock("@/components/settings/WhatsAppCard", () => ({ WhatsAppCard: () => null }));
 vi.mock("@/components/settings/DeviceSyncCard", () => ({ DeviceSyncCard: () => null }));
 vi.mock("@/components/settings/AutomationsCard", () => ({ AutomationsCard: () => null }));
-vi.mock("@/components/settings/PermissionsCard", () => ({ PermissionsCard: () => null }));
+vi.mock("@/components/settings/PermissionsCard", () => ({ PermissionsCard: () => <div>Device permissions</div> }));
 vi.mock("@/components/settings/AgentProfileManager", () => ({
   AgentProfileManager: () => <div>Profiles</div>,
 }));
@@ -29,10 +29,14 @@ vi.mock("@/hooks/useAgentProfile", () => ({
 describe("SettingsHub", () => {
   beforeEach(() => localStorage.clear());
 
-  it("opens Agent config with activation settings", () => {
+  it("opens Device & App Settings by default and allows switching tabs", () => {
     render(<SettingsHub user={{ name: "A", email: "a@b.c" }} />);
+    expect(screen.getByText("Device permissions")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Account & Connections/i }));
     expect(screen.getByText("Account body")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Agent config/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Agent Config/i }));
     expect(screen.getByText("Assistant activation")).toBeInTheDocument();
     expect(screen.getByText("Profiles")).toBeInTheDocument();
   });

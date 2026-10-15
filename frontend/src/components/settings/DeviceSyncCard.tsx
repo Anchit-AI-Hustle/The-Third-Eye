@@ -142,12 +142,14 @@ export function DeviceSyncCard() {
   const handleSyncFolder = async () => {
     setFolderError(null);
     setFolderSuccess(null);
+    // On iOS Safari / mobile browsers without directory picker, trigger file picker immediately in user gesture loop
+    if (typeof window !== "undefined" && !("showDirectoryPicker" in window)) {
+      folderFallbackInputRef.current?.click();
+      return;
+    }
     const res = await syncDeviceFolder();
     if (res.promptFiles) {
-      // Mobile / Safari fallback: open file selector
-      if (folderFallbackInputRef.current) {
-        folderFallbackInputRef.current.click();
-      }
+      folderFallbackInputRef.current?.click();
       return;
     }
     if (res.error) {
@@ -170,21 +172,27 @@ export function DeviceSyncCard() {
 
   return (
     <div className="holo-card rounded-card p-5 mt-5">
-      {/* Hidden file inputs */}
+      {/* Native file inputs (accessible to screen readers & OS without display:none so WebKit/iOS opens file dialogs) */}
       <input
+        id="device-vcf-native-input"
         type="file"
         ref={vcfInputRef}
         onChange={handleVcfInputChange}
         accept=".vcf,.vcard,.csv,text/vcard,text/x-vcard"
-        className="hidden"
+        className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10"
+        tabIndex={-1}
+        aria-hidden="true"
       />
       <input
+        id="device-folder-fallback-input"
         type="file"
         ref={folderFallbackInputRef}
         onChange={handleFileInputChange}
         multiple
         accept="*/*"
-        className="hidden"
+        className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10"
+        tabIndex={-1}
+        aria-hidden="true"
       />
 
       <div className="flex items-center gap-2 mb-1">
@@ -227,14 +235,16 @@ export function DeviceSyncCard() {
             >
               <ClipboardList size={12} /> Paste
             </button>
-            <button
-              type="button"
-              onClick={() => vcfInputRef.current?.click()}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary"
+            <label
+              htmlFor="device-vcf-native-input"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") vcfInputRef.current?.click(); }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer"
               title="Import exported iPhone (.vcf), Android (.vcf) or Google Contacts (.csv)"
             >
               <FileUp size={12} /> Import .vcf / CSV
-            </button>
+            </label>
             <button
               type="button"
               onClick={handleSyncContacts}
@@ -403,21 +413,28 @@ export function DeviceSyncCard() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <input
+              id="device-files-native-input"
               type="file"
               ref={fileInputRef}
               onChange={handleFileInputChange}
               multiple
-              accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.py,.ts,.js,.html,.sh"
-              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.py,.ts,.js,.html,.sh,.heic,.heif"
+              className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10"
+              tabIndex={-1}
+              aria-hidden="true"
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary disabled:opacity-50"
+            <label
+              htmlFor="device-files-native-input"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
+                uploading && "opacity-50 pointer-events-none"
+              )}
             >
               <ImageIcon size={12} /> Upload Files / Photos
-            </button>
+            </label>
             <button
               type="button"
               onClick={handleSyncFolder}
