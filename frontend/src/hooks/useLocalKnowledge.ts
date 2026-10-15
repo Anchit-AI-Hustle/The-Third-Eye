@@ -23,7 +23,15 @@ function ls(): KnowledgeDoc[] {
   if (typeof window === "undefined") return [];
   try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); } catch { return []; }
 }
-function lsSet(v: KnowledgeDoc[]) { localStorage.setItem(KEY, JSON.stringify(v)); }
+function lsSet(v: KnowledgeDoc[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(v));
+    window.dispatchEvent(new CustomEvent("jarvis:knowledge", { detail: v }));
+  } catch (err) {
+    console.warn("Failed to persist knowledge docs in localStorage:", err);
+  }
+}
 
 function chunkText(text: string): string[] {
   const words = text.split(/\s+/);
@@ -98,13 +106,36 @@ export function useLocalKnowledge() {
   useEffect(() => {
     let cancelled = false;
     setReady(false);
+
+    const onUpdate = (e: Event) => {
+      setDocs((e as CustomEvent<KnowledgeDoc[]>).detail ?? ls());
+    };
+    window.addEventListener("jarvis:knowledge", onUpdate);
+
     dataList<KnowledgeDoc>("knowledge_docs").then((r) => {
       if (cancelled) return;
       remote.current = r.remote;
-      setDocs(r.remote ? r.rows : ls());
+      const local = ls();
+      if (r.remote && r.rows.length > 0) {
+        const map = new Map<string, KnowledgeDoc>();
+        local.forEach((d) => map.set(d.id, d));
+        r.rows.forEach((d) => map.set(d.id, d));
+        const merged = Array.from(map.values());
+        lsSet(merged);
+        setDocs(merged);
+      } else {
+        setDocs(local);
+        if (r.remote && local.length > 0) {
+          dataInsert("knowledge_docs", local).catch(() => {});
+        }
+      }
       setReady(true);
     });
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("jarvis:knowledge", onUpdate);
+    };
   }, [userId]);
 
   const upload = useCallback(async (files: FileList | File[]) => {
