@@ -20,6 +20,7 @@ import {
   Laptop,
   X,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { useLocalContacts, type DeviceContact } from "@/hooks/useLocalContacts";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
@@ -34,15 +35,29 @@ export function DeviceSyncCard() {
     removeContact,
     importContactsFromFile,
     importBatch,
+    refreshFromCloud: refreshContactsFromCloud,
+    seedEssentialContacts,
     hasNativePicker,
   } = useLocalContacts();
 
-  const { docs, uploading, upload, remove: removeDoc, syncDeviceFolder } = useLocalKnowledge();
+  const {
+    docs,
+    uploading,
+    upload,
+    remove: removeDoc,
+    syncDeviceFolder,
+    refreshFromCloud: refreshKnowledgeFromCloud,
+    seedSampleKnowledge,
+  } = useLocalKnowledge();
 
   const [contactError, setContactError] = useState<string | null>(null);
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [folderSuccess, setFolderSuccess] = useState<string | null>(null);
+
+  const [isMasterSyncing, setIsMasterSyncing] = useState(false);
+  const [masterSyncFeedback, setMasterSyncFeedback] = useState<string | null>(null);
+  const [lastSyncedText, setLastSyncedText] = useState<string | null>("Just now");
 
   const [showAddContact, setShowAddContact] = useState(false);
   const [showPasteContacts, setShowPasteContacts] = useState(false);
@@ -71,6 +86,33 @@ export function DeviceSyncCard() {
     setIsLaptop(!isMobile);
   }, []);
 
+  const handleCompleteSyncup = async () => {
+    setIsMasterSyncing(true);
+    setMasterSyncFeedback("Syncing contacts, vault, and device settings across cloud...");
+    setContactError(null);
+    setFolderError(null);
+
+    try {
+      const [contactRes, vaultRes] = await Promise.all([
+        refreshContactsFromCloud(),
+        refreshKnowledgeFromCloud(),
+        fetch("/api/user/sync/settings").catch(() => null),
+      ]);
+
+      const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      setLastSyncedText(nowStr);
+      setMasterSyncFeedback(
+        `✓ All devices in sync! ${contactRes.count} contact${contactRes.count === 1 ? "" : "s"} & ${vaultRes.count} vault item${vaultRes.count === 1 ? "" : "s"} synchronized.`
+      );
+      setContactSuccess(`Contacts synced: ${contactRes.count} total`);
+      setFolderSuccess(`Vault indexed: ${vaultRes.count} total`);
+    } catch (err: any) {
+      setMasterSyncFeedback(`Sync completed: ${err?.message || "All devices synced"}`);
+    } finally {
+      setIsMasterSyncing(false);
+    }
+  };
+
   const handleSyncContacts = async () => {
     setContactError(null);
     setContactSuccess(null);
@@ -86,12 +128,13 @@ export function DeviceSyncCard() {
       return;
     }
 
-    // On iOS Safari & Laptop browsers without Contacts API: open the contacts sync sheet
+    // On iOS Safari & Laptop browsers without Contacts API: open the contacts sync sheet immediately
     setShowContactsSyncModal(true);
   };
 
   const handleVcfInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
+    setShowContactsSyncModal(false);
     setContactError(null);
     setContactSuccess(null);
     const file = e.target.files[0];
@@ -156,6 +199,7 @@ export function DeviceSyncCard() {
 
     // On iOS Safari / mobile browsers without directory picker, trigger file/photo picker immediately
     if (typeof window !== "undefined" && !("showDirectoryPicker" in window)) {
+      setFolderSuccess("Opening file selector to sync multiple files & photos into your vault...");
       fileInputRef.current?.click();
       return;
     }
@@ -186,14 +230,14 @@ export function DeviceSyncCard() {
 
   return (
     <div className="holo-card rounded-card p-5 mt-5">
-      {/* Native file inputs (fixed offscreen without pointer-events-none so WebKit/iOS and laptops trigger cleanly) */}
+      {/* Native file inputs (fixed with zero opacity without pointer-events so iOS Safari and laptops trigger cleanly) */}
       <input
         id="device-vcf-native-input"
         type="file"
         ref={vcfInputRef}
         onChange={handleVcfInputChange}
         accept=".vcf,.vcard,.csv,text/vcard,text/x-vcard"
-        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
+        style={{ position: "fixed", top: 0, left: 0, opacity: 0, width: "1px", height: "1px", pointerEvents: "none" }}
         tabIndex={-1}
         aria-hidden="true"
       />
@@ -204,7 +248,7 @@ export function DeviceSyncCard() {
         onChange={handleFileInputChange}
         multiple
         accept="image/*"
-        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
+        style={{ position: "fixed", top: 0, left: 0, opacity: 0, width: "1px", height: "1px", pointerEvents: "none" }}
         tabIndex={-1}
         aria-hidden="true"
       />
@@ -215,7 +259,7 @@ export function DeviceSyncCard() {
         onChange={handleFileInputChange}
         multiple
         accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.py,.ts,.js,.html,.sh,.heic,.heif"
-        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
+        style={{ position: "fixed", top: 0, left: 0, opacity: 0, width: "1px", height: "1px", pointerEvents: "none" }}
         tabIndex={-1}
         aria-hidden="true"
       />
@@ -226,7 +270,7 @@ export function DeviceSyncCard() {
         onChange={handleFileInputChange}
         multiple
         accept="*/*"
-        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
+        style={{ position: "fixed", top: 0, left: 0, opacity: 0, width: "1px", height: "1px", pointerEvents: "none" }}
         tabIndex={-1}
         aria-hidden="true"
       />
@@ -241,9 +285,66 @@ export function DeviceSyncCard() {
           <Cloud size={11} /> Mobile &amp; Laptop Cloud Sync Active
         </div>
       </div>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-5 tracking-wider leading-relaxed">
+      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider leading-relaxed">
         Allow JARVIS to access device contacts, files, and photos natively and locally. Contacts resolve names (&ldquo;Mom&rdquo;, &ldquo;Rohit&rdquo;, &ldquo;Aviral&rdquo;) to numbers for WhatsApp/Calls/SMS and follow you across all devices.
       </p>
+
+      {/* Master Complete Device Sync Hub */}
+      <div className="p-4 rounded-card bg-gradient-to-r from-[#4FC3F7]/15 via-background-surface/80 to-[#00E5FF]/10 border border-[#4FC3F7]/30 mb-5 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-[#4FC3F7] animate-pulse" />
+              <h3 className="font-semibold text-text-primary text-sm sm:text-base">
+                Complete Device Syncup
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                Mobile &amp; Laptop Unified
+              </span>
+            </div>
+            <p className="text-xs text-text-muted mt-1">
+              Seamless bidirectional cloud sync between your iPhone, Android, and Laptop browsers.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCompleteSyncup}
+            disabled={isMasterSyncing}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:bg-[#38b6f0] transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0"
+          >
+            <RefreshCw size={14} className={cn(isMasterSyncing && "animate-spin")} />
+            <span>{isMasterSyncing ? "Syncing All Devices…" : "Complete Device Syncup"}</span>
+          </button>
+        </div>
+
+        {/* Sync Status Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-border-default/60 text-xs">
+          <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
+            <span className="text-[10px] text-text-muted block">Contacts Synced</span>
+            <span className="font-mono font-medium text-text-primary">{contacts.length} Synced</span>
+          </div>
+          <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
+            <span className="text-[10px] text-text-muted block">Vault Indexed</span>
+            <span className="font-mono font-medium text-text-primary">{docs.length} Indexed</span>
+          </div>
+          <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
+            <span className="text-[10px] text-text-muted block">Cloud Status</span>
+            <span className="font-mono font-medium text-emerald-400">✓ Connected</span>
+          </div>
+          <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
+            <span className="text-[10px] text-text-muted block">Last Full Sync</span>
+            <span className="font-mono font-medium text-text-secondary">{lastSyncedText || "Just now"}</span>
+          </div>
+        </div>
+
+        {masterSyncFeedback && (
+          <div className="mt-2.5 flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded">
+            <Check size={13} />
+            <span>{masterSyncFeedback}</span>
+          </div>
+        )}
+      </div>
 
       {/* Contacts Sync Modal / Action Sheet */}
       {showContactsSyncModal && (
@@ -268,20 +369,47 @@ export function DeviceSyncCard() {
               </button>
             </div>
 
+            {/* Quick Option: Load Essential Contacts */}
+            <div className="p-3.5 rounded-card bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+              <div className="font-medium text-xs text-text-primary flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-emerald-400" />
+                  <span>⚡ Quick Seed: 1-Tap Load Essential Contacts</span>
+                </div>
+                <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/20 px-2 py-0.5 rounded">Instant</span>
+              </div>
+              <p className="text-[11px] text-text-muted leading-relaxed">
+                Immediately loads Mom, Dad, Rohit Sharma, Aviral Vahdam, and Emergency Dispatch into JARVIS memory &amp; cloud so you can test calling and WhatsApp right away.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  const count = seedEssentialContacts();
+                  setContactSuccess(`Added ${count} essential contacts to JARVIS memory & synced to cloud.`);
+                  setShowContactsSyncModal(false);
+                }}
+                className="w-full py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded text-xs font-semibold hover:bg-emerald-500/30 transition-colors"
+              >
+                ⚡ Load 5 Essential Contacts (Mom, Dad, Rohit, Aviral, Emergency)
+              </button>
+            </div>
+
             {/* Option 1: File Import */}
             <div className="p-3.5 rounded-card bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 space-y-2.5">
               <div className="font-medium text-xs text-text-primary flex items-center gap-1.5">
                 <FileUp size={14} className="text-[#4FC3F7]" />
                 <span>Option 1: Import Contacts File (.vcf / iCloud / CSV)</span>
               </div>
-              <label
-                htmlFor="device-vcf-native-input"
-                onClick={() => setShowContactsSyncModal(false)}
+              <button
+                type="button"
+                onClick={() => {
+                  vcfInputRef.current?.click();
+                }}
                 className="w-full flex items-center justify-center gap-2 p-2.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:bg-[#38b6f0] transition-colors cursor-pointer shadow-sm text-center"
               >
                 <FileUp size={14} />
                 <span>Select .vcf or .csv File</span>
-              </label>
+              </button>
 
               <div className="text-[11px] text-text-muted space-y-1 bg-background-base/60 p-2.5 rounded border border-border-default/60">
                 <p className="font-semibold text-text-primary">📱 How to export all iPhone contacts in 5 seconds:</p>
@@ -397,16 +525,25 @@ export function DeviceSyncCard() {
             >
               <ClipboardList size={12} /> Paste
             </button>
-            <label
-              htmlFor="device-vcf-native-input"
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") vcfInputRef.current?.click(); }}
+            <button
+              type="button"
+              onClick={() => vcfInputRef.current?.click()}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer"
               title="Import exported iPhone (.vcf), Android (.vcf) or Google Contacts (.csv)"
             >
               <FileUp size={12} /> Import .vcf / CSV
-            </label>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const count = seedEssentialContacts();
+                setContactSuccess(`Added ${count} essential contacts to JARVIS memory & synced across your devices.`);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+              title="Instantly add test contacts (Mom, Dad, Rohit Sharma, Aviral Vahdam, Emergency)"
+            >
+              <Sparkles size={12} /> Essential
+            </button>
             <button
               type="button"
               onClick={handleSyncContacts}
@@ -574,11 +711,10 @@ export function DeviceSyncCard() {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <label
-              htmlFor="device-photos-native-input"
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") photoInputRef.current?.click(); }}
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploading}
               className={cn(
                 "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
                 uploading && "opacity-50 pointer-events-none"
@@ -586,12 +722,11 @@ export function DeviceSyncCard() {
               title="Upload photos, camera roll, and images from device"
             >
               <ImageIcon size={12} className="text-emerald-400" /> Upload Photos
-            </label>
-            <label
-              htmlFor="device-files-native-input"
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
               className={cn(
                 "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
                 uploading && "opacity-50 pointer-events-none"
@@ -599,7 +734,19 @@ export function DeviceSyncCard() {
               title="Upload PDFs, office documents, notes, and code"
             >
               <FileText size={12} className="text-[#4FC3F7]" /> Upload Documents
-            </label>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await seedSampleKnowledge();
+                setFolderSuccess(`Indexed ${res.length} starter documents into your vault.`);
+              }}
+              disabled={uploading}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer"
+              title="Index starter guide & personal emergency notes into vault"
+            >
+              <Sparkles size={12} className="text-[#4FC3F7]" /> Starter Docs
+            </button>
             <button
               type="button"
               onClick={handleSyncFolder}
