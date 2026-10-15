@@ -10,6 +10,7 @@ const ACTION_LABELS: Record<string, Record<string, string>> = {
   manage_reminders: { set: "Setting a reminder", cancel: "Canceling a reminder", list: "Checking your reminders" },
   manage_calendar: { add: "Adding a calendar event", get: "Checking your calendar" },
   manage_expenses: { create: "Logging an expense", summary: "Checking your expenses" },
+  manage_contacts: { search: "Searching device contacts", list: "Viewing synced contacts", get: "Looking up contact", add: "Saving contact" },
   communicate: { whatsapp: "Opening WhatsApp", sms: "Opening messages", call: "Opening the dialer", read_emails: "Checking Gmail", email: "Sending an email" },
   navigate: { directions: "Getting directions", location: "Checking your location", nearby: "Finding nearby places" },
   generate: {
@@ -28,6 +29,7 @@ const BASE_LABELS: Record<string, string> = {
   complete_step: "Verifying a step",
   fail_step: "Fixing a failed step",
   calculate: "Running the numbers",
+  manage_contacts: "Accessing device contacts",
   get_current_time: "Checking the time",
   remember: "Remembering that",
   save_file: "Saving the file",

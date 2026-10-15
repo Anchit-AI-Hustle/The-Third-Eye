@@ -50,6 +50,8 @@ export function isSensitive(tool: string, args?: any): boolean {
 export function summarizeAction(tool: string, args: any): string {
   if (isMcpTool(tool)) return summarizeMcpAction(tool, args);
   switch (tool) {
+    case "manage_contacts":
+      return `Access device contacts (${args?.action ?? "search"})`;
     case "communicate":
       return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
     case "send_email":

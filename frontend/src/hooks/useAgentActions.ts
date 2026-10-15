@@ -132,6 +132,17 @@ export function useAgentActions() {
             case "expense_delete":
               if (d.id) removeExpense(d.id);
               break;
+            case "contact_add":
+              if (d.contact && typeof window !== "undefined") {
+                try {
+                  const raw = localStorage.getItem("jarvis_contacts_v1");
+                  const list = raw ? JSON.parse(raw) : [];
+                  list.push(d.contact);
+                  localStorage.setItem("jarvis_contacts_v1", JSON.stringify(list));
+                  window.dispatchEvent(new CustomEvent("jarvis:contacts", { detail: list }));
+                } catch {}
+              }
+              break;
             case "open_url":
               if (d.url) openResolved(d.url);
               break;

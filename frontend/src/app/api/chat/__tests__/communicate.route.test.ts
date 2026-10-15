@@ -97,4 +97,49 @@ describe("communicate tool in /api/chat", () => {
     expect(mockSendWhatsAppText).toHaveBeenCalledWith("919873945238", "Hello directly");
     expect(res.text).toContain("WhatsApp sent directly");
   });
+
+  it("automatically resolves Aviral Vahdam from essential contacts even if request contacts is empty", async () => {
+    script = [
+      { calls: [{ name: "communicate", args: { action: "whatsapp", to: "Aviral Vahdam", message: "Project update ready" } }] },
+      { text: "WhatsApp link prepared for Aviral Vahdam." },
+    ];
+
+    const res = await chat({
+      message: "send whatsapp to Aviral Vahdam saying Project update ready",
+      contacts: [],
+    });
+
+    expect(res.done?.sideEffects).toBeDefined();
+    const openUrl = res.done.sideEffects.find((fx: any) => fx.type === "open_url");
+    expect(openUrl).toBeDefined();
+    expect(openUrl.data.url).toContain("919811122334");
+    expect(openUrl.data.nativeUrl).toContain("whatsapp://send?phone=919811122334");
+  });
+
+  it("manage_contacts searches and retrieves synced phone contacts", async () => {
+    script = [
+      { calls: [{ name: "manage_contacts", args: { action: "search", query: "Aviral Vahdam" } }] },
+      { text: "Found contact details for Aviral Vahdam." },
+    ];
+
+    const res = await chat({
+      message: "look up Aviral Vahdam's number",
+      contacts: [],
+    });
+
+    expect(res.text).toContain("Found contact details for Aviral Vahdam");
+  });
+
+  it("manage_contacts lists all synced contacts", async () => {
+    script = [
+      { calls: [{ name: "manage_contacts", args: { action: "list" } }] },
+      { text: "Here are your synced device contacts." },
+    ];
+
+    const res = await chat({
+      message: "list all my contacts",
+    });
+
+    expect(res.text).toContain("Here are your synced device contacts");
+  });
 });
