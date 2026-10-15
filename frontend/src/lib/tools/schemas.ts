@@ -192,13 +192,30 @@ export const geminiTools = [
         },
       },
       {
+        name: "manage_contacts",
+        description: "Unified contact manager and phone sync: search, list, get, or add contacts synchronized across the user's phone, laptop, and cloud. action='search' to find a contact by name (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') or relationship, 'list' to view all synced phone/device contacts, 'get' to retrieve phone/email details, 'add' to save a new contact. All device contacts synced from phone/Google/iCloud are accessible here.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["search", "list", "get", "add"], description: "What to do" },
+            query: { type: "STRING", description: "Contact name, relationship, or keyword to search for (e.g. 'Aviral Vahdam', 'Mom')" },
+            name: { type: "STRING", description: "Contact full name (for add/get)" },
+            phone: { type: "STRING", description: "Phone number (for add)" },
+            email: { type: "STRING", description: "Email address (for add)" },
+            relationship: { type: "STRING", description: "Relationship, e.g. Family, Work, Friend (for add)" },
+            notes: { type: "STRING", description: "Notes about contact (for add)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
         name: "communicate",
-        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call' to send, 'read_emails' to check inbox.",
+        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or make a call, execute directly without asking repetitive confirmations. Recipient names (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') are automatically resolved from synced phone contacts.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["whatsapp", "sms", "email", "call", "read_emails"], description: "Communication channel" },
-            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Mom')" },
+            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Aviral Vahdam', 'Mom')" },
             number: { type: "STRING", description: "Phone number or contact name (for sms/call/whatsapp)" },
             message: { type: "STRING", description: "Message text" },
             subject: { type: "STRING", description: "Email subject (for email)" },

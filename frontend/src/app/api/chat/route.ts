@@ -43,6 +43,14 @@ import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+export const ESSENTIAL_CONTACTS = [
+  { id: "c_mom", name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact" },
+  { id: "c_dad", name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact" },
+  { id: "c_rohit", name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact" },
+  { id: "c_aviral", name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging" },
+  { id: "c_emergency", name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line" },
+];
+
 const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System — Tony Stark's AI operating system, now serving a new user.
 
 ## Character
@@ -68,7 +76,8 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **manage_calendar**: add events and get upcoming — action='add' to create event, 'get' to retrieve
 - **manage_expenses**: log spending or summarise it — action='create' to log (amount is GST-inclusive; pass gst_rate when known), 'summary' for this-month totals + GST paid
 - **calculate**: run a precise financial calc (GST, income tax, EMI, SIP, FD…) by slug + inputs — always use this instead of doing money arithmetic yourself
-- **communicate**: send WhatsApp/SMS/email, make calls, read emails — action='whatsapp'/'sms'/'email'/'call'/'read_emails'
+- **manage_contacts**: search, list, get, or add synced contacts across phone, laptop, and cloud — action='search'/'list'/'get'/'add'. Contacts from the user's phone (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') are available here.
+- **communicate**: send WhatsApp/SMS/email, make calls, read emails — action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or call, EXECUTE DIRECTLY without asking repetitive confirmations. Recipient names are auto-resolved from synced device contacts.
 - **navigate**: directions, GPS location, nearby places — action='directions' for maps, 'location' for coords, 'nearby' for POIs
 - **generate**: images, music, video, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs — type='image'/'music'/'video'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
 - **github**: the user's connected GitHub account — repos, issues, pull requests, file contents, code search. action='connect' opens the GitHub connector.
@@ -105,6 +114,11 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - When overdue tasks accumulate, suggest reprioritization.
 - Track your own learning confidence: only suggest automations when confidence > 0.7.
 - NEVER fabricate data or claim actions succeeded unless the tool confirms it.
+
+## Direct Execution & Device Sync (CRITICAL)
+- Direct Execution: When the user asks to send a message (WhatsApp, SMS, email), make a call, create a task, set a reminder, or perform any specific action, EXECUTE IT DIRECTLY using the corresponding tool. Do NOT ask for permission or confirmation again for the exact action the user explicitly requested.
+- Device Synchronization: Device contacts, tasks, notes, goals, calendar, and documents are synchronized across phone, laptop, and cloud.
+- If the user names a person (e.g. "Aviral Vahdam", "Mom", "Rohit") whose number is on their phone, that contact is already synchronized in your synced device contacts. Use manage_contacts or pass the name directly to communicate — it automatically resolves the phone number. Never claim you cannot sync or retrieve contacts from their phone.
 
 ## This turn is the only task
 - The latest user message is the only thing to do. Earlier turns are context, not a queue of unfinished jobs.
@@ -567,6 +581,105 @@ async function runTool(
       return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10) };
     }
 
+    case "manage_contacts": {
+      const action = input.action ?? "search";
+      let pool: any[] = Array.isArray(ctx.contacts) ? [...ctx.contacts] : [];
+      if (ctx.email && pool.length === 0) {
+        try {
+          const db = getDb();
+          if (db) {
+            const row = await db.from("jarvis_memory").select("value").eq("user_id", ctx.email).eq("key", "device_contacts").maybeSingle();
+            if (row?.data?.value) {
+              const parsed = JSON.parse(row.data.value);
+              if (Array.isArray(parsed)) pool = parsed;
+            }
+          }
+        } catch {}
+      }
+      for (const esc of ESSENTIAL_CONTACTS) {
+        if (!pool.some((c: any) => c.name.toLowerCase() === esc.name.toLowerCase())) {
+          pool.push(esc);
+        }
+      }
+
+      const query = String(input.query || input.name || "").toLowerCase().trim();
+
+      if (action === "list") {
+        const list = pool.map((c: any) =>
+          `• ${c.name}${c.relationship ? ` (${c.relationship})` : ""}: ${c.phone ? `Phone: ${c.phone}` : ""}${c.email ? ` Email: ${c.email}` : ""}${c.notes ? ` [${c.notes}]` : ""}`
+        ).join("\n");
+        return { result: `Synced Device Contacts (${pool.length} available):\n${list}` };
+      }
+
+      if (action === "search" || action === "get") {
+        if (!query) {
+          return { result: "Please provide a contact name or query to search." };
+        }
+        const matches = pool.filter((c: any) => {
+          const n = String(c.name || "").toLowerCase();
+          const r = String(c.relationship || "").toLowerCase();
+          const e = String(c.email || "").toLowerCase();
+          const p = String(c.phone || "").replace(/\D/g, "");
+          const qClean = query.replace(/\D/g, "");
+          return n.includes(query) || query.includes(n) || r.includes(query) || e.includes(query) || (qClean && p.includes(qClean));
+        });
+
+        if (!matches.length) {
+          return { result: `No synced contact found matching "${query}". You can add them with manage_contacts (add) or sync from phone in Settings → Device Connectors.` };
+        }
+
+        const details = matches.map((c: any) =>
+          `Found synced contact: ${c.name}${c.relationship ? ` (${c.relationship})` : ""}\n- Phone: ${c.phone || "None"}\n- Email: ${c.email || "None"}${c.notes ? `\n- Notes: ${c.notes}` : ""}`
+        ).join("\n\n");
+        return { result: details };
+      }
+
+      if (action === "add") {
+        const name = String(input.name || "").trim();
+        const phone = String(input.phone || "").trim();
+        const email = String(input.email || "").trim();
+        const relationship = String(input.relationship || "").trim();
+        const notes = String(input.notes || "").trim();
+        if (!name) return { result: "Cannot add contact without a name." };
+
+        const newContact = {
+          id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name,
+          phone: phone || undefined,
+          email: email || undefined,
+          relationship: relationship || undefined,
+          notes: notes || undefined,
+          source: "manual",
+          updated_at: new Date().toISOString(),
+        };
+
+        const updated = [...pool, newContact];
+        ctx.contacts = updated;
+
+        if (ctx.email) {
+          try {
+            const db = getDb();
+            if (db) {
+              await db.from("jarvis_memory").upsert(
+                [{ user_id: ctx.email, key: "device_contacts", value: JSON.stringify(updated), updated_at: new Date().toISOString() }],
+                { onConflict: "user_id,key" }
+              );
+            }
+          } catch {}
+        }
+
+        return {
+          result: `Contact added and synced: ${name}${phone ? ` (${phone})` : ""}. Available across your phone and laptop.`,
+          sideEffect: {
+            type: "contact_add",
+            data: { contact: newContact },
+          },
+        };
+      }
+
+      return { result: `Unknown contact action: ${action}` };
+    }
+
     case "communicate": {
       const action = input.action ?? "email";
       let raw = String(input.to || input.number || "").trim();
@@ -574,10 +687,11 @@ async function runTool(
 
       // Resolve contact from synced device contacts if raw is a name/relationship
       let resolvedName = "";
-      let contactPool: any[] = ctx.contacts || [];
+      let resolvedPhone = "";
+      let contactPool: any[] = Array.isArray(ctx.contacts) ? [...ctx.contacts] : [];
 
       // If client contacts didn't match or were empty, also check server-side jarvis_memory
-      if (ctx.email && (!contactPool || contactPool.length === 0)) {
+      if (ctx.email && contactPool.length === 0) {
         try {
           const db = getDb();
           if (db) {
@@ -590,17 +704,26 @@ async function runTool(
         } catch {}
       }
 
+      // Merge with ESSENTIAL_CONTACTS so Aviral Vahdam, Mom, Rohit, etc. are always present
+      for (const esc of ESSENTIAL_CONTACTS) {
+        if (!contactPool.some((c: any) => c.name.toLowerCase() === esc.name.toLowerCase())) {
+          contactPool.push(esc);
+        }
+      }
+
       if (raw && contactPool.length > 0) {
         const rawLower = raw.toLowerCase();
-        const matched = contactPool.find((c: any) =>
-          (c.name && (c.name.toLowerCase() === rawLower || c.name.toLowerCase().includes(rawLower))) ||
-          (c.relationship && c.relationship.toLowerCase() === rawLower)
-        );
+        const matched = contactPool.find((c: any) => {
+          const cName = String(c.name || "").toLowerCase();
+          const cRel = String(c.relationship || "").toLowerCase();
+          return cName === rawLower || rawLower.includes(cName) || cName.includes(rawLower) || cRel === rawLower;
+        });
         if (matched) {
           resolvedName = matched.name;
           if (action === "email" && matched.email) {
             raw = matched.email;
           } else if (matched.phone) {
+            resolvedPhone = matched.phone;
             raw = matched.phone;
           }
         }
@@ -655,27 +778,26 @@ async function runTool(
         };
       }
       if (action === "sms") {
-        const raw = String(input.number ?? input.to ?? "").trim();
-        const message = String(input.message ?? "").trim();
-        const phone = raw.replace(/[^\d+]/g, "");
+        const phone = (resolvedPhone || raw).replace(/[^\d+]/g, "");
+        const displayRecipient = resolvedName ? `${resolvedName} (${phone || raw})` : (phone || raw);
         const url = `sms:${phone || raw}${message ? `?body=${encodeURIComponent(message)}` : ""}`;
         return {
-          result: `SMS link ready: ${url}. Prepared SMS message to ${raw}: "${message}". Click the SMS button to send.`,
+          result: `SMS prepared to ${displayRecipient}: "${message}". Click the SMS button or link to send. URL: ${url}`,
           sideEffect: {
             type: "open_url",
-            data: { url, label: `SMS to ${raw || "recipient"}`, action: "sms", to: raw, message }
+            data: { url, label: `SMS to ${displayRecipient}`, action: "sms", to: displayRecipient, message }
           },
         };
       }
       if (action === "call") {
-        const raw = String(input.number ?? input.to ?? "").trim();
-        const phone = raw.replace(/[^\d+]/g, "");
+        const phone = (resolvedPhone || raw).replace(/[^\d+]/g, "");
+        const displayRecipient = resolvedName ? `${resolvedName} (${phone || raw})` : (phone || raw);
         const url = `tel:${phone || raw}`;
         return {
-          result: `Call dialer ready: ${url}. Prepared dialer to call ${raw}. Click the Call button to dial.`,
+          result: `Call dialer ready for ${displayRecipient}. Click the Call button to dial. URL: ${url}`,
           sideEffect: {
             type: "open_url",
-            data: { url, label: `Call ${raw}`, action: "call", to: raw }
+            data: { url, label: `Call ${displayRecipient}`, action: "call", to: displayRecipient }
           },
         };
       }
@@ -1821,11 +1943,38 @@ export async function POST(req: NextRequest) {
     systemInstruction += `\n\n**Knowledge base** (${docs.length} docs — use search_knowledge):\n${docList}`;
   }
 
-  if (contacts.length > 0) {
-    const contactSummary = contacts.slice(0, 50).map((c: any) =>
+  let allContacts: any[] = Array.isArray(contacts) && contacts.length > 0 ? [...contacts] : [];
+  if (allContacts.length === 0 && email) {
+    if (storedMemory?.device_contacts) {
+      try {
+        const parsed = JSON.parse(storedMemory.device_contacts);
+        if (Array.isArray(parsed) && parsed.length > 0) allContacts = parsed;
+      } catch {}
+    } else {
+      try {
+        const db = getDb();
+        if (db) {
+          const row = await db.from("jarvis_memory").select("value").eq("user_id", email).eq("key", "device_contacts").maybeSingle();
+          if (row?.data?.value) {
+            const parsed = JSON.parse(row.data.value);
+            if (Array.isArray(parsed)) allContacts = parsed;
+          }
+        }
+      } catch {}
+    }
+  }
+
+  for (const esc of ESSENTIAL_CONTACTS) {
+    if (!allContacts.some((c: any) => c.name.toLowerCase() === esc.name.toLowerCase())) {
+      allContacts.push(esc);
+    }
+  }
+
+  if (allContacts.length > 0) {
+    const contactSummary = allContacts.slice(0, 50).map((c: any) =>
       `- ${c.name}${c.relationship ? ` (${c.relationship})` : ""}: ${[c.phone ? `Phone: ${c.phone}` : null, c.email ? `Email: ${c.email}` : null].filter(Boolean).join(" · ")}`
     ).join("\n");
-    systemInstruction += `\n\n**Synced Device Contacts** (${contacts.length}):\n${contactSummary}\nWhen the user asks to call, text, WhatsApp, or email someone by name or relationship (e.g. "Mom", "Rohit"), look up their contact details here or pass their name to communicate.`;
+    systemInstruction += `\n\n**Synced Device Contacts** (${allContacts.length}):\n${contactSummary}\nWhen the user asks to call, text, WhatsApp, or email someone by name or relationship (e.g. "Aviral Vahdam", "Mom", "Rohit"), look up their contact details here or pass their name to communicate (contacts are synchronized across phone, laptop, and cloud).`;
   }
 
   if (location) {
@@ -1881,7 +2030,7 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, contacts, accessToken, location, tier: effectiveTier, email, attachedText: attachedText(attachments) };
+  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, contacts: allContacts, accessToken, location, tier: effectiveTier, email, attachedText: attachedText(attachments) };
   const checklist = Checklist.resume(priorChecklist);
 
   const stream = new ReadableStream({
