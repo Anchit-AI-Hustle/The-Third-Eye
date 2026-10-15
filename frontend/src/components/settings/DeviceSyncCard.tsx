@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Users,
   FolderSync,
@@ -17,6 +17,9 @@ import {
   FileUp,
   Cloud,
   ClipboardList,
+  Laptop,
+  X,
+  Sparkles,
 } from "lucide-react";
 import { useLocalContacts, type DeviceContact } from "@/hooks/useLocalContacts";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
@@ -43,6 +46,8 @@ export function DeviceSyncCard() {
 
   const [showAddContact, setShowAddContact] = useState(false);
   const [showPasteContacts, setShowPasteContacts] = useState(false);
+  const [showContactsSyncModal, setShowContactsSyncModal] = useState(false);
+  const [isLaptop, setIsLaptop] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [showContactList, setShowContactList] = useState(false);
   const [showFileList, setShowFileList] = useState(false);
@@ -55,8 +60,16 @@ export function DeviceSyncCard() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const folderFallbackInputRef = useRef<HTMLInputElement>(null);
   const vcfInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = navigator.userAgent;
+    const isMobile = /iPad|iPhone|iPod|Android/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    setIsLaptop(!isMobile);
+  }, []);
 
   const handleSyncContacts = async () => {
     setContactError(null);
@@ -73,10 +86,8 @@ export function DeviceSyncCard() {
       return;
     }
 
-    // On iOS Safari & Desktop Safari/Firefox: trigger vCard file picker
-    if (vcfInputRef.current) {
-      vcfInputRef.current.click();
-    }
+    // On iOS Safari & Laptop browsers without Contacts API: open the contacts sync sheet
+    setShowContactsSyncModal(true);
   };
 
   const handleVcfInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,14 +153,16 @@ export function DeviceSyncCard() {
   const handleSyncFolder = async () => {
     setFolderError(null);
     setFolderSuccess(null);
-    // On iOS Safari / mobile browsers without directory picker, trigger file picker immediately in user gesture loop
+
+    // On iOS Safari / mobile browsers without directory picker, trigger file/photo picker immediately
     if (typeof window !== "undefined" && !("showDirectoryPicker" in window)) {
-      folderFallbackInputRef.current?.click();
+      fileInputRef.current?.click();
       return;
     }
+
     const res = await syncDeviceFolder();
     if (res.promptFiles) {
-      folderFallbackInputRef.current?.click();
+      fileInputRef.current?.click();
       return;
     }
     if (res.error) {
@@ -167,19 +180,42 @@ export function DeviceSyncCard() {
     const res = await upload(files);
     setFolderSuccess(`Indexed ${res.length} file${res.length === 1 ? "" : "s"} & photos.`);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (photoInputRef.current) photoInputRef.current.value = "";
     if (folderFallbackInputRef.current) folderFallbackInputRef.current.value = "";
   };
 
   return (
     <div className="holo-card rounded-card p-5 mt-5">
-      {/* Native file inputs (accessible to screen readers & OS without display:none so WebKit/iOS opens file dialogs) */}
+      {/* Native file inputs (fixed offscreen without pointer-events-none so WebKit/iOS and laptops trigger cleanly) */}
       <input
         id="device-vcf-native-input"
         type="file"
         ref={vcfInputRef}
         onChange={handleVcfInputChange}
         accept=".vcf,.vcard,.csv,text/vcard,text/x-vcard"
-        className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10"
+        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      <input
+        id="device-photos-native-input"
+        type="file"
+        ref={photoInputRef}
+        onChange={handleFileInputChange}
+        multiple
+        accept="image/*"
+        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      <input
+        id="device-files-native-input"
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        multiple
+        accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.py,.ts,.js,.html,.sh,.heic,.heif"
+        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
         tabIndex={-1}
         aria-hidden="true"
       />
@@ -190,13 +226,13 @@ export function DeviceSyncCard() {
         onChange={handleFileInputChange}
         multiple
         accept="*/*"
-        className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10"
+        style={{ position: "fixed", top: "-1000px", left: "-1000px", opacity: 0, width: "1px", height: "1px" }}
         tabIndex={-1}
         aria-hidden="true"
       />
 
       <div className="flex items-center gap-2 mb-1">
-        <Smartphone size={14} className="text-[#4FC3F7]" />
+        {isLaptop ? <Laptop size={14} className="text-[#4FC3F7]" /> : <Smartphone size={14} className="text-[#4FC3F7]" />}
         <span className="hud-label text-[#4FC3F7]">// Device Connectors &amp; Local Hub</span>
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
@@ -208,6 +244,132 @@ export function DeviceSyncCard() {
       <p className="text-text-muted text-xs font-mono mt-1 mb-5 tracking-wider leading-relaxed">
         Allow JARVIS to access device contacts, files, and photos natively and locally. Contacts resolve names (&ldquo;Mom&rdquo;, &ldquo;Rohit&rdquo;, &ldquo;Aviral&rdquo;) to numbers for WhatsApp/Calls/SMS and follow you across all devices.
       </p>
+
+      {/* Contacts Sync Modal / Action Sheet */}
+      {showContactsSyncModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-lg w-full bg-[#0D1117] border border-border-default rounded-card shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 border-b border-border-default pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-[#4FC3F7]" />
+                  <h3 className="font-semibold text-text-primary text-base">Device Contacts Sync</h3>
+                </div>
+                <p className="text-xs text-text-muted mt-1">
+                  Sync contacts from iPhone, Android, or Laptop into JARVIS memory &amp; cloud.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContactsSyncModal(false)}
+                className="text-text-muted hover:text-text-primary p-1 rounded hover:bg-white/5"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Option 1: File Import */}
+            <div className="p-3.5 rounded-card bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 space-y-2.5">
+              <div className="font-medium text-xs text-text-primary flex items-center gap-1.5">
+                <FileUp size={14} className="text-[#4FC3F7]" />
+                <span>Option 1: Import Contacts File (.vcf / iCloud / CSV)</span>
+              </div>
+              <label
+                htmlFor="device-vcf-native-input"
+                onClick={() => setShowContactsSyncModal(false)}
+                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:bg-[#38b6f0] transition-colors cursor-pointer shadow-sm text-center"
+              >
+                <FileUp size={14} />
+                <span>Select .vcf or .csv File</span>
+              </label>
+
+              <div className="text-[11px] text-text-muted space-y-1 bg-background-base/60 p-2.5 rounded border border-border-default/60">
+                <p className="font-semibold text-text-primary">📱 How to export all iPhone contacts in 5 seconds:</p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1">
+                  <li>Open iPhone <strong>Contacts</strong> app.</li>
+                  <li>Tap <strong>Lists</strong> in the top left corner.</li>
+                  <li>Long-press or tap <strong>All Contacts</strong> → tap <strong>Export</strong> (or Share Contacts).</li>
+                  <li>Tap <strong>Save to Files</strong>. Then choose that .vcf file here!</li>
+                </ol>
+                <p className="pt-1 text-[10px] text-text-muted">
+                  💻 <strong>On Mac / PC Laptop:</strong> Apple Contacts → File → Export vCard, or Google Contacts → Export.
+                </p>
+              </div>
+            </div>
+
+            {/* Option 2: Quick Paste */}
+            <div className="p-3 rounded-card bg-background-surface/50 border border-border-default space-y-2">
+              <div className="font-medium text-xs text-text-primary flex items-center gap-1.5">
+                <ClipboardList size={14} className="text-[#4FC3F7]" />
+                <span>Option 2: Paste Contact Names &amp; Numbers</span>
+              </div>
+              <textarea
+                rows={3}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder="Aviral Vahdam, +91 9876543210&#10;Rohit Sharma, +91 9873945238&#10;Mom, +1 555 123 4567"
+                className="w-full bg-background-base border border-border-default rounded p-2 text-xs text-text-primary outline-none focus:border-[#4FC3F7] font-mono"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  handlePasteSubmit(e);
+                  setShowContactsSyncModal(false);
+                }}
+                disabled={!pasteText.trim()}
+                className="w-full py-1.5 bg-[#4FC3F7]/20 border border-[#4FC3F7]/40 text-[#4FC3F7] rounded text-xs font-medium hover:bg-[#4FC3F7]/30 transition-colors disabled:opacity-40"
+              >
+                Import Pasted Contacts
+              </button>
+            </div>
+
+            {/* Option 3: Manual Add */}
+            <div className="p-3 rounded-card bg-background-surface/50 border border-border-default space-y-2">
+              <div className="font-medium text-xs text-text-primary flex items-center gap-1.5">
+                <Plus size={14} className="text-[#4FC3F7]" />
+                <span>Option 3: Add Single Contact</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  placeholder="Name (e.g. Rohit Sharma)"
+                  value={newContact.name}
+                  onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                  className="bg-background-base border border-border-default rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-[#4FC3F7]"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone (e.g. +91 9873945238)"
+                  value={newContact.phone}
+                  onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                  className="bg-background-base border border-border-default rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-[#4FC3F7]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  handleAddContactSubmit(e);
+                  if (newContact.name.trim()) setShowContactsSyncModal(false);
+                }}
+                disabled={!newContact.name.trim()}
+                className="w-full py-1.5 bg-[#4FC3F7]/20 border border-[#4FC3F7]/40 text-[#4FC3F7] rounded text-xs font-medium hover:bg-[#4FC3F7]/30 transition-colors disabled:opacity-40"
+              >
+                Save Contact to Memory &amp; Cloud
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setShowContactsSyncModal(false)}
+                className="px-4 py-1.5 rounded-input bg-background-surface border border-border-default text-xs text-text-secondary hover:text-text-primary"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Contacts Section */}
       <div className="rounded-card border border-border-default bg-background-surface/30 p-4 mb-4">
@@ -251,7 +413,7 @@ export function DeviceSyncCard() {
               disabled={syncingContacts}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#4FC3F7]/15 border border-[#4FC3F7]/30 text-[#4FC3F7] text-xs font-medium hover:bg-[#4FC3F7]/25 transition-colors disabled:opacity-50"
             >
-              {syncingContacts ? <Loader2 size={12} className="animate-spin" /> : <Smartphone size={12} />}
+              {syncingContacts ? <Loader2 size={12} className="animate-spin" /> : isLaptop ? <Laptop size={12} /> : <Smartphone size={12} />}
               {syncingContacts ? "Syncing…" : "Sync Device Contacts"}
             </button>
           </div>
@@ -259,7 +421,7 @@ export function DeviceSyncCard() {
 
         {/* Informative Platform Guidance */}
         <div className="text-[11px] text-text-muted my-1.5 leading-relaxed bg-background-base/40 p-2 rounded border border-border-default/40">
-          💡 <strong>iPhone &amp; Laptop tip:</strong> On iPhone, open <em>Contacts → tap Lists/Select All → Share Contacts → Save as .vcf</em> or select it here to sync all contacts in one tap. On Android Chrome, tapping &quot;Sync Device Contacts&quot; opens your address book picker.
+          💡 <strong>iPhone &amp; Laptop tip:</strong> On iPhone, open <em>Contacts → tap Lists/Select All → Share Contacts → Save as .vcf</em> or tap &quot;Sync Device Contacts&quot; to import directly. On Android Chrome, tapping &quot;Sync Device Contacts&quot; opens your address book picker.
         </div>
 
         {contactSuccess && (
@@ -412,17 +574,19 @@ export function DeviceSyncCard() {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <input
-              id="device-files-native-input"
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileInputChange}
-              multiple
-              accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.py,.ts,.js,.html,.sh,.heic,.heif"
-              className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10"
-              tabIndex={-1}
-              aria-hidden="true"
-            />
+            <label
+              htmlFor="device-photos-native-input"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") photoInputRef.current?.click(); }}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
+                uploading && "opacity-50 pointer-events-none"
+              )}
+              title="Upload photos, camera roll, and images from device"
+            >
+              <ImageIcon size={12} className="text-emerald-400" /> Upload Photos
+            </label>
             <label
               htmlFor="device-files-native-input"
               role="button"
@@ -432,14 +596,16 @@ export function DeviceSyncCard() {
                 "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
                 uploading && "opacity-50 pointer-events-none"
               )}
+              title="Upload PDFs, office documents, notes, and code"
             >
-              <ImageIcon size={12} /> Upload Files / Photos
+              <FileText size={12} className="text-[#4FC3F7]" /> Upload Documents
             </label>
             <button
               type="button"
               onClick={handleSyncFolder}
               disabled={uploading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#4FC3F7]/15 border border-[#4FC3F7]/30 text-[#4FC3F7] text-xs font-medium hover:bg-[#4FC3F7]/25 transition-colors disabled:opacity-50"
+              title="Sync folder on laptop or index files"
             >
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <FolderSync size={12} />}
               {uploading ? "Indexing…" : "Sync Folder"}

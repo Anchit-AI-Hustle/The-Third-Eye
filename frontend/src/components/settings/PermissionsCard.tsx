@@ -26,6 +26,11 @@ import {
   Monitor,
   Clipboard,
   Info,
+  Laptop,
+  X,
+  Copy,
+  Check,
+  Lock,
 } from "lucide-react";
 import {
   CAPABILITIES,
@@ -38,8 +43,8 @@ import {
 import { CAP_META } from "@/components/permission/PermissionProvider";
 import { cn } from "@/lib/utils";
 
-// Detects platform and deep-links directly to the native phone device settings
-export async function openDeviceAppSettings(): Promise<{ opened: boolean; platform: "capacitor" | "ios" | "android" | "web" }> {
+// Detects platform and deep-links directly to native settings when supported, or guides the user safely
+export async function openDeviceAppSettings(): Promise<{ opened: boolean; platform: "capacitor" | "ios" | "android" | "mac" | "windows" | "web" }> {
   if (typeof window === "undefined") return { opened: false, platform: "web" };
 
   // 1. Capacitor Native Shell (iOS / Android build)
@@ -49,28 +54,27 @@ export async function openDeviceAppSettings(): Promise<{ opened: boolean; platfo
       await C.Plugins.App.openSettings();
       return { opened: true, platform: "capacitor" };
     } catch {
-      // Fall through to OS scheme
+      // Fall through to browser guide
     }
   }
 
-  // 2. iOS Native Settings scheme
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  // 2. Web Browsers on iOS, Android, macOS, or Windows:
+  // Direct URL schemes like 'app-settings:' or 'intent:' cause Safari / WebKit to throw:
+  // "Safari cannot open the page because the address is invalid."
+  // Instead, return platform info so the interactive Device Settings modal opens safely on both phone and laptop.
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  if (isIOS) {
-    try {
-      window.location.href = "app-settings:";
-      return { opened: true, platform: "ios" };
-    } catch {}
-  }
+  if (isIOS) return { opened: false, platform: "ios" };
 
-  // 3. Android Intent for Application Details Settings
-  const isAndroid = /Android/.test(navigator.userAgent);
-  if (isAndroid) {
-    try {
-      window.location.href = "intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;package=com.jarvis.app;end";
-      return { opened: true, platform: "android" };
-    } catch {}
-  }
+  const isAndroid = /Android/.test(ua);
+  if (isAndroid) return { opened: false, platform: "android" };
+
+  const isMac = /Macintosh|MacIntel|MacPPC|Mac68K/.test(navigator.platform || ua);
+  if (isMac) return { opened: false, platform: "mac" };
+
+  const isWindows = /Win32|Win64|Windows|WinCE/.test(navigator.platform || ua);
+  if (isWindows) return { opened: false, platform: "windows" };
 
   return { opened: false, platform: "web" };
 }
@@ -151,8 +155,28 @@ export function PermissionsCard() {
   const [systemStatuses, setSystemStatuses] = useState<Record<string, SystemStatus>>({});
   const [testResults, setTestResults] = useState<Record<string, { status: "testing" | "success" | "error"; message: string }>>({});
   const [showDesktopHelp, setShowDesktopHelp] = useState(false);
+  const [promptingAll, setPromptingAll] = useState(false);
+  const [promptStep, setPromptStep] = useState<string | null>(null);
+  const [platformInfo, setPlatformInfo] = useState<{ isIOS: boolean; isAndroid: boolean; isMac: boolean; isWindows: boolean; isLaptop: boolean }>({
+    isIOS: false,
+    isAndroid: false,
+    isMac: false,
+    isWindows: false,
+    isLaptop: false,
+  });
   const fileTestInputRef = useRef<HTMLInputElement>(null);
   const photoTestInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/.test(ua);
+    const isMac = !isIOS && /Macintosh|MacIntel|MacPPC|Mac68K/.test(navigator.platform || ua);
+    const isWindows = /Win32|Win64|Windows|WinCE/.test(navigator.platform || ua);
+    const isLaptop = isMac || isWindows || (!isIOS && !isAndroid);
+    setPlatformInfo({ isIOS, isAndroid, isMac, isWindows, isLaptop });
+  }, []);
 
   // Load policies
   useEffect(() => {
@@ -201,12 +225,62 @@ export function PermissionsCard() {
     refreshSystemStatuses();
   }, [refreshSystemStatuses]);
 
-  // Handle open settings action
+  // Handle open settings action - safe across Phone (iOS/Android) and Laptop (Mac/Windows)
   const handleOpenSettings = async () => {
     const res = await openDeviceAppSettings();
-    if (res.platform === "web" || !res.opened) {
+    if (!res.opened) {
       setShowDesktopHelp(true);
     }
+  };
+
+  // Prompt and verify all core hardware permissions in one tap
+  const handlePromptAllPermissions = async () => {
+    setPromptingAll(true);
+    setPromptStep("Initializing hardware test...");
+
+    // 1. Microphone
+    setPromptStep("1/4: Requesting Microphone access...");
+    try {
+      if (typeof navigator.mediaDevices?.getUserMedia === "function") {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    } catch {}
+
+    // 2. Camera
+    setPromptStep("2/4: Requesting Camera access...");
+    try {
+      if (typeof navigator.mediaDevices?.getUserMedia === "function") {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280 } });
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    } catch {}
+
+    // 3. Location
+    setPromptStep("3/4: Requesting Location access...");
+    try {
+      if (navigator.geolocation) {
+        await new Promise<void>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            () => resolve(),
+            () => resolve(),
+            { timeout: 8000 }
+          );
+        });
+      }
+    } catch {}
+
+    // 4. Notifications
+    setPromptStep("4/4: Requesting Notifications permission...");
+    try {
+      if (typeof Notification !== "undefined") {
+        await Notification.requestPermission();
+      }
+    } catch {}
+
+    setPromptStep("Probe complete! System permissions saved in your device & browser settings.");
+    setPromptingAll(false);
+    await refreshSystemStatuses();
   };
 
   // Test / prompt device access directly from settings
@@ -343,16 +417,23 @@ export function PermissionsCard() {
       <input ref={fileTestInputRef} type="file" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
       <input ref={photoTestInputRef} type="file" accept="image/*" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
 
-      {/* Header with App Settings & Native Link */}
+      {/* Header with App Settings & Cross-Platform Link */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border-default">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Smartphone size={18} className="text-[#4FC3F7]" />
+            {platformInfo.isLaptop ? (
+              <Laptop size={18} className="text-[#4FC3F7]" />
+            ) : (
+              <Smartphone size={18} className="text-[#4FC3F7]" />
+            )}
             <h2 className="text-base font-semibold text-text-primary">Phone App Settings & Device Access</h2>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#4FC3F7]/10 text-[#4FC3F7] border border-[#4FC3F7]/25 hidden sm:inline-block">
+              Mobile &amp; Laptop Compatible
+            </span>
           </div>
           <p className="text-xs text-text-muted max-w-2xl leading-relaxed">
             Configure access to documents, camera, location, contacts, and sensors. Just like any native
-            application on your phone, every capability is declared separately in device settings and within JARVIS.
+            application on your phone or laptop, every capability is declared separately in device settings and within JARVIS.
           </p>
         </div>
 
@@ -360,47 +441,164 @@ export function PermissionsCard() {
           type="button"
           onClick={handleOpenSettings}
           className="flex items-center gap-2 px-3.5 py-2 rounded-input bg-gradient-to-r from-[#4FC3F7]/20 to-[#0288D1]/20 hover:from-[#4FC3F7]/30 hover:to-[#0288D1]/30 border border-[#4FC3F7]/40 text-[#4FC3F7] text-xs font-medium transition-all shadow-sm flex-none w-fit"
+          title="Open device settings and configure permissions on phone or laptop"
         >
-          <ExternalLink size={14} />
+          {platformInfo.isLaptop ? <Laptop size={14} /> : <ExternalLink size={14} />}
           <span>Open Phone Device Settings</span>
+          <span className="text-[10px] text-text-muted font-mono hidden sm:inline">(Mobile &amp; Laptop)</span>
         </button>
       </div>
 
       {/* Platform Device Guide Pill */}
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-card bg-background-elevated/60 border border-border-default text-xs text-text-secondary">
         <Info size={14} className="text-[#4FC3F7] flex-none" />
-        <span className="font-medium text-text-primary">Where to find these in your phone:</span>
+        <span className="font-medium text-text-primary">Where to find these in your phone or laptop:</span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
           iOS: Settings → JARVIS OS
         </span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
           Android: Settings → Apps → JARVIS OS → Permissions
         </span>
+        <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
+          Laptop: Browser Address Bar 🔒 / 🎛️ → Permissions
+        </span>
       </div>
 
-      {/* Desktop / Browser Help Modal Banner */}
+      {/* Desktop / Browser Help Modal Banner & Interactive Guide */}
       {showDesktopHelp && (
-        <div className="p-3.5 rounded-card bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-xs text-text-secondary flex items-start justify-between gap-3 animate-in fade-in">
-          <div className="space-y-1">
-            <div className="font-semibold text-text-primary flex items-center gap-1.5">
-              <ShieldCheck size={14} className="text-[#4FC3F7]" />
-              Device App Settings Guide
+        <div className="p-4 rounded-card bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-xs text-text-secondary space-y-3.5 animate-in fade-in">
+          <div className="flex items-start justify-between gap-3 border-b border-[#4FC3F7]/20 pb-3">
+            <div className="space-y-1">
+              <div className="font-semibold text-text-primary flex items-center gap-2 text-sm">
+                <ShieldCheck size={16} className="text-[#4FC3F7]" />
+                Device App Settings Guide
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/10 text-[#4FC3F7] border border-white/10">
+                  {platformInfo.isIOS
+                    ? "📱 iPhone / iPad (iOS Safari)"
+                    : platformInfo.isMac
+                    ? "💻 Mac Laptop / Desktop"
+                    : platformInfo.isWindows
+                    ? "💻 Windows Laptop / PC"
+                    : platformInfo.isAndroid
+                    ? "🤖 Android"
+                    : "💻 Laptop & Mobile"}
+                </span>
+              </div>
+              <p className="text-text-muted leading-relaxed">
+                Step-by-step instructions to configure system permissions on phone and laptop, plus 1-click permission verification.
+              </p>
             </div>
-            <p className="text-text-muted leading-relaxed">
-              • <strong>On iPhone / iPad:</strong> Open your home screen <strong>Settings</strong> app, scroll down and tap <strong>JARVIS OS</strong> to toggle Camera, Photos, Location, and Contacts.
-              <br />
-              • <strong>On Android:</strong> Open <strong>Settings → Apps → JARVIS OS → Permissions</strong> to toggle individual permissions.
-              <br />
-              • <strong>In Web Browser:</strong> Click the padlock or settings tune icon to the left of the URL in your address bar to adjust Site permissions.
-            </p>
+            <button
+              type="button"
+              onClick={() => setShowDesktopHelp(false)}
+              className="text-text-muted hover:text-text-primary text-xs px-2.5 py-1 rounded bg-background-surface border border-border-default flex-none flex items-center gap-1"
+            >
+              <X size={12} />
+              <span>Dismiss</span>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowDesktopHelp(false)}
-            className="text-text-muted hover:text-text-primary text-xs px-2 py-1 rounded bg-background-surface border border-border-default flex-none"
-          >
-            Dismiss
-          </button>
+
+          {/* Quick Hardware Prompt Action */}
+          <div className="p-3 rounded-card bg-background-surface/80 border border-border-default flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="font-medium text-text-primary text-xs flex items-center gap-1.5">
+                <Sparkles size={13} className="text-[#4FC3F7]" />
+                <span>Grant &amp; Test All Device Permissions</span>
+              </div>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                Triggers native browser prompts for Camera, Microphone, Location &amp; Alerts in sequence. Once allowed, your device permanently saves them.
+              </p>
+              {promptStep && (
+                <div className="mt-1.5 text-[11px] text-[#4FC3F7] font-mono flex items-center gap-1.5">
+                  {promptingAll ? <RefreshCw size={11} className="animate-spin" /> : <CheckCircle2 size={11} className="text-emerald-400" />}
+                  <span>{promptStep}</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handlePromptAllPermissions}
+              disabled={promptingAll}
+              className="px-3 py-1.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:bg-[#38b6f0] transition-colors flex-none flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {promptingAll ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              <span>{promptingAll ? "Prompting..." : "Prompt All Now"}</span>
+            </button>
+          </div>
+
+          {/* Platform Specific Steps */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+            {/* iPhone / iPad */}
+            <div className={cn(
+              "p-3 rounded-card border text-xs space-y-1.5",
+              platformInfo.isIOS ? "bg-[#4FC3F7]/15 border-[#4FC3F7]/40 ring-1 ring-[#4FC3F7]/30" : "bg-background-surface/50 border-border-default"
+            )}>
+              <div className="font-semibold text-text-primary flex items-center gap-1.5">
+                <Smartphone size={13} className="text-[#4FC3F7]" />
+                <span>iPhone &amp; iPad (iOS Safari / Chrome)</span>
+                {platformInfo.isIOS && <span className="text-[10px] text-[#4FC3F7] font-mono uppercase ml-auto">Detected</span>}
+              </div>
+              <ol className="list-decimal list-inside text-text-muted space-y-1 text-[11px] leading-relaxed">
+                <li>Tap <strong>aA</strong> in the Safari address bar (left or bottom).</li>
+                <li>Tap <strong>Website Settings</strong>.</li>
+                <li>Set <strong>Camera</strong>, <strong>Microphone</strong> &amp; <strong>Location</strong> to <strong>Allow</strong>.</li>
+                <li>Or open iPhone <strong>Settings → JARVIS OS</strong> (or Safari) to toggle access.</li>
+              </ol>
+            </div>
+
+            {/* Mac Laptop & Desktop */}
+            <div className={cn(
+              "p-3 rounded-card border text-xs space-y-1.5",
+              platformInfo.isMac || (!platformInfo.isIOS && !platformInfo.isAndroid) ? "bg-[#4FC3F7]/15 border-[#4FC3F7]/40 ring-1 ring-[#4FC3F7]/30" : "bg-background-surface/50 border-border-default"
+            )}>
+              <div className="font-semibold text-text-primary flex items-center gap-1.5">
+                <Laptop size={13} className="text-[#4FC3F7]" />
+                <span>Mac Laptop &amp; Desktop (Safari / Chrome)</span>
+                {(platformInfo.isMac || platformInfo.isLaptop) && <span className="text-[10px] text-[#4FC3F7] font-mono uppercase ml-auto">Detected</span>}
+              </div>
+              <ol className="list-decimal list-inside text-text-muted space-y-1 text-[11px] leading-relaxed">
+                <li>In Chrome/Edge: Click the <strong>Tune 🎛️ or Padlock 🔒</strong> icon in the address bar.</li>
+                <li>In Safari: Menu bar → <strong>Safari → Settings for this Website...</strong></li>
+                <li>Set <strong>Camera</strong>, <strong>Microphone</strong> &amp; <strong>Location</strong> to <strong>Allow</strong>.</li>
+                <li>Check <strong>System Settings → Privacy &amp; Security</strong> if blocked globally.</li>
+              </ol>
+            </div>
+
+            {/* Windows Laptop */}
+            <div className={cn(
+              "p-3 rounded-card border text-xs space-y-1.5",
+              platformInfo.isWindows ? "bg-[#4FC3F7]/15 border-[#4FC3F7]/40 ring-1 ring-[#4FC3F7]/30" : "bg-background-surface/50 border-border-default"
+            )}>
+              <div className="font-semibold text-text-primary flex items-center gap-1.5">
+                <Laptop size={13} className="text-[#4FC3F7]" />
+                <span>Windows Laptop / PC (Chrome / Edge / Firefox)</span>
+                {platformInfo.isWindows && <span className="text-[10px] text-[#4FC3F7] font-mono uppercase ml-auto">Detected</span>}
+              </div>
+              <ol className="list-decimal list-inside text-text-muted space-y-1 text-[11px] leading-relaxed">
+                <li>Click the <strong>Tune 🎛️ or Padlock 🔒</strong> icon to the left of the address bar.</li>
+                <li>Toggle <strong>Camera</strong>, <strong>Microphone</strong> &amp; <strong>Location</strong> to <strong>On</strong>.</li>
+                <li>Ensure Windows <strong>Settings → Privacy → Camera/Microphone</strong> allows browser access.</li>
+              </ol>
+            </div>
+
+            {/* Android */}
+            <div className={cn(
+              "p-3 rounded-card border text-xs space-y-1.5",
+              platformInfo.isAndroid ? "bg-[#4FC3F7]/15 border-[#4FC3F7]/40 ring-1 ring-[#4FC3F7]/30" : "bg-background-surface/50 border-border-default"
+            )}>
+              <div className="font-semibold text-text-primary flex items-center gap-1.5">
+                <Smartphone size={13} className="text-[#4FC3F7]" />
+                <span>Android (Chrome / Samsung Internet)</span>
+                {platformInfo.isAndroid && <span className="text-[10px] text-[#4FC3F7] font-mono uppercase ml-auto">Detected</span>}
+              </div>
+              <ol className="list-decimal list-inside text-text-muted space-y-1 text-[11px] leading-relaxed">
+                <li>Tap the <strong>Padlock 🔒 or Tune icon</strong> next to the URL.</li>
+                <li>Tap <strong>Permissions</strong> → Enable <strong>Camera, Microphone &amp; Location</strong>.</li>
+                <li>Or open <strong>Settings → Apps → JARVIS OS → Permissions</strong>.</li>
+              </ol>
+            </div>
+          </div>
         </div>
       )}
 

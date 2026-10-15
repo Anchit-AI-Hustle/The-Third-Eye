@@ -62,12 +62,14 @@ export function parseVCard(vcfText: string): Omit<DeviceContact, "id" | "updated
         if (parts.length >= 2) name = `${parts[1]} ${parts[0]}`.trim();
         else if (parts.length === 1) name = parts[0];
       } else if (/^TEL[;: ]/i.test(line)) {
-        if (!phone) {
-          phone = line.replace(/^TEL[^:]*:/i, "").trim();
+        const rawPhone = line.replace(/^TEL[^:]*:/i, "").replace(/^tel:/i, "").replace(/^uri:tel:/i, "").trim();
+        if (!phone || /CELL|MOBILE|PREF/i.test(line)) {
+          phone = rawPhone;
         }
       } else if (/^EMAIL[;: ]/i.test(line)) {
-        if (!email) {
-          email = line.replace(/^EMAIL[^:]*:/i, "").trim();
+        const rawEmail = line.replace(/^EMAIL[^:]*:/i, "").trim();
+        if (!email || /PREF/i.test(line)) {
+          email = rawEmail;
         }
       } else if (/^NOTE[;: ]/i.test(line)) {
         notes = line.replace(/^NOTE[^:]*:/i, "").trim();
@@ -75,6 +77,9 @@ export function parseVCard(vcfText: string): Omit<DeviceContact, "id" | "updated
         relationship = line.replace(/^[A-Z-]+[^:]*:/i, "").trim();
       }
     }
+
+    name = name.replace(/\\([,;\\])/g, "$1").trim();
+    phone = phone.replace(/^tel:/i, "").replace(/^["']|["']$/g, "").trim();
 
     if (name || phone || email) {
       contacts.push({
@@ -217,37 +222,37 @@ export function useLocalContacts() {
 
   const importBatch = useCallback((items: Omit<DeviceContact, "id" | "updated_at">[]) => {
     if (!items.length) return 0;
-    let count = 0;
-    setContacts((prev) => {
-      const existingPhones = new Set(prev.map((c) => c.phone?.replace(/\D/g, "")).filter(Boolean));
-      const existingNames = new Set(prev.map((c) => c.name.toLowerCase().trim()));
+    const current = loadLocalContacts();
+    const existingPhones = new Set(current.map((c) => c.phone?.replace(/\D/g, "")).filter(Boolean));
+    const existingNames = new Set(current.map((c) => c.name.toLowerCase().trim()));
 
-      const fresh: DeviceContact[] = [];
-      const now = new Date().toISOString();
+    const fresh: DeviceContact[] = [];
+    const now = new Date().toISOString();
 
-      for (const item of items) {
-        const cleanP = item.phone?.replace(/\D/g, "");
-        const cleanN = item.name.toLowerCase().trim();
-        if ((cleanP && existingPhones.has(cleanP)) || (cleanN && existingNames.has(cleanN))) {
-          continue;
-        }
-        if (cleanP) existingPhones.add(cleanP);
-        if (cleanN) existingNames.add(cleanN);
-
-        fresh.push({
-          ...item,
-          id: crypto.randomUUID(),
-          updated_at: now,
-        });
+    for (const item of items) {
+      const cleanP = item.phone?.replace(/\D/g, "");
+      const cleanN = item.name.toLowerCase().trim();
+      if ((cleanP && existingPhones.has(cleanP)) || (cleanN && existingNames.has(cleanN))) {
+        continue;
       }
+      if (cleanP) existingPhones.add(cleanP);
+      if (cleanN) existingNames.add(cleanN);
 
-      count = fresh.length;
-      const next = [...fresh, ...prev];
+      fresh.push({
+        ...item,
+        id: crypto.randomUUID(),
+        updated_at: now,
+      });
+    }
+
+    if (fresh.length > 0) {
+      const next = [...fresh, ...current];
       saveLocalContacts(next);
+      setContacts(next);
       pushToCloud(next);
-      return next;
-    });
-    return count;
+    }
+
+    return fresh.length;
   }, [pushToCloud]);
 
   const importContactsFromFile = useCallback(async (file: File): Promise<{ count: number; error?: string }> => {
