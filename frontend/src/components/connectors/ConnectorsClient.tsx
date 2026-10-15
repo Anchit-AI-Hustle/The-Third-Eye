@@ -5,6 +5,7 @@ import { Check, ExternalLink, Loader2, Plug, Plus, Trash2 } from "lucide-react";
 import { ConnectionsCard } from "@/components/settings/ConnectionsCard";
 import { WhatsAppCard } from "@/components/settings/WhatsAppCard";
 import { DeviceSyncCard } from "@/components/settings/DeviceSyncCard";
+import { PermissionsCard } from "@/components/settings/PermissionsCard";
 import { cn } from "@/lib/utils";
 
 interface Connector { id: string; name: string; host: string; enabled: boolean; tool_count: number }
@@ -66,6 +67,7 @@ export function ConnectorsClient() {
           <WhatsAppCard />
         </div>
         <DeviceSyncCard />
+        <PermissionsCard />
       </section>
 
       <section className="rounded-card border border-border-default bg-background-surface/30 p-4 sm:p-5">

@@ -27,8 +27,8 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "X-DNS-Prefetch-Control", value: "on" },
-  // Voice needs the mic; vision needs the camera; some tools use geo/payment.
-  { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self), payment=(self)" },
+  // Voice needs the mic; vision needs the camera; tools use geo/payment/screen/clipboard/sensors.
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self), payment=(self), display-capture=(self), clipboard-read=(self), clipboard-write=(self), accelerometer=(self), gyroscope=(self), magnetometer=(self), screen-wake-lock=(self)" },
   { key: "Content-Security-Policy-Report-Only", value: CSP_REPORT_ONLY },
 ];
 
