@@ -339,9 +339,9 @@ export function PermissionsCard() {
 
   return (
     <div className="mt-6 rounded-card border border-border-default bg-background-surface/40 p-5 space-y-6">
-      {/* Hidden test inputs */}
-      <input ref={fileTestInputRef} type="file" className="hidden" aria-hidden="true" onChange={() => {}} />
-      <input ref={photoTestInputRef} type="file" accept="image/*" className="hidden" aria-hidden="true" onChange={() => {}} />
+      {/* Test inputs */}
+      <input ref={fileTestInputRef} type="file" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
+      <input ref={photoTestInputRef} type="file" accept="image/*" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
 
       {/* Header with App Settings & Native Link */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border-default">

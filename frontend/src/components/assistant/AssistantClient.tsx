@@ -678,13 +678,15 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     action: fx.data.action ? String(fx.data.action) : undefined,
                     to: fx.data.to ? String(fx.data.to) : undefined,
                     message: fx.data.message ? String(fx.data.message) : undefined,
+                    missingPhone: Boolean(fx.data.missingPhone),
                   }));
 
-                // Auto-dispatch outreach deep links (WhatsApp, dialer, SMS) directly without waiting for manual tap
+                // Auto-dispatch outreach deep links (WhatsApp, dialer, SMS) directly ONLY when a phone number is present
                 const autoOutreach = links.find((l) => l.action === "whatsapp" || l.action === "call" || l.action === "sms");
-                if (autoOutreach) {
+                if (autoOutreach && !autoOutreach.missingPhone) {
                   const targetUri = autoOutreach.nativeUrl || autoOutreach.url;
-                  if (/^(whatsapp|tel|sms):/i.test(targetUri)) {
+                  const hasDigits = /\d{7,15}/.test(targetUri);
+                  if (hasDigits && /^(whatsapp|tel|sms):/i.test(targetUri)) {
                     try { window.location.href = targetUri; } catch {}
                   }
                 }

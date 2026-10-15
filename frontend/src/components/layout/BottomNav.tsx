@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageSquare, CheckSquare, FileText, Target } from "lucide-react";
+import { LayoutDashboard, MessageSquare, CheckSquare, FileText, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { label: "AI", href: "/assistant", icon: MessageSquare },
   { label: "Tracker",  href: "/tasks",     icon: CheckSquare },
   { label: "Notes",  href: "/notes",     icon: FileText },
-  { label: "Goals",  href: "/goals",     icon: Target },
+  { label: "Settings", href: "/settings",  icon: Settings },
 ];
 
 export function BottomNav() {
