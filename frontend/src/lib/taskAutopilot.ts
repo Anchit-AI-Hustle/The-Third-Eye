@@ -8,6 +8,9 @@ import type { Step } from "@/lib/checklist";
 // A run older than this is from a tab that closed mid-task, so it may be retried.
 export const STALE_MS = 10 * 60_000;
 
+/** Marks a chat turn as autopilot's, so the chat route never sends on its behalf. */
+export const AUTOPILOT_PREFIX = "AUTOPILOT:";
+
 export type AutopilotStatus = "running" | "done" | "needs_you" | "failed";
 
 export interface AutopilotTask {
@@ -31,7 +34,7 @@ export interface AutopilotRun {
 
 export function autopilotPrompt(t: AutopilotTask): string {
   return [
-    `AUTOPILOT: complete this task from my Task Tracker now, without me watching.`,
+    `${AUTOPILOT_PREFIX} complete this task from my Task Tracker now, without me watching.`,
     `Task: ${t.title}`,
     t.description ? `Details: ${t.description}` : "",
     t.due_date ? `Due: ${t.due_date}` : "",

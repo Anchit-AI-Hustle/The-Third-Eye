@@ -1,5 +1,8 @@
 import { startAssistantMedia, studioVideoLink } from "@/lib/assistantMedia";
 import { replicateConfigured } from "@/lib/replicate";
+import { explicitlyRequested } from "@/lib/explicitRequest";
+import { runConfirmedAction } from "@/lib/confirmedActions";
+import { AUTOPILOT_PREFIX } from "@/lib/taskAutopilot";
 import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
 import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart } from "@/lib/shopping";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
@@ -1593,6 +1596,8 @@ interface ChatRequest {
   timezone?: string;
   /** The previous reply's checklist when it ended with steps still open. */
   checklist?: unknown;
+  /** Settings switch: confirm every world-changing action, even ones the user asked for. */
+  confirmActions?: boolean;
 }
 
 // Mode-aware runtime (ported from the Mirror app): the operator's active mode
@@ -1913,8 +1918,10 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const {
     history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], contacts = [], location, deviceInfo,
-    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist,
+    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist, confirmActions,
   } = body;
+  // Autopilot works unattended, so what it would send waits for the user.
+  const actsOnRequest = !confirmActions && !body.message?.startsWith(AUTOPILOT_PREFIX);
   const attachments = cleanAttachments(body.attachments);
   const message = body.message?.trim() || (attachments.length ? "Look at the attached file(s) and tell me what matters in them." : "");
 
@@ -2192,8 +2199,17 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             toolsRun.push(c.name);
             if (bad) {
               out[i] = { result: `${c.name} failed: invalid arguments: ${bad}. Nothing was run. Fix the arguments and call it again; do not claim it ran.` };
+            } else if (isSensitive(c.name, c.args) && actsOnRequest && explicitlyRequested(message, c.name, c.args ?? {})) {
+              // The user's own message asked for exactly this, so it runs now
+              // rather than asking again. It is logged like any other action.
+              const done = await runConfirmedAction(email, c.name, c.args ?? {});
+              await logAgentAction(email, { type: c.name, label: summarizeAction(c.name, c.args), outcome: done.ok ? "applied" : "failed" }, identity.source);
+              out[i] = {
+                result: done.ok ? done.result : `${c.name} did not complete: ${done.result} Tell the user it did not work; do not claim it did.`,
+                ...(done.openUrl ? { sideEffect: { type: "open_url", data: { url: done.openUrl, label: c.name === "build_app" ? "Open the app" : "Open" } } } : {}),
+              };
             } else if (isSensitive(c.name, c.args)) {
-              // Confirm-then-act: never run world-changing actions silently.
+              // Confirm-then-act for anything the user didn't ask for in their own words.
               const summary = summarizeAction(c.name, c.args);
               // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
               // client opens on the confirming tap; email is server-executed

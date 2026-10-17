@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
 import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder, ExternalLink, ArrowUpRight, MessageCircle, Mail } from "lucide-react";
@@ -611,6 +612,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           history: historyRef.current,
           memory: memoryRef.current,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          confirmActions: confirmActionsOn(),
           userName: userName ?? session?.user?.name?.split(" ")[0],
           email: session?.user?.email ?? undefined,
           tasks: allTasks,

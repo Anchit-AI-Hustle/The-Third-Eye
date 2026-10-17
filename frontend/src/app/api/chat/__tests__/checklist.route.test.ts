@@ -93,7 +93,7 @@ describe("verified checklist in /api/chat", () => {
       { calls: [{ name: "complete_step", args: { step: 1, evidence: "Email sent to a@b.co" } }] },
       { text: "Sent!" },
     ];
-    const r = await chat({ message: "email a@b.co hello" });
+    const r = await chat({ message: "email a@b.co hello", confirmActions: true });
     expect(r.events.some((e) => e.event === "confirm")).toBe(true);
     expect(r.done.checklist[0].status).toBe("awaiting");
     expect(r.text).toContain("Send the email (waiting for your Confirm)");
