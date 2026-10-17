@@ -1,0 +1,49 @@
+name: iOS app
+# An unsigned build of the Capacitor iOS shell (.ipa), made on GitHub's macOS
+# runner (free on a public repo). iOS installs only signed apps, so the .ipa is
+# installed with a signing sideloader (Sideloadly or AltStore) and the user's
+# own Apple ID; a free Apple ID's signature lasts 7 days. Builds from main
+# replace the asset on the public "ios-latest" release, linked from /install.
+# App Store or TestFlight distribution needs an Apple Developer account (NATIVE_BUILD.md).
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["ios/**", "capacitor.config.ts", "package.json", "package-lock.json"]
+  pull_request:
+    paths: ["ios/**", "capacitor.config.ts", "package.json", "package-lock.json", ".github/workflows/ios-app.yml"]
+permissions:
+  contents: read
+jobs:
+  ipa:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npx cap sync ios
+      - name: Build without signing
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package the .ipa
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry the-third-eye.ipa Payload
+      - uses: actions/upload-artifact@v7
+        with:
+          name: jarvis-ios-ipa
+          path: the-third-eye.ipa
+          if-no-files-found: error
+      - name: Publish to the ios-latest release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view ios-latest >/dev/null 2>&1 || gh release create ios-latest --title "iOS app" --notes "Unsigned .ipa. Install with Sideloadly or AltStore using your Apple ID; a free Apple ID's signature lasts 7 days. The app loads the live site, so it stays current."
+          gh release upload ios-latest the-third-eye.ipa --clobber

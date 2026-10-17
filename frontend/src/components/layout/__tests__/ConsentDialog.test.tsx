@@ -9,7 +9,8 @@ import * as consent from "@/lib/consent";
 // capture, location lookups) actually reads — so "Grant once, never asked
 // again" was a promise nothing downstream honored.
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }));
+let pathname = "/dashboard";
+vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 
 const requestAll = vi.fn(async (keys: string[]) => {
   const out: Record<string, string> = {};
@@ -23,12 +24,22 @@ vi.mock("@/hooks/useConsent", () => ({
 
 describe("ConsentDialog", () => {
   beforeEach(() => {
+    pathname = "/dashboard";
     vi.useFakeTimers();
     requestAll.mockClear();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("stays closed on the public install page", async () => {
+    pathname = "/install";
+    render(<ConsentDialog />);
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(screen.queryByText("Activate Assistant")).toBeNull();
   });
 
   it("sets the always policy for every capability granted on Grant access", async () => {

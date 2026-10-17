@@ -1,0 +1,112 @@
+name: App preview
+# Launches both native apps on real emulators and saves what they show:
+# the Android app on an emulator (Linux runner, KVM) and the iOS app on the
+# iOS Simulator (macOS runner). Screenshots and a screen recording of the
+# first seconds are uploaded as the "android-preview" and "ios-preview" artifacts,
+# and the screenshots are also pushed to the app-previews branch for quick viewing.
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths: [".github/workflows/app-preview.yml"]
+permissions:
+  contents: read
+concurrency: app-previews
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npx cap sync android
+      - run: ./gradlew assembleDebug --no-daemon
+        working-directory: android
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            mkdir -p preview
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb logcat -c
+            adb shell screenrecord --time-limit 40 /sdcard/launch.mp4 & sleep 1
+            adb shell am start -W -n com.jarvis.app/.MainActivity
+            sleep 12; adb exec-out screencap -p > preview/android-launch-12s.png
+            sleep 28; adb exec-out screencap -p > preview/android-launch-40s.png
+            adb pull /sdcard/launch.mp4 preview/android-launch.mp4 || true
+            adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" > preview/android-focus.txt || true
+            adb logcat -d -v brief AndroidRuntime:E Capacitor:V chromium:W ActivityManager:I '*:S' > preview/android-logcat.txt || true
+      - name: Push screenshots to the app-previews branch
+        env:
+          PLATFORM: android
+        run: |
+          git fetch origin app-previews || true
+          git worktree add -B app-previews ../shots origin/app-previews 2>/dev/null || { git worktree add --detach ../shots && git -C ../shots checkout --orphan app-previews && git -C ../shots rm -rfq . ; }
+          mkdir -p ../shots/$PLATFORM && rm -f ../shots/$PLATFORM/* && cp preview/*.png preview/*.txt ../shots/$PLATFORM/ 2>/dev/null || true
+          cd ../shots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $PLATFORM && git commit -qm "$PLATFORM preview from ${{ github.sha }}" && git push origin app-previews
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-preview
+          path: preview/
+          if-no-files-found: error
+
+  ios:
+    needs: android
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npx cap sync ios
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: Run in the iOS Simulator
+        run: |
+          mkdir -p preview
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k in sorted(d, reverse=True) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone')))")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl io "$UDID" recordVideo --codec=h264 preview/ios-launch.mp4 & REC=$!
+          xcrun simctl launch "$UDID" com.jarvis.app
+          sleep 40
+          kill -INT $REC; sleep 3
+          xcrun simctl io "$UDID" screenshot preview/ios-home.png
+          xcrun simctl spawn "$UDID" log show --last 2m --predicate 'process == "App"' --style compact > preview/ios-log.txt || true
+      - name: Push screenshots to the app-previews branch
+        env:
+          PLATFORM: ios
+        run: |
+          git fetch origin app-previews || true
+          git worktree add -B app-previews ../shots origin/app-previews 2>/dev/null || { git worktree add --detach ../shots && git -C ../shots checkout --orphan app-previews && git -C ../shots rm -rfq . ; }
+          mkdir -p ../shots/$PLATFORM && rm -f ../shots/$PLATFORM/* && cp preview/*.png preview/*.txt ../shots/$PLATFORM/ 2>/dev/null || true
+          cd ../shots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $PLATFORM && git commit -qm "$PLATFORM preview from ${{ github.sha }}" && git push origin app-previews
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios-preview
+          path: preview/
+          if-no-files-found: error

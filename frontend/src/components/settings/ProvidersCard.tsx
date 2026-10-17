@@ -139,7 +139,7 @@ export function ProvidersCard() {
                   r.status === "ok" ? "bg-success" : r.status === "unknown" ? "bg-text-muted" : r.status === "rate_limited" ? "bg-warning" : "bg-accent-red")} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-text-primary">{NAME[r.provider] ?? r.provider} <span className="text-xs text-text-muted">· {LABEL[r.status] ?? r.status}</span></p>
-                  <p className="text-[11px] font-mono text-text-muted truncate">
+                  <p className="text-[11px] text-text-muted truncate">
                     {r.model ?? "-"}{r.benchedUntil ? ` · back ${time(r.benchedUntil)}` : ""}{r.checkedAt ? ` · checked ${time(r.checkedAt)}` : ""}
                   </p>
                   {r.reason && <p className="text-[11px] text-text-muted truncate" title={r.reason}>{r.reason}</p>}

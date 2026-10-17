@@ -42,6 +42,7 @@ import {
 } from "@/lib/consent";
 import { CAP_META } from "@/components/permission/PermissionProvider";
 import { cn } from "@/lib/utils";
+import { grantFullDeviceAccess } from "@/lib/fullAccess";
 
 // Detects platform and deep-links directly to native settings when supported, or guides the user safely
 export async function openDeviceAppSettings(): Promise<{ opened: boolean; platform: "capacitor" | "ios" | "android" | "mac" | "windows" | "web" }> {
@@ -236,49 +237,7 @@ export function PermissionsCard() {
   // Prompt and verify all core hardware permissions in one tap
   const handlePromptAllPermissions = async () => {
     setPromptingAll(true);
-    setPromptStep("Initializing hardware test...");
-
-    // 1. Microphone
-    setPromptStep("1/4: Requesting Microphone access...");
-    try {
-      if (typeof navigator.mediaDevices?.getUserMedia === "function") {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    } catch {}
-
-    // 2. Camera
-    setPromptStep("2/4: Requesting Camera access...");
-    try {
-      if (typeof navigator.mediaDevices?.getUserMedia === "function") {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280 } });
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    } catch {}
-
-    // 3. Location
-    setPromptStep("3/4: Requesting Location access...");
-    try {
-      if (navigator.geolocation) {
-        await new Promise<void>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            () => resolve(),
-            () => resolve(),
-            { timeout: 8000 }
-          );
-        });
-      }
-    } catch {}
-
-    // 4. Notifications
-    setPromptStep("4/4: Requesting Notifications permission...");
-    try {
-      if (typeof Notification !== "undefined") {
-        await Notification.requestPermission();
-      }
-    } catch {}
-
-    setPromptStep("Probe complete! System permissions saved in your device & browser settings.");
+    await grantFullDeviceAccess(setPromptStep);
     setPromptingAll(false);
     await refreshSystemStatuses();
   };
@@ -520,10 +479,10 @@ export function PermissionsCard() {
             <div>
               <div className="font-medium text-text-primary text-xs flex items-center gap-1.5">
                 <Sparkles size={13} className="text-[#4FC3F7]" />
-                <span>Grant &amp; Test All Device Permissions</span>
+                <span>Allow full device access</span>
               </div>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Triggers native browser prompts for Camera, Microphone, Location &amp; Alerts in sequence. Once allowed, your device permanently saves them.
+                Sets every capability below to Allow always, then asks your device for microphone, camera, location, notifications, motion, storage and, in the Android app, SMS and calls. Whatever you allow stays allowed.
               </p>
               {promptStep && (
                 <div className="mt-1.5 text-[11px] text-[#4FC3F7] font-mono flex items-center gap-1.5">
@@ -540,7 +499,7 @@ export function PermissionsCard() {
               className="px-3 py-1.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:bg-[#38b6f0] transition-colors flex-none flex items-center gap-1.5 disabled:opacity-50"
             >
               {promptingAll ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              <span>{promptingAll ? "Prompting..." : "Prompt All Now"}</span>
+              <span>{promptingAll ? "Asking..." : "Allow everything"}</span>
             </button>
           </div>
 

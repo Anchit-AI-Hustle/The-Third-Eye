@@ -51,7 +51,7 @@ export function AgentProfileManager() {
         <AgentIcon avatar={active.avatar} color={active.accentColor} size={48} />
         <div className="flex-1">
           <p className="text-text-primary font-semibold">{active.name}</p>
-          <p className="text-text-muted text-xs font-mono mt-0.5">{active.gender} · {active.greeting}</p>
+          <p className="text-text-muted text-xs mt-0.5">{active.gender} · {active.greeting}</p>
         </div>
         <span className="flex items-center gap-1.5 text-success text-xs font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" /> Active
