@@ -622,6 +622,25 @@ export const geminiTools = [
         },
       },
       {
+        name: "shopping",
+        description: "Shop for the user: search real store listings (Amazon India and Flipkart by default), compare them, keep a cart, and at checkout give the store links so the user buys and pays on the store. JARVIS never pays. Prices are the listed prices from search; never invent one.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["search", "add", "remove", "view", "clear", "checkout"], description: "search listings, add/remove a cart item, view or clear the cart, or checkout" },
+            query: { type: "STRING", description: "What to search for (search)" },
+            stores: { type: "STRING", description: "Comma-separated store domains to search, e.g. amazon.in,flipkart.com,myntra.com (search, optional)" },
+            title: { type: "STRING", description: "Product title (add)" },
+            url: { type: "STRING", description: "Product page link from a search result (add), or the item to remove" },
+            price: { type: "NUMBER", description: "Listed price from the search result, if it had one (add)" },
+            currency: { type: "STRING", enum: ["INR", "USD"], description: "Currency of the listed price (add)" },
+            qty: { type: "NUMBER", description: "Quantity (add, default 1)" },
+            item: { type: "STRING", description: "Cart position (1, 2, ...) or link to remove (remove)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
         name: "build_app",
         description: "Build a complete static web app (HTML, CSS, JavaScript, data in the browser) from the user's description, put it in a new public repo on their GitHub, and publish it free on GitHub Pages. The user confirms before anything is created. Needs GitHub connected; if github status says it isn't, call github with action='connect' first.",
         parameters: {

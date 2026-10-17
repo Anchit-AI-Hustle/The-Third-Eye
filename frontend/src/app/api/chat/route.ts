@@ -1,5 +1,6 @@
 import { startAssistantMedia } from "@/lib/assistantMedia";
 import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
+import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart } from "@/lib/shopping";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
@@ -88,6 +89,7 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **communicate**: send WhatsApp/SMS/email, make calls, read emails - action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or call, EXECUTE DIRECTLY without asking repetitive confirmations. Recipient names are auto-resolved from synced device contacts.
 - **navigate**: directions, GPS location, nearby places - action='directions' for maps, 'location' for coords, 'nearby' for POIs
 - **generate**: images, music, video, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs - type='image'/'music'/'video'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
+- **shopping**: search real store listings, compare them, keep the user's cart, and at checkout give the store links - the user pays on the store, JARVIS never pays.
 - **build_app**: build a working web app from a description, create a public GitHub repo for it and publish it free on GitHub Pages (the user confirms first).
 - **github**: the user's connected GitHub account - repos, issues, pull requests, file contents, code search. action='connect' opens the GitHub connector.
 - **automate**: schedule recurring actions and run background checks - action='schedule' to set up, 'check' to scan for issues
@@ -1081,6 +1083,10 @@ async function runTool(
     case "github":
       return githubTool(ctx, input);
 
+    case "shopping":
+      if (!ctx.email) return { result: "shopping failed: sign in first." };
+      return shoppingTool(ctx.email, input);
+
     default:
       return { result: `I don't have a handler for "${name}". Try rephrasing or use one of my available tools.` };
   }
@@ -1672,6 +1678,42 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
     };
   }
   return startAssistantMedia(userId ?? undefined, "music", description);
+}
+
+async function shoppingTool(email: string, input: { action?: string; query?: string; stores?: string; title?: string; url?: string; price?: number; currency?: string; qty?: number; item?: string }): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
+  const action = input.action ?? "view";
+  if (action === "search") {
+    const query = input.query?.trim();
+    if (!query) return { result: "shopping failed: say what to search for." };
+    const stores = input.stores?.split(",").map((s) => s.trim().toLowerCase().replace(/^www\./, "")).filter(Boolean);
+    const found = await productSearch(query, stores?.length ? stores : undefined);
+    if (!found.length) return { result: `No store listings found for "${query}". Nothing was added to the cart.` };
+    return { result: found.map((l, i) => `${i + 1}. ${l.title} [${l.store}]${l.price ? ` - listed ${l.currency} ${l.price}` : " - no listed price"}\n   ${l.snippet}\n   ${l.url}`).join("\n") + "\nListed prices come from search; the store page has the current price." };
+  }
+  const cart = await loadCart(email);
+  if (action === "view") return { result: cartSummary(cart) };
+  let next = cart;
+  if (action === "add") {
+    let url: URL | null = null;
+    try { url = new URL(input.url ?? ""); } catch { /* checked below */ }
+    if (!url || url.protocol !== "https:" || !input.title?.trim()) return { result: "shopping failed: add needs the product title and its https link from a search result. Nothing was added." };
+    next = cartAdd(cart, { title: input.title.trim(), url: url.toString(), qty: Math.max(1, Math.round(input.qty ?? 1)), ...(input.price && input.price > 0 ? { price: input.price, currency: input.currency === "USD" ? "USD" : "INR" } : {}) });
+  } else if (action === "remove") {
+    next = cartRemove(cart, String(input.item ?? input.url ?? ""));
+    if (next.length === cart.length) return { result: "shopping failed: no cart item matched. Nothing was removed." };
+  } else if (action === "clear") {
+    next = [];
+  } else if (action === "checkout") {
+    if (!cart.length) return { result: "The cart is empty, so there is nothing to check out." };
+    return {
+      result: `${cartSummary(cart)}\n\nCheckout happens on each store: open each link, add it to the store's cart and pay there. JARVIS has not bought or paid for anything.`,
+      sideEffect: { type: "open_url", data: { url: cart[0].url, label: `Open ${cart[0].title.slice(0, 40)}` } },
+    };
+  } else {
+    return { result: `shopping failed: unknown action "${action}".` };
+  }
+  if (!(await saveCart(email, next))) return { result: "shopping failed: the cart couldn't be saved. Nothing changed." };
+  return { result: `Cart updated.\n${cartSummary(next)}` };
 }
 
 async function githubTool(ctx: RunContext, input: { action?: string; repo?: string; path?: string; query?: string }): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {

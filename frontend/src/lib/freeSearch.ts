@@ -55,13 +55,19 @@ export function duckDuckGoHits(html: string): Hit[] {
   });
 }
 
-export async function freeWebSearch(query: string): Promise<string> {
+/** Bing's feed, then DuckDuckGo when it has too little; `about` is what the hits must be relevant to. */
+export async function searchHits(query: string, about = query): Promise<Hit[]> {
   const bing = await get(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`);
-  let hits = relevantHits(bing ? rssItems(await bing.text()) : [], query);
+  let hits = relevantHits(bing ? rssItems(await bing.text()) : [], about);
   if (hits.length < 2) {
     const ddg = await get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-    hits = [...hits, ...relevantHits(ddg ? duckDuckGoHits(await ddg.text()) : [], query)];
+    hits = [...hits, ...relevantHits(ddg ? duckDuckGoHits(await ddg.text()) : [], about)];
   }
+  return hits;
+}
+
+export async function freeWebSearch(query: string): Promise<string> {
+  const hits = await searchHits(query);
   return hits.slice(0, 5).map((i) => `• **${i.title}**\n  ${i.description}\n  ${i.link}`).join("\n\n");
 }
 
