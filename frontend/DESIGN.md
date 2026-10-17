@@ -20,7 +20,7 @@ colors:
   accent:
     blue:   "#4FC3F7"      # Arc Blue — PRIMARY brand, all primary CTAs/focus/active
     violet: "#7B5CF0"      # secondary accent, gradients only
-    amber:  "#FFB547"      # HUD readouts only: section labels, ticks, telemetry; never a button
+    amber:  "#FFB547"      # rare telemetry marker only; never a button, link or label
     red:    "#EF4444"      # destructive
   status:
     success: "#10B981"
@@ -62,21 +62,21 @@ stays out of the way so the accent and the content carry the screen.
   that signals "interactive/active/primary." Primary buttons, focused inputs,
   active nav, live indicators. Violet is for gradients and secondary flourish
   only — never a second primary button colour. Red is destructive only.
-- **HUD readouts in amber.** Amber (`accent.amber #FFB547`) is the telemetry
-  colour of the HUD: section labels (`.hud-label`), dial ticks, the corner
-  marker on panels. It is never a button, link or state colour.
-- **Every panel is a HUD panel.** Cards inside a page get cyan corner brackets,
-  a faint scanline and an amber corner tick, and their brackets draw in as the
-  page assembles (`globals.css`, "HUD panels"). The backdrop behind every page
-  is the HUD itself: rotating dials with tick marks, a radar sweep, a hex
-  field and a scan beam (`components/hud/AmbientScene.tsx`).
+- **Amber is a rare marker.** Amber (`accent.amber #FFB547`) marks a single
+  telemetry detail at most (a reactor ring tick). It is never a button, link,
+  state or label colour.
+- **Restraint over ornament.** Cards are plain surfaces with hairline borders
+  that rise in as the page assembles (`globals.css`, "Panels"); no corner
+  brackets, scanlines or tickers. The backdrop is a soft breathing glow and
+  one faint, slowly turning ring (`components/hud/AmbientScene.tsx`).
+  Section labels (`.hud-label`) are small uppercase Inter in `text.muted`.
 - **Depth by surface, not by shadow.** Stack `background.base` → `surface` →
   `elevated` to show layering; borders are hairline (`border.default`, 1px).
   Use `shadow.card`/`elevated` sparingly; reach for `shadow.glowCyan` only on
   genuinely primary/live elements, not every card.
-- **Type.** Body and UI in Inter at the 14px/1.6 base. Headings/hero in Geist
-  (`display`). Any number, token, timestamp, or code in Geist Mono — the mono
-  face is part of the HUD identity, not just for code blocks.
+- **Type.** Body, UI and navigation in Inter at the 14px/1.6 base. Headings,
+  hero figures and stats in Geist (`display`) with tabular numbers. Geist Mono
+  is for code, tokens and IDs only.
 - **Rounding is tight.** 8px cards, 6px inputs, 3px badges. Nothing pill-shaped;
   this is instrument-panel geometry.
 - **Motion is fast and subtle.** 150ms for interactions, 250ms for page-level
@@ -103,7 +103,8 @@ Depth is a first-class part of the identity, not decoration bolted on. Three
 primitives in `src/components/hud/` cover it, and every one degrades to a flat,
 static panel under `prefers-reduced-motion`.
 
-- **`<HoloFrame>`** — the bracket frame. Pick which `corners` to draw, add a
+- **`<HoloFrame>`** — the bracket frame, for the public landing page only (app
+  pages use plain cards). Pick which `corners` to draw, add a
   `rule` hairline and a mono `label`. Brackets extend and brighten on hover and
   on `focus-within`, so the frame reads as locking onto what you point at. It
   replaces the old `.hud-frame` utility, which could only ever draw two corners

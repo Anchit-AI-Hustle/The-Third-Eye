@@ -71,7 +71,7 @@ export function JobAgentHome() {
 
 function StatCard({ href, icon, color, label, stat, sub }: { href: string; icon: React.ReactNode; color: string; label: string; stat: string; sub: string }) {
   return (
-    <Link href={href} className="group holo-card rounded-card p-4 hud-frame hover:-translate-y-0.5 transition-transform">
+    <Link href={href} className="group holo-card rounded-card p-4 hover:-translate-y-0.5 transition-transform">
       <div className="flex items-center justify-between mb-2">
         <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-none" style={{ background: `${color}1A`, color }}>{icon}</span>
         <ArrowRight size={14} className="text-text-muted group-hover:text-text-primary transition-colors" />

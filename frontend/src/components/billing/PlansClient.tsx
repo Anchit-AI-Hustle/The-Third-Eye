@@ -73,7 +73,7 @@ export function PlansClient() {
       <section>
         <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
           <div>
-            <span className="hud-label text-accent-blue">// Subscriptions</span>
+            <span className="hud-label text-accent-blue">Subscriptions</span>
             <h2 className="font-display text-xl font-semibold text-text-primary">Plans</h2>
             <p className="text-text-muted text-xs font-mono mt-0.5">Personas & higher limits. Cancel anytime.</p>
           </div>
@@ -143,7 +143,7 @@ export function PlansClient() {
 
       {/* Credit bundles — anyone can buy, no subscription needed */}
       <section>
-        <span className="hud-label text-accent-blue">// Pay as you go</span>
+        <span className="hud-label text-accent-blue">Pay as you go</span>
         <h2 className="font-display text-xl font-semibold text-text-primary">Credit packs</h2>
         <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups - no subscription required. Bigger packs = cheaper per credit.</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -189,7 +189,7 @@ export function PlansClient() {
       {/* Recent ledger */}
       {b.ledger.length > 0 && (
         <section>
-          <span className="hud-label text-text-muted">// Recent activity</span>
+          <span className="hud-label text-text-muted">Recent activity</span>
           <div className="holo-card divide-y divide-border-default/50 mt-2">
             {b.ledger.slice(0, 8).map((e, i) => (
               <div key={i} className="flex items-center justify-between px-4 py-2 text-xs font-mono">

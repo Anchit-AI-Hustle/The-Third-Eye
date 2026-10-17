@@ -71,7 +71,7 @@ export function ConnectionsCard() {
     <div className="holo-card rounded-card p-5 mt-5">
       <div className="flex items-center gap-2 mb-1">
         <Link2 size={14} className="text-[#4FC3F7]" />
-        <span className="hud-label text-[#4FC3F7]">// Connections</span>
+        <span className="hud-label text-[#4FC3F7]">Connections</span>
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Google account</h2>
       <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">

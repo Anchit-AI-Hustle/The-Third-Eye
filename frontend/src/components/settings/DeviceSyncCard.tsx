@@ -281,7 +281,7 @@ export function DeviceSyncCard() {
 
       <div className="flex items-center gap-2 mb-1">
         {isLaptop ? <Laptop size={14} className="text-[#4FC3F7]" /> : <Smartphone size={14} className="text-[#4FC3F7]" />}
-        <span className="hud-label text-[#4FC3F7]">// Device Connectors &amp; Local Hub</span>
+        <span className="hud-label text-[#4FC3F7]">Device Connectors &amp; Local Hub</span>
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
         <h2 className="font-display text-lg font-semibold text-text-primary">Device Data &amp; Media Sync</h2>

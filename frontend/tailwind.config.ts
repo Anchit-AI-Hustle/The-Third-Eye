@@ -49,7 +49,7 @@ const config: Config = {
         accent: {
           blue:   "#4FC3F7",   // Arc Blue — primary brand
           violet: "#7B5CF0",
-          amber:  "#FFB547",   // HUD readouts: labels, ticks, telemetry
+          amber:  "#FFB547",   // rare telemetry marker only
           red:    "#EF4444",
         },
         success: "#10B981",

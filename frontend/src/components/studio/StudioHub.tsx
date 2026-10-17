@@ -104,7 +104,7 @@ export function StudioHub({ showAnchor }: { showAnchor: boolean }) {
                   return (
                     <Card3D key={t.id} intensity={7} lift={10} className="rounded-card h-full">
                     <Link href={`/tools/${t.id}`}
-                      className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden preserve-3d block h-full">
+                      className="group holo-card rounded-card p-4 relative overflow-hidden preserve-3d block h-full">
                       <div className="flex items-center justify-between mb-2 depth-2">
                         <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-none" style={{ background: `${t.accent}1A`, color: t.accent }}>
                           <Icon size={18} />

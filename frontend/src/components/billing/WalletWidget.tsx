@@ -20,10 +20,9 @@ export function WalletWidget({ compact = false }: { compact?: boolean }) {
       className="group inline-flex items-center gap-2.5 rounded-card border border-border-default bg-background-secondary/60 px-3 py-1.5 hover:border-accent-blue/60 transition-colors"
       title={`${level.name} · ${TIERS[tier].label} plan`}
     >
-      <span className="text-lg leading-none">{level.avatar}</span>
       {!compact && (
         <span className="flex flex-col">
-          <span className="text-[11px] font-mono text-text-secondary leading-tight">{level.name}</span>
+          <span className="text-xs text-text-secondary leading-tight">{level.name}</span>
           <span className="w-16 h-1 rounded-full bg-background-primary overflow-hidden mt-0.5">
             <span className="block h-full rounded-full bg-accent-blue" style={{ width: `${pct}%` }} />
           </span>

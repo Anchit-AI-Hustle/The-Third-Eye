@@ -34,9 +34,9 @@ export default function StudioToolPage() {
         <ArrowLeft size={12} /> Studio
       </Link>
       <div className="mb-5">
-        <span className="hud-label" style={{ color: head.accent }}>// {head.mode} mode</span>
+        <span className="hud-label" style={{ color: head.accent }}>{head.mode} mode</span>
         <h1 className="font-display text-2xl font-semibold text-text-primary mt-1">{head.label}</h1>
-        <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">{head.blurb}</p>
+        <p className="text-text-muted text-sm mt-1">{head.blurb}</p>
       </div>
       {!tool ? <AnchorPanel />
         : tool.id === "music" ? <MusicStudio />
