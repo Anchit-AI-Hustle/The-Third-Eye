@@ -78,6 +78,29 @@ describe("the iPhone app syncs on its own when opened", () => {
     await waitFor(() => expect(LocalNotifications.schedule).toHaveBeenCalled());
   });
 
+  it("applies reminder refreshes in order, so a slow older read can't undo a newer one", async () => {
+    const LocalNotifications = {
+      requestPermissions: async () => ({ display: "granted" }),
+      getPending: async () => ({ notifications: [] }),
+      cancel: vi.fn(),
+      schedule: vi.fn(async () => ({})),
+      addListener: vi.fn(async () => ({ remove() {} })),
+    };
+    (window as { Capacitor?: unknown }).Capacitor = { getPlatform: () => "ios", isNativePlatform: () => true, Plugins: { LocalNotifications } };
+    let finishFirst: (rows: unknown[]) => void = () => {};
+    dataRead
+      .mockImplementationOnce(() => new Promise((r) => { finishFirst = r; }))
+      .mockResolvedValueOnce([{ id: "new", title: "New one", body: null, fire_at: "2999-01-01T09:00:00.000Z", status: "pending", recurrence: null }]);
+
+    render(<NativeAutoSync />);
+    await waitFor(() => expect(dataRead).toHaveBeenCalledTimes(1));
+    window.dispatchEvent(new Event("jarvis:reminders"));
+    finishFirst([]);
+    await waitFor(() => expect(LocalNotifications.schedule).toHaveBeenCalledTimes(2));
+    const last = LocalNotifications.schedule.mock.calls[1] as unknown as [{ notifications: { title: string }[] }];
+    expect(last[0].notifications.map((n) => n.title)).toEqual(["New one", "Good morning"]);
+  });
+
   it("does nothing in a browser", async () => {
     render(<NativeAutoSync />);
     await new Promise((r) => setTimeout(r, 20));
