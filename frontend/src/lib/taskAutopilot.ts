@@ -1,0 +1,100 @@
+import type { Step } from "@/lib/checklist";
+
+// Task autopilot: JARVIS works every new task through the assistant's own tool
+// loop. A run counts as done only when every planned step was ticked with
+// evidence and nothing is waiting for the user's approval; anything less is
+// reported as "needs you", with what was done and what is left.
+
+export type AutopilotStatus = "running" | "done" | "needs_you" | "failed";
+
+export interface AutopilotTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  due_date?: string | null;
+  priority?: string | null;
+}
+
+export interface AutopilotRun {
+  text: string;
+  checklist: Step[];
+  confirms: { summary: string }[];
+  links?: { label: string; url: string }[];
+  stopReason?: string;
+  error?: string;
+}
+
+export function autopilotPrompt(t: AutopilotTask): string {
+  return [
+    `AUTOPILOT: complete this task from my Task Tracker now, without me watching.`,
+    `Task: ${t.title}`,
+    t.description ? `Details: ${t.description}` : "",
+    t.due_date ? `Due: ${t.due_date}` : "",
+    t.priority ? `Priority: ${t.priority}` : "",
+    ``,
+    `How to work:`,
+    `- Plan concrete steps with plan_checklist, then do each one with your tools, check the result, and tick it with complete_step quoting the evidence.`,
+    `- Do the real work: research, write the drafts, documents or files, set the reminders, prepare the messages. Files you save go to my Knowledge base.`,
+    `- Sending, paying or anything else that needs my approval: prepare it fully and propose it; it will wait for me.`,
+    `- If part of it needs me in person, prepare everything you can and say exactly what is left for me.`,
+    `- Do not create, update or complete this task in the tracker yourself; the app records the outcome.`,
+    `- End with a short report: what you did, the result, and anything left for me. Never claim something you did not verify.`,
+  ].filter((l) => l !== "").join("\n");
+}
+
+// Pure, so the rule is testable and the same wherever it runs.
+export function judgeRun(run: AutopilotRun): { status: AutopilotStatus; report: string } {
+  const verified = run.checklist.filter((s) => s.status === "done");
+  const open = run.checklist.filter((s) => s.status !== "done");
+  const lines: string[] = [];
+  if (run.text.trim()) lines.push(run.text.trim().slice(0, 4000));
+  if (verified.length) lines.push(`Verified:\n${verified.map((s) => `- ${s.title}${s.evidence ? `: ${s.evidence}` : ""}`).join("\n")}`);
+  if (open.length) lines.push(`Not verified:\n${open.map((s) => `- ${s.title}${s.note ? ` (${s.note})` : ""}`).join("\n")}`);
+  if (run.links?.length) lines.push(`Ready for you to open:\n${run.links.map((l) => `- ${l.label}: ${l.url}`).join("\n")}`);
+  if (run.confirms.length) lines.push(`Waiting for your approval:\n${run.confirms.map((c) => `- ${c.summary}`).join("\n")}`);
+
+  if (run.error) return { status: "failed", report: [`JARVIS couldn't work on this: ${run.error}`, ...lines].join("\n\n") };
+  const finished = run.checklist.length > 0 && open.length === 0 && run.confirms.length === 0
+    && !["partial", "max_steps", "fallback"].includes(run.stopReason ?? "");
+  if (!finished && !run.checklist.length && !run.confirms.length) lines.push("No step could be verified, so this is not marked done.");
+  return { status: finished ? "done" : "needs_you", report: lines.join("\n\n") };
+}
+
+type Effect = { type: string; data?: Record<string, any> };
+
+/** One autopilot turn through /api/chat, read off its event stream. */
+export async function runThroughChat(task: AutopilotTask): Promise<{ run: AutopilotRun; effects: Effect[] }> {
+  const run: AutopilotRun = { text: "", checklist: [], confirms: [], links: [] };
+  let effects: Effect[] = [];
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: autopilotPrompt(task), history: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      return { run: { ...run, error: d.error ?? `the assistant answered ${res.status}` }, effects };
+    }
+    for (const block of (await res.text()).split("\n\n")) {
+      const event = block.match(/^event: (\w+)/m)?.[1];
+      const raw = block.match(/^data: (.*)$/m)?.[1];
+      if (!event || !raw) continue;
+      const data = JSON.parse(raw);
+      if (event === "text") run.text += data.text ?? "";
+      else if (event === "checklist" && Array.isArray(data.steps)) run.checklist = data.steps;
+      else if (event === "confirm") run.confirms.push({ summary: String(data.summary ?? data.tool) });
+      else if (event === "error") run.error = String(data.message ?? "the assistant failed");
+      else if (event === "done") {
+        effects = data.sideEffects ?? [];
+        run.stopReason = data.stop_reason;
+        if (Array.isArray(data.checklist) && data.checklist.length) run.checklist = data.checklist;
+      }
+    }
+  } catch (e) {
+    run.error = e instanceof Error ? e.message : "network error";
+  }
+  run.links = effects.filter((e) => e.type === "open_url" && typeof e.data?.url === "string")
+    .map((e) => ({ label: String(e.data!.label ?? "Link"), url: String(e.data!.url) }));
+  return { run, effects };
+}

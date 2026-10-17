@@ -6,7 +6,7 @@ import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TaskWorkspace, Team
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
   LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
-  Briefcase, Heart, MonitorSmartphone, Bot,
+  Briefcase, Heart, MonitorSmartphone, Bot, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isOverdue, isDueSoon } from "@/lib/taskDates";
@@ -15,6 +15,7 @@ import { useAgentProfile, type AgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { AUTOPILOT_RUN, autopilotOff, setAutopilotOff } from "@/components/tasks/TaskAutopilot";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,7 @@ export function TasksClient() {
           <span className="text-text-muted text-sm font-mono">{allTasks.length} tasks</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <AutopilotToggle className={btn} />
           <button onClick={exportCSV} className={btn}>
             <Download size={13} /> Export
           </button>
@@ -381,6 +383,7 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                         {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
                       </div>
                       <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                      <AutopilotBadge status={t.autopilot_status} />
                       <PillarBadge pillar={t.growth_pillar} />
                       <AgentChip id={t.agent} profiles={profiles} />
                     </div>
@@ -480,6 +483,8 @@ function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
                       <p className="text-text-primary text-sm leading-snug">{t.title}</p>
                       <div className="flex items-center gap-1 flex-none">
                         <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                        <AutopilotBadge status={t.autopilot_status} />
+                      <AutopilotBadge status={t.autopilot_status} />
                         <PillarBadge pillar={t.growth_pillar} />
                         <AgentChip id={t.agent} profiles={profiles} />
                       </div>
@@ -619,6 +624,23 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
             </Field>
           </div>
 
+          {task && (
+            <Field label="JARVIS autopilot">
+              <div className="space-y-2">
+                {task.autopilot_report && (
+                  <div className="max-h-48 overflow-y-auto rounded-input border border-border-default bg-background-surface px-3 py-2">
+                    <pre className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed">{task.autopilot_report}</pre>
+                  </div>
+                )}
+                <button type="button" disabled={task.autopilot_status === "running"}
+                  onClick={() => window.dispatchEvent(new CustomEvent(AUTOPILOT_RUN, { detail: task.id }))}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input border border-accent-blue/40 bg-accent-blue/10 text-accent-blue text-xs font-medium disabled:opacity-50">
+                  <Bot size={13} /> {task.autopilot_status === "running" ? "JARVIS is working on it" : task.autopilot_status ? "Run again with JARVIS" : "Run with JARVIS"}
+                </button>
+              </div>
+            </Field>
+          )}
+
           {task?.all_updates && (
             <Field label="Update trail">
               <div className="max-h-32 overflow-y-auto rounded-input border border-border-default bg-background-surface px-3 py-2">
@@ -712,6 +734,37 @@ function PillarBadge({ pillar }: { pillar?: string }) {
     <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none bg-success/10 text-success border-success/30">
       {pillar}
     </span>
+  );
+}
+
+const AUTOPILOT_META: Record<string, { label: string; color: string }> = {
+  running: { label: "JARVIS working", color: "#4FC3F7" },
+  done: { label: "Done by JARVIS", color: "#34D399" },
+  needs_you: { label: "Needs you", color: "#F0C94E" },
+  failed: { label: "JARVIS failed", color: "#F87171" },
+};
+
+function AutopilotBadge({ status }: { status?: string | null }) {
+  const meta = status ? AUTOPILOT_META[status] : undefined;
+  if (!meta) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none"
+      style={{ color: meta.color, borderColor: `${meta.color}55` }}>
+      {status === "running" ? <Loader2 size={10} className="animate-spin" /> : <Bot size={10} />} {meta.label}
+    </span>
+  );
+}
+
+// Autopilot works every new task unless switched off on this device.
+function AutopilotToggle({ className }: { className: string }) {
+  const [off, setOff] = useState(false);
+  useEffect(() => setOff(autopilotOff()), []);
+  return (
+    <button type="button" className={className} aria-pressed={!off}
+      title="When on, JARVIS works on every new task as soon as it is added"
+      onClick={() => { setAutopilotOff(!off); setOff(!off); }}>
+      <Bot size={13} /> Autopilot {off ? "off" : "on"}
+    </button>
   );
 }
 

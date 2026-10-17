@@ -294,6 +294,17 @@ the self-built ones so they don't get buried in the third-party directory.
   message is read only once. A daily cron (`/api/cron/dispatch?job=chat_tasks`)
   syncs up to 8 chats that the browser never synced.
 
+- **Task autopilot** (`lib/taskAutopilot.ts`, `components/tasks/TaskAutopilot.tsx`,
+  `/api/tasks/autopilot`): every task added after autopilot is switched on is
+  worked by JARVIS. The browser claims it on the server (one tab per task),
+  runs it through `/api/chat` with a verified checklist, and posts the outcome.
+  It is marked done only when every planned step was ticked with evidence and
+  nothing waits for approval; otherwise it is "needs you" with what was done and
+  what is left. Sends and payments always wait for the user. Files it makes go
+  to Knowledge; follow-up tasks it creates are tagged `Autopilot` and not worked
+  in turn. "Autopilot on/off" in the tracker header; "Run with JARVIS" in a
+  task's editor works an older task on request.
+
 ---
 
 ## 10. Agent safety layer

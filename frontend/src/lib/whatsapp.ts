@@ -106,7 +106,11 @@ export async function notifyWhatsApp(userId: string, text: string): Promise<bool
  * itself after a reply. On WhatsApp there is no browser, so the same side
  * effects are written here, as the same rows the app's hooks would write.
  */
-export async function applySideEffects(userId: string, effects: Array<{ type: string; data?: Record<string, unknown> }>): Promise<void> {
+export async function applySideEffects(
+  userId: string,
+  effects: Array<{ type: string; data?: Record<string, unknown> }>,
+  sourceType: string | null = null,
+): Promise<void> {
   const db = getDb();
   if (!db) return;
   const now = new Date().toISOString();
@@ -116,6 +120,7 @@ export async function applySideEffects(userId: string, effects: Array<{ type: st
       await db.from("tasks").insert({
         id: crypto.randomUUID(), user_id: userId, title: d.title, priority: d.priority ?? "medium", status: "todo",
         assignee: d.assignee ?? null, agent: d.agent ?? null, due_date: d.due_date ?? null, description: d.description ?? null, created_at: now,
+        source_type: sourceType,
       });
     } else if (type === "task_update" && id) {
       await db.from("tasks").update((d.patch as Record<string, unknown>) ?? {}).eq("id", id).eq("user_id", userId);
