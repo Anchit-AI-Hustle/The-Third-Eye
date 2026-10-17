@@ -3,13 +3,14 @@
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { dataList } from "@/lib/dataClient";
-import { runThroughChat, STALE_MS, type AutopilotTask } from "@/lib/taskAutopilot";
+import { runThroughChat, STALE_MS, workOrder, type AutopilotTask } from "@/lib/taskAutopilot";
 import { activeAgent } from "@/hooks/useAgentProfile";
 import type { LocalTask } from "@/hooks/useLocalTasks";
 
 // Headless: every open task in the tracker is worked by the agent the user has
 // selected, each in its own independent run (its own conversation), a few at a
-// time. A task is claimed on the server first, so two tabs never work the same
+// time, urgent and overdue first. A task is claimed on the server first, so two
+// tabs (or the scheduled server run, /api/cron/autopilot) never work the same
 // one. Run with JARVIS dispatches AUTOPILOT_RUN to rerun a task on demand.
 
 export const AUTOPILOT_RUN = "te:autopilot-run";
@@ -65,7 +66,7 @@ export function TaskAutopilot() {
       try {
         const r = await dataList<LocalTask>("tasks");
         if (!r.remote) return;
-        const open = r.rows.filter((t) => t.status === "todo" && (!t.autopilot_status || stale(t)) && t.source_type !== "Autopilot" && !running.has(t.id) && !attempted.has(t.id));
+        const open = workOrder(r.rows).filter((t) => t.status === "todo" && (!t.autopilot_status || stale(t)) && t.source_type !== "Autopilot" && !running.has(t.id) && !attempted.has(t.id));
         for (const t of open.slice(0, MAX_PARALLEL - running.size)) void runOne(t.id);
       } finally {
         scanning = false;

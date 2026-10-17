@@ -73,4 +73,20 @@ jobs:
               *)   echo "::error::$path returned $code"; failed=1 ;;
             esac
           done
+
+          # Task autopilot: GitHub runs this schedule far less often than every
+          # five minutes, so each run works the tracker in several batches
+          # (3 tasks each, within Vercel's 60s limit) until nothing is left to take.
+          for i in 1 2 3 4 5 6 7 8 9 10
+          do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 65 \
+                     -H "Authorization: Bearer $CRON_SECRET" \
+                     "$SITE/api/cron/autopilot" || echo 000)
+            echo "--- autopilot batch $i ($code)"; head -c 500 /tmp/body; echo
+            case "$code" in
+              2*)  grep -q '"worked":\[\]' /tmp/body && break ;;
+              501) echo "::notice::autopilot is not configured on the server"; break ;;
+              *)   echo "::error::/api/cron/autopilot returned $code"; failed=1; break ;;
+            esac
+          done
           exit $failed
