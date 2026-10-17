@@ -36,9 +36,16 @@ describe("useLocalContacts", () => {
     expect(result.current.contacts[0].phone).toBe("+91 9873945238");
     expect(result.current.contacts[0].relationship).toBe("Mother");
 
-    const saved = JSON.parse(localStorage.getItem("jarvis_contacts_v1") ?? "[]");
+    const saved = JSON.parse(localStorage.getItem("jarvis_contacts_v1:test@example.com") ?? "[]");
     expect(saved.length).toBe(1);
     expect(saved[0].name).toBe("Mom");
+  });
+
+  it("never loads another account's contacts left on this browser", () => {
+    localStorage.setItem("jarvis_contacts_v1", JSON.stringify([{ id: "x", name: "Someone else", phone: "1", updated_at: "" }]));
+    localStorage.setItem("jarvis_contacts_v1:other@example.com", JSON.stringify([{ id: "y", name: "Other user", phone: "2", updated_at: "" }]));
+    const { result } = renderHook(() => useLocalContacts());
+    expect(result.current.contacts).toEqual([]);
   });
 
   it("removes a contact by id", () => {

@@ -11,7 +11,7 @@ import { useJobAgent } from "@/hooks/useJobAgent";
 import type { ApplicationKit, NormalizedJob } from "@/lib/jobAgent/types";
 import { resumeToHtml, resumeToMarkdown, resumeToText, coverLetterToHtml, coverLetterToText } from "@/lib/jobAgent/documents";
 import { documentFilename } from "@/lib/jobAgent/normalize";
-import { dataInsert } from "@/lib/dataClient";
+import { dataSave } from "@/lib/dataClient";
 
 type Tab = "resume" | "cover" | "answers";
 
@@ -22,6 +22,7 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("resume");
   const [approved, setApproved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,16 +72,21 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
     const resumeId = `resume_${Date.now().toString(36)}`;
     const coverId = `cover_${Date.now().toString(36)}`;
     // Persist immutable snapshots (best-effort; localStorage fallback handled by dataClient).
-    await dataInsert("resume_documents", {
+    setSaveError(null);
+    const resumeSaved = await dataSave("resume_documents", {
       id: resumeId, name: `${job.company} — ${job.title}`, target_job_id: job.id,
       document_json: kit.resume, template_id: kit.resume.templateId, version_number: 1,
       validation_json: { warnings: kit.warnings }, generation_metadata_json: { generatedAt: kit.generatedAt, provider: kit.provider },
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }).catch(() => {});
-    await dataInsert("cover_letters", {
+    });
+    const coverSaved = await dataSave("cover_letters", {
       id: coverId, target_job_id: job.id, title: `${job.company} — ${job.title}`,
       document_json: kit.coverLetter, version_number: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }).catch(() => {});
+    });
+    if (resumeSaved === "failed" || coverSaved === "failed") {
+      setSaveError("Couldn't save these documents. Nothing was approved; try again.");
+      return;
+    }
     await upsertApplication({
       id: `app_${Date.now().toString(36)}`, job_id: job.id, job_json: job, status: "ready_to_apply",
       match_score: kit.match.overallScore, submitted_resume_id: resumeId, submitted_cover_letter_id: coverId,
@@ -188,6 +194,7 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 text-xs text-text-muted">Approving saves an immutable snapshot of these documents to your tracker. <strong className="text-text-secondary">Nothing is submitted automatically</strong> — you apply on the employer's site yourself.</div>
                   <button onClick={approve} className="flex items-center gap-2 px-4 py-2.5 rounded-input bg-[#34D399] text-[#07070F] text-sm font-semibold hover:brightness-110"><Check size={15} /> Approve &amp; save</button>
+                  {saveError && <p className="text-xs text-accent-red basis-full">{saveError}</p>}
                 </div>
               ) : (
                 <div className="space-y-3">

@@ -7,7 +7,7 @@ import { Loader2, Copy, Check, Download, Sparkles, BookmarkPlus, Eye, Code2, Rot
 import type { StudioTool } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags } from "@/hooks/useModeTags";
-import { dataInsert } from "@/lib/dataClient";
+import { dataSave } from "@/lib/dataClient";
 import { recordGeneration, fieldsFrom } from "@/lib/generations";
 import { VideoScenes } from "@/components/studio/VideoScenes";
 import { BookWriter } from "@/components/studio/BookWriter";
@@ -80,7 +80,10 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
       chunk_count: Math.max(1, Math.ceil(output.split(/\s+/).length / 500)),
       processing_status: "ready",
     };
-    await dataInsert("knowledge_docs", doc).catch(() => {});
+    if (await dataSave("knowledge_docs", doc) === "failed") {
+      setError("Couldn't save to Knowledge. Try again.");
+      return;
+    }
     tagItem(id, modeId); // mode-scope the saved doc
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   }

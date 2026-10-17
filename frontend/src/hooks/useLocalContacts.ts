@@ -14,22 +14,27 @@ export interface DeviceContact {
   updated_at: string;
 }
 
+// The device cache is per account, so a shared browser never hands one
+// person's contacts to the next (who would then upload them as their own).
 const STORAGE_KEY = "jarvis_contacts_v1";
+let activeUser: string | null = null;
+const storageKey = () => (activeUser ? `${STORAGE_KEY}:${activeUser}` : STORAGE_KEY);
+const useStorageUser = (u: string | null) => { activeUser = u; };
 
-function loadLocalContacts(): DeviceContact[] {
+export function loadLocalContacts(): DeviceContact[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveLocalContacts(contacts: DeviceContact[]) {
+export function saveLocalContacts(contacts: DeviceContact[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));
+    localStorage.setItem(storageKey(), JSON.stringify(contacts));
     window.dispatchEvent(new CustomEvent("jarvis:contacts", { detail: contacts }));
   } catch {}
 }
@@ -137,6 +142,7 @@ export function hasNativeContactsPicker(): boolean {
 export function useLocalContacts() {
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
+  useStorageUser(userId);
 
   const [contacts, setContacts] = useState<DeviceContact[]>([]);
   const [syncing, setSyncing] = useState(false);
