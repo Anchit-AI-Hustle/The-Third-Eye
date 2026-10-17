@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PermissionsCard, openDeviceAppSettings } from "../PermissionsCard";
 import * as consent from "@/lib/consent";
@@ -92,5 +92,41 @@ describe("PermissionsCard & Device App Settings", () => {
     expect(mockOpenSettings).toHaveBeenCalled();
 
     delete (window as any).Capacitor;
+  });
+
+  describe("Test Access says what really happened", () => {
+    const testButton = (label: string) => {
+      let el: HTMLElement | null = screen.getByText(label);
+      while (el && !el.querySelector("button[title^='Trigger hardware']")) el = el.parentElement;
+      return el!.querySelector("button[title^='Trigger hardware']") as HTMLButtonElement;
+    };
+    afterEach(() => { delete (window as any).Capacitor; });
+
+    it("reports contacts unavailable in a browser that cannot read them, not ready", async () => {
+      render(<PermissionsCard />);
+      fireEvent.click(testButton("Contacts & People"));
+      expect(await screen.findByText(/can't read contacts/)).toBeInTheDocument();
+    });
+
+    it("asks the phone app's native prompts for contacts and notifications", async () => {
+      const Contacts = { requestPermissions: vi.fn(async () => ({ contacts: "denied" })) };
+      const PushNotifications = { requestPermissions: vi.fn(async () => ({ receive: "granted" })) };
+      (window as any).Capacitor = { isNativePlatform: () => true, Plugins: { Contacts, PushNotifications } };
+      render(<PermissionsCard />);
+      fireEvent.click(testButton("Contacts & People"));
+      expect(await screen.findByText(/Contacts access is off/)).toBeInTheDocument();
+      fireEvent.click(testButton("Notifications"));
+      expect(await screen.findByText("Notification permission: granted.")).toBeInTheDocument();
+      expect(PushNotifications.requestPermissions).toHaveBeenCalled();
+    });
+
+    it("passes the file test only once a file is actually picked", async () => {
+      const { container } = render(<PermissionsCard />);
+      fireEvent.click(testButton("Documents & Files"));
+      expect(await screen.findByText("Pick a file to confirm access.")).toBeInTheDocument();
+      const input = container.querySelector("input[type=file]:not([accept])") as HTMLInputElement;
+      fireEvent.change(input, { target: { files: [new File(["hello"], "plan.txt")] } });
+      expect(await screen.findByText(/Read plan.txt/)).toBeInTheDocument();
+    });
   });
 });

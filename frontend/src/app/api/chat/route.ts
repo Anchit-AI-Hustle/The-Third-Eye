@@ -21,6 +21,7 @@ import { runBusinessAgent } from "@/lib/businessAgents";
 import { geminiTools } from "@/lib/tools/schemas";
 import { checkArgs, parseToolArgs } from "@/lib/tools/args";
 import { localDay, validZone } from "@/lib/localDay";
+import { toWhatsAppNumber } from "@/lib/whatsappNumber";
 import { appInventory } from "@/lib/tools/inventory";
 import { resolveTask } from "@/lib/tools/taskMatch";
 import { todayBlock } from "@/lib/tools/today";
@@ -767,11 +768,8 @@ async function runTool(
       }
 
       if (action === "whatsapp") {
-        // Normalize phone number for wa.me / whatsapp:// (strip non-digits, auto-prepend 91 if 10 digits)
-        let cleanDigits = raw.replace(/[^\d+]/g, "");
-        if (/^0\d{10}$/.test(cleanDigits)) cleanDigits = "91" + cleanDigits.slice(1);
-        else if (/^\d{10}$/.test(cleanDigits)) cleanDigits = "91" + cleanDigits;
-        else if (cleanDigits.startsWith("+")) cleanDigits = cleanDigits.slice(1);
+        // wa.me wants the full number; a local one takes the user's own country code.
+        let cleanDigits = toWhatsAppNumber(raw, ctx.timezone);
 
         // If cleanDigits is empty, check if input.number has digits
         if (!cleanDigits && input.number) {

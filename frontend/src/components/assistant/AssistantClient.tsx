@@ -42,6 +42,7 @@ import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
 import { toolLabel } from "@/lib/toolLabels";
+import { toWhatsAppNumber } from "@/lib/whatsappNumber";
 
 // Replies whose files should save and open on arrival (after the permission
 // check); files in reopened chats only act when their buttons are clicked.
@@ -1580,29 +1581,18 @@ function WhatsAppPhonePicker({
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    let clean = phone.replace(/[^\d+]/g, "");
+    const clean = toWhatsAppNumber(phone, Intl.DateTimeFormat().resolvedOptions().timeZone);
     if (!clean) return;
-    if (/^\d{10}$/.test(clean)) clean = "91" + clean;
-    else if (clean.startsWith("+")) clean = clean.slice(1);
 
     const contactName = name.trim() || link.to || `Contact ${clean}`;
     if (onSaveContact) {
       onSaveContact({ name: contactName, phone: clean });
     }
 
-    const text = link.message || "";
-    const webUrl = `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
-    const nativeUrl = `whatsapp://send?phone=${clean}&text=${encodeURIComponent(text)}`;
-
+    // wa.me hands off to the WhatsApp app on a phone and to WhatsApp Web on a
+    // computer; opening the app link as well put WhatsApp up twice.
     setSent(true);
-    try {
-      window.location.href = nativeUrl;
-    } catch {}
-    setTimeout(() => {
-      try {
-        window.open(webUrl, "_blank", "noopener,noreferrer");
-      } catch {}
-    }, 600);
+    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(link.message || "")}`, "_blank", "noopener,noreferrer");
   };
 
   if (sent) {
