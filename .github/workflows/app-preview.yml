@@ -40,19 +40,21 @@ jobs:
           script: |
             mkdir -p preview
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell monkey -p com.jarvis.app -c android.intent.category.LAUNCHER 1
-            adb shell screenrecord --time-limit 40 /sdcard/launch.mp4 & sleep 42
-            adb pull /sdcard/launch.mp4 preview/android-launch.mp4
-            adb exec-out screencap -p > preview/android-home.png
-            adb shell input swipe 540 1600 540 600 400; sleep 4
-            adb exec-out screencap -p > preview/android-scrolled.png
+            adb logcat -c
+            adb shell screenrecord --time-limit 40 /sdcard/launch.mp4 & sleep 1
+            adb shell am start -W -n com.jarvis.app/.MainActivity
+            sleep 12; adb exec-out screencap -p > preview/android-launch-12s.png
+            sleep 28; adb exec-out screencap -p > preview/android-launch-40s.png
+            adb pull /sdcard/launch.mp4 preview/android-launch.mp4 || true
+            adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" > preview/android-focus.txt || true
+            adb logcat -d -v brief AndroidRuntime:E Capacitor:V chromium:W ActivityManager:I '*:S' > preview/android-logcat.txt || true
       - name: Push screenshots to the app-previews branch
         env:
           PLATFORM: android
         run: |
           git fetch origin app-previews || true
           git worktree add -B app-previews ../shots origin/app-previews 2>/dev/null || { git worktree add --detach ../shots && git -C ../shots checkout --orphan app-previews && git -C ../shots rm -rfq . ; }
-          mkdir -p ../shots/$PLATFORM && cp preview/*.png ../shots/$PLATFORM/
+          mkdir -p ../shots/$PLATFORM && rm -f ../shots/$PLATFORM/* && cp preview/*.png preview/*.txt ../shots/$PLATFORM/ 2>/dev/null || true
           cd ../shots
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,13 +93,14 @@ jobs:
           sleep 40
           kill -INT $REC; sleep 3
           xcrun simctl io "$UDID" screenshot preview/ios-home.png
+          xcrun simctl spawn "$UDID" log show --last 2m --predicate 'process == "App"' --style compact > preview/ios-log.txt || true
       - name: Push screenshots to the app-previews branch
         env:
           PLATFORM: ios
         run: |
           git fetch origin app-previews || true
           git worktree add -B app-previews ../shots origin/app-previews 2>/dev/null || { git worktree add --detach ../shots && git -C ../shots checkout --orphan app-previews && git -C ../shots rm -rfq . ; }
-          mkdir -p ../shots/$PLATFORM && cp preview/*.png ../shots/$PLATFORM/
+          mkdir -p ../shots/$PLATFORM && rm -f ../shots/$PLATFORM/* && cp preview/*.png preview/*.txt ../shots/$PLATFORM/ 2>/dev/null || true
           cd ../shots
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
