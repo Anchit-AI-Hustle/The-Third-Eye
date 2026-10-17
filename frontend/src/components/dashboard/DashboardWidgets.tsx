@@ -13,6 +13,7 @@ import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 
 import { getAgentLog, isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
+import { localDay } from "@/lib/localDay";
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
@@ -48,7 +49,7 @@ export function DashboardWidgets() {
     const avgGoal = goals.length
       ? Math.round(goals.reduce((s, g) => s + (g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0), 0) / goals.length)
       : 0;
-    const month = new Date().toISOString().slice(0, 7);
+    const month = localDay().slice(0, 7);
     const spend = expenses.filter((e) => e.spent_on?.startsWith(month)).reduce((s, e) => s + (e.amount || 0), 0);
     return { open: open.length, urgent: urgent.length, avgGoal, spend };
   }, [allTasks, goals, expenses]);

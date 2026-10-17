@@ -6,6 +6,7 @@ import {
   AGENT_EVENT, getAgentLog, isAgentKilled, setAgentKilled, clearAgentLog,
   type AgentLogEntry,
 } from "@/lib/agentControl";
+import { localDay } from "@/lib/localDay";
 
 export function ActivityClient() {
   const [killed, setKilled] = useState(false);
@@ -25,7 +26,7 @@ export function ActivityClient() {
   function exportLog() {
     const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `third-eye-agent-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `third-eye-agent-audit-${localDay()}.json`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
+import { localDay } from "@/lib/localDay";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -23,11 +24,15 @@ export async function POST(req: NextRequest) {
   }
 
   let text = "";
-  try { text = String((await req.json())?.text ?? "").slice(0, 500); }
-  catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  let timezone: string | undefined;
+  try {
+    const body = await req.json();
+    text = String(body?.text ?? "").slice(0, 500);
+    timezone = typeof body?.timezone === "string" ? body.timezone : undefined;
+  } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!text.trim()) return Response.json({ error: "Empty" }, { status: 400 });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay(new Date(), timezone);
 
   try {
     const out = await llmCascade({
