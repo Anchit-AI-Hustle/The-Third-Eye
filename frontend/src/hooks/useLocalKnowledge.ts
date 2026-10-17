@@ -168,22 +168,21 @@ export function useLocalKnowledge() {
       }
 
       if (DOC_TYPES.has(ext)) {
+        // Real text out of the PDF or Word file; one that can't be read is
+        // marked failed with the reason, never stored as "ready" binary junk.
         try {
-          // Attempt plain text read for PDF/DOC (often contains text streams)
-          const raw = await readFileAsText(file);
-          const cleanText = raw.replace(/[^\x20-\x7E\r\n\t]/g, " ").replace(/\s{2,}/g, " ").trim();
-          const preview = cleanText.length > 50 ? cleanText : `[Document: ${title} (${Math.round(file.size / 1024)} KB)]`;
-          const chunks = chunkText(preview);
+          const { extractDocText } = await import("@/lib/docText");
+          const content = await extractDocText(title, new Uint8Array(await file.arrayBuffer()));
           newDocs.push({
-            id, title, content: preview, file_type: ext.replace(".", "") || "doc",
+            id, title, content, file_type: ext.replace(".", ""),
             file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: chunks.length, processing_status: "ready",
+            chunk_count: chunkText(content).length, processing_status: "ready",
           });
-        } catch {
+        } catch (err) {
           newDocs.push({
-            id, title, content: `[Document: ${title} (${Math.round(file.size / 1024)} KB)]`, file_type: ext.replace(".", ""),
+            id, title, content: "", file_type: ext.replace(".", ""),
             file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: 1, processing_status: "ready",
+            chunk_count: 0, processing_status: "failed", error: err instanceof Error ? err.message : "Couldn't read this document.",
           });
         }
         continue;
