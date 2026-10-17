@@ -496,6 +496,7 @@ export function MusicStudio() {
       const notes: string[] = [];
       if (d.elevenLabsError) notes.push(`ElevenLabs couldn't make this one (${String(d.elevenLabsError).slice(0, 160)}), so a backup model is used.`);
       if (d.fellBackToInstrumental) notes.push(`Couldn't generate sung vocals${d.vocalError ? ` — ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
+      if (d.provider === "code" && d.note) notes.push(d.note);
       if (d.loop) notes.push(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
       if (notes.length) setNote(notes.join(" "));
       // Free HuggingFace fallback returns audio synchronously (no job to poll).

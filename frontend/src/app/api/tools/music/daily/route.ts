@@ -72,7 +72,7 @@ const RUN_MESSAGES = {
   started: "Today's track is being made — it will appear here in a few minutes.",
   exists: "Today's track has already been made.",
   "no-preset": "Save a daily style first.",
-  unconfigured: "Daily tracks need REPLICATE_API_TOKEN and a production URL.",
+  unconfigured: "Daily tracks from REPLICATE_API_TOKEN also need a production URL (NEXTAUTH_URL) for the render to report back.",
   failed: "Couldn't start today's track — try again.",
 } as const;
 

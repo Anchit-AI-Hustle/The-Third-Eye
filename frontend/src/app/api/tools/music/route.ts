@@ -7,6 +7,7 @@ import { SONG_MODEL as VOCAL_MODEL, SONG_CLIP_MAX as VOCAL_CLIP_MAX } from "@/li
 import type { MusicInput } from "@/lib/music/types";
 import { elevenLabsConfigured, composeElevenLabs, elevenPrompt, clipSecondsFor } from "@/lib/music/elevenlabs";
 import { storeStudioAudio, audioPath } from "@/lib/music/studioAudio";
+import { renderWav } from "@/lib/music/synth";
 import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -48,6 +49,10 @@ const STABLE_AUDIO_VERSION = "9aff84a639f96d0f7e6081cdea002d15133d0043727f849c40
 const INSTRUMENTAL_CLIP_MAX = 60;  // a real mini-composition, not a tiny loop
 const STABLE_AUDIO_CLIP_MAX = 47;  // stable-audio-open's native window
 const MAX_SESSION_SECONDS = 18000; // 5 hours
+// Code-composed fallback: 60s stored, 45s when it has to travel inline (a 45s
+// 22 kHz WAV is about 2.6 MB as base64, inside INLINE_MAX).
+const SYNTH_CLIP_MAX = 60;
+const SYNTH_INLINE_MAX = 45;
 
 async function email() {
   const s = await getServerSession(authOptions);
@@ -165,7 +170,21 @@ export async function POST(req: NextRequest) {
     const keyNote = keySet && !elevenLabsConfigured()
       ? "The saved ElevenLabs value is a key id, not the secret. A working key starts with sk_ and is shown once when it is created or rotated. "
       : "";
-    return Response.json({ configured: false, prompt, tags, lyrics, ...briefMeta, ...elMeta, note: `${keyNote}Music generation needs an sk_ ELEVENLABS_API_KEY or REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool.` });
+    // No music model is reachable: compose the instrumental in code so the
+    // Studio still plays a real track, and say exactly what it is.
+    const db = getDb();
+    const seconds = Math.min(clipSeconds, db ? SYNTH_CLIP_MAX : SYNTH_INLINE_MAX);
+    const wav = Buffer.from(renderWav({ bpm: brief.bpm, seconds, energy: brief.energy, key: brief.key, moods: brief.moods, seed: `${description}|${prompt}` }));
+    let audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
+    if (db) {
+      try { audioUrl = audioPath(await storeStudioAudio(db, user, wav, { audioType: "audio/wav", provider: "code" })); }
+      catch { /* the inline copy still plays */ }
+    }
+    return Response.json({
+      configured: true, done: true, audioUrl, model: "code:synth", provider: "code",
+      prompt, tags, lyrics, sessionSeconds, clipSeconds: seconds, loop: sessionSeconds > seconds, ...briefMeta, ...elMeta,
+      note: `${keyNote}No music AI is set up, so this instrumental was composed in code: synth parts, no vocals${sing ? " (the lyrics are below)" : ""}. Add an sk_ ELEVENLABS_API_KEY or a REPLICATE_API_TOKEN for AI songs with sung vocals.`,
+    });
   }
 
   // Route to a model that generates from text alone (no reference required).
