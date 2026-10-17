@@ -8,6 +8,15 @@
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
         <string>The Third Eye</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Jarvis</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>jar-viss</string>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

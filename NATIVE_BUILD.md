@@ -56,7 +56,14 @@ and return to the app (at most every 10 minutes), and from Settings:
 `AppDelegate.swift` declares App Intents (iOS 16+): "Hey Siri, ask The Third
 Eye" (Siri then asks for the question) and "Hey Siri, morning briefing in The
 Third Eye". Both also appear in the Shortcuts app. Each opens the app at
-`/assistant?ask=<message>`, which sends the message.
+`/assistant?ask=<message>`, which sends the message. `INAlternativeAppNames`
+in `Info.plist` makes "Jarvis" a second name, so "Hey Siri, ask Jarvis" works
+too.
+
+iOS lets no app listen for its own wake word in the background. For a true
+"Hey Jarvis" on iOS 18+, the person sets up a Vocal Shortcut once: Settings >
+Accessibility > Vocal Shortcuts > Add Action > Shortcut > "Ask The Third
+Eye", then records the phrase "Hey Jarvis".
 
 ## iOS without a Mac
 
