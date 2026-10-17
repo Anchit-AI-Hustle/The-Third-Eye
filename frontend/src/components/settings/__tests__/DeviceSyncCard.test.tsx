@@ -12,10 +12,12 @@ describe("DeviceSyncCard", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders Device Data & Media Sync header and cloud active indicator", () => {
+  it("shows the cloud sync state the server reports, not a fixed 'active'", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => new Response(JSON.stringify(u === "/api/health" ? { llm_available: true, llm: { status: "ok", providers: { groq: "ok" } }, services: { database: false } } : {}))));
     render(<DeviceSyncCard />);
     expect(screen.getByText("Device Data & Media Sync")).toBeInTheDocument();
-    expect(screen.getByText(/Mobile & Laptop Cloud Sync Active/i)).toBeInTheDocument();
+    expect(await screen.findByText(/This device only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Cloud Sync Active/i)).toBeNull();
     expect(screen.getByText("Device Contacts")).toBeInTheDocument();
     expect(screen.getByText("Device Files & Photos Vault")).toBeInTheDocument();
   });

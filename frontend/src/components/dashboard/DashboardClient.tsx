@@ -10,10 +10,11 @@ import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { taskStatusLabel } from "@/lib/taskStatus";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
-  Target, FileText, Cpu, Shield, Mic, TrendingUp, AlertTriangle,
+  Target, FileText, Cpu, Shield, Mic, AlertTriangle,
   Activity, Database, Eye,
 } from "lucide-react";
 import Link from "next/link";
+import { useSystemHealth } from "@/hooks/useSystemHealth";
 
 const PRIORITY_DOT: Record<string, string> = {
   low: "bg-text-muted", medium: "bg-[#4FC3F7]", high: "bg-warning", urgent: "bg-accent-red",
@@ -80,11 +81,13 @@ function useKillSwitch() {
 // is its own tiny client piece rather than inline state there.
 export function SystemStatusText() {
   const killed = useKillSwitch();
-  return (
-    <span className={killed ? "text-accent-red" : undefined}>
-      {killed ? "AGENT HALTED — KILL SWITCH ON" : "ALL SYSTEMS OPERATIONAL"}
-    </span>
-  );
+  const health = useSystemHealth();
+  const text = killed ? "AGENT HALTED: KILL SWITCH ON"
+    : !health ? "CHECKING SYSTEMS"
+    : health.ai === "down" ? "ASSISTANT OFFLINE"
+    : health.ai === "degraded" ? "RUNNING ON BACKUP AI"
+    : "ALL SYSTEMS OPERATIONAL";
+  return <span className={killed || health?.ai === "down" ? "text-accent-red" : undefined}>{text}</span>;
 }
 
 export function DashboardClient() {
@@ -92,6 +95,12 @@ export function DashboardClient() {
   const { active: agent } = useAgentProfile();
   const { time, date, seconds } = useClock();
   const uptime = useUptime();
+  const health = useSystemHealth();
+  const [voiceReady, setVoiceReady] = useState(false);
+  useEffect(() => {
+    const w = window as Window & { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    setVoiceReady("speechSynthesis" in window && !!(w.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
   const killed = useKillSwitch();
 
   const open     = allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
@@ -141,8 +150,8 @@ export function DashboardClient() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="hud-label">uptime {uptime}</span>
-                <span className={cn("hud-label", killed ? "text-accent-red" : "text-success")}>
-                  {killed ? "kill switch engaged" : "all systems nominal"}
+                <span className={cn("hud-label", killed || health?.ai === "down" ? "text-accent-red" : "text-success")}>
+                  {killed ? "kill switch engaged" : !health ? "checking" : health.ai === "down" ? "assistant offline" : health.ai === "degraded" ? "backup ai" : "all systems nominal"}
                 </span>
               </div>
             </div>
@@ -178,12 +187,11 @@ export function DashboardClient() {
 
           {/* System lines */}
           <div className="w-full space-y-2.5 mt-auto">
-            <StatusRow icon={<Cpu size={12} />} label="AI Engine" value="Gemini 2.5" status="online" />
-            <StatusRow icon={<Brain size={12} />} label="Memory" value="Active" status="online" />
-            <StatusRow icon={<Mic size={12} />} label="Voice I/O" value="Ready" status="online" />
-            <StatusRow icon={<Shield size={12} />} label="Auth" value="Secured" status="online" />
-            <StatusRow icon={<Database size={12} />} label="Knowledge" value="Indexed" status="idle" />
-            <StatusRow icon={<TrendingUp size={12} />} label="Finance" value="AI-assisted" status="online" />
+            <StatusRow icon={<Cpu size={12} />} label="AI Engine" value={health?.aiProvider ?? (health ? "Offline" : "…")} status={health?.ai === "down" ? "idle" : "online"} />
+            <StatusRow icon={<Brain size={12} />} label="Memory" value={health?.database ? "Synced" : health ? "This device only" : "…"} status={health?.database ? "online" : "idle"} />
+            <StatusRow icon={<Mic size={12} />} label="Voice I/O" value={voiceReady ? "Ready" : "Not supported here"} status={voiceReady ? "online" : "idle"} />
+            <StatusRow icon={<Shield size={12} />} label="Auth" value="Signed in" status="online" />
+            <StatusRow icon={<Database size={12} />} label="Knowledge" value={health?.database ? "Cloud" : health ? "This device only" : "…"} status={health?.database ? "online" : "idle"} />
           </div>
         </div>
       </div>
@@ -197,9 +205,8 @@ export function DashboardClient() {
               <TickerItem label="PRIORITY" value={`${urgent.length} high/urgent`} />
               <TickerItem label="COMPLETED" value={`${doneToday.length} today`} />
               <TickerItem label="VOICE" value="STT + TTS" />
-              <TickerItem label="MODEL" value="gemini-2.5-flash" />
-              <TickerItem label="STATUS" value={killed ? "halted" : "operational"} />
-              <TickerItem label="LATENCY" value="<200ms" />
+              <TickerItem label="AI" value={health?.aiProvider ?? "checking"} />
+              <TickerItem label="STATUS" value={killed ? "halted" : health?.ai === "down" ? "offline" : "operational"} />
             </div>
           ))}
         </div>
@@ -314,18 +321,17 @@ export function DashboardClient() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: "Streaming AI", active: true },
+            { label: "Streaming AI", active: health?.ai !== "down" },
             { label: "Task Ops", active: true },
-            { label: "Voice I/O", active: true },
-            { label: "Memory Core", active: true },
-            { label: "Knowledge DB", active: true },
-            { label: "Web Recon", active: true },
-            { label: "Comms (Email)", active: true },
-            { label: "Scheduler", active: true },
-            { label: "Finance AI", active: true },
-            { label: "Multi-Agent", active: true },
-            { label: "Automation", active: true },
-            { label: "Digital Twin", active: false },
+            { label: "Voice I/O", active: voiceReady },
+            { label: "Memory Core", active: !!health?.database },
+            { label: "Knowledge DB", active: !!health?.database },
+            { label: "Web Recon", active: health?.ai !== "down" },
+            { label: "Comms (Email)", active: !!health?.google },
+            { label: "Scheduler", active: !!health?.database },
+            { label: "Finance AI", active: health?.ai !== "down" },
+            { label: "Multi-Agent", active: health?.ai !== "down" },
+            { label: "Automation", active: !!health?.database },
           ].map(({ label, active }) => (
             <div key={label} className={cn(
               "flex items-center gap-2 px-3 py-2.5 rounded-input border text-xs transition-all",

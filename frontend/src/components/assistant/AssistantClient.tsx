@@ -1085,11 +1085,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           <div className="flex items-start gap-3">
             <AlertCircle size={14} className="text-warning flex-none mt-0.5" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-warning">JARVIS needs configuration</p>
-              <p className="text-xs text-text-muted mt-0.5">
-                <code className="font-mono bg-background-elevated px-1 rounded">GEMINI_API_KEY</code> is not set.
-                {" "}Go to Vercel → Settings → Environment Variables → add it → Redeploy.
-              </p>
+              <p className="text-sm font-medium text-warning">The assistant isn&apos;t switched on yet</p>
+              <p className="text-xs text-text-muted mt-0.5">No AI provider is set up on this site, so JARVIS can&apos;t answer. The site owner needs to add one.</p>
             </div>
             <a href="/settings" className="flex-none text-text-muted hover:text-text-secondary transition-colors p-0.5 rounded">
               <Settings size={13} />

@@ -25,6 +25,7 @@ import {
 import { useLocalContacts, type DeviceContact } from "@/hooks/useLocalContacts";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { cn } from "@/lib/utils";
+import { useSystemHealth } from "@/hooks/useSystemHealth";
 
 export function DeviceSyncCard() {
   const {
@@ -55,7 +56,8 @@ export function DeviceSyncCard() {
 
   const [isMasterSyncing, setIsMasterSyncing] = useState(false);
   const [masterSyncFeedback, setMasterSyncFeedback] = useState<string | null>(null);
-  const [lastSyncedText, setLastSyncedText] = useState<string | null>("Just now");
+  const [lastSyncedText, setLastSyncedText] = useState<string | null>(null);
+  const health = useSystemHealth();
 
   const [showAddContact, setShowAddContact] = useState(false);
   const [showPasteContacts, setShowPasteContacts] = useState(false);
@@ -97,15 +99,19 @@ export function DeviceSyncCard() {
         fetch("/api/user/sync/settings").catch(() => null),
       ]);
 
-      const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      setLastSyncedText(nowStr);
+      const failed = contactRes.error || vaultRes.error;
+      if (failed) {
+        setMasterSyncFeedback(`Sync didn't finish: ${failed}`);
+        return;
+      }
+      setLastSyncedText(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
       setMasterSyncFeedback(
-        `✓ All devices in sync! ${contactRes.count} contact${contactRes.count === 1 ? "" : "s"} & ${vaultRes.count} vault item${vaultRes.count === 1 ? "" : "s"} synchronized.`
+        `In sync: ${contactRes.count} contact${contactRes.count === 1 ? "" : "s"} and ${vaultRes.count} vault item${vaultRes.count === 1 ? "" : "s"}.`
       );
       setContactSuccess(`Contacts synced: ${contactRes.count} total`);
       setFolderSuccess(`Vault indexed: ${vaultRes.count} total`);
     } catch (err: any) {
-      setMasterSyncFeedback(`Sync completed: ${err?.message || "All devices synced"}`);
+      setMasterSyncFeedback(`Sync didn't finish: ${err?.message || "unknown error"}`);
     } finally {
       setIsMasterSyncing(false);
     }
@@ -280,11 +286,11 @@ export function DeviceSyncCard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
         <h2 className="font-display text-lg font-semibold text-text-primary">Device Data &amp; Media Sync</h2>
         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/25 text-[11px] text-[#4FC3F7] font-mono w-fit">
-          <Cloud size={11} /> Mobile &amp; Laptop Cloud Sync Active
+          <Cloud size={11} /> {health ? (health.database ? "Cloud sync on" : "This device only") : "Checking…"}
         </div>
       </div>
       <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider leading-relaxed">
-        Allow JARVIS to access device contacts, files, and photos natively and locally. Contacts resolve names (&ldquo;Mom&rdquo;, &ldquo;Priya&rdquo;) to numbers for WhatsApp/Calls/SMS and follow you across all devices.
+        Add or import your contacts and files here. JARVIS uses the contacts to turn names (&ldquo;Mom&rdquo;, &ldquo;Priya&rdquo;) into numbers for WhatsApp, calls and SMS, and they follow you to every device you sign in on.
       </p>
 
       {/* Master Complete Device Sync Hub */}
@@ -301,7 +307,7 @@ export function DeviceSyncCard() {
               </span>
             </div>
             <p className="text-xs text-text-muted mt-1">
-              Seamless bidirectional cloud sync between your iPhone, Android, and Laptop browsers.
+              Pulls your contacts and vault from the cloud and pushes this device's changes back.
             </p>
           </div>
 
@@ -328,11 +334,11 @@ export function DeviceSyncCard() {
           </div>
           <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
             <span className="text-[10px] text-text-muted block">Cloud Status</span>
-            <span className="font-mono font-medium text-emerald-400">✓ Connected</span>
+            <span className={cn("font-mono font-medium", health?.database ? "text-emerald-400" : "text-text-muted")}>{health ? (health.database ? "Connected" : "Not set up") : "…"}</span>
           </div>
           <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
             <span className="text-[10px] text-text-muted block">Last Full Sync</span>
-            <span className="font-mono font-medium text-text-secondary">{lastSyncedText || "Just now"}</span>
+            <span className="font-mono font-medium text-text-secondary">{lastSyncedText || "Not this session"}</span>
           </div>
         </div>
 

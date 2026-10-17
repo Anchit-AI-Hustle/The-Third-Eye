@@ -14,7 +14,8 @@ export function usableGeminiKey(env: EnvLike = process.env): string {
 export function systemStatus(env: EnvLike = process.env) {
   const geminiLive = !!usableGeminiKey(env);
   return {
-    ai: !!(clean(env.GEMINI_API_KEY) || clean(env.ANTHROPIC_API_KEY)),
+    // Any provider in the cascade answers chat, not only Gemini or Anthropic.
+    ai: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"].some((k) => !!clean(env[k])),
     // Whisper is Groq or OpenAI. A live Gemini key transcribes audio too,
     // so the row is not "missing" on a deployment that already has Gemini.
     openai: !!(clean(env.OPENAI_API_KEY) || clean(env.GROQ_API_KEY)) || geminiLive,

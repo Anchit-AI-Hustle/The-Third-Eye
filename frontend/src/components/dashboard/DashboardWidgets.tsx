@@ -97,7 +97,7 @@ export function DashboardWidgets() {
         {widgets.map((w) => {
           const Icon = w.icon;
           return (
-            <Link key={w.href} href={w.href} data-widget
+            <Link key={w.label} href={w.href} data-widget
               className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden hover:-translate-y-0.5 transition-transform duration-150">
               <div className="flex items-center justify-between mb-3">
                 <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-none"
