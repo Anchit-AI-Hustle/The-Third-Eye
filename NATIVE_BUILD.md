@@ -22,8 +22,14 @@ on any change to `android/`). Builds from `main` also publish the APK to the
 public `android-latest` release, which the site's `/install` page links for a
 one-tap download. A store release still needs the signed bundle below.
 
-iOS has no install outside the App Store or TestFlight, so `/install` walks
-iPhone users through Safari's Add to Home Screen instead.
+## iOS without a Mac
+
+The **iOS app** workflow (`.github/workflows/ios-app.yml`) builds an unsigned
+`.ipa` on GitHub's macOS runner (free on a public repo). Builds from `main`
+publish it to the public `ios-latest` release. iOS installs only signed apps,
+so install it with Sideloadly or AltStore and your Apple ID (a free Apple ID's
+signature lasts 7 days). `/install` offers it under "Native iOS app", after
+Safari's Add to Home Screen, which needs no signing.
 
 ## Build & run
 

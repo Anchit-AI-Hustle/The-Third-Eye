@@ -1,8 +1,10 @@
 // Which install path the /install page offers. Android gets the native APK
-// from the android-latest release (android-apk.yml); iOS has no direct install
-// outside the App Store, so Safari's Add to Home Screen is the path there.
+// from the android-latest release (android-apk.yml). iOS installs only signed
+// apps, so iPhones get Safari's Add to Home Screen, with the native .ipa from
+// the ios-latest release (ios-app.yml) for signing with a sideloader.
 
 export const ANDROID_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-latest/the-third-eye.apk";
+export const IOS_IPA_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/ios-latest/the-third-eye.ipa";
 
 export type InstallPlatform = "android" | "ios-safari" | "ios-other" | "desktop" | "installed";
 

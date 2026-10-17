@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Download, PlusSquare, Share, Smartphone } from "lucide-react";
-import { ANDROID_APK_URL, installPlatform, type InstallPlatform } from "@/lib/installPlatform";
+import { ANDROID_APK_URL, IOS_IPA_URL, installPlatform, type InstallPlatform } from "@/lib/installPlatform";
 
 function AndroidCard({ primary }: { primary: boolean }) {
   return (
@@ -40,6 +40,19 @@ function IosCard({ inSafari }: { inSafari: boolean }) {
         <li className="flex items-center gap-2"><span className="text-text-muted">2.</span> Tap <PlusSquare size={16} className="text-accent-blue" aria-hidden="true" /> Add to Home Screen, then Add.</li>
         <li className="flex items-center gap-2"><span className="text-text-muted">3.</span> Open JARVIS from your home screen. It runs full screen, with voice.</li>
       </ol>
+      <details className="mt-5 border-t border-border-default pt-4 text-sm text-text-secondary">
+        <summary className="cursor-pointer text-text-primary">Native iOS app (advanced)</summary>
+        <p className="mt-2">
+          Apple installs only signed apps. Download the app file on a computer, then install it to your iPhone with{" "}
+          <a href="https://sideloadly.io" className="text-accent-blue hover:underline" rel="noopener noreferrer" target="_blank">Sideloadly</a>{" "}
+          or{" "}
+          <a href="https://altstore.io" className="text-accent-blue hover:underline" rel="noopener noreferrer" target="_blank">AltStore</a>{" "}
+          and your Apple ID. With a free Apple ID it needs re-signing every 7 days.
+        </p>
+        <a href={IOS_IPA_URL} className="mt-3 inline-flex items-center gap-2 rounded-card border border-accent-blue/40 px-4 py-2 text-sm font-semibold text-accent-blue hover:opacity-90">
+          <Download size={15} /> Download iOS app file
+        </a>
+      </details>
     </section>
   );
 }

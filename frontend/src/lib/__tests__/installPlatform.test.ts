@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANDROID_APK_URL, installPlatform } from "@/lib/installPlatform";
+import { ANDROID_APK_URL, IOS_IPA_URL, installPlatform } from "@/lib/installPlatform";
 
 const IPHONE_SAFARI = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 const IPHONE_CHROME = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1";
@@ -34,5 +34,9 @@ describe("which install path a visitor gets", () => {
 
   it("links a stable public APK that needs no sign-in", () => {
     expect(ANDROID_APK_URL).toBe("https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-latest/the-third-eye.apk");
+  });
+
+  it("links a stable public iOS app file too", () => {
+    expect(IOS_IPA_URL).toBe("https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/ios-latest/the-third-eye.ipa");
   });
 });
