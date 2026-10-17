@@ -16,7 +16,9 @@ import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { matchSystemsCommand } from "@/lib/systems";
 import { triggerSystemsOnline } from "@/components/systems/SystemsOnline";
-import { usePush } from "@/hooks/usePush";
+import { NotifyPrompt } from "./NotifyPrompt";
+import { takeUrlParam } from "@/lib/urlParam";
+import { REMINDERS_CHANGED } from "@/lib/localReminders";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
@@ -170,7 +172,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
-  usePush();
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -658,6 +659,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
       let buffer = "";
       let fullText = "";
       const toolsUsed: string[] = [];
+      let remindersChanged = false;
       let eventType = "";
 
       while (true) {
@@ -679,6 +681,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   m.id === assistantId ? { ...m, content: fullText, toolsUsed } : m
                 ));
               } else if (eventType === "tool" && parsed.name && !CHECKLIST_TOOLS.has(parsed.name)) {
+                if (parsed.name === "manage_reminders") remindersChanged = true;
                 toolsUsed.push(toolLabel(parsed.name, parsed.input));
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
@@ -751,6 +754,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "assistant", content: effectiveContent },
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
+                // The phone app reschedules its reminder notifications.
+                if (remindersChanged) window.dispatchEvent(new Event(REMINDERS_CHANGED));
                 openLinks(parsed.sideEffects);
                 const media = (parsed.sideEffects ?? [])
                   .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)
@@ -885,17 +890,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setShowChats(false);
   }
 
-  // A task in the tracker links back here with ?chat=<id>.
+  // A task in the tracker links back here with ?chat=<id>; a phone
+  // notification (the morning briefing) with ?ask=<message>.
   const linkedChat = useRef(false);
   useEffect(() => {
     if (!library.ready || linkedChat.current) return;
     linkedChat.current = true;
-    const url = new URL(window.location.href);
-    const id = url.searchParams.get("chat");
-    if (!id) return;
-    url.searchParams.delete("chat");
-    window.history.replaceState(null, "", url.pathname + url.search);
-    void openChat(id, true);
+    const id = takeUrlParam("chat");
+    if (id) void openChat(id, true);
+    const ask = takeUrlParam("ask");
+    if (ask) void sendMessage(ask);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [library.ready]);
 
@@ -1182,6 +1186,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         <div ref={bottomRef} />
       </div>
 
+      <div className="flex-none px-4 sm:px-8 pt-3 empty:hidden"><NotifyPrompt /></div>
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div
         onDragOver={handleDragOver}
