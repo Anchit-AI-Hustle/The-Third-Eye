@@ -68,7 +68,7 @@ export function SettingsClient({ user }: Props) {
           <div>
             <p className="text-text-primary font-medium">{user?.name ?? "Unknown"}</p>
             <p className="text-text-muted text-sm mt-0.5">{user?.email ?? ""}</p>
-            <p className="text-text-muted text-xs mt-1 font-mono">Signed in with Google</p>
+            <p className="text-text-muted text-xs mt-1 font-mono">Signed in with mobile number and PIN</p>
           </div>
         </div>
       </Section>
@@ -118,7 +118,7 @@ export function SettingsClient({ user }: Props) {
               <StatusRow label="Speech to text" ok={status?.openai} hint="Optional: Groq, OpenAI or Gemini" />
               <StatusRow label="Web search" ok={status?.serper} hint="Optional: keyless search is used without it" />
               <StatusRow label="Database" ok={status?.database} hint="Required for sync across devices" />
-              <StatusRow label="Google sign-in" ok={status?.google_oauth} hint="Required: sign-in, Gmail and Calendar" />
+              <StatusRow label="Google connection" ok={status?.google_oauth} hint="Optional: Gmail and Calendar" />
             </>
           )}
         </div>

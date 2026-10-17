@@ -248,11 +248,9 @@ export async function enter(input: {
     };
   }
 
-  // The right PIN clears the count, the lock and the escalation ladder — without
-  // the last of those, one bad afternoon would leave someone on 24-hour locks for
-  // ever.
+  // The right PIN clears the count and the lock.
   //
-  // AND THE RESULT IS CHECKED, because this attempt has already SPENT a try. If
+  // THE RESULT IS CHECKED, because this attempt has already SPENT a try. If
   // the reset does not persist, a correct PIN still leaves the counter advanced —
   // so five good sign-ins in a row would lock the account, which is the opposite
   // of what a correct PIN should do. Retried once for a transient blip, then the
@@ -318,7 +316,7 @@ async function beginAttempt(
   return { ok: true, tries: state.tries ?? MAX_TRIES, lockedUntil: state.locked_until ?? null };
 }
 
-/** Clear the failure count, lock and escalation ladder. One retry, then give up. */
+/** Clear the failure count and lock. One retry, then give up. */
 async function clearFailures(sb: Sb, id: string): Promise<boolean> {
   for (let i = 0; i < 2; i++) {
     const { error } = await sb.rpc("phone_pin_ok", { p_id: id });
