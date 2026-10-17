@@ -83,11 +83,11 @@ function useKillSwitch() {
 export function SystemStatusText() {
   const killed = useKillSwitch();
   const health = useSystemHealth();
-  const text = killed ? "AGENT HALTED: KILL SWITCH ON"
-    : !health ? "CHECKING SYSTEMS"
-    : health.ai === "down" ? "ASSISTANT OFFLINE"
-    : health.ai === "degraded" ? "RUNNING ON BACKUP AI"
-    : "ALL SYSTEMS OPERATIONAL";
+  const text = killed ? "Agent halted: kill switch on"
+    : !health ? "Checking systems"
+    : health.ai === "down" ? "Assistant offline"
+    : health.ai === "degraded" ? "Running on backup AI"
+    : "All systems operational";
   return <span className={killed || health?.ai === "down" ? "text-accent-red" : undefined}>{text}</span>;
 }
 
@@ -183,8 +183,8 @@ export function DashboardClient() {
         {/* Arc Reactor + System Status */}
         <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center">
           {/* Arc reactor — live 3D */}
-          <ReactorCanvas size={150} />
-          <span className="hud-label mt-2 mb-4">{agent.name}</span>
+          <div className="hidden sm:flex flex-col items-center"><ReactorCanvas size={112} /></div>
+          <span className="hud-label self-start sm:self-center sm:mt-2 mb-4">Core systems</span>
 
           {/* System lines */}
           <div className="w-full space-y-2.5 mt-auto">

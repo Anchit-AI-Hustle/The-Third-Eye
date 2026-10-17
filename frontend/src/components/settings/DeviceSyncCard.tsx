@@ -26,6 +26,8 @@ import { useLocalContacts, type DeviceContact } from "@/hooks/useLocalContacts";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { cn } from "@/lib/utils";
 import { useSystemHealth } from "@/hooks/useSystemHealth";
+import { dataSave } from "@/lib/dataClient";
+import { deviceSyncPlugin, localStore, syncFolder, syncPhotos } from "@/lib/deviceSync";
 
 export function DeviceSyncCard() {
   const {
@@ -63,6 +65,8 @@ export function DeviceSyncCard() {
   const [showPasteContacts, setShowPasteContacts] = useState(false);
   const [showContactsSyncModal, setShowContactsSyncModal] = useState(false);
   const [isLaptop, setIsLaptop] = useState(false);
+  const [iosApp, setIosApp] = useState(false);
+  const [syncingPhotos, setSyncingPhotos] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [showContactList, setShowContactList] = useState(false);
   const [showFileList, setShowFileList] = useState(false);
@@ -84,7 +88,28 @@ export function DeviceSyncCard() {
     const ua = navigator.userAgent;
     const isMobile = /iPad|iPhone|iPod|Android/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     setIsLaptop(!isMobile);
+    setIosApp(!!deviceSyncPlugin());
   }, []);
+
+  const handleSyncPhotos = async () => {
+    const plugin = deviceSyncPlugin();
+    if (!plugin) return;
+    setFolderError(null);
+    setFolderSuccess(null);
+    setSyncingPhotos(true);
+    try {
+      if ((await plugin.photoAccess()).status === "denied") {
+        setFolderError("Photo access is off. Turn it on in Settings > The Third Eye > Photos, then sync again.");
+        return;
+      }
+      const n = await syncPhotos(plugin, async (rows) => (await dataSave("device_photos", rows)) === "saved", localStore);
+      setFolderSuccess(n ? `Synced ${n} photo${n === 1 ? "" : "s"} from your library.` : "Photos are up to date.");
+    } catch (err: any) {
+      setFolderError(err?.message || "Photo sync didn't finish.");
+    } finally {
+      setSyncingPhotos(false);
+    }
+  };
 
   const handleCompleteSyncup = async () => {
     setIsMasterSyncing(true);
@@ -200,6 +225,20 @@ export function DeviceSyncCard() {
   const handleSyncFolder = async () => {
     setFolderError(null);
     setFolderSuccess(null);
+
+    // The iPhone app keeps access to the folder chosen here and re-syncs it on every open.
+    const plugin = deviceSyncPlugin();
+    if (plugin) {
+      const picked = await plugin.chooseFolder().catch(() => null);
+      if (!picked) return;
+      try {
+        const n = await syncFolder(plugin, async (files) => (await upload(files)).length, localStore);
+        setFolderSuccess(`${picked.name}: ${n} file${n === 1 ? "" : "s"} synced. New and changed files sync automatically.`);
+      } catch (err: any) {
+        setFolderError(err?.message || "Folder sync didn't finish.");
+      }
+      return;
+    }
 
     // On iOS Safari / mobile browsers without directory picker, trigger file/photo picker immediately
     if (typeof window !== "undefined" && !("showDirectoryPicker" in window)) {
@@ -679,18 +718,30 @@ export function DeviceSyncCard() {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => photoInputRef.current?.click()}
-              disabled={uploading}
-              className={cn(
-                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
-                uploading && "opacity-50 pointer-events-none"
-              )}
-              title="Upload photos, camera roll, and images from device"
-            >
-              <ImageIcon size={12} className="text-emerald-400" /> Upload Photos
-            </button>
+            {iosApp ? (
+              <button
+                type="button"
+                onClick={handleSyncPhotos}
+                disabled={syncingPhotos}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary disabled:opacity-50"
+                title="Sync your whole photo library"
+              >
+                {syncingPhotos ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} className="text-emerald-400" />} Sync All Photos
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploading}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
+                  uploading && "opacity-50 pointer-events-none"
+                )}
+                title="Upload photos, camera roll, and images from device"
+              >
+                <ImageIcon size={12} className="text-emerald-400" /> Upload Photos
+              </button>
+            )}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}

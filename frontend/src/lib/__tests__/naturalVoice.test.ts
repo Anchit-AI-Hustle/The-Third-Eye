@@ -32,4 +32,16 @@ describe("natural voice falls back instead of going silent", () => {
     expect(importer).toHaveBeenCalledTimes(1);
     expect(await speakNatural("Hello there.", {})).toBe(false);
   });
+
+  it("returns false when the phone blocks audio playback, so the system voice speaks instead", async () => {
+    vi.stubGlobal("navigator", { gpu: {} });
+    const importer = vi.fn().mockResolvedValue({ KokoroTTS: { from_pretrained: async () => ({ generate: async () => ({ toBlob: () => new Blob(["x"]) }) }) } });
+    await loadNaturalVoice(importer);
+    vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
+    vi.stubGlobal("Audio", class { volume = 1; onended: unknown; onerror: unknown; play() { return Promise.reject(new DOMException("blocked", "NotAllowedError")); } pause() {} });
+    const onStart = vi.fn();
+    expect(await speakNatural("Hello there, how are you today?", { onStart })).toBe(false);
+    expect(onStart).not.toHaveBeenCalled();
+  });
 });
+

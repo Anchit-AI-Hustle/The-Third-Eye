@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Sidebar } from "./Sidebar";
@@ -9,6 +9,8 @@ import { VoiceOverlay } from "../voice/VoiceOverlay";
 import { AiStatusBanner } from "./AiStatusBanner";
 import { AmbientScene } from "../hud/AmbientScene";
 import { MotionNotice } from "../hud/MotionNotice";
+import { NativeAutoSync } from "./NativeAutoSync";
+import { deviceSyncPlugin } from "@/lib/deviceSync";
 import { useJarvisTriggers } from "@/hooks/useJarvisTriggers";
 import { activateAssistant } from "@/lib/activation";
 import { cn } from "@/lib/utils";
@@ -21,6 +23,8 @@ interface MainLayoutProps {
 export function MainLayout({ children, mainClassName }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const [nativeApp, setNativeApp] = useState(false);
+  useEffect(() => setNativeApp(!!deviceSyncPlugin()), []);
   useJarvisTriggers(activateAssistant);
 
   return (
@@ -45,7 +49,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
         tabIndex={-1}
         className={cn(
           mainClassName ??
-          "flex-1 overflow-y-auto pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 pl-14 pr-16 lg:pl-0 lg:pr-40",
+          "flex-1 overflow-y-auto pt-[calc(3.5rem_+_env(safe-area-inset-top))] sm:pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 sm:pl-14 sm:pr-16 lg:pl-0 lg:pr-40",
           "relative z-[1]",
         )}
       >
@@ -58,6 +62,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       <div key={`shutter-${pathname}`} className="route-shutter" aria-hidden="true"><span /><span /></div>
       <div key={pathname} className="route-scan" aria-hidden="true" />
       <MotionNotice />
+      {nativeApp && <NativeAutoSync />}
       <BottomNav />
       <VoiceOverlay />
     </div>

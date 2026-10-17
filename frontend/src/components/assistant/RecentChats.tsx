@@ -11,27 +11,34 @@ function ago(iso: string, now: number): string {
   return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
 }
 
+function readable(title: string): string {
+  const call = /^CALL (\w+)/.exec(title);
+  if (!call) return title || "Untitled chat";
+  const words = call[1].replace(/_/g, " ");
+  return words[0].toUpperCase() + words.slice(1);
+}
+
 export function RecentChats({ chats, now = Date.now(), onOpen, onShowAll }: {
   chats: ChatSummary[]; now?: number; onOpen: (id: string) => void; onShowAll: () => void;
 }) {
   if (!chats.length) return null;
   const [latest, ...rest] = chats;
   return (
-    <div className="w-full max-w-lg space-y-2">
-      <button type="button" onClick={() => onOpen(latest.id)} aria-label={`Continue: ${latest.title || "Untitled chat"}`}
-        className="w-full flex items-center gap-3 text-left px-4 py-3 rounded-card bg-accent-blue/10 border border-accent-blue/30 hover:bg-accent-blue/15 transition-colors">
-        <History size={16} className="flex-none text-accent-blue" />
+    <div className="w-full max-w-lg space-y-1">
+      <button type="button" onClick={() => onOpen(latest.id)} aria-label={`Continue: ${readable(latest.title)}`}
+        className="w-full flex items-center gap-3 text-left px-3.5 py-2.5 rounded-input bg-white/[0.03] border border-white/[0.08] hover:border-accent-blue/30 transition-colors">
+        <History size={14} className="flex-none text-accent-blue" />
         <span className="flex-1 min-w-0">
-          <span className="block text-[11px] font-mono uppercase tracking-wider text-accent-blue">Continue</span>
-          <span className="block text-sm text-text-primary truncate">{latest.title || "Untitled chat"}</span>
+          <span className="block text-[10px] uppercase tracking-[0.14em] text-text-muted">Continue</span>
+          <span className="block text-[13px] text-text-primary truncate">{readable(latest.title)}</span>
         </span>
         <span className="text-[11px] text-text-muted flex-none">{ago(latest.updated_at, now)}</span>
       </button>
       {rest.slice(0, 3).map((c) => (
         <button key={c.id} type="button" onClick={() => onOpen(c.id)}
-          className="w-full flex items-center gap-3 text-left px-4 py-2 rounded-card border border-border-default hover:bg-background-surface transition-colors">
+          className="w-full flex items-center gap-3 text-left px-3.5 py-2 rounded-input hover:bg-white/[0.03] transition-colors">
           <MessageSquare size={13} className="flex-none text-text-muted" />
-          <span className="flex-1 min-w-0 text-sm text-text-secondary truncate">{c.title || "Untitled chat"}</span>
+          <span className="flex-1 min-w-0 text-[13px] text-text-secondary truncate">{readable(c.title)}</span>
           <span className="text-[11px] text-text-muted flex-none">{ago(c.updated_at, now)}</span>
         </button>
       ))}

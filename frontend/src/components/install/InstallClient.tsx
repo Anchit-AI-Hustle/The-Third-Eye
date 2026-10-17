@@ -44,7 +44,7 @@ function IosCard({ inSafari }: { inSafari: boolean }) {
       <ol className="mt-4 space-y-1.5 text-sm text-text-secondary list-decimal pl-5">
         <li>Tap Allow when Safari asks to download the profile.</li>
         <li>Open Settings, tap Profile Downloaded at the top, then Install.</li>
-        <li>JARVIS appears on your home screen and opens full screen, with voice.</li>
+        <li>The Third Eye appears on your home screen and opens full screen, with voice.</li>
       </ol>
       <p className="mt-4 text-sm text-text-secondary flex flex-wrap items-center gap-1">
         Or in Safari: <Share size={15} className="text-accent-blue" aria-label="Share" /> Share, then <PlusSquare size={15} className="text-accent-blue" aria-hidden="true" /> Add to Home Screen.

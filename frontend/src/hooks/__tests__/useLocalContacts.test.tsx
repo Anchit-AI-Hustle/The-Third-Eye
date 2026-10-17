@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useLocalContacts, parseVCard, parseCSVContacts } from "@/hooks/useLocalContacts";
+import { useLocalContacts, parseVCard, parseCSVContacts, hasNativeContactsPicker } from "@/hooks/useLocalContacts";
 
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { user: { email: "test@example.com" } } }),
@@ -14,6 +14,13 @@ describe("useLocalContacts", () => {
 
   afterEach(() => {
     localStorage.clear();
+  });
+
+  it("reads the whole address book in the native app, without the browser picker", () => {
+    expect(hasNativeContactsPicker()).toBe(false);
+    (window as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
+    expect(hasNativeContactsPicker()).toBe(true);
+    delete (window as { Capacitor?: unknown }).Capacitor;
   });
 
   it("loads empty contacts initially", () => {

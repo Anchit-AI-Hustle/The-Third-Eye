@@ -12,12 +12,8 @@ export default async function AssistantPage() {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex items-center gap-3 pl-16 pr-4 sm:pr-8 lg:pl-8 py-4 border-b border-border-default flex-none bg-background-surface/80 backdrop-blur-sm">
-        <div className="relative">
-          <div className="w-2 h-2 rounded-full bg-success" />
-          <div className="absolute inset-0 w-2 h-2 rounded-full bg-success animate-ping opacity-60" />
-        </div>
         <h1 className="font-display font-semibold text-text-primary tracking-tight">The Third Eye</h1>
-        <span className="text-text-muted text-xs font-mono">AI Assistant · Online</span>
+        <span className="text-text-muted text-[10px] uppercase tracking-[0.18em]">Assistant</span>
       </div>
       <AssistantClient userName={session.user?.name?.split(" ")[0]} />
     </div>

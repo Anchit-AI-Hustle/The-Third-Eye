@@ -135,6 +135,7 @@ export function parseCSVContacts(csvText: string): Omit<DeviceContact, "id" | "u
 
 export function hasNativeContactsPicker(): boolean {
   if (typeof window === "undefined") return false;
+  if ((window as any).Capacitor?.isNativePlatform?.()) return true;
   const nav = navigator as any;
   return !!("contacts" in nav && "ContactsManager" in window);
 }
@@ -301,7 +302,7 @@ export function useLocalContacts() {
       if (native) {
         const perm = await native.requestPermissions();
         if (perm.contacts !== "granted" && perm.contacts !== "limited") {
-          return { count: 0, supported: true, error: "Contacts access is off. Turn it on in your phone's Settings for JARVIS, then sync again." };
+          return { count: 0, supported: true, error: "Contacts access is off. Turn it on in your phone's Settings for The Third Eye, then sync again." };
         }
         const { contacts: book } = await native.getContacts({ projection: { name: true, phones: true, emails: true } });
         const imported: Omit<DeviceContact, "id" | "updated_at">[] = (book ?? []).flatMap((c: any) => {
@@ -332,7 +333,7 @@ export function useLocalContacts() {
       return {
         count: 0,
         supported: false,
-        error: "The JARVIS app for Android and iPhone syncs your whole address book. In a browser, Chrome on Android lets you pick contacts; anywhere else, import a .vcf or CSV file below.",
+        error: "The Third Eye app for Android and iPhone syncs your whole address book. In a browser, Chrome on Android lets you pick contacts; anywhere else, import a .vcf or CSV file below.",
       };
     } catch (err: any) {
       return { count: 0, supported: true, error: err?.message || "Sync cancelled or not allowed." };

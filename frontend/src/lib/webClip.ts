@@ -1,5 +1,5 @@
 // An iOS configuration profile holding one Web Clip: tapping it in Safari and
-// installing it from Settings puts a full-screen JARVIS icon on the home
+// installing it from Settings puts a full-screen The Third Eye icon on the home
 // screen, with no App Store or Apple Developer account. The UUIDs are fixed so
 // installing again replaces the same profile.
 
@@ -15,9 +15,9 @@ export function webClipProfile(origin: string, iconBase64: string): string {
 <key>PayloadVersion</key><integer>1</integer>
 <key>PayloadIdentifier</key><string>com.thethirdeye.jarvis.webclip</string>
 <key>PayloadUUID</key><string>${CLIP_UUID}</string>
-<key>PayloadDisplayName</key><string>JARVIS</string>
+<key>PayloadDisplayName</key><string>The Third Eye</string>
 <key>URL</key><string>${origin}/dashboard</string>
-<key>Label</key><string>JARVIS</string>
+<key>Label</key><string>The Third Eye</string>
 <key>Icon</key><data>${iconBase64}</data>
 <key>FullScreen</key><true/>
 <key>IsRemovable</key><true/>
@@ -27,8 +27,8 @@ export function webClipProfile(origin: string, iconBase64: string): string {
 <key>PayloadVersion</key><integer>1</integer>
 <key>PayloadIdentifier</key><string>com.thethirdeye.jarvis</string>
 <key>PayloadUUID</key><string>${PROFILE_UUID}</string>
-<key>PayloadDisplayName</key><string>JARVIS app</string>
-<key>PayloadDescription</key><string>Adds JARVIS to your home screen as a full-screen app.</string>
+<key>PayloadDisplayName</key><string>The Third Eye app</string>
+<key>PayloadDescription</key><string>Adds The Third Eye to your home screen as a full-screen app.</string>
 <key>PayloadOrganization</key><string>The Third Eye</string>
 <key>PayloadRemovalDisallowed</key><false/>
 </dict></plist>
