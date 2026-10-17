@@ -36,7 +36,6 @@ export function DeviceSyncCard() {
     importContactsFromFile,
     importBatch,
     refreshFromCloud: refreshContactsFromCloud,
-    seedEssentialContacts,
     hasNativePicker,
   } = useLocalContacts();
 
@@ -47,7 +46,6 @@ export function DeviceSyncCard() {
     remove: removeDoc,
     syncDeviceFolder,
     refreshFromCloud: refreshKnowledgeFromCloud,
-    seedSampleKnowledge,
   } = useLocalKnowledge();
 
   const [contactError, setContactError] = useState<string | null>(null);
@@ -286,7 +284,7 @@ export function DeviceSyncCard() {
         </div>
       </div>
       <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider leading-relaxed">
-        Allow JARVIS to access device contacts, files, and photos natively and locally. Contacts resolve names (&ldquo;Mom&rdquo;, &ldquo;Rohit&rdquo;, &ldquo;Aviral&rdquo;) to numbers for WhatsApp/Calls/SMS and follow you across all devices.
+        Allow JARVIS to access device contacts, files, and photos natively and locally. Contacts resolve names (&ldquo;Mom&rdquo;, &ldquo;Priya&rdquo;) to numbers for WhatsApp/Calls/SMS and follow you across all devices.
       </p>
 
       {/* Master Complete Device Sync Hub */}
@@ -369,31 +367,6 @@ export function DeviceSyncCard() {
               </button>
             </div>
 
-            {/* Quick Option: Load Essential Contacts */}
-            <div className="p-3.5 rounded-card bg-emerald-500/10 border border-emerald-500/30 space-y-2">
-              <div className="font-medium text-xs text-text-primary flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-emerald-400" />
-                  <span>⚡ Quick Seed: 1-Tap Load Essential Contacts</span>
-                </div>
-                <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/20 px-2 py-0.5 rounded">Instant</span>
-              </div>
-              <p className="text-[11px] text-text-muted leading-relaxed">
-                Immediately loads Mom, Dad, Rohit Sharma, Aviral Vahdam, and Emergency Dispatch into JARVIS memory &amp; cloud so you can test calling and WhatsApp right away.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const count = seedEssentialContacts();
-                  setContactSuccess(`Added ${count} essential contacts to JARVIS memory & synced to cloud.`);
-                  setShowContactsSyncModal(false);
-                }}
-                className="w-full py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded text-xs font-semibold hover:bg-emerald-500/30 transition-colors"
-              >
-                ⚡ Load 5 Essential Contacts (Mom, Dad, Rohit, Aviral, Emergency)
-              </button>
-            </div>
-
             {/* Option 1: File Import */}
             <div className="p-3.5 rounded-card bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 space-y-2.5">
               <div className="font-medium text-xs text-text-primary flex items-center gap-1.5">
@@ -435,7 +408,7 @@ export function DeviceSyncCard() {
                 rows={3}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Aviral Vahdam, +91 9876543210&#10;Rohit Sharma, +91 9873945238&#10;Mom, +1 555 123 4567"
+                placeholder="Priya Sharma, +91 90000 00000&#10;Mom, +1 555 123 4567"
                 className="w-full bg-background-base border border-border-default rounded p-2 text-xs text-text-primary outline-none focus:border-[#4FC3F7] font-mono"
               />
               <button
@@ -535,17 +508,6 @@ export function DeviceSyncCard() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                const count = seedEssentialContacts();
-                setContactSuccess(`Added ${count} essential contacts to JARVIS memory & synced across your devices.`);
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-              title="Instantly add test contacts (Mom, Dad, Rohit Sharma, Aviral Vahdam, Emergency)"
-            >
-              <Sparkles size={12} /> Essential
-            </button>
-            <button
-              type="button"
               onClick={handleSyncContacts}
               disabled={syncingContacts}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#4FC3F7]/15 border border-[#4FC3F7]/30 text-[#4FC3F7] text-xs font-medium hover:bg-[#4FC3F7]/25 transition-colors disabled:opacity-50"
@@ -576,13 +538,13 @@ export function DeviceSyncCard() {
         {showPasteContacts && (
           <form onSubmit={handlePasteSubmit} className="mt-3 p-3 bg-background-base rounded-input border border-border-default space-y-2">
             <label className="block text-xs font-medium text-text-primary">
-              Paste Contacts (one per line, e.g. &ldquo;Aviral Vahdam, +91 9876543210&rdquo;):
+              Paste Contacts (one per line, e.g. &ldquo;Priya Sharma, +91 90000 00000&rdquo;):
             </label>
             <textarea
               rows={3}
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
-              placeholder="Aviral Vahdam, +91 9876543210&#10;Rohit Sharma, +91 9873945238"
+              placeholder="Priya Sharma, +91 90000 00000"
               className="w-full bg-background-surface border border-border-default rounded p-2 text-xs text-text-primary outline-none focus:border-[#4FC3F7] font-mono"
             />
             <div className="flex justify-end gap-2">
@@ -610,7 +572,7 @@ export function DeviceSyncCard() {
               <input
                 required
                 type="text"
-                placeholder="Name (e.g. Rohit Sharma, Aviral Vahdam, Mom)"
+                placeholder="Name (e.g. Priya Sharma, Mom)"
                 value={newContact.name}
                 onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
                 className="bg-background-surface border border-border-default rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-[#4FC3F7]"
@@ -734,18 +696,6 @@ export function DeviceSyncCard() {
               title="Upload PDFs, office documents, notes, and code"
             >
               <FileText size={12} className="text-[#4FC3F7]" /> Upload Documents
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                const res = await seedSampleKnowledge();
-                setFolderSuccess(`Indexed ${res.length} starter documents into your vault.`);
-              }}
-              disabled={uploading}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer"
-              title="Index starter guide & personal emergency notes into vault"
-            >
-              <Sparkles size={12} className="text-[#4FC3F7]" /> Starter Docs
             </button>
             <button
               type="button"

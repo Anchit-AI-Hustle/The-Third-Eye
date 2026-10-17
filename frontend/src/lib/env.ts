@@ -43,6 +43,7 @@ export const ENV_SCHEMA: EnvVar[] = [
   { name: "GITHUB_CLIENT_SECRET", required: false, purpose: "GitHub connector" },
   { name: "ELEVENLABS_API_KEY", required: false, purpose: "voice and music generation" },
   { name: "REPLICATE_API_TOKEN", required: false, purpose: "image and video generation" },
+  { name: "OWNER_EMAILS", required: false, purpose: "accounts that get the owner's own work context in inbox and activity extraction" },
 ];
 
 type Env = Record<string, string | undefined>;

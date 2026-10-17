@@ -35,7 +35,7 @@ import { normalizePrompt } from "@/lib/promptNormalizer";
 import { randomUUID } from "crypto";
 import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
 import { gatherResearchRounds } from "@/lib/deepResearch";
-import { anchorStatus } from "@/lib/anchor";
+import { anchorStatus, isAnchorOperator } from "@/lib/anchor";
 import { modelFor } from "@/lib/llmCascade";
 import { CHECKLIST_INSTRUCTION, CHECKLIST_TOOLS, Checklist, classifyResult, resumeNote } from "@/lib/checklist";
 import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
@@ -80,7 +80,7 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 - **manage_calendar**: add events and get upcoming — action='add' to create event, 'get' to retrieve
 - **manage_expenses**: log spending or summarise it — action='create' to log (amount is GST-inclusive; pass gst_rate when known), 'summary' for this-month totals + GST paid
 - **calculate**: run a precise financial calc (GST, income tax, EMI, SIP, FD…) by slug + inputs — always use this instead of doing money arithmetic yourself
-- **manage_contacts**: search, list, get, or add synced contacts across phone, laptop, and cloud — action='search'/'list'/'get'/'add'. Contacts from the user's phone (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') are available here.
+- **manage_contacts**: search, list, get, or add synced contacts across phone, laptop, and cloud. action='search'/'list'/'get'/'add'. Contacts from the user's phone (e.g. 'Priya Sharma', 'Mom', 'Rohit') are available here.
 - **communicate**: send WhatsApp/SMS/email, make calls, read emails — action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or call, EXECUTE DIRECTLY without asking repetitive confirmations. Recipient names are auto-resolved from synced device contacts.
 - **navigate**: directions, GPS location, nearby places — action='directions' for maps, 'location' for coords, 'nearby' for POIs
 - **generate**: images, music, video, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs — type='image'/'music'/'video'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
@@ -122,7 +122,7 @@ const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System 
 ## Direct Execution & Device Sync (CRITICAL)
 - Direct Execution: When the user asks to send a message (WhatsApp, SMS, email), make a call, create a task, set a reminder, or perform any specific action, EXECUTE IT DIRECTLY using the corresponding tool. Do NOT ask for permission or confirmation again for the exact action the user explicitly requested.
 - Device Synchronization: Device contacts, tasks, notes, goals, calendar, and documents are synchronized across phone, laptop, and cloud.
-- If the user names a person (e.g. "Aviral Vahdam", "Mom", "Rohit") whose number is on their phone, that contact is already synchronized in your synced device contacts. Use manage_contacts or pass the name directly to communicate — it automatically resolves the phone number. Never claim you cannot sync or retrieve contacts from their phone.
+- If the user names a person (e.g. "Priya Sharma", "Mom", "Rohit") whose number is on their phone, that contact is already synchronized in your synced device contacts. Use manage_contacts or pass the name directly to communicate; it automatically resolves the phone number. Never claim you cannot sync or retrieve contacts from their phone.
 
 ## This turn is the only task
 - The latest user message is the only thing to do. Earlier turns are context, not a queue of unfinished jobs.
@@ -1025,6 +1025,7 @@ async function runTool(
     case "anchor":
       // Only status reaches here; every other action is confirmed first and
       // runs from /api/act.
+      if (!isAnchorOperator(ctx.email)) return { result: "ANCHOR is a private release robot that is not available on this account. Tell the user so." };
       return { result: await anchorStatus(ctx.email) };
 
     case "deep_research":
@@ -2021,7 +2022,7 @@ export async function POST(req: NextRequest) {
     const contactSummary = allContacts.slice(0, 50).map((c: any) =>
       `- ${c.name}${c.relationship ? ` (${c.relationship})` : ""}: ${[c.phone ? `Phone: ${c.phone}` : null, c.email ? `Email: ${c.email}` : null].filter(Boolean).join(" · ")}`
     ).join("\n");
-    systemInstruction += `\n\n**Synced Device Contacts** (${allContacts.length}):\n${contactSummary}\nWhen the user asks to call, text, WhatsApp, or email someone by name or relationship (e.g. "Aviral Vahdam", "Mom", "Rohit"), look up their contact details here or pass their name to communicate (contacts are synchronized across phone, laptop, and cloud).`;
+    systemInstruction += `\n\n**Synced Device Contacts** (${allContacts.length}):\n${contactSummary}\nWhen the user asks to call, text, WhatsApp, or email someone by name or relationship (e.g. "Priya Sharma", "Mom", "Rohit"), look up their contact details here or pass their name to communicate (contacts are synchronized across phone, laptop, and cloud).`;
   }
 
   if (location) {

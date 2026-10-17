@@ -1,23 +1,30 @@
 import { llmCascade } from "@/lib/llmCascade";
 import { parseLlmJson } from "@/lib/llmJson";
 import { GROWTH_PILLARS, type ExtractedTask } from "@/lib/tasks";
+import { isOwner, workContext } from "@/lib/owner";
 
-// Ported from Personal-AI-OS ai/prompts.py + ai/extractor.py. The Vahdam-only
-// gate and anti-fake-identifier rule are load-bearing — keep them verbatim.
+// Ported from Personal-AI-OS ai/prompts.py + ai/extractor.py. The owner's
+// account keeps the original Vahdam-only gate (lib/owner.ts); everyone else
+// gets the same rules about their own work. The anti-fake-identifier rule is
+// load-bearing for both.
 
-const USER_CONTEXT = `
-You are the chief-of-staff AI for Anchit Tandon, who leads D2C growth at Vahdam
-India (a premium tea D2C brand). Direct team: Aman, Manisha, Arihant.
-
-HARD RULES:
-- Only extract Vahdam work. Personal matters (banking, family, food delivery,
+function userContext(email: string): string {
+  const scope = isOwner(email)
+    ? `- Only extract Vahdam work. Personal matters (banking, family, food delivery,
   receipts, newsletters, promotions, auto-generated mail) → return empty tasks.
-- Never invent people. Never emit opaque identifiers (users/12345, UUIDs,
-  "(unknown)") as an owner — set owner to null instead.
 - Weight growth levers: acquisition/CAC, repeat/LTV/subscription, CRO, AOV,
   marketplace ranking + ads, promotions/gifting, retention (email/SMS/WhatsApp/
-  Klaviyo), influencer/PR, ops issues blocking sales, margin.
-`.trim();
+  Klaviyo), influencer/PR, ops issues blocking sales, margin.`
+    : `- Extract actions the user personally has to take, for work or personal life.
+  Receipts, newsletters, promotions and auto-generated mail → return empty tasks.`;
+  return `You are the user's chief-of-staff AI.
+${workContext(email)}
+
+HARD RULES:
+${scope}
+- Never invent people. Never emit opaque identifiers (users/12345, UUIDs,
+  "(unknown)") as an owner; set owner to null instead.`;
+}
 
 const TASK_SHAPE_HINT = `
 Each task is an object:
@@ -34,12 +41,13 @@ Each task is an object:
 Reject vague headings like "Follow up" or "Reply to email".
 `.trim();
 
-const EMAIL_SYSTEM_PROMPT = `${USER_CONTEXT}
+const emailSystemPrompt = (email: string) => `${userContext(email)}
 
 You are analysing a single email. Return STRICT JSON:
 {"is_actionable": bool, "summary": string, "tasks": [ ... ]}
 ${TASK_SHAPE_HINT}
-is_actionable is true ONLY when there is a concrete required action for Anchit.
+Each task also has "workspace": "office" for work, "personal" for everything else.
+is_actionable is true ONLY when there is a concrete required action for the user.
 Newsletters, receipts, digests, mass announcements, cold outreach, FYIs, and
 auto-replies are NOT actionable → is_actionable=false, tasks=[].`;
 
@@ -73,6 +81,7 @@ function coerceTask(raw: Record<string, unknown>, defaultOwner?: string | null):
     urgency: normalizeUrgency(raw.urgency),
     owner: str(raw.owner) ?? str(raw.spoc) ?? defaultOwner ?? null,
     ownerContact: str(raw.owner_contact) ?? str(raw.spoc_contact) ?? str(raw.contact),
+    workspace: raw.workspace === "personal" ? "personal" : raw.workspace === "office" ? "office" : null,
   };
 }
 
@@ -100,10 +109,10 @@ export interface ExtractionResult {
 }
 
 export async function extractEmailTasks(input: {
-  sender: string; subject: string; receivedAt: string; body: string;
+  email: string; sender: string; subject: string; receivedAt: string; body: string;
 }): Promise<ExtractionResult | null> {
   const user = `From: ${input.sender}\nSubject: ${input.subject}\nReceived: ${input.receivedAt}\n\n${input.body.slice(0, 6000)}`;
-  const parsed = await runExtraction(EMAIL_SYSTEM_PROMPT, user, 1000);
+  const parsed = await runExtraction(emailSystemPrompt(input.email), user, 1000);
   // null = the model couldn't be reached, which is not the same as "nothing actionable".
   if (!parsed) return null;
   const rawTasks = Array.isArray(parsed.tasks) ? (parsed.tasks as Record<string, unknown>[]) : [];

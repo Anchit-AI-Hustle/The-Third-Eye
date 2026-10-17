@@ -5,7 +5,7 @@ import { getTool, type OutputFormat } from "@/lib/studioTools";
 // workbench) and by the assistant's create_asset tool, so both produce
 // identical output from one source of truth.
 
-const BRAND = "The default brand context is Vahdam India (premium D2C teas & wellness) unless the brief says otherwise.";
+const BRAND = "Write for the brand and product named in the brief. If it names none, keep the copy brand-neutral; never invent or substitute a brand.";
 
 export function studioSystemPrompt(toolId: string, mode?: string): string {
   const modeLine = mode ? `\nThe operator is in ${mode} mode; keep the output consistent with that context.` : "";

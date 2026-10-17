@@ -193,12 +193,12 @@ export const geminiTools = [
       },
       {
         name: "manage_contacts",
-        description: "Unified contact manager and phone sync: search, list, get, or add contacts synchronized across the user's phone, laptop, and cloud. action='search' to find a contact by name (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') or relationship, 'list' to view all synced phone/device contacts, 'get' to retrieve phone/email details, 'add' to save a new contact. All device contacts synced from phone/Google/iCloud are accessible here.",
+        description: "Unified contact manager and phone sync: search, list, get, or add contacts synchronized across the user's phone, laptop, and cloud. action='search' to find a contact by name (e.g. 'Priya Sharma', 'Mom', 'Priya') or relationship, 'list' to view all synced phone/device contacts, 'get' to retrieve phone/email details, 'add' to save a new contact. All device contacts synced from phone/Google/iCloud are accessible here.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["search", "list", "get", "add"], description: "What to do" },
-            query: { type: "STRING", description: "Contact name, relationship, or keyword to search for (e.g. 'Aviral Vahdam', 'Mom')" },
+            query: { type: "STRING", description: "Contact name, relationship, or keyword to search for (e.g. 'Priya Sharma', 'Mom')" },
             name: { type: "STRING", description: "Contact full name (for add/get)" },
             phone: { type: "STRING", description: "Phone number (for add)" },
             email: { type: "STRING", description: "Email address (for add)" },
@@ -210,12 +210,12 @@ export const geminiTools = [
       },
       {
         name: "communicate",
-        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or make a call, execute directly without asking repetitive confirmations. Recipient names (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') are automatically resolved from synced phone contacts.",
+        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or make a call, execute directly without asking repetitive confirmations. Recipient names (e.g. 'Priya Sharma', 'Mom', 'Priya') are automatically resolved from synced phone contacts.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["whatsapp", "sms", "email", "call", "read_emails"], description: "Communication channel" },
-            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Aviral Vahdam', 'Mom')" },
+            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Priya Sharma', 'Mom')" },
             number: { type: "STRING", description: "Phone number or contact name (for sms/call/whatsapp)" },
             message: { type: "STRING", description: "Message text" },
             subject: { type: "STRING", description: "Email subject (for email)" },

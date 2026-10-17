@@ -180,7 +180,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     blurb: "A complete, responsive HTML landing page from a product brief — preview, copy, or ship.",
     format: "html", downloadExt: "html", cta: "Generate landing page",
     fields: [
-      { name: "product", label: "Product / brand", type: "text", placeholder: "e.g. Vahdam Turmeric Latte", required: true },
+      { name: "product", label: "Product / brand", type: "text", placeholder: "e.g. Cold-brew coffee concentrate", required: true },
       { name: "brief", label: "What it is & why it's great", type: "textarea", placeholder: "The offer, key benefits, proof points…", required: true },
       { name: "audience", label: "Target audience", type: "text", placeholder: "e.g. wellness-focused millennials" },
       { name: "cta", label: "Primary CTA", type: "text", placeholder: "e.g. Shop now – 20% off" },
@@ -215,7 +215,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     blurb: "Performance ad copy — hooks, primary text, headlines and CTAs — per channel.",
     format: "markdown", downloadExt: "md", cta: "Write ads",
     fields: [
-      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Vahdam Chai sampler", required: true },
+      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Starter sampler box", required: true },
       { name: "angle", label: "Angle / benefit", type: "textarea", placeholder: "What to lead with, audience, offer…", required: true },
       { name: "channel", label: "Channel", type: "select", options: ["Meta (FB/IG)", "Google Search", "TikTok", "Email subject lines"] },
       { name: "tone", label: "Tone", type: "text", placeholder: "e.g. playful, premium, urgent" },
@@ -239,7 +239,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     blurb: "A ready-to-post content calendar — hooks, captions, and formats across a week or month.",
     format: "markdown", downloadExt: "md", cta: "Build calendar",
     fields: [
-      { name: "brand", label: "Brand / product", type: "text", placeholder: "e.g. Vahdam India", required: true },
+      { name: "brand", label: "Brand / product", type: "text", placeholder: "e.g. Your brand name", required: true },
       { name: "goal", label: "Goal & themes", type: "textarea", placeholder: "e.g. drive Diwali gifting, educate on wellness…", required: true },
       { name: "platforms", label: "Platforms", type: "text", placeholder: "e.g. Instagram, LinkedIn" },
       { name: "cadence", label: "Timeframe", type: "select", options: ["1 week", "2 weeks", "1 month"] },
@@ -273,7 +273,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     blurb: "A full multi-channel marketing campaign plan — angles, channels, timeline, budget split, and KPIs.",
     format: "markdown", downloadExt: "md", cta: "Plan campaign",
     fields: [
-      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Vahdam Diwali gifting", required: true },
+      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Festive gift hampers", required: true },
       { name: "objective", label: "Objective & context", type: "textarea", placeholder: "Goal, audience, timing, budget, constraints…", required: true },
       { name: "channels", label: "Channels", type: "text", placeholder: "e.g. Meta, Google, email, influencers" },
       { name: "duration", label: "Duration", type: "select", options: ["1 week", "2 weeks", "1 month", "Quarter"] },

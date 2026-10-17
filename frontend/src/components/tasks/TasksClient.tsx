@@ -26,7 +26,7 @@ const STATUS_OPTIONS = TASK_STATUSES;
 // Tab split: Office = Vahdam work, Personal = everything else. Tasks without a
 // workspace (legacy rows, Vahdam-gated email/chat extraction) land on Office.
 const WORKSPACES: { value: TaskWorkspace; label: string; icon: typeof Briefcase }[] = [
-  { value: "office", label: "Office · Vahdam", icon: Briefcase },
+  { value: "office", label: "Office", icon: Briefcase },
   { value: "personal", label: "Personal", icon: Heart },
 ];
 const WS_KEY = "te_tasks_workspace_v1";

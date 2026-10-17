@@ -371,17 +371,6 @@ export function useLocalContacts() {
     }
   }, [userId, pushToCloud]);
 
-  const seedEssentialContacts = useCallback(() => {
-    const essentials: Omit<DeviceContact, "id" | "updated_at">[] = [
-      { name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact", source: "manual" },
-      { name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact", source: "manual" },
-      { name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact", source: "manual" },
-      { name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging", source: "manual" },
-      { name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line", source: "manual" },
-    ];
-    return importBatch(essentials);
-  }, [importBatch]);
-
   return {
     contacts,
     syncing,
@@ -391,7 +380,6 @@ export function useLocalContacts() {
     importContactsFromFile,
     syncDeviceContacts,
     refreshFromCloud,
-    seedEssentialContacts,
     hasNativePicker: hasNativeContactsPicker(),
   };
 }

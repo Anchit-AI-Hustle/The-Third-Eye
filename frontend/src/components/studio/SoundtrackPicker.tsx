@@ -21,6 +21,10 @@ export function SoundtrackPicker({ onChange, accent }: { onChange: (s: Soundtrac
   const [error, setError] = useState<string | null>(null);
   const blob = useRef<string | null>(null);
 
+  // ANCHOR releases are offered only to the accounts that run ANCHOR.
+  const [anchorOk, setAnchorOk] = useState(false);
+  useEffect(() => { fetch("/api/tools/anchor", { method: "HEAD" }).then((r) => setAnchorOk(r.ok)).catch(() => {}); }, []);
+
   const release = () => { if (blob.current) { URL.revokeObjectURL(blob.current); blob.current = null; } };
   useEffect(() => release, []);
 
@@ -75,7 +79,7 @@ export function SoundtrackPicker({ onChange, accent }: { onChange: (s: Soundtrac
         <option value="none">None</option>
         <option value="file">Upload a track</option>
         <option value="daily">My daily drops</option>
-        <option value="anchor">ANCHOR releases</option>
+        {anchorOk && <option value="anchor">ANCHOR releases</option>}
       </select>
       {source === "file" && <input type="file" accept="audio/*" onChange={(e) => upload(e.target.files?.[0])} className="text-[11px] text-text-muted max-w-[220px]" aria-label="Soundtrack file" />}
       {(source === "daily" || source === "anchor") && (

@@ -311,38 +311,5 @@ export function useLocalKnowledge() {
     }
   }, []);
 
-  const seedSampleKnowledge = useCallback(async (): Promise<KnowledgeDoc[]> => {
-    const starterDocs: KnowledgeDoc[] = [
-      {
-        id: crypto.randomUUID(),
-        title: "JARVIS_Device_Voice_Guide.md",
-        content: `# JARVIS Voice & Device Quick Guide\n\n- Phone Calls: "Call Mom", "Call Rohit Sharma"\n- Messaging: "Send WhatsApp to Rohit saying I am arriving soon"\n- Knowledge: "Search vault for emergency contacts"\n- Multi-Device Sync: Contacts and vault automatically sync between iPhone, Android, and Laptop.`,
-        file_type: "md",
-        file_size_bytes: 420,
-        created_at: new Date().toISOString(),
-        chunk_count: 1,
-        processing_status: "ready",
-      },
-      {
-        id: crypto.randomUUID(),
-        title: "Personal_Medical_Emergency_Notes.txt",
-        content: `Personal Emergency Notes:\n- Primary emergency contact: Mom (+91 98765 43210)\n- Secondary contact: Rohit Sharma (+91 98739 45238)\n- Blood Group: O+\n- Allergies: None recorded\n- Local Dispatch: 112 / 911`,
-        file_type: "txt",
-        file_size_bytes: 310,
-        created_at: new Date().toISOString(),
-        chunk_count: 1,
-        processing_status: "ready",
-      },
-    ];
-
-    setDocs((prev) => {
-      const next = [...starterDocs, ...prev];
-      if (!remote.current) lsSet(next);
-      return next;
-    });
-    if (remote.current) await dataInsert("knowledge_docs", starterDocs);
-    return starterDocs;
-  }, []);
-
-  return { docs, ready, uploading, upload, remove, syncDeviceFolder, refreshFromCloud, seedSampleKnowledge };
+  return { docs, ready, uploading, upload, remove, syncDeviceFolder, refreshFromCloud };
 }
