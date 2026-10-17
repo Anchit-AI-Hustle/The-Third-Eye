@@ -2527,7 +2527,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           // otherwise every chat can fail while monitoring reports a clean 100%.
           // The provider error only: the user's message is not logged.
           console.error("chat: all providers failed:", raw);
-          send("error", { message });
+          send("error", { message, code: "no_provider" });
         }
         close();
       }
