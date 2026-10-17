@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { ReactorCanvas } from "./ReactorCanvas";
+import { SignalTrace } from "@/components/hud/SignalTrace";
 import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
 import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
@@ -175,6 +176,7 @@ export function DashboardClient() {
                 <HUDStat icon={<Clock size={14} />} label="Overdue" value={overdue.length} alert />
               )}
             </div>
+            <SignalTrace className="h-10 mt-6 opacity-70" />
           </div>
         </div>
 

@@ -67,8 +67,11 @@ stays out of the way so the accent and the content carry the screen.
   state or label colour.
 - **Restraint over ornament.** Cards are plain surfaces with hairline borders
   that rise in as the page assembles (`globals.css`, "Panels"); no corner
-  brackets, scanlines or tickers. The backdrop is a soft breathing glow and
-  one faint, slowly turning ring (`components/hud/AmbientScene.tsx`).
+  brackets, scanlines or tickers. Motion lives in the backdrop and in live
+  readouts, in cyan line work only: an instrument ring with a radar sweep, a
+  perspective grid floor drifting toward the viewer, a slow scan line and a
+  few data motes (`components/hud/AmbientScene.tsx`), plus the dashboard's
+  scrolling signal trace (`components/hud/SignalTrace.tsx`).
   Section labels (`.hud-label`) are small uppercase Inter in `text.muted`.
 - **Depth by surface, not by shadow.** Stack `background.base` → `surface` →
   `elevated` to show layering; borders are hairline (`border.default`, 1px).
