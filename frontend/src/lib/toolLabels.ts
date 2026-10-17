@@ -38,6 +38,7 @@ const BASE_LABELS: Record<string, string> = {
   pay: "Setting up the payment",
   get_weather: "Checking the weather",
   search_knowledge: "Searching your documents",
+  search_photos: "Finding your photos",
   get_news: "Getting the news",
   translate: "Translating",
   stock_quote: "Checking the stock price",

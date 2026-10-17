@@ -9,6 +9,7 @@ import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart, ty
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
+import { searchPhotos } from "@/lib/photoSearch";
 import { getDb } from "@/lib/db";
 import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited, type Tier } from "@/lib/entitlements";
 import { isSensitive, summarizeAction } from "@/lib/actions";
@@ -107,6 +108,7 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **pay**: send money via UPI - opens payment app pre-filled, user approves
 - **get_weather**: any weather question - get it, don't guess
 - **search_knowledge**: ALWAYS search when user asks about their documents
+- **search_photos**: the user's own photos (synced from their iPhone) - by date, place or favourites; they are shown in the chat
 - **get_news**: latest news headlines by topic
 - **translate**: translate text between languages
 - **stock_quote**: latest price for stock or crypto ticker
@@ -1025,6 +1027,14 @@ async function runTool(
       const keywordMeaningful = keywordText && !/^No (documents|relevant)/.test(keywordText);
       if (cortexText && keywordMeaningful) return { result: `${cortexText}\n\n---\n\n${keywordText}` };
       return { result: cortexText || keywordText };
+    }
+
+    case "search_photos": {
+      const db = getDb();
+      if (!ctx.email || !db) return { result: "Photos need you to be signed in with cloud sync on." };
+      const { result, photos } = await searchPhotos(db, ctx.email, input);
+      const shown = photos.map((p) => ({ type: "media", data: { kind: "image", url: p.url, alt: `Photo from ${p.taken_at.slice(0, 10)}` } }));
+      return { result, sideEffect: shown.length ? { type: "batch", data: shown } : undefined };
     }
 
     case "get_news":

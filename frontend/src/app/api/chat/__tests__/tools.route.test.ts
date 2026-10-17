@@ -79,6 +79,17 @@ describe("chat tools", () => {
     expect(r.text).toContain("₹11,800.00");
   });
 
+  it("finds the person's synced iPhone photos and shows them in the chat", async () => {
+    tables = { device_photos: [
+      { user_id: "u@x.com", id: "p1", taken_at: "2026-09-12T10:00:00Z", lat: null, lon: null, favorite: true },
+      { user_id: "someone@else.com", id: "p2", taken_at: "2026-09-12T11:00:00Z", lat: null, lon: null, favorite: true },
+    ] };
+    calls = [{ name: "search_photos", args: { favorite: true } }];
+    const r = await run();
+    expect(r.results[0]).toMatch(/Found 1 photo/);
+    expect(r.done.sideEffects).toEqual([{ type: "media", data: { kind: "image", url: "/api/photos/thumb?id=p1", alt: "Photo from 2026-09-12" } }]);
+  });
+
   it("makes a real track in code when no music AI is set up", async () => {
     tables = {};
     vi.stubEnv("ELEVENLABS_API_KEY", "");
