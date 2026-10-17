@@ -45,7 +45,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
         tabIndex={-1}
         className={cn(
           mainClassName ??
-          "flex-1 overflow-y-auto pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 pl-14 pr-16 lg:pl-0 lg:pr-40",
+          "flex-1 overflow-y-auto pt-[calc(3.5rem_+_env(safe-area-inset-top))] sm:pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 sm:pl-14 sm:pr-16 lg:pl-0 lg:pr-40",
           "relative z-[1]",
         )}
       >

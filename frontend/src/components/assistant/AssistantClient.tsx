@@ -1024,9 +1024,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : isStreaming ? "bg-accent-violet animate-pulse"
             : "bg-text-muted"
           )} />
-          <span className={cn("text-xs font-mono transition-colors duration-300",
+          <span className={cn("text-[11px] tracking-wide truncate transition-colors duration-300",
             killed ? "text-warning"
-            : systemOnline ? "text-success"
+            : systemOnline ? "text-text-secondary"
             : doneMsg ? "text-accent-blue"
             : tts.speaking ? "text-accent-violet"
             : isStreaming ? "text-accent-violet"
@@ -1034,7 +1034,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : "text-text-muted"
           )}>
             {killed ? "Agent stopped · turn it back on in Settings"
-              : systemOnline ? "JARVIS activated · all systems online"
+              : systemOnline ? "Online"
               : stt.recognitionIssue === "server" ? "I heard you, but transcription failed - say it once more"
               : stt.recognitionIssue ? "Browser speech recognition stalled - keep talking, I'll transcribe it here"
               : tts.speaking ? "Speaking · hold on…"
@@ -1116,7 +1116,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <AlertCircle size={14} className="text-warning flex-none mt-0.5" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-warning">The assistant isn&apos;t switched on yet</p>
-              <p className="text-xs text-text-muted mt-0.5">No AI provider is set up on this site, so JARVIS can&apos;t answer. The site owner needs to add one.</p>
+              <p className="text-xs text-text-muted mt-0.5">No AI provider is set up on this site, so The Third Eye can&apos;t answer. The site owner needs to add one.</p>
             </div>
             <a href="/settings" className="flex-none text-text-muted hover:text-text-secondary transition-colors p-0.5 rounded">
               <Settings size={13} />
@@ -1247,7 +1247,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
+              placeholder={micOn ? "Or type here…" : "Ask The Third Eye…"}
               aria-label="Message input"
               rows={1}
               disabled={isStreaming}
@@ -1359,11 +1359,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </div>
           </div>
         </div>
-        <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted")}>
+        <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted",
+          !stt.permissionDenied && !micOn && replyMode === "text" && "hidden sm:block")}>
           {stt.permissionDenied
             ? "Microphone blocked for this site - click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
             : micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
-            : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
+            : replyMode === "call" ? "Call mode · speak naturally, replies are spoken aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
             : "Enter to send · Shift+Enter for new line"}
         </p>
@@ -1397,19 +1398,18 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking, childre
           <span /><span /><span />
           <Persona3D color={persona.color} speaking={speaking} className="relative w-full h-full" />
         </div>
-        <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
-        <p className="text-text-primary font-semibold text-base mb-1">
-          {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
+        <p className="text-text-primary font-display font-light text-2xl tracking-tight mb-1.5">
+          {userName ? `Good to see you, ${userName}.` : "Ready when you are."}
         </p>
-        <p className="text-text-secondary text-sm">
-          {supported ? "Just speak - or tap a suggestion below." : "Type below to begin."}
+        <p className="text-text-muted text-[13px]">
+          {supported ? "Speak, or choose a starting point." : "Type below to begin."}
         </p>
       </div>
       {children}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+      <div className="grid grid-cols-2 gap-1.5 w-full max-w-lg">
         {SUGGESTIONS.map((s) => (
           <button key={s} onClick={() => onSuggest(s)}
-            className="text-left px-4 py-3 rounded-card bg-background-surface border border-border-default hover:border-accent-blue/30 hover:bg-accent-blue/5 transition-all text-sm text-text-secondary hover:text-text-primary">
+            className="text-left px-3 py-2.5 rounded-input bg-white/[0.02] border border-white/[0.07] hover:border-accent-blue/30 hover:bg-accent-blue/5 transition-all text-[12.5px] leading-snug text-text-secondary hover:text-text-primary">
             {s}
           </button>
         ))}

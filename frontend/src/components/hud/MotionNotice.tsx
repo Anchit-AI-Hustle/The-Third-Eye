@@ -23,7 +23,7 @@ export function MotionNotice() {
   };
   return (
     <div role="status" className="fixed z-[70] left-1/2 -translate-x-1/2 bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] w-[min(92vw,420px)] rounded-card border border-accent-blue/40 bg-background-surface/95 backdrop-blur p-4 shadow-lg">
-      <p className="text-sm text-text-primary">Your device has Reduce Motion on, so JARVIS&apos;s animations and 3D effects are paused.</p>
+      <p className="text-sm text-text-primary">Your device has Reduce Motion on, so the app&apos;s animations and 3D effects are paused.</p>
       <div className="mt-3 flex gap-2 justify-end">
         <button type="button" onClick={() => close(false)} className="px-3 py-1.5 rounded-input text-xs text-text-secondary border border-border-default">Keep them off</button>
         <button type="button" onClick={() => close(true)} className="px-3 py-1.5 rounded-input text-xs font-medium bg-accent-blue text-black">Turn animations on</button>

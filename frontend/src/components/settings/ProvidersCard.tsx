@@ -130,7 +130,7 @@ export function ProvidersCard() {
       ) : (
         <>
           {rows.length > 0 && working === 0 && rows.some((r) => r.status !== "unknown") && (
-            <p className="mb-3 text-xs text-accent-red">No provider is answering right now, so JARVIS can&apos;t reply. Add credit or enable billing on one of them.</p>
+            <p className="mb-3 text-xs text-accent-red">No provider is answering right now, so The Third Eye can&apos;t reply. Add credit or enable billing on one of them.</p>
           )}
           <ul className="space-y-1.5">
             {rows.map((r) => (
