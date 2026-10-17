@@ -51,6 +51,13 @@ and return to the app (at most every 10 minutes), and from Settings:
   to Knowledge on their own (text, Markdown, CSV, JSON, PDF and Word, up to
   10 MB, 25 per run).
 
+### Siri and Shortcuts
+
+`AppDelegate.swift` declares App Intents (iOS 16+): "Hey Siri, ask The Third
+Eye" (Siri then asks for the question) and "Hey Siri, morning briefing in The
+Third Eye". Both also appear in the Shortcuts app. Each opens the app at
+`/assistant?ask=<message>`, which sends the message.
+
 ## iOS without a Mac
 
 The **iOS app** workflow (`.github/workflows/ios-app.yml`) builds an unsigned
