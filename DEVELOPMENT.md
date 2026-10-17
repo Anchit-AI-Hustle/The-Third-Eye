@@ -77,6 +77,15 @@ Key behaviours:
   treated as data, never instructions.
 - **Undo.** Agent-created items surface a short-lived Undo in the client
   (`hooks/useAgentActions.ts`).
+- **Argument checks at the tool boundary** (`lib/tools/args.ts`). Every call is
+  checked against its declaration (required params, enum values, numbers) and
+  unparseable JSON is rejected. A rejected call does not run; the model gets the
+  reason and can retry.
+- **Failed tools are reported.** The latest outcome of each tool is tracked; a
+  turn that ends with one still failed (and no checklist covering it) appends a
+  "Not completed" note, and the `done` event lists it in `failed`.
+- **Cancellation.** When the client stops the stream or disconnects, no further
+  model round or tool call starts.
 - **Streaming SSE** with a text/`tool`/`confirm`/`done`/`error` event protocol; on
   a failure of every tool-capable provider it falls back to a plain-text answer
   via `llmCascade`.

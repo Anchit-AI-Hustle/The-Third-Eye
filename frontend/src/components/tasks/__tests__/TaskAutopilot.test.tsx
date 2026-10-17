@@ -49,6 +49,17 @@ describe("task autopilot runner", () => {
     expect(finish.body.effects).toEqual([{ type: "file", data: { filename: "Goa.html" } }]);
   });
 
+  it("retries a task left running by a tab that closed, but not one still being worked", async () => {
+    const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    tasks = [
+      { id: "busy", title: "Busy", status: "todo", created_at: "2026-10-17T06:00:00Z", autopilot_status: "running", autopilot_at: ago(2) },
+      { id: "stuck", title: "Stuck", status: "todo", created_at: "2026-10-17T06:00:00Z", autopilot_status: "running", autopilot_at: ago(30) },
+    ];
+    render(<TaskAutopilot />);
+    await waitFor(() => expect(calls.some((c) => c.body?.action === "claim")).toBe(true));
+    expect(calls.filter((c) => c.body?.action === "claim").map((c) => c.body.taskId)).toEqual(["stuck"]);
+  });
+
   it("does nothing on its own when switched off", async () => {
     setAutopilotOff(true);
     render(<TaskAutopilot />);

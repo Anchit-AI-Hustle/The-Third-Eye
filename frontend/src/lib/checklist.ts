@@ -24,7 +24,7 @@ export const CHECKLIST_TOOLS = new Set(["plan_checklist", "start_step", "complet
 // Handlers report trouble in their first words ("Couldn't …", "[News error …]",
 // "Need a …", "Not signed in"); content further in is the user's data and may
 // say "error" legitimately.
-const FAILED = /^\s*(\[[^\]\n]{0,60}\b(error|failed|unavailable)\b|⚠|❌|error\b|failed\b|(\w+ ){1,2}failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|need (a|an|the)\b|no \w+ named\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set|no email was sent|rejected the send)\b/i;
+const FAILED = /^\s*(\[[^\]\n]{0,60}\b(error|failed|unavailable)\b|⚠|❌|error\b|failed\b|(\w+ ){1,2}failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|(i )?need (a|an|the)\b|please provide\b|no \w+ (named|matching)\b|no [\w ]{1,30} was given\b|(\w+ ){1,3}(could not|couldn'?t)\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set|no email was sent|rejected the send|ask the user for the missing|check the numbers with the user|not available on this account)\b/i;
 
 export function classifyResult(result: string): Outcome {
   if (/^Proposed to the user for confirmation/.test(result)) return "awaiting";

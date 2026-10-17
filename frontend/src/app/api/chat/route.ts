@@ -19,6 +19,7 @@ import { benchedReason, noteFailure } from "@/lib/providerHealth";
 import { attachedText, attachmentsAsText, cleanAttachments, geminiParts, isTextAttachment } from "@/lib/attachments";
 import { runBusinessAgent } from "@/lib/businessAgents";
 import { geminiTools } from "@/lib/tools/schemas";
+import { checkArgs, parseToolArgs } from "@/lib/tools/args";
 import { appInventory } from "@/lib/tools/inventory";
 import { resolveTask } from "@/lib/tools/taskMatch";
 import { todayBlock } from "@/lib/tools/today";
@@ -431,6 +432,7 @@ async function runTool(
     case "manage_tasks": {
       const action = input.action ?? "search";
       if (action === "create") {
+        if (!String(input.title ?? "").trim()) return { result: "Need a title to create a task. Ask the user what to call it." };
         const task = {
           title: input.title,
           priority: input.priority ?? "medium",
@@ -491,6 +493,7 @@ async function runTool(
     case "manage_notes": {
       const action = input.action ?? "search";
       if (action === "create") {
+        if (!String(input.title ?? "").trim() && !String(input.content ?? "").trim()) return { result: "Need a title or content to save a note." };
         const note = { title: input.title, content: input.content };
         ctx.notes.unshift({ id: "", ...note });
         return {
@@ -2086,18 +2089,32 @@ export async function POST(req: NextRequest) {
   };
   const checklist = Checklist.resume(priorChecklist);
 
+  // Set when the user stops the reply or closes the tab: no further model
+  // round or tool call starts after that.
+  let cancelled = req.signal.aborted;
+  req.signal.addEventListener("abort", () => { cancelled = true; });
+  const declOf = new Map<string, any>(tools[0].functionDeclarations.map((d: any) => [d.name, d]));
   const stream = new ReadableStream({
+    cancel() { cancelled = true; },
     async start(controller) {
       const encoder = new TextEncoder();
       const send = (event: string, data: any) => {
+        if (cancelled) return;
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
+      // After a cancel the stream is already closed.
+      const close = () => { try { controller.close(); } catch { /* cancelled */ } };
+      // Tool calls (by tool and action) whose latest attempt failed. Reported at
+      // the end when no checklist tracks them, so a closing "done!" cannot hide one.
+      const failures = new Map<string, string>();
+      // Real tools run so far this turn, on any tier.
+      const toolsRun: string[] = [];
 
       // Checklist calls are answered by the ledger, not runTool, and ordered
       // around the real tools in the same batch: plan/start first so the work is
       // attributed to its step, complete/fail last so a tick sees the outcome of
       // the call that was meant to earn it.
-      const execute = async (calls: { name: string; args: any }[]) => {
+      const execute = async (calls: { name: string; args: any; invalid?: string }[]) => {
         const out: { result: string; sideEffect?: { type: string; data: any } }[] = new Array(calls.length);
         const phase = (n: string) => (n === "plan_checklist" || n === "start_step" ? 0 : CHECKLIST_TOOLS.has(n) ? 2 : 1);
         for (const p of [0, 1, 2]) {
@@ -2108,8 +2125,16 @@ export async function POST(req: NextRequest) {
               send("checklist", { steps: checklist.snapshot() });
               return;
             }
-            // Confirm-then-act: never run world-changing actions silently.
-            if (isSensitive(c.name, c.args)) {
+            const bad = c.invalid ?? checkArgs(declOf.get(c.name), c.args ?? {});
+            if (cancelled) {
+              out[i] = { result: `${c.name} was not run: the user stopped this reply.` };
+              return;
+            }
+            toolsRun.push(c.name);
+            if (bad) {
+              out[i] = { result: `${c.name} failed: invalid arguments: ${bad}. Nothing was run. Fix the arguments and call it again; do not claim it ran.` };
+            } else if (isSensitive(c.name, c.args)) {
+              // Confirm-then-act: never run world-changing actions silently.
               const summary = summarizeAction(c.name, c.args);
               // Deep-link intents (pay/whatsapp/call/sms) resolve to a URL the
               // client opens on the confirming tap; email is server-executed
@@ -2123,7 +2148,11 @@ export async function POST(req: NextRequest) {
                 result: `${c.name} failed: ${e instanceof Error ? e.message : String(e)}. Tell the user it did not work; do not claim it did.`,
               }));
             }
-            checklist.record(classifyResult(out[i].result));
+            const outcome = classifyResult(out[i].result);
+            const key = typeof c.args?.action === "string" ? `${c.name} (${c.args.action})` : c.name;
+            if (outcome === "failed") failures.set(key, out[i].result.slice(0, 200));
+            else if (outcome === "ok") failures.delete(key);
+            checklist.record(outcome);
           }));
           if (p === 1 && checklist.planned) send("checklist", { steps: checklist.snapshot() });
         }
@@ -2135,9 +2164,20 @@ export async function POST(req: NextRequest) {
 
       // Said before "done" whenever the ledger has open steps, so the closing
       // message cannot report more than was verified.
+      const openGap = () => checklist.shortfall() ?? (!checklist.planned && failures.size
+        ? `\n\n**Not completed:**\n${[...failures].map(([n, r]) => `- ${n}: ${r}`).join("\n")}`
+        : null);
       const reportShortfall = () => {
-        const gap = checklist.shortfall();
+        const gap = openGap();
         if (gap) send("text", { text: gap });
+      };
+      const failed = () => [...failures.keys()];
+      // Tools already ran (a mail may be sent) and no model can finish the
+      // reply: say what ran rather than start the task again elsewhere.
+      const endPartial = () => {
+        send("text", { text: `Done so far: ${[...new Set(toolsRun)].join(", ")}. No AI provider is free to write the rest of the reply right now, so ask again in a minute to continue.${openGap() ?? ""}` });
+        send("done", { stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+        close();
       };
 
       try {
@@ -2148,7 +2188,7 @@ export async function POST(req: NextRequest) {
         if (direct?.kind === "open") {
           send("text", { text: direct.text });
           send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: direct.sideEffects });
-          controller.close();
+          close();
           return;
         }
         if (direct?.kind === "email") {
@@ -2162,7 +2202,7 @@ export async function POST(req: NextRequest) {
             clientAction: false,
           });
           send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: [] });
-          controller.close();
+          close();
           return;
         }
 
@@ -2176,8 +2216,9 @@ export async function POST(req: NextRequest) {
 
         let finished = false;
         // Verified multi-step work needs room for plan, act, check and tick per step.
-        while (loopGuard++ < (checklist.planned ? 30 : 8) && Date.now() < deadline) {
-          const result = await model.generateContentStream({ contents: currentContents });
+        while (loopGuard++ < (checklist.planned ? 30 : 8) && Date.now() < deadline && !cancelled) {
+          // A hung call must not outlive the function: it times out into the fallback tiers.
+          const result = await model.generateContentStream({ contents: currentContents }, { timeout: Math.min(30_000, Math.max(5_000, deadline - Date.now())), signal: req.signal });
 
           let fullText = "";
           const functionCalls: Array<{ name: string; args: any }> = [];
@@ -2193,10 +2234,10 @@ export async function POST(req: NextRequest) {
 
           if (!functionCalls.length && !fullText.trim()) {
             if (loopGuard > 1) {
-              send("text", { text: checklist.shortfall() ?? "Done." });
+              send("text", { text: openGap() ?? "Done." });
               await saveMemory(email, memory, memoryStore);
-              send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
-              controller.close();
+              send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+              close();
               return;
             }
             throw new Error("empty gemini response");
@@ -2238,7 +2279,7 @@ export async function POST(req: NextRequest) {
 
           reportShortfall();
           await saveMemory(email, memory, memoryStore);
-          send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+          send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
           // Best-effort, non-blocking: don't hold the stream open (which keeps the
           // client's composer locked) while the embedding + insert run.
           if (email && fullText) void rememberExchange(email, message, fullText).catch(() => {});
@@ -2247,13 +2288,17 @@ export async function POST(req: NextRequest) {
         }
 
         if (!finished) {
-          send("text", { text: `${checklist.shortfall() ?? ""}\n\nI've reached the time or step limit for one reply — say "continue" and I'll pick up from the first open step.` });
-          send("done", { stop_reason: "max_steps", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+          send("text", { text: `${openGap() ?? ""}\n\nI've reached the time or step limit for one reply - say "continue" and I'll pick up from the first open step.` });
+          send("done", { stop_reason: "max_steps", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
         }
-        controller.close();
+        close();
       } catch (err) {
+        if (cancelled) { close(); return; }
         const geminiStatus = Number(String(err).match(/\[(\d{3})/)?.[1] ?? 0);
         if (geminiStatus) await noteFailure("gemini", MODEL, geminiStatus, String(err));
+        // Gemini failed after running tools: re-running the request on another
+        // model would repeat them.
+        if (toolsRun.length) { endPartial(); return; }
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
         // Tier 2: try a tool-capable fallback (Groq/Cerebras/Mistral all speak
         // OpenAI-style function calling) so live actions — send an email, add
@@ -2261,11 +2306,9 @@ export async function POST(req: NextRequest) {
         // long as Gemini stays rate-limited. Only if every one of those is
         // also unavailable does this drop to the tools-less text cascade below.
         let tier2Handled = false;
-        const toolsRun: string[] = [];
         try {
           const { toolCallCascade, geminiToolsToOpenAI } = await import("@/lib/llmCascade");
           const openAiTools = geminiToolsToOpenAI(tools[0].functionDeclarations);
-          const parseArgs = (raw: string): any => { try { return JSON.parse(raw || "{}"); } catch { return {}; } };
           type ToolMsg = import("@/lib/llmCascade").OpenAIChatMessage;
           const toolMessages: ToolMsg[] = [
             { role: "system", content: systemInstruction },
@@ -2282,17 +2325,20 @@ export async function POST(req: NextRequest) {
           let fallbackFinished = false;
           let usedProvider = "";
           let usedModel = "";
-          while (loopGuard2++ < (checklist.planned ? 30 : 8) && Date.now() < deadline) {
+          while (loopGuard2++ < (checklist.planned ? 30 : 8) && Date.now() < deadline && !cancelled) {
             const out = await toolCallCascade({ messages: toolMessages, tools: openAiTools, temperature: 0.6, maxTokens: 1500 });
             usedProvider = out.provider;
             usedModel = out.model;
 
             if (out.tool_calls && out.tool_calls.length > 0) {
               toolMessages.push({ role: "assistant", content: out.content, tool_calls: out.tool_calls });
-              for (const tc of out.tool_calls) send("tool", { name: tc.function.name, input: parseArgs(tc.function.arguments) });
+              const calls = out.tool_calls.map((tc) => {
+                const p = parseToolArgs(tc.function.arguments);
+                return { name: tc.function.name, args: p.args, invalid: p.error };
+              });
+              for (const c of calls) send("tool", { name: c.name, input: c.args });
 
-              const results = await execute(out.tool_calls.map((tc) => ({ name: tc.function.name, args: parseArgs(tc.function.arguments) })));
-              toolsRun.push(...out.tool_calls.map((tc) => tc.function.name));
+              const results = await execute(calls);
               results.forEach((tr, i) => {
                 if (tr.sideEffect) {
                   if (tr.sideEffect.type === "batch" && Array.isArray(tr.sideEffect.data)) sideEffects.push(...tr.sideEffect.data);
@@ -2307,25 +2353,23 @@ export async function POST(req: NextRequest) {
             send("text", { text: out.content });
             reportShortfall();
             await saveMemory(email, memory, memoryStore);
-            send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+            send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
             if (email && out.content) void rememberExchange(email, message, out.content).catch(() => {});
             fallbackFinished = true;
             break;
           }
           if (!fallbackFinished) {
-            send("text", { text: `${checklist.shortfall() ?? ""}\n\nI've reached the time or step limit for one reply — say "continue" and I'll pick up from the first open step.` });
-            send("done", { stop_reason: "max_steps", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+            send("text", { text: `${openGap() ?? ""}\n\nI've reached the time or step limit for one reply - say "continue" and I'll pick up from the first open step.` });
+            send("done", { stop_reason: "max_steps", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
           }
           tier2Handled = true;
-          controller.close();
+          close();
         } catch {
           // Tools already ran (a mail may be sent): say so rather than let the
           // tools-less tier 3 tell the user it cannot act.
           if (toolsRun.length) {
-            send("text", { text: `Done so far: ${[...new Set(toolsRun)].join(", ")}. No AI provider is free to write the rest of the reply right now, so ask again in a minute to continue.` });
-            send("done", { stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot() });
+            endPartial();
             tier2Handled = true;
-            controller.close();
           }
           // Otherwise tier 2 is unavailable too; fall through to tier 3.
         }
@@ -2389,7 +2433,7 @@ export async function POST(req: NextRequest) {
           console.error("chat: all providers failed:", raw);
           send("error", { message });
         }
-        controller.close();
+        close();
       }
     },
   });
