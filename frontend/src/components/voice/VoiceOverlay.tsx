@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -307,6 +308,7 @@ export function VoiceOverlay() {
             history: historyRef.current,
             memory: memoryRef.current,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            confirmActions: confirmActionsOn(),
             userName: session?.user?.name?.split(" ")[0],
             userEmail: session?.user?.email,
             agentName: agent.name,

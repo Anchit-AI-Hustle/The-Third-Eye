@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines } from "lucide-react";
+import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { maybeRequestShake } from "@/hooks/useJarvisTriggers";
@@ -12,6 +12,7 @@ import {
   type GestureId,
   type Hotkey,
 } from "@/lib/activation";
+import { CONFIRM_ACTIONS_KEY, confirmActionsOn } from "@/lib/explicitRequest";
 import { loadNaturalVoice, NATURAL_VOICE_KEY, naturalVoiceOn, naturalVoiceProgress, naturalVoiceSupported } from "@/lib/naturalVoice";
 
 const GESTURES: { id: GestureId; label: string; desc: string }[] = [
@@ -242,7 +243,38 @@ export function ActivationSettings() {
       </section>
 
       <NaturalVoice />
+      <AskBeforeActing />
     </div>
+  );
+}
+
+// Off: what you ask for directly (send this email, build this app) runs at
+// once. On: every send, post and publish waits for your Confirm.
+function AskBeforeActing() {
+  const [on, setOn] = useState(false);
+  useEffect(() => { setOn(confirmActionsOn()); }, []);
+  const toggle = (v: boolean) => {
+    setOn(v);
+    try { localStorage.setItem(CONFIRM_ACTIONS_KEY, v ? "1" : "0"); } catch { /* private mode */ }
+  };
+  return (
+    <section className="bg-background-surface border border-border-default rounded-card p-5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-input bg-accent-blue/10 text-accent-blue">
+            <ShieldCheck size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Confirm before acting</h3>
+            <p className="text-xs text-text-muted">
+              Off: when you tell JARVIS to send, post or publish something, it does it straight away. On: every one waits for your Confirm.
+              Either way, anything JARVIS decides on its own, or picks up from an email or web page, still asks first.
+            </p>
+          </div>
+        </div>
+        <Toggle enabled={on} onChange={toggle} />
+      </div>
+    </section>
   );
 }
 

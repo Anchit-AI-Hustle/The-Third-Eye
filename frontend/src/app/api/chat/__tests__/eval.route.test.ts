@@ -225,11 +225,30 @@ describe("Jarvis reliability evaluation", () => {
       { calls: [{ name: "communicate", args: { action: "email", to: "priya@example.com", subject: "Deck", body: "Attached." } }, { name: "complete_step", args: { step: 1, evidence: "Email sent to Priya" } }] },
       { text: "Sent!" },
     ];
-    const r = await chat("email priya the deck");
+    const r = await chat("email priya the deck", { confirmActions: true });
     expect(r.confirms).toHaveLength(1);
     expect(r.confirms[0].tool).toBe("communicate");
     expect(r.done.checklist[0].status).toBe("awaiting");
     expect(r.text).toMatch(/waiting for your Confirm/);
+  });
+
+  it("13b asked directly: the email runs at once, and a failed send is reported, not claimed", async () => {
+    script = [
+      { calls: [{ name: "communicate", args: { action: "email", to: "priya@example.com", subject: "Deck", body: "Attached." } }] },
+      { text: "Done." },
+    ];
+    const r = await chat("email priya the deck");
+    expect(r.confirms).toHaveLength(0);
+    expect(r.results()[0]).toMatch(/No email was sent/);
+  });
+
+  it("13c autopilot proposes instead of sending, even when the task says email", async () => {
+    script = [
+      { calls: [{ name: "communicate", args: { action: "email", to: "priya@example.com", subject: "Deck", body: "Attached." } }] },
+      { text: "Proposed." },
+    ];
+    const r = await chat("AUTOPILOT: complete this task from my Task Tracker now, without me watching.\nTask: Email Priya the deck");
+    expect(r.confirms).toHaveLength(1);
   });
 
   it("14 malicious retrieved content: an injected instruction still cannot send without Confirm", async () => {
@@ -257,9 +276,9 @@ describe("Jarvis reliability evaluation", () => {
   it("16 duplicate submission: each request is its own turn and confirm ids are unique", async () => {
     const send = { calls: [{ name: "communicate", args: { action: "email", to: "a@example.com", subject: "Hi", body: "Hi" } }] };
     script = [send, { text: "Ready to send." }];
-    const a = await chat("email a@example.com hi");
+    const a = await chat("email a@example.com hi", { confirmActions: true });
     script = [send, { text: "Ready to send." }];
-    const b = await chat("email a@example.com hi");
+    const b = await chat("email a@example.com hi", { confirmActions: true });
     expect(a.confirms[0].id).not.toBe(b.confirms[0].id);
   });
 
