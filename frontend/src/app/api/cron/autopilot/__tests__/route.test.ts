@@ -101,4 +101,13 @@ describe("/api/cron/autopilot", () => {
     expect(urgent.all_updates).toMatch(/waiting for a free AI provider/);
     expect(urgent.all_updates).not.toMatch(/couldn't work on it/);
   });
+
+  it("records chat's every-provider-failed error as waiting, not a failed attempt", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(sse([["error", { message: "All AI providers are busy.", code: "no_provider" }]]))));
+    const body = await (await call()).json();
+    expect(body.waiting).toEqual(expect.any(String));
+    const urgent = tables.tasks.find((t) => t.id === "t-urgent")!;
+    expect(urgent.autopilot_status).toBe("failed");
+    expect(urgent.all_updates).toMatch(/waiting for a free AI provider/);
+  });
 });

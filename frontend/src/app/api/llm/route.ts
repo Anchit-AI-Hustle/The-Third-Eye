@@ -10,7 +10,7 @@ interface Body {
   system?: string;
   messages: LlmMessage[];
   jsonMode?: boolean;
-  preferProvider?: "openai" | "anthropic" | "gemini" | "grok" | "groq" | "cerebras" | "ollama";
+  preferProvider?: "openai" | "gemini" | "grok" | "groq" | "cerebras" | "ollama";
   maxTokens?: number;
   temperature?: number;
 }

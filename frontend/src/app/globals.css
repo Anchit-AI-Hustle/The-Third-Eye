@@ -242,17 +242,59 @@ body {
 .ambient-glow {
   position: absolute; inset: -20%;
   background:
-    radial-gradient(40% 35% at 78% 18%, rgba(79,195,247,0.09), transparent 70%),
-    radial-gradient(50% 40% at 20% 85%, rgba(123,92,240,0.05), transparent 70%);
+    radial-gradient(40% 35% at 78% 18%, rgba(79,195,247,0.11), transparent 70%),
+    radial-gradient(50% 40% at 20% 85%, rgba(123,92,240,0.06), transparent 70%);
   animation: glowBreathe 12s ease-in-out infinite alternate;
 }
 @keyframes glowBreathe { to { opacity: 0.6; transform: scale(1.05); } }
-.hud-dial { position: absolute; width: min(70vmin, 600px); height: min(70vmin, 600px); top: -14vmin; right: -16vmin; opacity: 0.14; }
-@media (max-width: 640px) { .hud-dial { width: 80vw; height: 80vw; top: -28vw; right: -36vw; opacity: 0.1; } }
+/* Grid floor: a plane tilted away from the viewer, its lines drifting toward them. */
+.ambient-floor {
+  position: absolute; left: -50%; right: -50%; bottom: -10%; height: 55vh;
+  transform: perspective(600px) rotateX(72deg); transform-origin: 50% 100%;
+  background-image:
+    linear-gradient(rgba(79,195,247,0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,195,247,0.16) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  animation: floorDrift 6s linear infinite;
+}
+@keyframes floorDrift { to { background-position: 0 64px, 0 0; } }
+.hud-dial { position: absolute; width: min(64vmin, 560px); height: min(64vmin, 560px); top: -12vmin; right: -14vmin; opacity: 0.28; filter: drop-shadow(0 0 4px rgba(79,195,247,0.35)); }
+@media (max-width: 640px) { .hud-dial { width: 80vw; height: 80vw; top: -28vw; right: -36vw; opacity: 0.18; } }
 .hud-dial g { transform-origin: 100px 100px; transform-box: view-box; }
-.hud-dial-outer { animation: dialSpin 90s linear infinite; }
-.hud-dial-inner { animation: dialSpin 60s linear infinite reverse; }
+.hud-dial-outer { animation: dialSpin 80s linear infinite; }
+.hud-dial-inner { animation: dialSpin 45s linear infinite reverse; }
+.hud-dial-sweep { animation: dialSpin 8s linear infinite; }
 @keyframes dialSpin { to { transform: rotate(360deg); } }
+.ambient-scan {
+  position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(79,195,247,0.45) 30%, rgba(79,195,247,0.45) 70%, transparent);
+  box-shadow: 0 0 12px rgba(79,195,247,0.35);
+  animation: scanPass 14s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes scanPass {
+  0% { transform: translateY(-10px); opacity: 0; }
+  8% { opacity: 0.7; }
+  55% { transform: translateY(100vh); opacity: 0.4; }
+  56%, 100% { transform: translateY(100vh); opacity: 0; }
+}
+.ambient-mote {
+  position: absolute; bottom: -6px; width: 2px; height: 2px; border-radius: 50%;
+  background: #4FC3F7; box-shadow: 0 0 6px rgba(79,195,247,0.8); opacity: 0;
+  animation: moteRise 18s linear infinite;
+}
+@keyframes moteRise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  15% { opacity: 0.6; }
+  100% { transform: translate3d(0, -100vh, 0); opacity: 0; }
+}
+
+/* ── Signal trace: the live telemetry line on the dashboard ── */
+.signal-trace { position: relative; overflow: hidden; color: #4FC3F7; }
+.signal-trace svg { position: absolute; inset: 0; width: 200%; height: 100%; animation: traceScroll 6s linear infinite; }
+.signal-trace svg:last-child { animation-duration: 10s; opacity: 0.4; }
+@keyframes traceScroll { to { transform: translateX(-50%); } }
 
 /* ── JARVIS core: tick rings turning around the persona ───── */
 .hud-core { position: relative; }
@@ -333,16 +375,22 @@ body {
 
 
 /* ── Holographic card ────────────────────────────────── */
+/* Glass panel with a hairline light edge: cyan from the top left fading to
+   violet at the bottom right, a lit top rim and a soft floor shadow. */
 .holo-card {
-  background: linear-gradient(135deg, rgba(79,195,247,0.03) 0%, rgba(14,14,42,0.8) 50%, rgba(123,92,240,0.03) 100%);
-  border: 1px solid rgba(79,195,247,0.12);
-  transition: all 200ms;
+  background:
+    linear-gradient(180deg, rgba(18, 24, 46, 0.78), rgba(9, 11, 26, 0.86)) padding-box,
+    linear-gradient(135deg, rgba(79,195,247,0.42), rgba(79,195,247,0.07) 32%, rgba(123,92,240,0.07) 68%, rgba(123,92,240,0.34)) border-box;
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px -16px rgba(0,0,0,0.7);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  transition: box-shadow 250ms var(--ease-depth), transform 250ms var(--ease-depth);
   position: relative;
   overflow: hidden;
 }
 .holo-card:hover {
-  border-color: rgba(79,195,247,0.3);
-  box-shadow: 0 0 20px rgba(79,195,247,0.08), inset 0 0 20px rgba(79,195,247,0.02);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(79,195,247,0.12), 0 18px 44px -16px rgba(79,195,247,0.28);
 }
 .holo-card::before {
   content: '';

@@ -7,7 +7,7 @@ type EnvVar = { name: string; required: boolean; purpose: string; valid?: Rule; 
 
 const url: Rule = (v) => { try { return /^https?:$/.test(new URL(v).protocol); } catch { return false; } };
 const postgres: Rule = (v) => { try { return /^postgres(ql)?:$/.test(new URL(v).protocol); } catch { return false; } };
-const PROVIDERS = ["openai", "anthropic", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "mistral"];
+const PROVIDERS = ["openai", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "mistral"];
 
 const llm = (name: string, provider: string): EnvVar => ({ name, required: false, purpose: `${provider} in the AI cascade`, llm: true });
 
@@ -17,7 +17,6 @@ export const ENV_SCHEMA: EnvVar[] = [
   { name: "TOKEN_ENCRYPTION_KEY", required: true, purpose: "encrypts stored connector tokens" },
   { name: "NEXTAUTH_URL", required: false, purpose: "canonical sign-in callback URL", valid: url },
   llm("OPENAI_API_KEY", "OpenAI"),
-  llm("ANTHROPIC_API_KEY", "Anthropic"),
   llm("GEMINI_API_KEY", "Gemini"),
   llm("GOOGLE_API_KEY", "Gemini (alternate name)"),
   llm("XAI_API_KEY", "Grok"),

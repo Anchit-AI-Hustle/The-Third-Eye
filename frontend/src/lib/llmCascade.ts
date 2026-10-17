@@ -1,6 +1,6 @@
 // LLM cascade — ported from marketing_mailers__html_architect/api/_shared/llm.js
 //
-// Order: OpenAI → Anthropic → Gemini → xAI/Grok → Groq → Cerebras → OpenRouter
+// Order: OpenAI → Gemini → xAI/Grok → Groq → Cerebras → OpenRouter
 //        → Mistral → Ollama
 // Groq, Cerebras, OpenRouter (:free models) and Mistral all offer generous FREE
 // tiers, so the app keeps working on free keys alone.
@@ -46,7 +46,6 @@ export interface LlmCascadeResult {
 
 
 const OPENAI_BASE    = "https://api.openai.com/v1";
-const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
 const GEMINI_BASE    = "https://generativelanguage.googleapis.com/v1beta";
 const GROK_BASE      = "https://api.x.ai/v1";
 const GROQ_BASE      = "https://api.groq.com/openai/v1";
@@ -67,7 +66,6 @@ function loadKeys() {
   const own = currentOwnKeys();
   return {
     openai:    [own?.openai, process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3].map(clean).filter(Boolean),
-    anthropic: clean(own?.anthropic) || clean(process.env.ANTHROPIC_API_KEY),
     gemini:    clean(own?.gemini) || clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY),
     grok:      clean(process.env.XAI_API_KEY),
     groq:      clean(own?.groq) || clean(process.env.GROQ_API_KEY),
@@ -86,13 +84,12 @@ function healthName(provider: string): string {
   return own?.[base as keyof typeof own] ? `${provider}@${own.userId}` : provider;
 }
 
-// One model per provider, each overridable by env (ANTHROPIC_MODEL, GEMINI_MODEL,
+// One model per provider, each overridable by env (OPENAI_MODEL, GEMINI_MODEL,
 // …): when a provider retires a model every call to it 404s, and with every
 // provider on a retired model the whole cascade fails — that should be a
 // settings change, not a code release.
 const DEFAULT_MODELS = {
   openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-5-5",
   gemini: "gemini-2.5-flash",
   geminiPro: "gemini-2.5-pro",
   grok: "grok-2-latest",
@@ -104,7 +101,7 @@ const DEFAULT_MODELS = {
 } as const;
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
-  openai: "OPENAI_MODEL", anthropic: "ANTHROPIC_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
+  openai: "OPENAI_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
   groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
 };
 export function modelFor(provider: ModelProvider): string {
@@ -213,7 +210,7 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "anthropic", "grok"] as const;
+const CLOUD_PROVIDERS = ["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
 // Free tiers first, ordered by daily headroom: Groq's free plan serves
@@ -284,7 +281,7 @@ export class LlmCascadeError extends Error {
 }
 
 /**
- * "anthropic 404 model not found · gemini 429 quota or rate limit" — what to fix,
+ * "groq 404 model not found · gemini 429 quota or rate limit" — what to fix,
  * in one line. Only a category per status: provider error bodies can echo part
  * of the key or account details, so they stay in the server log.
  */
@@ -335,7 +332,7 @@ export function userFacingLlmError(e: unknown): string {
 }
 
 // How long the provider asked us to wait: the retry-after header (seconds or
-// an HTTP date, sent by Groq and Anthropic on a 429), else Gemini's
+// an HTTP date, sent by Groq on a 429), else Gemini's
 // RetryInfo retryDelay in the error body.
 export function retryAfterMs(headers: Headers | undefined, body: string): number | undefined {
   const h = headers?.get("retry-after");
@@ -363,7 +360,7 @@ function attempt(provider: string, model: string, res: CallResult): LlmCascadeRe
 
 function isQuotaError(status: number, body: string): boolean {
   if (status === 429 || status === 402) return true;
-  // OpenAI / Anthropic both return 400 with billing language when out of credit
+  // OpenAI returns 400 with billing language when out of credit
   if (status === 400 && /insufficient_quota|billing|credit|quota/i.test(body)) return true;
   return false;
 }
@@ -430,34 +427,6 @@ async function callOpenAI(key: string, model: string, opts: LlmCascadeOptions) {
     }
     const data = await r.json();
     const text = data.choices?.[0]?.message?.content ?? "";
-    return { ok: true as const, text, model };
-  } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
-  } finally { clear(); }
-}
-
-async function callAnthropic(key: string, model: string, opts: LlmCascadeOptions) {
-  const { signal, clear } = withTimeout(opts.timeoutMs ?? 30_000);
-  try {
-    const userContent = opts.messages.filter((m) => m.role !== "system").map((m) => m.content).join("\n\n");
-    const system = (opts.jsonMode
-      ? `${opts.system ?? ""}\n\nCRITICAL: Return ONLY valid JSON. Start with { end with }. No fences, no commentary.`
-      : opts.system) || undefined;
-    const r = await fetch(`${ANTHROPIC_BASE}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model, max_tokens: opts.maxTokens ?? 2000, temperature: opts.temperature ?? 0.7,
-        ...(system ? { system } : {}),
-        messages: [{ role: "user", content: userContent }],
-      }),
-      signal,
-    });
-    if (!r.ok) {
-      return failed(r);
-    }
-    const data = await r.json();
-    const text = data.content?.[0]?.text ?? "";
     return { ok: true as const, text, model };
   } catch (e) {
     return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
@@ -557,7 +526,7 @@ async function callOllama(model: string, opts: LlmCascadeOptions) {
 // ─── Cascade entrypoint ──────────────────────────────────────────────────
 
 // Unattended work (Gmail scan, log sync) never spends paid credit.
-const PAID = new Set<CloudProvider>(["openai", "anthropic", "grok"]);
+const PAID = new Set<CloudProvider>(["openai", "grok"]);
 
 export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeResult> {
   const keys = loadKeys();
@@ -594,12 +563,6 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
         if (!res.quota) break; // non-quota error → try next provider, not next key
         startCooldown(healthName("openai"), res.retryAfterMs);
       }
-    } else if (provider === "anthropic" && keys.anthropic) {
-      const model = modelFor("anthropic");
-      const res = await callAnthropic(keys.anthropic, model, opts);
-      attempts.push(attempt("anthropic", model, res));
-      if (res.ok) { await noteSuccess(healthName("anthropic"), model); return { text: res.text, provider: "anthropic", model, attempts }; }
-      if (res.quota) startCooldown(healthName("anthropic"), res.retryAfterMs);
     } else if (provider === "gemini" && keys.gemini) {
       const model = modelFor("gemini");
       const res = await callGemini(keys.gemini, model, opts);
@@ -793,8 +756,6 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   const keys = loadKeys();
   const rows: { provider: string; base: string; model: string; key: string }[] = [];
   if (keys.openai[0]) rows.push({ provider: "openai", base: OPENAI_BASE, model: modelFor("openai"), key: keys.openai[0] });
-  // Anthropic's OpenAI-compatible endpoint takes the same tools payload.
-  if (keys.anthropic) rows.push({ provider: "anthropic", base: ANTHROPIC_BASE, model: modelFor("anthropic"), key: keys.anthropic });
   if (keys.gemini) {
     rows.push({ provider: "gemini-lite", base: GEMINI_OPENAI_BASE, model: GEMINI_LITE_MODEL, key: keys.gemini });
     rows.push({ provider: "gemini", base: GEMINI_OPENAI_BASE, model: modelFor("gemini"), key: keys.gemini });

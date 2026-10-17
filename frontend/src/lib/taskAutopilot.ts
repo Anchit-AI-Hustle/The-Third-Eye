@@ -66,8 +66,8 @@ export function judgeRun(run: AutopilotRun): { status: AutopilotStatus; report: 
   if (run.confirms.length) lines.push(`Waiting for your approval:\n${run.confirms.map((c) => `- ${c.summary}`).join("\n")}`);
 
   if (run.error) return { status: "failed", report: [`JARVIS couldn't work on this: ${run.error}`, ...lines].join("\n\n") };
-  // "fallback" is the text-only reply chat gives when no provider can run tools.
-  if (run.stopReason === "fallback" && !run.checklist.length && !run.confirms.length) {
+  // "fallback" is chat's text-only reply when no provider can run tools; "no_provider" is when none answered at all.
+  if ((run.stopReason === "fallback" || run.stopReason === "no_provider") && !run.checklist.length && !run.confirms.length) {
     return { status: "failed", report: [`${NO_PROVIDER}, so JARVIS will try again when one is.`, ...lines].join("\n\n") };
   }
   const finished = run.checklist.length > 0 && open.length === 0 && run.confirms.length === 0
@@ -116,6 +116,7 @@ export async function runThroughChat(task: AutopilotTask, agent?: { id: string; 
       if (event === "text") run.text += data.text ?? "";
       else if (event === "checklist" && Array.isArray(data.steps)) run.checklist = data.steps;
       else if (event === "confirm") run.confirms.push({ summary: String(data.summary ?? data.tool) });
+      else if (event === "error" && data.code === "no_provider") run.stopReason = "no_provider";
       else if (event === "error") run.error = String(data.message ?? "the assistant failed");
       else if (event === "done") {
         effects = data.sideEffects ?? [];

@@ -14,7 +14,7 @@ export interface SystemHealth {
 
 const NAMES: Record<string, string> = {
   groq: "Groq", "gemini-lite": "Gemini Flash-Lite", gemini: "Gemini", cerebras: "Cerebras", openrouter: "OpenRouter",
-  mistral: "Mistral", openai: "OpenAI", anthropic: "Claude", grok: "Grok",
+  mistral: "Mistral", openai: "OpenAI", grok: "Grok",
 };
 
 export function useSystemHealth(): SystemHealth | null {

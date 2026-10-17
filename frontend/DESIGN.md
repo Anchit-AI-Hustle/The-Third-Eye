@@ -65,10 +65,15 @@ stays out of the way so the accent and the content carry the screen.
 - **Amber is a rare marker.** Amber (`accent.amber #FFB547`) marks a single
   telemetry detail at most (a reactor ring tick). It is never a button, link,
   state or label colour.
-- **Restraint over ornament.** Cards are plain surfaces with hairline borders
-  that rise in as the page assembles (`globals.css`, "Panels"); no corner
-  brackets, scanlines or tickers. The backdrop is a soft breathing glow and
-  one faint, slowly turning ring (`components/hud/AmbientScene.tsx`).
+- **Restraint over ornament.** Cards (`.holo-card`) are glass panels: a
+  blurred dark surface, a hairline edge lit cyan at the top left fading to
+  violet at the bottom right, a lit top rim and a soft floor shadow. They rise
+  in as the page assembles (`globals.css`, "Panels"); no corner
+  brackets, scanlines or tickers. Motion lives in the backdrop and in live
+  readouts, in cyan line work only: an instrument ring with a radar sweep, a
+  perspective grid floor drifting toward the viewer, a slow scan line and a
+  few data motes (`components/hud/AmbientScene.tsx`), plus the dashboard's
+  scrolling signal trace (`components/hud/SignalTrace.tsx`).
   Section labels (`.hud-label`) are small uppercase Inter in `text.muted`.
 - **Depth by surface, not by shadow.** Stack `background.base` → `surface` →
   `elevated` to show layering; borders are hairline (`border.default`, 1px).

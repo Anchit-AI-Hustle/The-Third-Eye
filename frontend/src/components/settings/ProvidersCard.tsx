@@ -10,7 +10,7 @@ const LABEL: Record<string, string> = {
   ok: "Working", unknown: "Not checked yet", rate_limited: "Rate limited", quota: "Daily quota used up", credit: "Out of credit", misconfigured: "Key or model rejected", error: "Error",
 };
 const NAME: Record<string, string> = {
-  openai: "OpenAI", anthropic: "Anthropic (Claude)", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter", mistral: "Mistral",
+  openai: "OpenAI", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter", mistral: "Mistral",
 };
 
 // Free keys a user can get themselves, so their requests don't share the
@@ -21,7 +21,6 @@ const OWN: { id: string; name: string; placeholder: string; url?: string }[] = [
   { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", url: "https://openrouter.ai/keys" },
   { id: "mistral", name: "Mistral", placeholder: "Mistral API key", url: "https://console.mistral.ai/api-keys" },
   { id: "cerebras", name: "Cerebras", placeholder: "csk-...", url: "https://cloud.cerebras.ai" },
-  { id: "anthropic", name: "Anthropic (Claude)", placeholder: "sk-ant-..." },
   { id: "openai", name: "OpenAI", placeholder: "sk-..." },
   { id: "ollama", name: "Ollama on your computer", placeholder: "https://your-tunnel.example.com" },
 ];

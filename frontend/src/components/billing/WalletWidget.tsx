@@ -28,11 +28,11 @@ export function WalletWidget({ compact = false }: { compact?: boolean }) {
           </span>
         </span>
       )}
-      <span className="flex items-center gap-1 text-xs font-mono font-semibold text-text-primary">
+      <span className="flex items-center gap-1 text-xs font-semibold tabular-nums text-text-primary">
         <Wallet size={13} className="text-accent-blue" /> {balance.toLocaleString()}
       </span>
       <span
-        className="rounded-full px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider"
+        className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
         style={{ color: t.color, backgroundColor: `${t.color}1A`, border: `1px solid ${t.color}55` }}
       >
         {t.badge}

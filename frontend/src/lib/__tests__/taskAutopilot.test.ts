@@ -37,6 +37,12 @@ describe("task autopilot outcome", () => {
     expect(r.report.startsWith(NO_PROVIDER)).toBe(true);
   });
 
+  it("treats chat's every-provider-failed reply as an outage to retry", () => {
+    const r = judgeRun({ text: "", checklist: [], confirms: [], stopReason: "no_provider" });
+    expect(r.status).toBe("failed");
+    expect(r.report.startsWith(NO_PROVIDER)).toBe(true);
+  });
+
   it("reports a failure plainly", () => {
     expect(judgeRun({ text: "", checklist: [], confirms: [], error: "agent stopped" })).toMatchObject({ status: "failed", report: expect.stringContaining("agent stopped") });
   });
