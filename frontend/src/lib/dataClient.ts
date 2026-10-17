@@ -46,6 +46,13 @@ export async function dataInsert(entity: string, rows: unknown | unknown[]): Pro
   return !isLocalOnly(res);
 }
 
+/** Insert and say whether it was stored: "local" means there is no database to store it in. */
+export async function dataSave(entity: string, rows: unknown | unknown[]): Promise<"saved" | "local" | "failed"> {
+  const res = await req(entity, { method: "POST", body: JSON.stringify(rows) });
+  if (isLocalOnly(res)) return res ? "local" : "failed";
+  return res!.ok ? "saved" : "failed";
+}
+
 export async function dataUpdate(entity: string, id: string, patch: Record<string, unknown>): Promise<boolean> {
   const res = await req(entity, { method: "PATCH", body: JSON.stringify({ id, patch }) });
   return !isLocalOnly(res);

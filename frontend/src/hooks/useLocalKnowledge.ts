@@ -16,17 +16,21 @@ export interface KnowledgeDoc {
   error?: string;
 }
 
+// Per-account device cache; the database is the source of truth when there is one.
 const KEY = "jarvis_knowledge_v1";
+let activeUser: string | null = null;
+const storageKey = () => (activeUser ? `${KEY}:${activeUser}` : KEY);
+const useStorageUser = (u: string | null) => { activeUser = u; };
 const CHUNK_SIZE = 500;
 
 function ls(): KnowledgeDoc[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(storageKey()) ?? "[]"); } catch { return []; }
 }
 function lsSet(v: KnowledgeDoc[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(v));
+    localStorage.setItem(storageKey(), JSON.stringify(v));
     window.dispatchEvent(new CustomEvent("jarvis:knowledge", { detail: v }));
   } catch (err) {
     console.warn("Failed to persist knowledge docs in localStorage:", err);
@@ -98,6 +102,7 @@ export function searchDocs(docs: KnowledgeDoc[], query: string, topK = 5): Searc
 export function useLocalKnowledge() {
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
+  useStorageUser(userId);
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [ready, setReady] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -115,19 +120,13 @@ export function useLocalKnowledge() {
     dataList<KnowledgeDoc>("knowledge_docs").then((r) => {
       if (cancelled) return;
       remote.current = r.remote;
-      const local = ls();
-      if (r.remote && r.rows.length > 0) {
-        const map = new Map<string, KnowledgeDoc>();
-        local.forEach((d) => map.set(d.id, d));
-        r.rows.forEach((d) => map.set(d.id, d));
-        const merged = Array.from(map.values());
-        lsSet(merged);
-        setDocs(merged);
+      // With a database, its rows are the list: merging the cache back in is
+      // what brought deleted documents back on the next load.
+      if (r.remote) {
+        lsSet(r.rows);
+        setDocs(r.rows);
       } else {
-        setDocs(local);
-        if (r.remote && local.length > 0) {
-          dataInsert("knowledge_docs", local).catch(() => {});
-        }
+        setDocs(ls());
       }
       setReady(true);
     });
@@ -275,7 +274,7 @@ export function useLocalKnowledge() {
   const remove = useCallback(async (id: string) => {
     setDocs((prev) => {
       const next = prev.filter((d) => d.id !== id);
-      if (!remote.current) lsSet(next);
+      lsSet(next);
       return next;
     });
     if (remote.current) await dataDelete("knowledge_docs", id);
@@ -287,24 +286,11 @@ export function useLocalKnowledge() {
     try {
       const r = await dataList<KnowledgeDoc>("knowledge_docs");
       remote.current = r.remote;
-      const local = ls();
-      if (r.remote && r.rows.length > 0) {
-        const map = new Map<string, KnowledgeDoc>();
-        local.forEach((d) => map.set(d.id, d));
-        r.rows.forEach((d) => map.set(d.id, d));
-        const merged = Array.from(map.values());
-        lsSet(merged);
-        setDocs(merged);
-        setUploading(false);
-        return { count: merged.length };
-      } else {
-        setDocs(local);
-        if (r.remote && local.length > 0) {
-          await dataInsert("knowledge_docs", local).catch(() => {});
-        }
-        setUploading(false);
-        return { count: local.length };
-      }
+      const list = r.remote ? r.rows : ls();
+      if (r.remote) lsSet(list);
+      setDocs(list);
+      setUploading(false);
+      return { count: list.length };
     } catch (err: any) {
       setUploading(false);
       return { count: ls().length, error: err?.message || "Vault sync failed" };

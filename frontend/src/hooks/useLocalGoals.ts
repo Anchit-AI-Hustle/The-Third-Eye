@@ -30,6 +30,10 @@ export function useLocalGoals() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [ready, setReady] = useState(false);
   const remote = useRef(false);
+  // Read by adjust(): a value computed inside a setState updater is not there
+  // yet when React defers the updater, so the database write was skipped.
+  const goalsRef = useRef(goals);
+  goalsRef.current = goals;
 
   useEffect(() => {
     let cancelled = false;
@@ -55,17 +59,14 @@ export function useLocalGoals() {
   }, []);
 
   const adjust = useCallback(async (id: string, delta: number) => {
-    let nextCurrent: number | null = null;
-    setGoals((prev) => {
-      const next = prev.map((g) => {
-        if (g.id !== id) return g;
-        nextCurrent = Math.max(0, Math.min(g.target, g.current + delta));
-        return { ...g, current: nextCurrent };
-      });
-      if (!remote.current) lsSet(next);
-      return next;
-    });
-    if (remote.current && nextCurrent !== null) await dataUpdate("goals", id, { current: nextCurrent });
+    const goal = goalsRef.current.find((g) => g.id === id);
+    if (!goal) return;
+    const nextCurrent = Math.max(0, Math.min(goal.target, goal.current + delta));
+    const next = goalsRef.current.map((g) => (g.id === id ? { ...g, current: nextCurrent } : g));
+    goalsRef.current = next;
+    setGoals(next);
+    if (!remote.current) lsSet(next);
+    else await dataUpdate("goals", id, { current: nextCurrent });
   }, []);
 
   const remove = useCallback(async (id: string) => {

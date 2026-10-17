@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useLocalTasks } from "./useLocalTasks";
+import { loadLocalContacts, saveLocalContacts } from "./useLocalContacts";
 import { useLocalGoals } from "./useLocalGoals";
 import { useLocalNotes } from "./useLocalNotes";
 import { useLocalExpenses } from "./useLocalExpenses";
@@ -134,13 +135,7 @@ export function useAgentActions() {
               break;
             case "contact_add":
               if (d.contact && typeof window !== "undefined") {
-                try {
-                  const raw = localStorage.getItem("jarvis_contacts_v1");
-                  const list = raw ? JSON.parse(raw) : [];
-                  list.push(d.contact);
-                  localStorage.setItem("jarvis_contacts_v1", JSON.stringify(list));
-                  window.dispatchEvent(new CustomEvent("jarvis:contacts", { detail: list }));
-                } catch {}
+                saveLocalContacts([...loadLocalContacts(), d.contact]);
               }
               break;
             case "open_url":
