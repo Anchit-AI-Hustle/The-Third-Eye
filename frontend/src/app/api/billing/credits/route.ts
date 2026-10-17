@@ -16,7 +16,7 @@ export async function GET() {
   const email = await user();
   if (!email) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const unlimited = unlimitedCredits(email);
-  const balance = unlimited ? null : await creditBalance(email);
+  const balance = await creditBalance(email);
   const db = getDb();
   if (!db) return Response.json({ unlimited, balance, used: 0, ledger: [] });
   // Creations made = spends minus refunds (the only credits added besides the gift).

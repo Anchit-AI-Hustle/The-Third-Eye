@@ -36,6 +36,10 @@ export function currentTier(): Tier {
   const s = getSubscription();
   return s && s.status === "active" ? s.tier : "basic";
 }
+/** Records a plan bought on this device (a test purchase on an owner account). */
+export function setSubscription(tier: Tier, period: BillingPeriod) {
+  vaultSet(APP, "subscription", { tier, period, status: "active", since: new Date().toISOString() });
+}
 export function cancelSubscription() {
   const s = getSubscription();
   if (s) vaultSet(APP, "subscription", { ...s, status: "unsubscribed" });

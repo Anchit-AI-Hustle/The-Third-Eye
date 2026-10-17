@@ -20,9 +20,19 @@ export function PlansClient() {
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2200); };
 
-  // No payment gateway is connected yet, so nothing can be bought.
+  // No payment gateway is connected yet: owner test accounts buy for free, everyone else is told.
   const notLive = () => flash("Payments are not live yet. Nothing was charged and no credits were added.");
-  const doSubscribe = (tier: Tier) => { if (tier !== "basic") notLive(); };
+  const doSubscribe = async (tier: Tier) => {
+    if (tier === "basic") return;
+    if (!b.unlimited) return notLive();
+    const r = await b.testPurchase({ tier, period });
+    flash(r.ok ? `Test purchase: ${TIERS[tier].label} plan active, +${r.added.toLocaleString()} credits (no payment)` : r.error);
+  };
+  const doBuy = async (id: string) => {
+    if (!b.unlimited) return notLive();
+    const r = await b.testPurchase({ bundle: id });
+    flash(r.ok ? `Test purchase: +${r.added.toLocaleString()} credits (no payment)` : r.error);
+  };
   const submitCode = async () => {
     if (await b.tryUnlock(code)) { setCodeMsg("Unlocked - all paid features open (test mode)."); setCode(""); }
     else setCodeMsg("Incorrect code.");
@@ -51,10 +61,13 @@ export function PlansClient() {
         </div>
         <div className="flex items-center gap-2 rounded-card border border-accent-blue/40 bg-accent-blue/10 px-4 py-2">
           <Wallet size={18} className="text-accent-blue" />
-          <span className="font-display text-2xl font-semibold text-text-primary">{b.unlimited ? "Unlimited" : b.balance.toLocaleString()}</span>
+          <span className="font-display text-2xl font-semibold text-text-primary">{b.balance.toLocaleString()}</span>
           <span className="text-xs font-mono text-text-muted">credits</span>
         </div>
       </div>
+      {b.unlimited && (
+        <p className="text-xs font-mono text-[#34D399] -mt-5">Owner test account: packs and plans are free to buy here, and creations are never charged.</p>
+      )}
 
       {/* Subscription tiers */}
       <section>
@@ -144,7 +157,7 @@ export function PlansClient() {
               </div>
               <div className="text-[11px] font-mono text-text-muted">₹{pricePer100(bundle)} / 100 cr</div>
               <div className="text-lg font-display font-semibold text-text-primary mt-2 mb-3">₹{bundle.priceInr.toLocaleString()}</div>
-              <button onClick={notLive} className="mt-auto rounded-input px-3 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-blue transition-colors">
+              <button onClick={() => void doBuy(bundle.id)} className="mt-auto rounded-input px-3 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-blue transition-colors">
                 Buy
               </button>
             </div>

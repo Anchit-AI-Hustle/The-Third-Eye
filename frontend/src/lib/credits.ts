@@ -48,6 +48,16 @@ export async function refundCredits(email: string, spend: Spend, action: string)
   if (error) console.error("refund_credits failed", error.code, error.message);
 }
 
+// Adds credits (a test purchase on an owner account). refund_credits adds to
+// the balance and writes the ledger row; credit_balance opens the wallet first.
+export async function grantCredits(email: string, amount: number, reason: string): Promise<number | null> {
+  const db = getDb();
+  if (!db) return null;
+  await creditBalance(email);
+  const { data, error } = await db.rpc("refund_credits", { p_user_id: email, p_amount: amount, p_reason: reason });
+  return error ? null : Number(data);
+}
+
 export function creditsRefused(spend: Spend): Response {
   return Response.json(
     { error: spend.ok ? "" : spend.error, code: "insufficient_credits", cost: spend.cost, balance: spend.balance },
