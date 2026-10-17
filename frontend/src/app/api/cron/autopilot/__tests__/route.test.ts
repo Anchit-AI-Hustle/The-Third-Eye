@@ -13,6 +13,7 @@ function from(table: string) {
     select: () => q,
     limit: () => q,
     eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return q; },
+    in: (c: string, v: unknown[]) => { filters.push((r) => v.includes(r[c])); return q; },
     is: (c: string, v: unknown) => { filters.push((r) => (r[c] ?? null) === v); return q; },
     update: (p: Row) => { patch = p; return q; },
     insert: async (r: Row) => { tables[table].push({ ...r }); return { data: null, error: null }; },
@@ -21,6 +22,8 @@ function from(table: string) {
   return q;
 }
 vi.mock("@/lib/db", () => ({ getDb: () => ({ from }) }));
+let llm = "ok";
+vi.mock("@/lib/llmCascade", () => ({ llmStatus: async () => ({ status: llm, providers: {} }) }));
 vi.mock("@/lib/whatsapp", () => ({ applySideEffects: vi.fn(async () => undefined) }));
 
 const sse = (events: [string, unknown][]) => events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}`).join("\n\n");
@@ -28,6 +31,7 @@ const { GET } = await import("@/app/api/cron/autopilot/route");
 const call = (auth = "Bearer s3cret") => GET(new Request("https://x.test/api/cron/autopilot", { headers: { authorization: auth } }) as never);
 
 beforeEach(() => {
+  llm = "ok";
   vi.stubEnv("CRON_SECRET", "s3cret");
   vi.stubEnv("NEXTAUTH_URL", "https://app.test");
   tables = {
@@ -76,5 +80,25 @@ describe("/api/cron/autopilot", () => {
     const urgent = tables.tasks.find((t) => t.id === "t-urgent")!;
     expect(urgent).toMatchObject({ status: "todo", autopilot_status: "failed" });
     expect(urgent.all_updates).toMatch(/couldn't work on it/);
+  });
+
+  it("waits without touching a task while every AI provider is out", async () => {
+    llm = "down";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const body = await (await call()).json();
+    expect(body).toMatchObject({ worked: [], waiting: expect.any(String) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(tables.tasks.find((t) => t.id === "t-urgent")!.autopilot_status).toBeNull();
+  });
+
+  it("stops the batch loop when a run hits a provider outage, and leaves the task due", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(sse([["text", { text: "Live actions are unavailable." }], ["done", { stop_reason: "fallback", sideEffects: [] }]]))));
+    const body = await (await call()).json();
+    expect(body.waiting).toEqual(expect.any(String));
+    const urgent = tables.tasks.find((t) => t.id === "t-urgent")!;
+    expect(urgent).toMatchObject({ status: "todo", autopilot_status: "failed" });
+    expect(urgent.all_updates).toMatch(/waiting for a free AI provider/);
+    expect(urgent.all_updates).not.toMatch(/couldn't work on it/);
   });
 });

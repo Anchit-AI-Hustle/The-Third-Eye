@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autopilotPrompt, judgeRun } from "@/lib/taskAutopilot";
+import { autopilotPrompt, judgeRun, NO_PROVIDER } from "@/lib/taskAutopilot";
 import type { Step } from "@/lib/checklist";
 
 const step = (id: number, title: string, status: Step["status"], evidence?: string): Step => ({ id, title, verify: "", needsTool: true, status, evidence });
@@ -29,6 +29,12 @@ describe("task autopilot outcome", () => {
 
   it("does not trust a run that was cut short", () => {
     expect(judgeRun({ text: "", checklist: [step(1, "A", "done", "x")], confirms: [], stopReason: "partial" }).status).toBe("needs_you");
+  });
+
+  it("treats a text-only reply with no provider for tools as an outage to retry, not work for the user", () => {
+    const r = judgeRun({ text: "Live actions are temporarily unavailable.", checklist: [], confirms: [], stopReason: "fallback" });
+    expect(r.status).toBe("failed");
+    expect(r.report.startsWith(NO_PROVIDER)).toBe(true);
   });
 
   it("reports a failure plainly", () => {

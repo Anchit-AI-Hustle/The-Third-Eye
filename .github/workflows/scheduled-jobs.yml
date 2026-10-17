@@ -84,7 +84,7 @@ jobs:
                      "$SITE/api/cron/autopilot" || echo 000)
             echo "--- autopilot batch $i ($code)"; head -c 500 /tmp/body; echo
             case "$code" in
-              2*)  grep -q '"worked":\[\]' /tmp/body && break ;;
+              2*)  grep -qE '"worked":\[\]|"waiting"' /tmp/body && break ;;
               501) echo "::notice::autopilot is not configured on the server"; break ;;
               *)   echo "::error::/api/cron/autopilot returned $code"; failed=1; break ;;
             esac

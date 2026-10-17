@@ -11,6 +11,9 @@ export const STALE_MS = 10 * 60_000;
 /** Marks a chat turn as autopilot's, so the chat route never sends on its behalf. */
 export const AUTOPILOT_PREFIX = "AUTOPILOT:";
 
+/** Starts the report of a run that no AI provider could do; it is retried, not left for the user. */
+export const NO_PROVIDER = "No AI provider was free to work on this";
+
 export type AutopilotStatus = "running" | "done" | "needs_you" | "failed";
 
 export interface AutopilotTask {
@@ -63,6 +66,10 @@ export function judgeRun(run: AutopilotRun): { status: AutopilotStatus; report: 
   if (run.confirms.length) lines.push(`Waiting for your approval:\n${run.confirms.map((c) => `- ${c.summary}`).join("\n")}`);
 
   if (run.error) return { status: "failed", report: [`JARVIS couldn't work on this: ${run.error}`, ...lines].join("\n\n") };
+  // "fallback" is the text-only reply chat gives when no provider can run tools.
+  if (run.stopReason === "fallback" && !run.checklist.length && !run.confirms.length) {
+    return { status: "failed", report: [`${NO_PROVIDER}, so JARVIS will try again when one is.`, ...lines].join("\n\n") };
+  }
   const finished = run.checklist.length > 0 && open.length === 0 && run.confirms.length === 0
     && !["partial", "max_steps", "fallback"].includes(run.stopReason ?? "");
   if (!finished && !run.checklist.length && !run.confirms.length) lines.push("No step could be verified, so this is not marked done.");
