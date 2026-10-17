@@ -51,6 +51,14 @@ Capacitor's WebView maps the web APIs onto them, so no bridge code is required (
 | `geolocation` | `ACCESS_*_LOCATION` | `NSLocationWhenInUseUsageDescription` |
 | Contacts sync (`@capacitor-community/contacts`) | `READ_CONTACTS`, `WRITE_CONTACTS` | `NSContactsUsageDescription` |
 
+| SMS and calls (`DeviceControl.sendSms` / `call`, `lib/nativeOutreach.ts`) | `SEND_SMS`, `CALL_PHONE` | not possible - Messages / dialer open instead |
+
+In the Android app an SMS or call JARVIS was asked for goes out over the phone's
+own SIM straight away (one-time permission prompt); the reply says whether the
+SMS was sent. Google Play only allows `SEND_SMS` and `CALL_PHONE` for the
+default SMS / dialer app, so the debug APK keeps them and a Play build must
+drop them. iOS gives no app a way to send an SMS or place a call by itself.
+
 Without these the calls fail silently inside the app while still working in a
 browser tab, which is the confusing failure mode they exist to prevent.
 

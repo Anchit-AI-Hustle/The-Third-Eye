@@ -44,6 +44,7 @@ import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
 import { toolLabel } from "@/lib/toolLabels";
 import { toWhatsAppNumber } from "@/lib/whatsappNumber";
+import { deviceSendable, sendFromDevice } from "@/lib/nativeOutreach";
 
 // Replies whose files should save and open on arrival (after the permission
 // check); files in reopened chats only act when their buttons are clicked.
@@ -182,6 +183,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
     };
     document.addEventListener("visibilitychange", next);
     return () => document.removeEventListener("visibilitychange", next);
+  }, []);
+  const sendDirect = useCallback((messageId: string, link: MessageLink) => {
+    void sendFromDevice(link).then((r) => {
+      if (!r) return;
+      setMessages((prev) => prev.map((m) => m.id !== messageId ? m : {
+        ...m,
+        content: `${m.content}\n\n${r.text}`,
+        links: r.ok ? m.links?.filter((l) => l !== link) : m.links,
+      }));
+    });
   }, []);
   const [files, setFiles] = useState<(Attachment & { size: number })[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
@@ -713,8 +724,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 // Outreach deep links (WhatsApp, dialer, SMS) with a number open straight
                 // away. Several recipients open one after another: the next one opens
                 // when the user comes back from the app (see the visibility effect).
+                // In the Android app SMS and calls leave from the phone itself; the
+                // outcome is added to the reply rather than opening Messages or the dialer.
+                links.filter((l) => !l.missingPhone && deviceSendable(l)).forEach((l) => sendDirect(assistantId, l));
                 const outreach = links
-                  .filter((l) => (l.action === "whatsapp" || l.action === "call" || l.action === "sms") && !l.missingPhone)
+                  .filter((l) => (l.action === "whatsapp" || l.action === "call" || l.action === "sms") && !l.missingPhone && !deviceSendable(l))
                   .map((l) => l.nativeUrl || l.url)
                   .filter((u) => /\d{7,15}/.test(u) && /^(whatsapp|tel|sms):/i.test(u));
                 if (outreach.length) {
@@ -781,7 +795,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setIsStreaming(false);
       }
     }
-  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, contacts, modeId, agent]);
+  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, contacts, modeId, agent, sendDirect]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -1127,7 +1141,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} />
+          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} onSendDirect={sendDirect} />
         ))}
 
         {pendingActions.map((a) => (
@@ -1400,10 +1414,12 @@ function MessageBubble({
   message,
   session,
   onAddContact,
+  onSendDirect,
 }: {
   message: Message;
   session: any;
   onAddContact?: (c: { name: string; phone?: string; email?: string; notes?: string }) => void;
+  onSendDirect: (messageId: string, link: MessageLink) => void;
 }) {
   const isUser = message.role === "user";
   return (
@@ -1491,7 +1507,9 @@ function MessageBubble({
                       const isEmail = link.action === "email" || link.url.startsWith("mailto:");
 
                       const handleClick = () => {
-                        if (link.nativeUrl) {
+                        if (deviceSendable(link)) {
+                          onSendDirect(message.id, link);
+                        } else if (link.nativeUrl) {
                           try { window.location.href = link.nativeUrl; } catch {}
                           setTimeout(() => {
                             try { window.open(link.url, "_blank", "noopener,noreferrer"); } catch {}

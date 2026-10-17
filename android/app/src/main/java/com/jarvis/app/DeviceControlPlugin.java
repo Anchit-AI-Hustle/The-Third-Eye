@@ -1,6 +1,15 @@
 package com.jarvis.app;
 
+import android.Manifest;
+import android.app.Activity;
 import android.app.NotificationChannel;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.telephony.SmsManager;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -14,12 +23,18 @@ import android.provider.Settings;
 import android.view.WindowManager;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+
+import java.util.ArrayList;
 
 /**
  * Native device control for JARVIS. Web APIs cover a lot; the LED torch,
@@ -27,8 +42,18 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *
  * Wi-Fi / Bluetooth radios cannot be toggled by a third-party app on modern
  * Android — we open the matching Settings pane instead of lying.
+ *
+ * SMS and calls go out over the phone's own network with no app opening,
+ * after a one-time permission. An SMS resolves only once the network has
+ * accepted every part, so "sent" is never claimed early.
  */
-@CapacitorPlugin(name = "DeviceControl")
+@CapacitorPlugin(
+    name = "DeviceControl",
+    permissions = {
+        @Permission(alias = "sms", strings = { Manifest.permission.SEND_SMS }),
+        @Permission(alias = "phone", strings = { Manifest.permission.CALL_PHONE }),
+    }
+)
 public class DeviceControlPlugin extends Plugin {
     private static final String CHANNEL_ID = "jarvis_device";
     private boolean torchOn = false;
@@ -194,5 +219,112 @@ public class DeviceControlPlugin extends Plugin {
             }
         } catch (Exception ignored) { }
         call.resolve(ret);
+    }
+
+    private static final String SMS_SENT = "com.jarvis.app.SMS_SENT";
+    private static final long SMS_TIMEOUT_MS = 30_000;
+
+    private static JSObject failure(String error) {
+        JSObject ret = new JSObject();
+        ret.put("ok", false);
+        ret.put("error", error);
+        return ret;
+    }
+
+    @PluginMethod
+    public void sendSms(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) {
+            requestPermissionForAlias("sms", call, "smsPermission");
+            return;
+        }
+        deliverSms(call);
+    }
+
+    @PermissionCallback
+    private void smsPermission(PluginCall call) {
+        if (getPermissionState("sms") == PermissionState.GRANTED) deliverSms(call);
+        else call.resolve(failure("SMS permission was not granted"));
+    }
+
+    private void deliverSms(PluginCall call) {
+        String to = call.getString("to", "");
+        String message = call.getString("message", "");
+        if (to.isEmpty() || message.isEmpty()) {
+            call.resolve(failure("A number and a message are needed"));
+            return;
+        }
+        try {
+            Context ctx = getContext();
+            SmsManager sms = Build.VERSION.SDK_INT >= 31 ? ctx.getSystemService(SmsManager.class) : SmsManager.getDefault();
+            ArrayList<String> parts = sms.divideMessage(message);
+            String action = SMS_SENT + "." + System.nanoTime();
+            final int[] pending = { parts.size() };
+            final boolean[] done = { false };
+            Handler handler = new Handler(Looper.getMainLooper());
+            BroadcastReceiver receiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context c, Intent intent) {
+                    if (done[0]) return;
+                    if (getResultCode() != Activity.RESULT_OK) {
+                        finish(c, this, handler, done, call, failure("The network did not accept the SMS (code " + getResultCode() + ")"));
+                    } else if (--pending[0] == 0) {
+                        JSObject ret = new JSObject();
+                        ret.put("ok", true);
+                        finish(c, this, handler, done, call, ret);
+                    }
+                }
+            };
+            ContextCompat.registerReceiver(ctx, receiver, new IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED);
+            handler.postDelayed(() -> finish(ctx, receiver, handler, done, call, failure("No confirmation from the network")), SMS_TIMEOUT_MS);
+            ArrayList<PendingIntent> sent = new ArrayList<>();
+            for (int i = 0; i < parts.size(); i++) {
+                Intent intent = new Intent(action).setPackage(ctx.getPackageName());
+                sent.add(PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+            }
+            sms.sendMultipartTextMessage(to, null, parts, sent, null);
+        } catch (Exception e) {
+            call.resolve(failure(e.getMessage()));
+        }
+    }
+
+    private static void finish(Context ctx, BroadcastReceiver receiver, Handler handler, boolean[] done, PluginCall call, JSObject result) {
+        if (done[0]) return;
+        done[0] = true;
+        handler.removeCallbacksAndMessages(null);
+        try { ctx.unregisterReceiver(receiver); } catch (IllegalArgumentException ignored) { }
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void call(PluginCall call) {
+        if (getPermissionState("phone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("phone", call, "phonePermission");
+            return;
+        }
+        placeCall(call);
+    }
+
+    @PermissionCallback
+    private void phonePermission(PluginCall call) {
+        if (getPermissionState("phone") == PermissionState.GRANTED) placeCall(call);
+        else call.resolve(failure("Phone permission was not granted"));
+    }
+
+    private void placeCall(PluginCall call) {
+        String number = call.getString("number", "");
+        if (number.isEmpty()) {
+            call.resolve(failure("A number is needed"));
+            return;
+        }
+        try {
+            Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(number)));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.resolve(failure(e.getMessage()));
+        }
     }
 }
