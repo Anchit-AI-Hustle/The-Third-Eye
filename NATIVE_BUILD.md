@@ -14,6 +14,14 @@ npm run cap:add:android     # creates android/ (requires Android Studio + JDK 17
 npm run cap:sync
 ```
 
+## Android without a local SDK
+
+The **Android APK** workflow (`.github/workflows/android-apk.yml`) builds a
+debug APK on GitHub's runner for free. Run it from the Actions tab (or it runs
+on any change to `android/`), download the `jarvis-debug-apk` artifact on the
+phone, and allow installs from that source. A store release still needs the
+signed bundle below.
+
 ## Build & run
 
 ```bash
