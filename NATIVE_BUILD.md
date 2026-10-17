@@ -95,3 +95,14 @@ service typed `microphone`, started when capture begins and stopped with it.
 `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE` are declared for it, but
 the service class is not written yet — so on Android, capture still stops when
 the app is backgrounded, exactly as it does in a browser tab.
+
+## TestFlight (one-tap iPhone install)
+
+`.github/workflows/ios-testflight.yml` signs the app and uploads it to
+TestFlight. It does nothing until the Apple Developer Program ($99/yr) secrets
+listed at the top of the workflow are set. After enrolling: create the app in
+App Store Connect with the bundle ID from `capacitor.config.ts` (a generic ID
+like `com.jarvis.app` may already be taken; change `appId` and the Xcode
+bundle ID together if so), add the four secrets, run the workflow, then invite
+testers in App Store Connect -> TestFlight.
+
