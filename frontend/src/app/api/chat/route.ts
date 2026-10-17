@@ -4,7 +4,7 @@ import { explicitlyRequested } from "@/lib/explicitRequest";
 import { runConfirmedAction } from "@/lib/confirmedActions";
 import { AUTOPILOT_PREFIX } from "@/lib/taskAutopilot";
 import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
-import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart } from "@/lib/shopping";
+import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart, type CartItem } from "@/lib/shopping";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
@@ -1705,7 +1705,7 @@ async function shoppingTool(email: string, input: { action?: string; query?: str
   }
   const cart = await loadCart(email);
   if (action === "view") return { result: cartSummary(cart) };
-  let next = cart;
+  let next: CartItem[];
   if (action === "add") {
     let url: URL | null = null;
     try { url = new URL(input.url ?? ""); } catch { /* checked below */ }
