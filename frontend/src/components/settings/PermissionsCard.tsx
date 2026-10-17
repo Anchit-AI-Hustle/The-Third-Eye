@@ -96,7 +96,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Documents, Files & Media Vault",
     description: "Access and index offline documents, PDFs, photos, and local assets for JARVIS knowledge.",
     icon: FolderOpen,
-    devicePathHint: "iOS: Settings → JARVIS OS → Photos & Files | Android: Settings → Apps → JARVIS OS → Permissions → Files and media",
+    devicePathHint: "iOS: Settings → The Third Eye → Photos & Files | Android: Settings → Apps → The Third Eye → Permissions → Files and media",
     capabilities: ["files", "photos"],
   },
   {
@@ -104,7 +104,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Camera & Optical Vision",
     description: "Live camera capture, document OCR, visual scene analysis, and screen sharing.",
     icon: Camera,
-    devicePathHint: "iOS: Settings → JARVIS OS → Camera | Android: Settings → Apps → JARVIS OS → Permissions → Camera",
+    devicePathHint: "iOS: Settings → The Third Eye → Camera | Android: Settings → Apps → The Third Eye → Permissions → Camera",
     capabilities: ["camera", "screen"],
   },
   {
@@ -112,7 +112,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Microphone & Voice Intelligence",
     description: "Hands-free wake word detection, voice dictation, and ambient acoustic processing.",
     icon: Mic,
-    devicePathHint: "iOS: Settings → JARVIS OS → Microphone | Android: Settings → Apps → JARVIS OS → Permissions → Microphone",
+    devicePathHint: "iOS: Settings → The Third Eye → Microphone | Android: Settings → Apps → The Third Eye → Permissions → Microphone",
     capabilities: ["microphone"],
   },
   {
@@ -120,7 +120,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Location & Spatial Navigation",
     description: "GPS geofencing, precise location, local weather, commute alerts, and ambient context.",
     icon: MapPin,
-    devicePathHint: "iOS: Settings → JARVIS OS → Location | Android: Settings → Apps → JARVIS OS → Permissions → Location",
+    devicePathHint: "iOS: Settings → The Third Eye → Location | Android: Settings → Apps → The Third Eye → Permissions → Location",
     capabilities: ["location"],
   },
   {
@@ -128,7 +128,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Contacts & Direct Outreach",
     description: "Phonebook lookup for instant dialing, automated WhatsApp dispatch, and SMS messages.",
     icon: Users,
-    devicePathHint: "iOS: Settings → JARVIS OS → Contacts | Android: Settings → Apps → JARVIS OS → Permissions → Contacts",
+    devicePathHint: "iOS: Settings → The Third Eye → Contacts | Android: Settings → Apps → The Third Eye → Permissions → Contacts",
     capabilities: ["contacts"],
   },
   {
@@ -136,7 +136,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Alerts, Briefings & Clipboard",
     description: "Push notifications for reminders, daily executive briefings, and clipboard integration.",
     icon: Bell,
-    devicePathHint: "iOS: Settings → JARVIS OS → Notifications | Android: Settings → Apps → JARVIS OS → Notifications",
+    devicePathHint: "iOS: Settings → The Third Eye → Notifications | Android: Settings → Apps → The Third Eye → Notifications",
     capabilities: ["notifications", "clipboard"],
   },
   {
@@ -144,7 +144,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Hardware & Physical Controls",
     description: "Bluetooth IoT hubs, shake-to-activate motion gestures, haptics, wake lock, and power.",
     icon: Radio,
-    devicePathHint: "iOS: Settings → JARVIS OS → Bluetooth & Motion | Android: Settings → Apps → JARVIS OS → Permissions → Nearby devices",
+    devicePathHint: "iOS: Settings → The Third Eye → Bluetooth & Motion | Android: Settings → Apps → The Third Eye → Permissions → Nearby devices",
     capabilities: ["bluetooth", "motion", "wakeLock", "vibration", "battery"],
   },
 ];
@@ -430,10 +430,10 @@ export function PermissionsCard() {
         <Info size={14} className="text-[#4FC3F7] flex-none" />
         <span className="font-medium text-text-primary">Where to find these in your phone or laptop:</span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
-          iOS: Settings → JARVIS OS
+          iOS: Settings → The Third Eye
         </span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
-          Android: Settings → Apps → JARVIS OS → Permissions
+          Android: Settings → Apps → The Third Eye → Permissions
         </span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
           Laptop: Browser Address Bar 🔒 / 🎛️ → Permissions
@@ -519,7 +519,7 @@ export function PermissionsCard() {
                 <li>Tap <strong>aA</strong> in the Safari address bar (left or bottom).</li>
                 <li>Tap <strong>Website Settings</strong>.</li>
                 <li>Set <strong>Camera</strong>, <strong>Microphone</strong> &amp; <strong>Location</strong> to <strong>Allow</strong>.</li>
-                <li>Or open iPhone <strong>Settings → JARVIS OS</strong> (or Safari) to toggle access.</li>
+                <li>Or open iPhone <strong>Settings → The Third Eye</strong> (or Safari) to toggle access.</li>
               </ol>
             </div>
 
@@ -571,7 +571,7 @@ export function PermissionsCard() {
               <ol className="list-decimal list-inside text-text-muted space-y-1 text-[11px] leading-relaxed">
                 <li>Tap the <strong>Padlock 🔒 or Tune icon</strong> next to the URL.</li>
                 <li>Tap <strong>Permissions</strong> → Enable <strong>Camera, Microphone &amp; Location</strong>.</li>
-                <li>Or open <strong>Settings → Apps → JARVIS OS → Permissions</strong>.</li>
+                <li>Or open <strong>Settings → Apps → The Third Eye → Permissions</strong>.</li>
               </ol>
             </div>
           </div>

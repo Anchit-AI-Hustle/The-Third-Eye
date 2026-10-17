@@ -12,8 +12,8 @@ describe("PermissionsCard & Device App Settings", () => {
   it("renders Phone App Settings header and platform guide", () => {
     render(<PermissionsCard />);
     expect(screen.getByText("Phone App Settings & Device Access")).toBeInTheDocument();
-    expect(screen.getAllByText(/iOS: Settings → JARVIS OS/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Android: Settings → Apps → JARVIS OS → Permissions/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/iOS: Settings → The Third Eye/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Android: Settings → Apps → The Third Eye → Permissions/).length).toBeGreaterThan(0);
   });
 
   it("renders categorized permissions for Documents, Camera, Location, Contacts, Audio, etc.", () => {

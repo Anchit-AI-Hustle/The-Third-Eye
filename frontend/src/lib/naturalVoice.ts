@@ -88,18 +88,20 @@ export async function speakNatural(text: string, o: { volume?: number; onStart?:
   const sentences = splitSentences(text);
   let url = await render(tts, sentences[0] ?? "");
   if (!url) return false;
-  o.onStart?.();
   for (let i = 0; url && id === generation; i++) {
     // The next sentence renders while this one plays.
     const pending = i + 1 < sentences.length ? render(tts, sentences[i + 1]) : null;
     const playing = url;
-    await new Promise<void>((done) => {
+    const played = await new Promise<boolean>((done) => {
       const a = new Audio(playing);
       a.volume = o.volume ?? 1;
       current = a;
-      a.onended = a.onerror = () => { URL.revokeObjectURL(playing); done(); };
-      a.play().catch(() => done());
+      a.onended = a.onerror = () => { URL.revokeObjectURL(playing); done(true); };
+      // A phone refuses playback it doesn't count as started by a tap.
+      a.play().then(() => { if (i === 0) o.onStart?.(); }, () => { URL.revokeObjectURL(playing); done(false); });
     });
+    // Refused on the first sentence: hand the whole reply to the system voice.
+    if (!played && i === 0) { current = null; return false; }
     url = pending ? await pending : null;
   }
   if (id === generation) current = null;

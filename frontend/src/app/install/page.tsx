@@ -3,7 +3,7 @@ import { InstallClient } from "@/components/install/InstallClient";
 
 export const metadata = {
   title: "Get the app - The Third Eye",
-  description: "Install JARVIS on Android with one tap, or add it to your iPhone home screen.",
+  description: "Install The Third Eye on Android with one tap, or add it to your iPhone home screen.",
 };
 
 export default function InstallPage() {
@@ -15,7 +15,7 @@ export default function InstallPage() {
         </Link>
         <h1 className="font-display text-3xl font-semibold text-text-primary mt-8">Get the app</h1>
         <p className="text-text-secondary text-sm mt-2 mb-10">
-          JARVIS on your phone, full screen, with voice. The app always runs the latest version, so you install it once.
+          The Third Eye on your phone, full screen, with voice. The app always runs the latest version, so you install it once.
         </p>
         <InstallClient />
       </div>

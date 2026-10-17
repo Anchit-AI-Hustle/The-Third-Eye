@@ -9,7 +9,7 @@ describe("the iPhone install profile", () => {
     expect(xml).toContain("<key>PayloadType</key><string>Configuration</string>");
     expect(xml).toContain("<key>PayloadType</key><string>com.apple.webClip.managed</string>");
     expect(xml).toContain("<key>URL</key><string>https://the-third-eye.anchit-tandon.com/dashboard</string>");
-    expect(xml).toContain("<key>Label</key><string>JARVIS</string>");
+    expect(xml).toContain("<key>Label</key><string>The Third Eye</string>");
     expect(xml).toContain("<key>FullScreen</key><true/>");
     expect(xml).toContain("<key>Icon</key><data>aWNvbg==</data>");
   });

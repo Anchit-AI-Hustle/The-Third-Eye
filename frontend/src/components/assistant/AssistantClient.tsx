@@ -10,6 +10,7 @@ import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
 import { useChatTaskSync } from "@/hooks/useChatTaskSync";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
+import { micButton } from "@/lib/micButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
@@ -1312,14 +1313,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   </button>
                 )}
               </div>
-              {stt.supported && (
-                <button onClick={toggleDictate}
-                  title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate - speech fills the box, doesn't send"}
-                  className={cn("flex-none p-1.5 rounded-input transition-colors",
-                    micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
-                  {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
-                </button>
-              )}
+              {stt.supported && (() => {
+                const m = micButton(micOn, voiceMode);
+                return (
+                  <button onClick={toggleDictate} title={m.title} aria-pressed={m.live}
+                    className={cn("flex-none p-1.5 rounded-input transition-colors",
+                      m.tone === "dictate" ? "text-accent-blue bg-accent-blue/10"
+                      : m.tone === "call" ? "text-success bg-success/10 animate-pulse"
+                      : "text-text-muted hover:text-text-secondary")}>
+                    {m.live ? <Mic size={15} /> : <MicOff size={15} />}
+                  </button>
+                );
+              })()}
               <button
                 onClick={async () => {
                   if (wakeEnabled) {
