@@ -10,7 +10,9 @@
 
 export interface EpisodeShot {
   title: string;
-  clipUrl: string;
+  /** A rendered clip. Without one the shot is drawn in code for `seconds`. */
+  clipUrl?: string;
+  seconds?: number;
   narration: string;
   voiceUrl?: string;
 }
@@ -53,6 +55,34 @@ export function planTimeline(shots: { clip: number; voice: number }[], cards = t
   });
   if (cards) segs.push({ kind: "end", start: t, end: t + END_SECONDS });
   return segs;
+}
+
+const DRAWN_SECONDS = 5;
+
+/** How long each shot runs before voice-over: its clip, else its planned length. */
+export function shotLengths(shots: { clip?: number; seconds?: number }[]): number[] {
+  return shots.map((s) => s.clip ?? s.seconds ?? DRAWN_SECONDS);
+}
+
+/**
+ * The look of a shot drawn in code, when no clip was rendered: a slowly
+ * turning gradient in the scene's own colours and soft orbs drifting across it.
+ * Seeded by the scene, so a rebuild draws the same film.
+ */
+export function drawnScene(index: number, title: string) {
+  let h = 2166136261 ^ index;
+  for (let i = 0; i < title.length; i++) h = Math.imul(h ^ title.charCodeAt(i), 16777619);
+  const rand = () => { h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const hue = Math.floor(rand() * 360);
+  const colors = [
+    `hsl(${hue} 55% 14%)`,
+    `hsl(${(hue + 40 + Math.floor(rand() * 60)) % 360} 60% 24%)`,
+    `hsl(${(hue + 180) % 360} 85% 62%)`,
+  ];
+  const orbs = Array.from({ length: 5 + Math.floor(rand() * 4) }, () => ({
+    x: rand(), y: rand(), r: 0.08 + rand() * 0.22, dx: (rand() - 0.5) * 0.06, dy: (rand() - 0.5) * 0.06,
+  }));
+  return { colors, orbs, spin: (rand() - 0.5) * 0.2 };
 }
 
 export const canvasSize = (aspect: Aspect) => (aspect === "9:16" ? { W: 720, H: 1280 } : { W: 1280, H: 720 });
@@ -156,16 +186,17 @@ export async function assembleEpisode(opts: {
   const { mime, ext } = pickFormat();
 
   const ctx = new AudioContext();
-  const videos: HTMLVideoElement[] = [];
+  const videos: (HTMLVideoElement | null)[] = [];
   let raf = 0;
   try {
-    for (const [i, s] of opts.shots.entries()) videos.push(await loadClip(s.clipUrl, i + 1));
+    for (const [i, s] of opts.shots.entries()) videos.push(s.clipUrl ? await loadClip(s.clipUrl, i + 1) : null);
     const voices = await Promise.all(
       opts.shots.map((s, i) => (s.voiceUrl ? loadVoice(ctx, s.voiceUrl, i + 1) : Promise.resolve(null))),
     );
     const music = opts.soundtrack ? await loadSoundtrack(ctx, opts.soundtrack.url) : null;
     const reel = opts.aspect === "9:16";
-    const segs = planTimeline(videos.map((v, i) => ({ clip: v.duration, voice: voices[i]?.duration ?? 0 })), !reel);
+    const lengths = shotLengths(opts.shots.map((s, i) => ({ clip: videos[i]?.duration, seconds: s.seconds })));
+    const segs = planTimeline(lengths.map((clip, i) => ({ clip, voice: voices[i]?.duration ?? 0 })), !reel);
     const total = segs[segs.length - 1].end;
 
     const { W, H } = canvasSize(opts.aspect ?? "16:9");
@@ -194,6 +225,25 @@ export async function assembleEpisode(opts: {
       g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
       const f = coverFit(v.videoWidth, v.videoHeight, W, H);
       g.drawImage(v, f.x, f.y, f.w, f.h);
+    };
+    const looks = opts.shots.map((s, i) => drawnScene(i, s.title));
+    const drawn = (i: number, t: number) => {
+      const { colors, orbs, spin } = looks[i];
+      const a = t * spin;
+      const bg = g.createLinearGradient(W / 2 - Math.cos(a) * W, H / 2 - Math.sin(a) * H, W / 2 + Math.cos(a) * W, H / 2 + Math.sin(a) * H);
+      bg.addColorStop(0, colors[0]); bg.addColorStop(1, colors[1]);
+      g.fillStyle = bg; g.fillRect(0, 0, W, H);
+      g.globalCompositeOperation = "lighter";
+      for (const o of orbs) {
+        const x = ((o.x + o.dx * t) % 1 + 1) % 1 * W, y = ((o.y + o.dy * t) % 1 + 1) % 1 * H, r = o.r * Math.min(W, H);
+        const glow = g.createRadialGradient(x, y, 0, x, y, r);
+        glow.addColorStop(0, colors[2]); glow.addColorStop(1, "transparent");
+        g.globalAlpha = 0.18; g.fillStyle = glow; g.fillRect(x - r, y - r, 2 * r, 2 * r);
+      }
+      g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+      g.textAlign = "center"; g.fillStyle = "#F5F0E1";
+      g.font = `bold ${Math.round((52 + Math.min(t, 6)) * u)}px system-ui, -apple-system, sans-serif`;
+      wrap(g, opts.shots[i].title, W - 200 * u).slice(0, 3).forEach((l, k, all) => g.fillText(l, W / 2, H * 0.42 - (all.length - 1) * 32 * u + k * 64 * u));
     };
     const subtitle = (text: string) => {
       g.font = `600 ${Math.round(30 * u)}px system-ui, -apple-system, sans-serif`; g.textAlign = "center";
@@ -255,8 +305,11 @@ export async function assembleEpisode(opts: {
         const seg = segs.find((s) => t < s.end)!;
         if (seg.kind === "shot") {
           const i = seg.shot!;
-          if (playing !== i) { playing = i; videos[i].currentTime = 0; void videos[i].play(); }
-          frame(videos[i]);
+          const v = videos[i];
+          if (v) {
+            if (playing !== i) { playing = i; v.currentTime = 0; void v.play(); }
+            frame(v);
+          } else drawn(i, t - seg.start);
           if (opts.shots[i].narration) subtitle(opts.shots[i].narration);
         } else {
           card(opts.title, seg.kind === "end" ? "Made with The Third Eye" : "");
@@ -275,7 +328,7 @@ export async function assembleEpisode(opts: {
     return { blob: await done, ext };
   } finally {
     cancelAnimationFrame(raf);
-    for (const v of videos) { v.pause(); URL.revokeObjectURL(v.src); }
+    for (const v of videos) if (v) { v.pause(); URL.revokeObjectURL(v.src); }
     await ctx.close().catch(() => {});
   }
 }

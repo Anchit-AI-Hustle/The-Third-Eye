@@ -1639,6 +1639,7 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
   try {
     const { elevenLabsConfigured, composeElevenLabs } = await import("@/lib/music/elevenlabs");
     const { storeStudioAudio, audioPath } = await import("@/lib/music/studioAudio");
+    const { replicateConfigured } = await import("@/lib/replicate");
     const db = getDb();
     if (elevenLabsConfigured() && db && userId) {
       const song = await composeElevenLabs({
@@ -1651,6 +1652,16 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
       const url = audioPath(id);
       return {
         result: `Track ready. Put this exact URL in your reply:\n${url}`,
+        sideEffect: { type: "media", data: { kind: "audio", url, alt: description } },
+      };
+    }
+    if (!replicateConfigured() && db && userId) {
+      // No music model: compose the instrumental in code and say so.
+      const { renderWav, specFromText } = await import("@/lib/music/synth");
+      const wav = Buffer.from(renderWav(specFromText(description, 30)));
+      const url = audioPath(await storeStudioAudio(db, userId, wav, { audioType: "audio/wav", provider: "code" }));
+      return {
+        result: `Track ready: a 30-second instrumental composed in code (synth parts, no vocals), because no music AI is set up. Say that plainly, and put this exact URL in your reply:\n${url}`,
         sideEffect: { type: "media", data: { kind: "audio", url, alt: description } },
       };
     }

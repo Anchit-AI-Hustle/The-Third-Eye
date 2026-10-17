@@ -67,6 +67,19 @@ describe("chat tools", () => {
     expect(r.text).toContain("₹11,800.00");
   });
 
+  it("makes a real track in code when no music AI is set up", async () => {
+    tables = {};
+    vi.stubEnv("ELEVENLABS_API_KEY", "");
+    vi.stubEnv("REPLICATE_API_TOKEN", "");
+    calls = [{ name: "generate", args: { type: "music", prompt: "chill lofi beat at 80 bpm" } }];
+    const r = await run();
+    expect(r.results[0]).toMatch(/composed in code/);
+    expect(r.results[0]).toMatch(/\/api\/tools\/music\/audio\//);
+    const stored = (tables.music_studio_audio_chunks ?? []).map((c) => c.data as Buffer);
+    expect(Buffer.concat(stored).subarray(0, 4).toString()).toBe("RIFF");
+    expect(r.done.sideEffects).toEqual([expect.objectContaining({ type: "media", data: expect.objectContaining({ kind: "audio" }) })]);
+  });
+
   it("will not save an untitled task or an empty note", async () => {
     calls = [
       { name: "manage_tasks", args: { action: "create", title: "  " } },

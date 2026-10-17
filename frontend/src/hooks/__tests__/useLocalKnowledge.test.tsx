@@ -39,4 +39,22 @@ describe("knowledge documents with a database", () => {
     const { dataInsert } = await import("@/lib/dataClient");
     expect(dataInsert).not.toHaveBeenCalled();
   });
+
+  it("stores a Word file's real text, and marks an unreadable PDF failed instead of ready", async () => {
+    rows = [];
+    const { strToU8, zipSync } = await import("fflate");
+    const docx = zipSync({ "word/document.xml": strToU8('<w:document><w:body><w:p><w:r><w:t>Board meeting on Friday</w:t></w:r></w:p></w:body></w:document>') });
+    const { result } = renderHook(() => useLocalKnowledge());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    let made: Awaited<ReturnType<typeof result.current.upload>> = [];
+    await act(async () => {
+      made = await result.current.upload([
+        new File([docx], "agenda.docx"),
+        new File(["%PDF-1.4 garbage \x00\x01"], "scan.pdf", { type: "application/pdf" }),
+      ]);
+    });
+    expect(made[0]).toMatchObject({ title: "agenda.docx", processing_status: "ready", content: "Board meeting on Friday" });
+    expect(made[1]).toMatchObject({ title: "scan.pdf", processing_status: "failed", content: "" });
+    expect(made[1].error).toMatch(/couldn't read/i);
+  });
 });

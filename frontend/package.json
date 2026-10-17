@@ -29,6 +29,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "fflate": "0.8.3",
     "geist": "^1.3.1",
     "gsap": "^3.15.0",
     "highlight.js": "^11.12.0",
@@ -46,6 +47,7 @@
     "supabase": "^2.120.0",
     "tailwind-merge": "^3.7.0",
     "three": "^0.186.1",
+    "unpdf": "1.8.1",
     "web-push": "^3.6.7",
     "zod": "^3.23.8"
   },
