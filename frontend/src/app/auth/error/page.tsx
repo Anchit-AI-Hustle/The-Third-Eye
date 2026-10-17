@@ -5,16 +5,27 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 // NextAuth redirects here with ?error=<code>. Map each code to something the
-// operator can act on, and always surface the raw code.
+// operator can act on, and always surface the raw code — a generic "an error
+// occurred" hides whether the problem is missing server env or Google declining the sign-in.
+//
 const ERRORS: Record<string, { title: string; detail: string }> = {
   Configuration: {
     title: "Server isn't configured for sign-in",
     detail:
-      "Sign-in needs DATABASE_URL, NEXTAUTH_SECRET and NEXTAUTH_URL. Set them in the deployment environment.",
+      "Sign-in needs GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET and NEXTAUTH_URL. Set them in the deployment environment.",
   },
-  CredentialsSignin: {
-    title: "That number and PIN did not work",
-    detail: "Go back and type your mobile number and your 4-digit PIN again.",
+  AccessDenied: {
+    title: "Google didn't allow that sign-in",
+    detail:
+      "Google refused this account. Sign-in only needs your name and email. If you were connecting Gmail, that access is still under Google's review, so only a listed test user can allow it until the review finishes.",
+  },
+  OAuthSignin: {
+    title: "Couldn't start Google sign-in",
+    detail: "The Google client isn't configured. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+  },
+  OAuthCallback: {
+    title: "Google didn't finish signing you in",
+    detail: "The return from Google failed. Try again. If it keeps happening, the redirect URL on the Google client doesn't match this site.",
   },
   SessionRequired: {
     title: "Please sign in to see that page",

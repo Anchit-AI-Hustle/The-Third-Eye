@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONNECT_SCOPES, INGESTION_SCOPE_LIST } from "@/lib/googleToken";
+import { GOOGLE_SIGNIN_PARAMS, INGESTION_SCOPE_LIST, SIGNIN_SCOPES } from "@/lib/googleToken";
 import {
   GMAIL_READONLY_JUSTIFICATION,
   RESTRICTED_GMAIL_SCOPE_LIST,
@@ -18,8 +18,13 @@ describe("OAuth scopes requested of Google", () => {
     ]);
   });
 
-  it("connects with identity plus the feature scopes only", () => {
-    expect(CONNECT_SCOPES).toBe(["openid", "email", "profile", ...INGESTION_SCOPE_LIST].join(" "));
+  it("signs in with name and email only, never a Gmail or Calendar scope", () => {
+    expect(SIGNIN_SCOPES).toBe("openid email profile");
+    expect(GOOGLE_SIGNIN_PARAMS.prompt).toBe("select_account");
+    expect(GOOGLE_SIGNIN_PARAMS.access_type).toBe("online");
+    for (const scope of INGESTION_SCOPE_LIST) {
+      expect(SIGNIN_SCOPES.split(" ")).not.toContain(scope);
+    }
   });
 
   it("does not request broader Calendar, write Gmail or any Chat scope", () => {
