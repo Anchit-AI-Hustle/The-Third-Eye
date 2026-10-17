@@ -172,6 +172,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRef = useRef<HistoryEntry[]>([]);
+  const outreachQueueRef = useRef<string[]>([]);
+  useEffect(() => {
+    const next = () => {
+      if (document.visibilityState !== "visible" || !outreachQueueRef.current.length) return;
+      const url = outreachQueueRef.current.shift()!;
+      setTimeout(() => { try { window.location.href = url; } catch {} }, 700);
+    };
+    document.addEventListener("visibilitychange", next);
+    return () => document.removeEventListener("visibilitychange", next);
+  }, []);
   const [files, setFiles] = useState<(Attachment & { size: number })[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -698,14 +708,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     missingPhone: Boolean(fx.data.missingPhone),
                   }));
 
-                // Auto-dispatch outreach deep links (WhatsApp, dialer, SMS) directly ONLY when a phone number is present
-                const autoOutreach = links.find((l) => l.action === "whatsapp" || l.action === "call" || l.action === "sms");
-                if (autoOutreach && !autoOutreach.missingPhone) {
-                  const targetUri = autoOutreach.nativeUrl || autoOutreach.url;
-                  const hasDigits = /\d{7,15}/.test(targetUri);
-                  if (hasDigits && /^(whatsapp|tel|sms):/i.test(targetUri)) {
-                    try { window.location.href = targetUri; } catch {}
-                  }
+                // Outreach deep links (WhatsApp, dialer, SMS) with a number open straight
+                // away. Several recipients open one after another: the next one opens
+                // when the user comes back from the app (see the visibility effect).
+                const outreach = links
+                  .filter((l) => (l.action === "whatsapp" || l.action === "call" || l.action === "sms") && !l.missingPhone)
+                  .map((l) => l.nativeUrl || l.url)
+                  .filter((u) => /\d{7,15}/.test(u) && /^(whatsapp|tel|sms):/i.test(u));
+                if (outreach.length) {
+                  outreachQueueRef.current = outreach.slice(1);
+                  try { window.location.href = outreach[0]; } catch {}
                 }
 
                 let effectiveContent = fullText;
