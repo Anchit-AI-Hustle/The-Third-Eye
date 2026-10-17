@@ -411,6 +411,16 @@ body {
               border-color var(--dur-interaction) var(--ease-depth);
   will-change: transform;
 }
+/* Scrolling into view: the card swings up into place. Only set once the card
+   has been seen off-screen, so nothing visible on load is hidden first. */
+.card-3d[data-inview="false"] {
+  opacity: 0;
+  transform: perspective(900px) rotateX(18deg) translateY(28px) scale(0.96);
+}
+.card-3d[data-inview] {
+  transition: transform 640ms var(--ease-depth), opacity 520ms var(--ease-depth),
+              box-shadow var(--dur-depth) var(--ease-depth);
+}
 /* While the pointer is down/over, track it immediately instead of easing —
    easing during tracking reads as lag, easing on release reads as settle. */
 .card-3d[data-tracking="true"] { transition: box-shadow var(--dur-depth) var(--ease-depth); }
@@ -539,6 +549,7 @@ body {
     transition: border-color var(--dur-interaction) linear !important;
   }
   .card-3d::after { opacity: 0 !important; }
+  .card-3d[data-inview="false"] { opacity: 1 !important; }
   .depth-1, .depth-2, .depth-3 { transform: none !important; }
   .depth-field { transform: none !important; }
   /* Hold the brackets at their resting length instead of pinning every
