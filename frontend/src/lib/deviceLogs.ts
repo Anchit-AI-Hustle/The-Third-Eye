@@ -5,7 +5,6 @@ import { z } from "zod";
 import { parseLlmJson, validItems } from "@/lib/llmJson";
 import { saveExtractedTasks, type ExtractedTask, type TaskWorkspace } from "@/lib/tasks";
 import { logActivity } from "@/lib/activity";
-import { workContext } from "@/lib/owner";
 
 // AI Log Sync: turn raw device activity logs (what the operator did on the
 // computer/phone the app runs on) into Task Tracker changes — progress updates
@@ -33,9 +32,9 @@ interface OpenTaskRow {
   spoc: string | null;
 }
 
-const systemPrompt = (email: string) => `
+const SYSTEM_PROMPT = `
 You are the user's chief-of-staff AI.
-${workContext(email)}
+Office work means the user's job: their employer, clients, colleagues and professional projects.
 
 You receive (1) their current open tasks and (2) a raw activity log from their
 devices: pages/apps used, on which device, for how long. Update their tracker.
@@ -135,7 +134,7 @@ export async function summarizeDeviceLogs(email: string): Promise<LogSyncResult>
   let raw: string;
   try {
     const out = await llmCascade({
-      system: systemPrompt(email),
+      system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: user }],
       jsonMode: true,
       // 400 log lines can yield many updates; 1500 tokens cut answers off mid-array.

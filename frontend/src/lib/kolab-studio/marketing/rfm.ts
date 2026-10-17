@@ -1,6 +1,6 @@
 // web/lib/marketing/rfm.ts
 // RFM segmentation + lifecycle stages for the Commerce/Local packs (spec §5, §6).
-// Logic adapted from the vahdam-lifecycle-os retention engine (segment taxonomy, lifecycle
+// Logic adapted from the lifecycle-os retention engine (segment taxonomy, lifecycle
 // stages), generalised and brand-agnostic — no product/brand facts are copied (their own
 // zero-fabrication rule). Pure functions; unit-tested.
 

@@ -1,7 +1,7 @@
 // Kolab — the brand marketing AI. A universal, brand-ADAPTABLE lifecycle engine:
 // give it any brand's profile and it produces a complete customer-lifecycle
 // program, creator/influencer campaigns, and a marketing plan. Brand-agnostic by
-// design (defaults to whatever brand you enter — Vahdam or anyone else).
+// design (defaults to whatever brand you enter).
 
 export interface BrandProfile {
   name: string;
