@@ -28,9 +28,9 @@ import { identify } from "@/lib/serverIdentity";
 import { freeNearby, freeNews, freeStockQuote, freeWebSearch } from "@/lib/freeSearch";
 import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
-import { MAX_FILE_CHARS, safeFilename } from "@/lib/fileSave";
+import { MAX_FILE_CHARS, safeFilename, type SavedFile } from "@/lib/fileSave";
 import { FORMULAS, gstBreakup, toGstSlab } from "@/lib/calculators/formulas";
-import { bySlug as calculatorsBySlug } from "@/lib/calculators/data";
+import { bySlug as calculatorsBySlug, calculators } from "@/lib/calculators/data";
 import { normalizePrompt } from "@/lib/promptNormalizer";
 import { randomUUID } from "crypto";
 import { planDeviceControl, protocolActions } from "@/lib/devicePlan";
@@ -43,13 +43,17 @@ import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export const ESSENTIAL_CONTACTS = [
-  { id: "c_mom", name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact" },
-  { id: "c_dad", name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact" },
-  { id: "c_rohit", name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact" },
-  { id: "c_aviral", name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging" },
-  { id: "c_emergency", name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line" },
-];
+// A recipient names a contact only by its full name, first name or relationship.
+// Substring matching sent "moment@x.com" to whoever was saved as "Mom".
+function matchContact<T extends { name?: string; relationship?: string }>(pool: T[], raw: string): T | undefined {
+  const q = raw.trim().toLowerCase();
+  if (!q) return undefined;
+  return pool.find((c) => {
+    const name = String(c.name ?? "").trim().toLowerCase();
+    if (!name) return false;
+    return name === q || name.split(/\s+/)[0] === q || String(c.relationship ?? "").trim().toLowerCase() === q;
+  });
+}
 
 const SYSTEM_PROMPT = `You are JARVIS — Just A Rather Very Intelligent System — Tony Stark's AI operating system, now serving a new user.
 
@@ -361,6 +365,35 @@ async function sendEmail(accessToken: string | undefined, to: string, subject: s
 
 // ─── Request context ─────────────────────────────────────────────────────────
 
+function validZone(tz?: string): string {
+  try { if (tz) { new Intl.DateTimeFormat("en-IN", { timeZone: tz }); return tz; } } catch {}
+  return "UTC";
+}
+
+function formatWhen(iso: string, tz?: string): string {
+  return new Date(iso).toLocaleString("en-IN", { timeZone: validZone(tz), day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
+}
+
+function localDate(tz?: string): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: validZone(tz) });
+}
+
+// The user's own rows, read from the database by the session identity. The
+// lists the browser sends are a stale copy of one tab's state, so they are
+// only used when there is no database.
+async function storedLists(email: string) {
+  const sb = getDb();
+  if (!sb) return null;
+  const read = async (table: string, order: string, limit: number) => {
+    const { data, error } = await sb.from(table).select("*").eq("user_id", email).order(order, { ascending: false }).limit(limit);
+    return error ? null : (data as any[]);
+  };
+  const [tasks, notes, goals, expenses] = await Promise.all([
+    read("tasks", "created_at", 300), read("notes", "updated_at", 200), read("goals", "created_at", 100), read("expenses", "created_at", 500),
+  ]);
+  return { tasks, notes, goals, expenses };
+}
+
 interface RunContext {
   memoryStore: Record<string, string>;
   tasks: any[];
@@ -375,6 +408,7 @@ interface RunContext {
   email?: string;
   /** Text of the files attached to this message, for tools that work on them. */
   attachedText: string;
+  timezone?: string;
 }
 
 async function runTool(
@@ -405,6 +439,7 @@ async function runTool(
           due_date: input.due_date,
           description: input.description,
         };
+        ctx.tasks.unshift({ ...task, status: "todo" });
         return {
           result: JSON.stringify({ success: true, task }),
           sideEffect: { type: "task_create", data: task },
@@ -448,7 +483,7 @@ async function runTool(
       if (filter === "overdue") filtered = ctx.tasks.filter((t) => t.due_date && new Date(t.due_date) < new Date(now) && t.status !== "done");
       if (input.agent) filtered = filtered.filter((t: any) => t.agent === input.agent);
       const summary = filtered.slice(0, 15).map((t: any) =>
-        `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.agent ? ` · agent:${t.agent}` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status} (id: ${t.id})`
+        `- [${t.priority}] ${t.title}${t.assignee ? ` (${t.assignee})` : ""}${t.agent ? ` · agent:${t.agent}` : ""}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status}${t.id ? ` (id: ${t.id})` : ""}`
       ).join("\n");
       return { result: summary || "No tasks found." };
     }
@@ -457,6 +492,7 @@ async function runTool(
       const action = input.action ?? "search";
       if (action === "create") {
         const note = { title: input.title, content: input.content };
+        ctx.notes.unshift({ id: "", ...note });
         return {
           result: JSON.stringify({ success: true, note }),
           sideEffect: { type: "note_create", data: note },
@@ -484,6 +520,7 @@ async function runTool(
           deadline: input.deadline,
           description: input.description,
         };
+        ctx.goals.unshift(goal);
         return {
           result: JSON.stringify({ success: true, goal }),
           sideEffect: { type: "goal_create", data: goal },
@@ -497,13 +534,16 @@ async function runTool(
         };
       }
       // update
-      const goal = ctx.goals.find((g) => g.id === input.id);
-      const label = goal?.title ?? input.id;
+      const wanted = String(input.title ?? "").trim().toLowerCase();
+      const goal = ctx.goals.find((g) => g.id && g.id === input.id)
+        ?? (wanted ? ctx.goals.find((g) => String(g.title ?? "").toLowerCase() === wanted) ?? ctx.goals.find((g) => String(g.title ?? "").toLowerCase().includes(wanted)) : undefined);
+      if (goal && !goal.id) return { result: `"${goal.title}" was created in this reply, so its progress can only change on the next message. Tell the user it is set up with the starting value they gave.` };
+      if (!goal) return { result: `No goal matching "${input.title ?? input.id}" was found, so nothing was updated. Tell the user; do not claim progress was saved.` };
       return {
-        result: `Goal progress updated for "${label}"`,
+        result: `Goal progress updated for "${goal.title}"`,
         sideEffect: {
           type: "goal_update",
-          data: { id: input.id, delta: input.delta, set_to: input.set_to },
+          data: { id: goal.id, delta: input.delta, set_to: input.set_to },
         },
       };
     }
@@ -520,8 +560,9 @@ async function runTool(
           category: input.category ?? "Other",
           note: input.note,
           gst_rate: rate > 0 ? rate : undefined,
-          spent_on: input.spent_on,
+          spent_on: input.spent_on ?? localDate(ctx.timezone),
         };
+        ctx.expenses.unshift(expense);
         const gstNote = rate > 0 ? ` (incl. ${rate}% GST ≈ ₹${Math.round(gstBreakup(amount, rate, "remove").gst)})` : "";
         return {
           result: JSON.stringify({ success: true, logged: `₹${amount} · ${expense.category}${gstNote}` }),
@@ -529,7 +570,7 @@ async function runTool(
         };
       }
       // summary — this calendar month
-      const month = new Date().toISOString().slice(0, 7);
+      const month = localDate(ctx.timezone).slice(0, 7);
       const rows = (ctx.expenses ?? []).filter((e) => (e.spent_on ?? "").startsWith(month));
       if (rows.length === 0) return { result: `No expenses logged for ${month} yet.` };
       const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -548,12 +589,27 @@ async function runTool(
       // calculator's formula name (gst). Resolve slug→formula, and also accept a
       // bare formula name so either form works.
       const slug = String(input.slug ?? "");
-      const key = calculatorsBySlug[slug]?.formula ?? slug;
-      const calc = FORMULAS[key];
-      if (!calc) return { result: `No calculator named "${input.slug}". Try gst-calculator, income-tax-calculator, emi-calculator, sip-calculator, fd-calculator.` };
+      const spec = calculatorsBySlug[slug] ?? calculatorsBySlug[`${slug}-calculator`] ?? calculators.find((c) => c.formula === slug);
+      const calc = spec ? FORMULAS[spec.formula] : undefined;
+      if (!spec || !calc) return { result: `No calculator named "${input.slug}". Try gst-calculator, income-tax-calculator, emi-calculator, sip-calculator, fd-calculator.` };
+      const given = (input.inputs ?? {}) as Record<string, unknown>;
+      const values: Record<string, number> = {};
+      const missing: string[] = [];
+      for (const i of spec.inputs) {
+        const v = Number(given[i.id]);
+        if (Number.isFinite(v) && given[i.id] !== "" && given[i.id] != null) values[i.id] = v;
+        else if (i.type === "select") values[i.id] = i.default;
+        else missing.push(`${i.id} (${i.label})`);
+      }
+      if (missing.length) {
+        return { result: `${spec.h1} needs ${missing.join(", ")}. It got: ${Object.keys(given).join(", ") || "nothing"}. Ask the user for the missing values; do not guess them.` };
+      }
       try {
-        const out = calc((input.inputs ?? {}) as Record<string, number>);
-        return { result: JSON.stringify({ slug: input.slug, values: out.values, note: out.note }) };
+        const out = calc(values);
+        if (Object.values(out.values).some((v) => typeof v === "number" && !Number.isFinite(v))) {
+          return { result: `${spec.h1} could not work that out from ${JSON.stringify(values)}. Check the numbers with the user.` };
+        }
+        return { result: JSON.stringify({ slug: spec.slug, values: out.values, note: out.note }) };
       } catch (e: any) {
         return { result: `Calculation failed: ${e?.message ?? "bad inputs"}.` };
       }
@@ -596,11 +652,6 @@ async function runTool(
           }
         } catch {}
       }
-      for (const esc of ESSENTIAL_CONTACTS) {
-        if (!pool.some((c: any) => c.name.toLowerCase() === esc.name.toLowerCase())) {
-          pool.push(esc);
-        }
-      }
 
       const query = String(input.query || input.name || "").toLowerCase().trim();
 
@@ -621,7 +672,7 @@ async function runTool(
           const e = String(c.email || "").toLowerCase();
           const p = String(c.phone || "").replace(/\D/g, "");
           const qClean = query.replace(/\D/g, "");
-          return n.includes(query) || query.includes(n) || r.includes(query) || e.includes(query) || (qClean && p.includes(qClean));
+          return (n && n.includes(query)) || (r && r === query) || e.includes(query) || (qClean && p.includes(qClean));
         });
 
         if (!matches.length) {
@@ -653,7 +704,9 @@ async function runTool(
           updated_at: new Date().toISOString(),
         };
 
-        const updated = [...pool, newContact];
+        const digits = (v?: string) => String(v ?? "").replace(/\D/g, "").slice(-10);
+        const same = (c: any) => (phone && digits(c.phone) === digits(phone)) || (!phone && String(c.name ?? "").toLowerCase() === name.toLowerCase());
+        const updated = [...pool.filter((c: any) => !same(c)), newContact];
         ctx.contacts = updated;
 
         if (ctx.email) {
@@ -669,7 +722,7 @@ async function runTool(
         }
 
         return {
-          result: `Contact added and synced: ${name}${phone ? ` (${phone})` : ""}. Available across your phone and laptop.`,
+          result: `Contact added and synced: ${name}${phone ? ` (${phone})` : ""}. Saved to your account.`,
           sideEffect: {
             type: "contact_add",
             data: { contact: newContact },
@@ -704,20 +757,9 @@ async function runTool(
         } catch {}
       }
 
-      // Merge with ESSENTIAL_CONTACTS so Aviral Vahdam, Mom, Rohit, etc. are always present
-      for (const esc of ESSENTIAL_CONTACTS) {
-        if (!contactPool.some((c: any) => c.name.toLowerCase() === esc.name.toLowerCase())) {
-          contactPool.push(esc);
-        }
-      }
 
       if (raw && contactPool.length > 0) {
-        const rawLower = raw.toLowerCase();
-        const matched = contactPool.find((c: any) => {
-          const cName = String(c.name || "").toLowerCase();
-          const cRel = String(c.relationship || "").toLowerCase();
-          return cName === rawLower || rawLower.includes(cName) || cName.includes(rawLower) || cRel === rawLower;
-        });
+        const matched: any = matchContact(contactPool, raw);
         if (matched) {
           resolvedName = matched.name;
           if (action === "email" && matched.email) {
@@ -850,14 +892,14 @@ async function runTool(
         case "video": return await startAssistantMedia(ctx.email, "video", input.prompt ?? input.description ?? "");
         case "qr": return { result: generateQR(input.data ?? "", input.label) };
         case "chart": return { result: createChart(input.title ?? "Chart", input.chart_type ?? "bar", input.data ?? "") };
-        case "invoice": return { result: generateInvoice(input.client ?? "", input.items ?? "", input.tax_rate, input.notes) };
+        case "invoice": return { result: generateInvoice(String(input.client ?? ""), String(input.items ?? ""), input.tax_rate, input.notes) };
         case "resume": return { result: buildResume(input.name ?? "", input.role ?? "", input.experience ?? "", input.skills ?? "", input.education, input.extras) };
         case "screenshot": return { result: await captureScreenshot(input.url ?? "", input.width ?? 1280) };
         case "shorten_url": return { result: await shortenUrl(input.url ?? "") };
         case "form": return { result: createForm(input.title ?? "Form", input.fields ?? "", input.purpose) };
         case "analyze": return { result: analyzeData(input.data ?? "", input.question ?? "") };
-        case "code": return { result: await generateCode(input.task ?? "generate", input.language ?? "typescript", input.description ?? "", input.context) };
-        case "pdf": return { result: generatePdf(input.title ?? "Document", input.content ?? "", input.format ?? "report") };
+        case "code": return { result: await generateCode(input.task ?? "generate", input.language ?? "typescript", input.description ?? input.prompt ?? "", input.context) };
+        case "pdf": return generatePdf(String(input.title ?? "Document"), String(input.content ?? input.prompt ?? input.data ?? ""), input.format ?? "report");
         default: return { result: `Unknown generation type: ${type}. Supported: image, music, video, qr, chart, invoice, resume, screenshot, form, analyze, shorten_url, code, pdf` };
       }
     }
@@ -1027,7 +1069,7 @@ async function runTool(
       return { result: await weeklyReport(input.period ?? "this_week", input.focus, ctx) };
 
     case "emergency_alert":
-      return { result: emergencyAlert(input.message, input.contacts ?? [], ctx) };
+      return emergencyAlert(input.message, ctx);
 
     case "book_reservation": {
       const link = bookReservation(input.type ?? "restaurant", input.query ?? "", input.date, input.guests);
@@ -1172,7 +1214,7 @@ async function setReminder(
     .select("id, fire_at")
     .single();
   if (error) return `Could not save the reminder: ${error.message}`;
-  return `Reminder set for ${new Date(data.fire_at).toLocaleString()}${recurrence ? ` (repeats ${recurrence})` : ""}. (id: ${data.id})`;
+  return `Reminder set for ${formatWhen(data.fire_at, ctx.timezone)}${recurrence ? ` (repeats ${recurrence})` : ""}. (id: ${data.id})`;
 }
 
 async function listReminders(ctx: RunContext): Promise<string> {
@@ -1186,7 +1228,7 @@ async function listReminders(ctx: RunContext): Promise<string> {
     .order("fire_at", { ascending: true });
   if (!data?.length) return "No pending reminders.";
   return data
-    .map((r) => `- ${r.title} · ${new Date(r.fire_at).toLocaleString()}${r.recurrence ? ` (${r.recurrence})` : ""} (id: ${r.id})`)
+    .map((r) => `- ${r.title} · ${formatWhen(r.fire_at, ctx.timezone)}${r.recurrence ? ` (${r.recurrence})` : ""} (id: ${r.id})`)
     .join("\n");
 }
 
@@ -1439,13 +1481,14 @@ async function weeklyReport(period: string, focus: string | undefined, ctx: RunC
   }
 }
 
-function emergencyAlert(message: string | undefined, contacts: string[], ctx: RunContext): string {
-  // Emergency alert system is not yet connected. We open the dialer so the user can call.
-  const defaultMsg = 'Emergency! I need help. My location is being shared.';
-  const alertMsg = message || defaultMsg;
-  const contactList = contacts.length > 0 ? contacts.join(', ') : 'your emergency contacts on file';
-  const location = ctx.location ? `${ctx.location.latitude.toFixed(4)}, ${ctx.location.longitude.toFixed(4)}` : 'your location';
-  return `🚨 **Emergency Alert**\n\nI'm opening your phone's dialer so you can call for help directly. I cannot send alerts on your behalf — please call 112 (or your local emergency number) immediately.\n\nYour message: "${alertMsg}"\nYour location: ${location}\n\nI'll also open WhatsApp so you can message ${contactList}.\n\n_Call 112 now if this is a real emergency._`;
+// Nothing can be sent on the user's behalf, so this opens the dialer on 112
+// and says so plainly, with their location when the app has it.
+function emergencyAlert(message: string | undefined, ctx: RunContext): { result: string; sideEffect: { type: string; data: any } } {
+  const where = ctx.location ? `https://maps.google.com/?q=${ctx.location.latitude.toFixed(5)},${ctx.location.longitude.toFixed(5)}` : null;
+  return {
+    result: `Opening the phone dialer on 112. JARVIS cannot call or alert anyone itself, so the user must press call.${message ? ` Their message: "${message}".` : ""}${where ? ` Their location to read out or share: ${where}` : " Their location is not available to the app."} Tell them to call 112 now if this is a real emergency.`,
+    sideEffect: { type: "open_url", data: { url: "tel:112", label: "Call 112", action: "call", to: "112" } },
+  };
 }
 
 function bookReservation(type: string, query: string, date?: string, guests?: number): { url: string; label: string } {
@@ -1651,11 +1694,14 @@ function createChart(title: string, type: string, dataStr: string): string {
   let items: Array<{ label: string; value: number }> = [];
   try {
     const parsed = JSON.parse(dataStr);
-    if (Array.isArray(parsed)) items = parsed;
+    if (Array.isArray(parsed)) items = parsed.map((p) => ({ label: String(p.label ?? p.name ?? ""), value: Number(p.value) })).filter((i) => Number.isFinite(i.value));
+    else if (parsed && typeof parsed === "object") items = Object.entries(parsed).map(([label, v]) => ({ label, value: Number(v) })).filter((i) => Number.isFinite(i.value));
   } catch {
-    const lines = dataStr.trim().split("\n").filter(Boolean);
+    // One record per line, or "Jan:10,Feb:20" on one line: split on a comma only
+    // when the next field is itself a label:value pair.
+    const lines = dataStr.trim().split(/\n|;|,(?=[^,]*[:=])/).filter((l) => l.trim());
     for (const line of lines) {
-      const parts = line.split(/[,:|\t]/).map((s: string) => s.trim());
+      const parts = line.split(/[,:=|\t]/).map((s: string) => s.trim());
       if (parts.length >= 2) {
         const val = parseFloat(parts[parts.length - 1]);
         if (!isNaN(val)) items.push({ label: parts.slice(0, -1).join(" "), value: val });
@@ -1681,8 +1727,9 @@ function createChart(title: string, type: string, dataStr: string): string {
   return `**${title}**\n\n${lines.join("\n")}`;
 }
 
-function generateInvoice(client: string, itemsStr: string, taxRate?: string, notes?: string): string {
-  const lines = itemsStr.trim().split("\n").filter(Boolean);
+function generateInvoice(client: string, itemsStr: string, taxRate?: unknown, notes?: string): string {
+  const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const lines = itemsStr.trim().split(/\n|;/).filter((l) => l.trim());
   let subtotal = 0;
   const rows = lines.map((line) => {
     const parts = line.split(/[,:|\t]/).map((s: string) => s.trim());
@@ -1691,13 +1738,13 @@ function generateInvoice(client: string, itemsStr: string, taxRate?: string, not
     const price = parseFloat(parts[2]) || 0;
     const total = qty * price;
     subtotal += total;
-    return `| ${name} | ${qty} | $${price.toFixed(2)} | $${total.toFixed(2)} |`;
+    return `| ${name} | ${qty} | ${inr(price)} | ${inr(total)} |`;
   }).join("\n");
-  const tax = taxRate ? parseFloat(taxRate.replace("%", "")) / 100 : 0;
+  const tax = (parseFloat(String(taxRate ?? "").replace("%", "")) || 0) / 100;
   const taxAmount = subtotal * tax;
   const grandTotal = subtotal + taxAmount;
   const invNum = `INV-${Date.now().toString(36).toUpperCase()}`;
-  return `# Invoice\n\n**Invoice #:** ${invNum}\n**Date:** ${new Date().toLocaleDateString()}\n**Client:** ${client}\n\n| Item | Qty | Unit Price | Total |\n|------|-----|-----------|-------|\n${rows}\n\n**Subtotal:** $${subtotal.toFixed(2)}${tax > 0 ? `\n**Tax (${(tax * 100).toFixed(0)}%):** $${taxAmount.toFixed(2)}` : ""}\n**Total:** $${grandTotal.toFixed(2)}\n\n${notes ? `**Notes:** ${notes}` : ""}\n\n*Generated by JARVIS — The Third Eye*`;
+  return `# Invoice\n\n**Invoice #:** ${invNum}\n**Date:** ${new Date().toLocaleDateString("en-IN")}\n**Client:** ${client}\n\n| Item | Qty | Unit Price | Total |\n|------|-----|-----------|-------|\n${rows}\n\n**Subtotal:** ${inr(subtotal)}${tax > 0 ? `\n**Tax (${(tax * 100).toFixed(0)}%):** ${inr(taxAmount)}` : ""}\n**Total:** ${inr(grandTotal)}\n\n${notes ? `**Notes:** ${notes}` : ""}\n\n*Generated by JARVIS, The Third Eye*`;
 }
 
 function buildResume(name: string, role: string, experience: string, skills: string, education?: string, extras?: string): string {
@@ -1781,9 +1828,14 @@ function analyzeData(data: string, question: string): string {
   return report;
 }
 
-function generatePdf(title: string, content: string, format: string): string {
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;line-height:1.6}h1{border-bottom:2px solid #333;padding-bottom:8px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px;text-align:left}</style></head><body><h1>${title}</h1><div>${content.replace(/\n/g, "<br>")}</div></body></html>`;
-  return `**Document Generated**\n\nTitle: ${title}\nFormat: ${format}\n\n[Open in new tab](data:text/html;base64,${Buffer.from(html).toString("base64")})\n\nClick the link to view and print as PDF (use browser Print → Save as PDF).`;
+function generatePdf(title: string, content: string, format: string): { result: string; sideEffect: { type: string; data: SavedFile } } {
+  const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;line-height:1.6}h1{border-bottom:2px solid #333;padding-bottom:8px}@media print{body{margin:0}}</style></head><body><h1>${esc(title)}</h1><div>${esc(content).replace(/\n/g, "<br>")}</div></body></html>`;
+  const filename = safeFilename(title, "text/html");
+  return {
+    result: `${filename} (${format}) is ready. The app saves it and opens it in a new tab, where the user can print it or use Save as PDF. Tell them that; do not paste the contents.`,
+    sideEffect: { type: "file", data: { filename, mime: "text/html", content: html } },
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -1964,11 +2016,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  for (const esc of ESSENTIAL_CONTACTS) {
-    if (!allContacts.some((c: any) => c.name.toLowerCase() === esc.name.toLowerCase())) {
-      allContacts.push(esc);
-    }
-  }
 
   if (allContacts.length > 0) {
     const contactSummary = allContacts.slice(0, 50).map((c: any) =>
@@ -2030,7 +2077,12 @@ export async function POST(req: NextRequest) {
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const ctx: RunContext = { memoryStore, tasks, docs, notes, goals, expenses, contacts: allContacts, accessToken, location, tier: effectiveTier, email, attachedText: attachedText(attachments) };
+  const stored = await storedLists(email).catch(() => null);
+  const ctx: RunContext = {
+    memoryStore, docs, contacts: allContacts, accessToken, location, tier: effectiveTier, email,
+    tasks: stored?.tasks ?? [...tasks], notes: stored?.notes ?? [...notes], goals: stored?.goals ?? [...goals], expenses: stored?.expenses ?? [...expenses],
+    attachedText: attachedText(attachments), timezone: timezone || req.headers.get("x-vercel-ip-timezone") || "UTC",
+  };
   const checklist = Checklist.resume(priorChecklist);
 
   const stream = new ReadableStream({
@@ -2065,7 +2117,10 @@ export async function POST(req: NextRequest) {
               send("confirm", { id: crypto.randomUUID(), tool: c.name, args: c.args, summary, url: intent?.url, openLabel: intent?.openLabel, clientAction: !!intent });
               out[i] = { result: `Proposed to the user for confirmation: ${summary}. Awaiting their approval — do not claim it is done.` };
             } else {
-              out[i] = await runTool(c.name, c.args, ctx);
+              // A tool that throws must not take the whole reply down with it.
+              out[i] = await runTool(c.name, c.args, ctx).catch((e) => ({
+                result: `${c.name} failed: ${e instanceof Error ? e.message : String(e)}. Tell the user it did not work; do not claim it did.`,
+              }));
             }
             checklist.record(classifyResult(out[i].result));
           }));
