@@ -66,7 +66,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <head />
+      <head>
+        {/* Before first paint, so a Reduce Motion device that chose "animations on" never flashes static (lib/motion.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem('jarvis_motion')==='full')document.documentElement.setAttribute('data-motion-full','')}catch(e){}` }} />
+      </head>
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >

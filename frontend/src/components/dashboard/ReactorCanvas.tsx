@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { reducedMotion } from "@/lib/motion";
 
 // A compact live 3D "arc reactor" for the dashboard: concentric torus rings
 // spinning on different axes around a glowing core, in the app cyan. Lazy-loads
@@ -18,7 +19,7 @@ export function ReactorCanvas({ size = 150 }: { size?: number }) {
 
     import("three").then((THREE) => {
       if (disposed || !mount) return;
-      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const reduce = reducedMotion();
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
