@@ -3,6 +3,12 @@
 import { getCsrfToken } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
 
+// A home-screen app keeps its own cookies, apart from Safari where Google
+// sign-in finishes, so there it signs in through /auth/handoff instead.
+function inHomeScreenApp(): boolean {
+  return (navigator as { standalone?: boolean }).standalone === true || window.matchMedia?.("(display-mode: standalone)").matches === true;
+}
+
 const ERROR_TEXT: Record<string, string> = {
   AccessDenied: "Google didn't allow that sign-in. It only needs your name and email.",
   OAuthCallback: "Google didn't finish. Continue once more.",
@@ -21,6 +27,28 @@ export function SignInClient({
   const [csrfToken, setCsrfToken] = useState("");
   const [csrfError, setCsrfError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [standalone, setStandalone] = useState(false);
+  const [handoff, setHandoff] = useState<string | null>(null);
+
+  useEffect(() => setStandalone(inHomeScreenApp()), []);
+
+  useEffect(() => {
+    if (!handoff) return;
+    const poll = async () => {
+      const r = await fetch(`/api/auth/handoff?code=${handoff}`).then((res) => res.json()).catch(() => null);
+      if (r?.signedIn) window.location.assign(callbackUrl);
+    };
+    const id = setInterval(poll, 2000);
+    document.addEventListener("visibilitychange", poll);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", poll); };
+  }, [handoff, callbackUrl]);
+
+  async function startHandoff() {
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
+    await fetch("/api/auth/handoff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    setHandoff(code);
+    window.open(`/auth/handoff?code=${code}`, "_blank");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -105,6 +133,24 @@ export function SignInClient({
             </div>
           )}
 
+          {standalone ? (
+            handoff ? (
+              <div className="text-center space-y-2" aria-live="polite">
+                <p className="text-text-primary text-sm">Finish signing in with Google in Safari, approve code</p>
+                <p className="font-display text-2xl font-semibold tracking-widest text-accent-blue">{handoff.slice(0, 4).toUpperCase()}</p>
+                <p className="text-text-muted text-xs">then come back here. This screen opens your workspace by itself.</p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={startHandoff}
+                className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-background-base text-sm font-medium transition-all duration-150 active:scale-[0.98]"
+              >
+                Continue with Google
+              </button>
+            )
+          ) : (
+          <>
           {/* Native POST. fetch(signIn) set the state cookie on a background
               response that Chrome dropped on the way back from Google. */}
           <form
@@ -123,6 +169,8 @@ export function SignInClient({
               {busy ? "Opening Google…" : "Continue with Google"}
             </button>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>

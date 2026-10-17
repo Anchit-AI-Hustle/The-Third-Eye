@@ -49,4 +49,37 @@ describe("SignInClient", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("OAuthCallback");
     await waitFor(() => expect(getCsrfToken).toHaveBeenCalled());
   });
+
+  it("in the iPhone home-screen app, signs in through Safari and picks the session up when approved", async () => {
+    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", { value: { ...window.location, assign }, configurable: true });
+    let approved = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return new Response(null, { status: 204 });
+      return Response.json({ signedIn: approved });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    await act(async () => { screen.getByRole("button", { name: "Continue with Google" }).click(); });
+
+    const [, start] = fetchMock.mock.calls[0];
+    const code = JSON.parse(String(start!.body)).code as string;
+    expect(code).toMatch(/^[0-9a-f]{64}$/);
+    expect(open).toHaveBeenCalledWith(`/auth/handoff?code=${code}`, "_blank");
+    expect(screen.getByText(code.slice(0, 4).toUpperCase())).toBeTruthy();
+
+    approved = true;
+    await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
+    expect(assign).toHaveBeenCalledWith("/dashboard");
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    open.mockRestore();
+    delete (window.navigator as { standalone?: boolean }).standalone;
+  });
 });
+
