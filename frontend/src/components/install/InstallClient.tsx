@@ -33,13 +33,22 @@ function IosCard({ inSafari }: { inSafari: boolean }) {
         <h2 className="font-display text-lg font-semibold text-text-primary">iPhone and iPad</h2>
       </div>
       {!inSafari && (
-        <p className="mb-3 text-sm text-text-primary">Open this page in Safari first: Apple only lets Safari add apps to the home screen.</p>
+        <p className="mb-3 text-sm text-text-primary">Open this page in Safari first: Apple only installs from Safari.</p>
       )}
-      <ol className="space-y-2.5 text-sm text-text-secondary">
-        <li className="flex items-center gap-2"><span className="text-text-muted">1.</span> Tap <Share size={16} className="text-accent-blue" aria-label="Share" /> Share in Safari&apos;s toolbar.</li>
-        <li className="flex items-center gap-2"><span className="text-text-muted">2.</span> Tap <PlusSquare size={16} className="text-accent-blue" aria-hidden="true" /> Add to Home Screen, then Add.</li>
-        <li className="flex items-center gap-2"><span className="text-text-muted">3.</span> Open JARVIS from your home screen. It runs full screen, with voice.</li>
+      <a
+        href="/install/jarvis.mobileconfig"
+        className="inline-flex items-center gap-2 rounded-card bg-accent-blue px-5 py-3 text-sm font-semibold text-background-base transition-opacity hover:opacity-90"
+      >
+        <Download size={16} /> Install on iPhone
+      </a>
+      <ol className="mt-4 space-y-1.5 text-sm text-text-secondary list-decimal pl-5">
+        <li>Tap Allow when Safari asks to download the profile.</li>
+        <li>Open Settings, tap Profile Downloaded at the top, then Install.</li>
+        <li>JARVIS appears on your home screen and opens full screen, with voice.</li>
       </ol>
+      <p className="mt-4 text-sm text-text-secondary flex flex-wrap items-center gap-1">
+        Or in Safari: <Share size={15} className="text-accent-blue" aria-label="Share" /> Share, then <PlusSquare size={15} className="text-accent-blue" aria-hidden="true" /> Add to Home Screen.
+      </p>
       <details className="mt-5 border-t border-border-default pt-4 text-sm text-text-secondary">
         <summary className="cursor-pointer text-text-primary">Native iOS app (advanced)</summary>
         <p className="mt-2">
