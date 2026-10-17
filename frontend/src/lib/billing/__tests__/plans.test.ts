@@ -92,8 +92,8 @@ describe("credit costs", () => {
     expect(costOf("chat.message")).toBe(1);
   });
 
-  it("keeps in-browser video rendering free", () => {
-    expect(costOf("video.render")).toBe(0);
+  it("charges for video renders like any other creation", () => {
+    expect(costOf("video.render")).toBe(50);
   });
 
   it("never prices an action negatively", () => {
@@ -161,7 +161,8 @@ describe("test unlock code", () => {
 });
 
 describe("welcome grant", () => {
-  it("is a positive one-time grant", () => {
-    expect(WELCOME_CREDITS).toBeGreaterThan(0);
+  it("covers one use of every paid action, and no more", () => {
+    expect(WELCOME_CREDITS).toBe(Object.keys(CREDIT_COSTS).reduce((sum, a) => sum + costOf(a), 0));
+    expect(WELCOME_CREDITS).toBe(106);
   });
 });

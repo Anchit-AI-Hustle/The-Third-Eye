@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!replicateConfigured()) {
-    return Response.json({ error: "Rendering needs REPLICATE_API_TOKEN. The shot list above is ready to paste into a video tool." }, { status: 501 });
+    return Response.json({ error: "AI clip rendering is not available right now. Build episode file still turns the shot list into a finished video." }, { status: 501 });
   }
   try {
     const p = await createPrediction(model, input);

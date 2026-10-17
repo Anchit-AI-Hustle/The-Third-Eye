@@ -48,7 +48,8 @@ describe("Daily Drop without a music model", () => {
     expect(createPrediction).not.toHaveBeenCalled();
     const track = tables.music_daily_tracks[0];
     expect(track).toMatchObject({ status: "done", audio_type: "audio/wav", title: "Monsoon Drive" });
-    expect(String(track.tags)).toMatch(/composed in code/);
+    expect(String(track.tags)).toMatch(/instrumental$/);
+    expect(String(track.tags)).not.toMatch(/in code/);
     const audio = Buffer.concat((tables.music_daily_chunks ?? []).map((c) => c.data as Buffer));
     expect(audio.subarray(0, 4).toString()).toBe("RIFF");
     expect(track.size).toBe(audio.length);

@@ -37,10 +37,10 @@ describe("/api/tools/music with no music AI set up", () => {
     expect(wav.length).toBeGreaterThan(30 * 22_050 * 2);
   });
 
-  it("says plainly that it is an instrumental and what sung vocals need", async () => {
+  it("says plainly that it is an instrumental, without exposing how it was made", async () => {
     const { json } = await post({ description: "rainy lofi to study to", vocals: true, duration: 30 });
-    expect(json.note).toMatch(/composed in code/i);
     expect(json.note).toMatch(/no vocals/i);
+    expect(json.note).not.toMatch(/in code|free|API_KEY|TOKEN/i);
     expect(json.lyrics).toContain("Rain on the glass");
   });
 });

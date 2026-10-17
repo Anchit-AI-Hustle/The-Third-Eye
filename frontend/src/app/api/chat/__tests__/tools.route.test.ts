@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WELCOME_CREDITS, costOf } from "@/lib/billing/plans";
 
 // What each chat tool hands back, driven through the real /api/chat route with
 // a scripted model: one turn per tool call, then a final turn that repeats the
@@ -27,7 +28,18 @@ function from(table: string) {
   } as Record<string, unknown>, { get: (t, k: string) => (k in t ? t[k] : () => q) });
   return q;
 }
-vi.mock("@/lib/db", async (orig) => ({ ...(await orig<typeof import("@/lib/db")>()), getDb: () => (tables ? { from } : null) }));
+// The credit functions in supabase/migrations/*_credit_ledger.sql, over a balance map.
+let balances: Record<string, number> = {};
+async function rpc(fn: string, a: { p_user_id: string; p_amount: number; p_gift: number }) {
+  balances[a.p_user_id] ??= a.p_gift;
+  if (fn === "spend_credits") {
+    if (balances[a.p_user_id] < a.p_amount) return { data: -1, error: null };
+    balances[a.p_user_id] -= a.p_amount;
+  }
+  if (fn === "refund_credits") balances[a.p_user_id] += a.p_amount;
+  return { data: balances[a.p_user_id], error: null };
+}
+vi.mock("@/lib/db", async (orig) => ({ ...(await orig<typeof import("@/lib/db")>()), getDb: () => (tables ? { from, rpc } : null) }));
 
 let calls: { name: string; args: unknown }[] = [];
 async function run(body: Record<string, unknown> = {}) {
@@ -73,11 +85,29 @@ describe("chat tools", () => {
     vi.stubEnv("REPLICATE_API_TOKEN", "");
     calls = [{ name: "generate", args: { type: "music", prompt: "chill lofi beat at 80 bpm" } }];
     const r = await run();
-    expect(r.results[0]).toMatch(/composed in code/);
+    expect(r.results[0]).toMatch(/instrumental \(no vocals\)/);
+    expect(r.results[0]).toMatch(/do not describe how it was made or call it free/);
     expect(r.results[0]).toMatch(/\/api\/tools\/music\/audio\//);
     const stored = (tables.music_studio_audio_chunks ?? []).map((c) => c.data as Buffer);
     expect(Buffer.concat(stored).subarray(0, 4).toString()).toBe("RIFF");
     expect(r.done.sideEffects).toEqual([expect.objectContaining({ type: "media", data: expect.objectContaining({ kind: "audio" }) })]);
+  });
+
+  it("charges the track's credits, and makes none when the balance is short", async () => {
+    tables = {};
+    vi.stubEnv("ELEVENLABS_API_KEY", "");
+    vi.stubEnv("REPLICATE_API_TOKEN", "");
+    calls = [{ name: "generate", args: { type: "music", prompt: "chill lofi beat at 80 bpm" } }];
+    balances = {};
+    await run();
+    expect(Object.values(balances)).toEqual([WELCOME_CREDITS - costOf("music.generate")]);
+    const user = Object.keys(balances)[0];
+    balances[user] = 5;
+    tables = {};
+    const r = await run();
+    expect(r.results[0]).toMatch(/No track was made: This needs 20 credits and you have 5/);
+    expect(tables.music_studio_audio_chunks).toBeUndefined();
+    expect(balances[user]).toBe(5);
   });
 
   it("will not save an untitled task or an empty note", async () => {

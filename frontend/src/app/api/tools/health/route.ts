@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
 import { computeTargets } from "@/lib/health/calc";
 import type { HealthInput } from "@/lib/health/types";
+import { chargedRoute, refundable } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ function req(i: Partial<HealthInput>): string | null {
   return null;
 }
 
-export async function POST(reqObj: NextRequest) {
+async function create(reqObj: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
@@ -72,6 +73,8 @@ ${wantsExercise ? `## Training\n- A weekly plan for ${body.trainingDaysPerWeek |
     return Response.json({ targets, plan: out.text.trim(), provider: out.provider });
   } catch (e) {
     // Targets are still valuable without the AI plan — degrade gracefully.
-    return Response.json({ targets, plan: null, warning: "AI plan unavailable right now - your targets above are still accurate.", error: e instanceof Error ? e.message : "ai_unavailable" });
+    return refundable(Response.json({ targets, plan: null, warning: "AI plan unavailable right now - your targets above are still accurate.", error: e instanceof Error ? e.message : "ai_unavailable" }));
   }
 }
+
+export const POST = chargedRoute("health.plan", create);

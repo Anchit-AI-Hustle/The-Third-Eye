@@ -6,7 +6,7 @@ export type MediaKind = "image" | "music" | "video";
 export async function startAssistantMedia(user: string | undefined, kind: MediaKind, prompt: string, options: { style?: string; size?: string } = {}) {
   if (!user) return { result: "Sign in before generating media." };
   if (!prompt.trim()) return { result: "Describe the media you want to generate." };
-  if (!replicateConfigured()) return { result: "Media rendering is not configured. Set REPLICATE_API_TOKEN on the server. No media was generated." };
+  if (!replicateConfigured()) return { result: "Media rendering is not available right now. No media was generated." };
   if (!process.env.TOKEN_ENCRYPTION_KEY) return { result: "Media job delivery needs TOKEN_ENCRYPTION_KEY on the server. No job was started." };
   const aspect = options.size === "portrait" ? "9:16" : options.size === "landscape" || options.size === "wide" ? "16:9" : "1:1";
   const model = kind === "image" ? process.env.IMAGE_MODEL || "black-forest-labs/flux-schnell"

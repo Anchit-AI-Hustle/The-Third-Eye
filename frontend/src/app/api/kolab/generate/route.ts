@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { generationFailure, llmCascade } from "@/lib/llmCascade";
 import type { BrandProfile, KolabMode } from "@/lib/kolab/types";
+import { chargedRoute } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -64,7 +65,7 @@ Design a retention, CRM & loyalty program as Markdown:
 
 const MODES: KolabMode[] = ["lifecycle", "creator", "brandplan", "retention"];
 
-export async function POST(req: NextRequest) {
+async function create(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
@@ -89,3 +90,5 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: generationFailure(e) }, { status: 503 });
   }
 }
+
+export const POST = chargedRoute("kolab.generate", create);

@@ -68,7 +68,7 @@ export function summarizeAction(tool: string, args: any): string {
         : args?.action === "rehearse" ? "Rehearse today's ANCHOR drop (render only, nothing posted)"
         : `Run today's ANCHOR drop${args?.now ? " and publish immediately" : " (posts at 17:30 UTC)"}`;
     case "build_app":
-      return `Build "${args?.name ?? "app"}" and publish it as a public repo on your GitHub with a free GitHub Pages site: ${String(args?.description ?? "").slice(0, 200)}`;
+      return `Build "${args?.name ?? "app"}" and publish it as a public repo on your GitHub with a GitHub Pages site: ${String(args?.description ?? "").slice(0, 200)}`;
     case "make_call":
       return `Call ${args?.number ?? "?"}`;
     case "send_sms":

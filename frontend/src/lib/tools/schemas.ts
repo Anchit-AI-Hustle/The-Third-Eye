@@ -642,7 +642,7 @@ export const geminiTools = [
       },
       {
         name: "build_app",
-        description: "Build a complete static web app (HTML, CSS, JavaScript, data in the browser) from the user's description, put it in a new public repo on their GitHub, and publish it free on GitHub Pages. The user confirms before anything is created. Needs GitHub connected; if github status says it isn't, call github with action='connect' first.",
+        description: "Build a complete static web app (HTML, CSS, JavaScript, data in the browser) from the user's description, put it in a new public repo on their GitHub, and publish it on GitHub Pages. The user confirms before anything is created. Needs GitHub connected; if github status says it isn't, call github with action='connect' first.",
         parameters: {
           type: "OBJECT",
           properties: {

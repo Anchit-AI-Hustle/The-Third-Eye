@@ -305,7 +305,7 @@ function NaturalVoice() {
           </div>
           <div>
             <h3 className="text-sm font-medium text-text-primary">Natural voice</h3>
-            <p className="text-xs text-text-muted">A human-sounding voice that runs in your browser: free, no key, nothing leaves the device</p>
+            <p className="text-xs text-text-muted">A natural, human-sounding voice. It runs on your device, so nothing you hear is sent anywhere</p>
           </div>
         </div>
         <Toggle enabled={on} onChange={(v) => void toggle(v)} />

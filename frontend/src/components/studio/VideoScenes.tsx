@@ -7,6 +7,7 @@ import { assembleEpisode, type Aspect, type Soundtrack } from "@/lib/episodeVide
 import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
+import { chargeCreation } from "@/lib/billing/useBilling";
 
 const POLL_LIMIT_MS = 10 * 60_000;
 
@@ -17,7 +18,7 @@ type Episode = { status: "idle" | "building" | "done" | "error"; progress?: numb
 // Turns a finished Video Studio script into real clips, then into one episode
 // file. Clips are paid renders, so nothing starts on its own: each shot has its
 // own Render button, and "Render all" says how many paid jobs it is about to
-// start and asks first. Assembling the episode is free — it happens in the browser.
+// start and asks first. Assembling the episode happens in the browser.
 export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, tool = "video" }: { script: string; title: string; accent: string; aspect?: Aspect; seconds?: number; tool?: string }) {
   const [scenes, setScenes] = useState<Scene[] | null>(null);
   const [planning, setPlanning] = useState(false);
@@ -53,7 +54,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
       const d = await res.json();
       if (!res.ok) { setError(d.error ?? `HTTP ${res.status}`); return; }
       setScenes(d.scenes ?? []);
-      if (d.configured === false) setError("Shot list ready. AI clips need REPLICATE_API_TOKEN; without it, Build episode file draws every shot in code (animated scenes with the narration as subtitles) and adds your soundtrack, for free.");
+      if (d.configured === false) setError("Shot list ready. Build episode file turns every shot into an animated scene with the narration as subtitles and adds your soundtrack.");
     } catch {
       setError("Network error - please try again.");
     } finally { setPlanning(false); }
@@ -129,6 +130,8 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
   async function buildEpisode() {
     if (!scenes) return;
     setEpisode({ status: "building", progress: 0 });
+    const paid = await chargeCreation("video.render");
+    if (!paid.ok) { setEpisode({ status: "error", msg: paid.error }); return; }
     try {
       const { blob, ext } = await assembleEpisode({
         title,
@@ -265,7 +268,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
             </button>
           </div>
           <p className="text-[11px] text-text-muted">
-            {`Title card, ${scenes.length} shot${scenes.length === 1 ? "" : "s"} with subtitles${Object.values(voices).some((v) => v.status === "done") ? " and voice-over" : ""}${soundtrack ? ", soundtrack underneath" : ""}, end card, assembled in your browser in real time, so keep this tab in front.${drawnCount ? ` ${drawnCount === scenes.length ? "Every shot is" : `${drawnCount} unrendered shot${drawnCount === 1 ? " is" : "s are"}`} drawn in code (animated scene, no AI footage).` : ""}`}
+            {`Title card, ${scenes.length} shot${scenes.length === 1 ? "" : "s"} with subtitles${Object.values(voices).some((v) => v.status === "done") ? " and voice-over" : ""}${soundtrack ? ", soundtrack underneath" : ""}, end card, assembled live on this device, so keep this tab in front.${drawnCount ? ` ${drawnCount === scenes.length ? "Every shot is" : `${drawnCount} unrendered shot${drawnCount === 1 ? " is" : "s are"}`} rendered as an animated scene.` : ""}`}
           </p>
           <SoundtrackPicker onChange={setSoundtrack} accent={accent} />
           {episode.status === "error" && <p className="text-[11px] text-accent-red">{episode.msg}</p>}
