@@ -104,7 +104,7 @@ export function ProfilePanel() {
 
 function FactRow({ fact, onVerify, onReject, onDelete }: { fact: CandidateFact; onVerify: () => void; onReject: () => void; onDelete: () => void }) {
   const val = typeof fact.value === "string" ? fact.value : JSON.stringify(fact.value);
-  const vColor = fact.verified === "verified" ? "#34D399" : fact.verified === "rejected" ? "#EF4444" : "#7878A8";
+  const vColor = fact.verified === "verified" ? "#34D399" : fact.verified === "rejected" ? "#EF4444" : "#8E8EBC";
   return (
     <div className="flex items-start gap-2 py-1.5 border-b border-border-default last:border-0">
       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background-base border border-border-default text-text-muted flex-none mt-0.5">{fact.factType}</span>

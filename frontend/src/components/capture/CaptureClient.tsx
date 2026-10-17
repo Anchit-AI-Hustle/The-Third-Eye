@@ -14,7 +14,7 @@ const TYPE_META: Record<ConvType, { label: string; color: string }> = {
   work:       { label: "Work",       color: "#4FC3F7" },
   personal:   { label: "Personal",   color: "#34D399" },
   learning:   { label: "Learning",   color: "#F0C94E" },
-  other:      { label: "Other",      color: "#7878A8" },
+  other:      { label: "Other",      color: "#8E8EBC" },
 };
 
 export function CaptureClient() {
@@ -261,7 +261,7 @@ function StatusDot({ on, label }: { on: boolean; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-text-muted">
       <span className={`w-2 h-2 rounded-full ${on ? "bg-[#34D399]" : "bg-text-muted/40"}`} />
-      {label} {on ? "" : <span className="text-text-muted/60">off</span>}
+      {label} {on ? "" : <span className="text-text-muted">off</span>}
     </span>
   );
 }

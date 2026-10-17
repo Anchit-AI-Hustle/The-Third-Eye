@@ -1345,7 +1345,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   <X size={15} /><span className="text-[11px] font-mono">Esc</span>
                 </button>
               ) : (
-                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming}
+                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming} aria-label="Send message"
                   className={cn("flex-none p-1.5 rounded-input transition-colors shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center",
                     input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
                   <Send size={15} />

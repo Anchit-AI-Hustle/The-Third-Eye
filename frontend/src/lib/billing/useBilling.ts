@@ -74,8 +74,8 @@ export function useBilling() {
   const canAfford = useCallback((action: string) =>
     serverRef.current.unlimited || serverRef.current.balance >= costOf(action), []);
 
-  const tryUnlock = useCallback((code: string) => {
-    const ok = unlockTest(code); if (ok) refresh(); return ok;
+  const tryUnlock = useCallback(async (code: string) => {
+    const ok = await unlockTest(code); if (ok) refresh(); return ok;
   }, [refresh]);
 
   const lock = useCallback(() => { clearTestUnlock(); refresh(); }, [refresh]);

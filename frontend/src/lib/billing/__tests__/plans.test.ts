@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   PERIODS,
   TIERS,
@@ -9,16 +9,7 @@ import {
   priceFor,
   costOf,
   pricePer100,
-  matchesTestCode,
-  testUnlockConfigured,
 } from "../plans";
-
-const ORIGINAL_CODE = process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-
-afterEach(() => {
-  if (ORIGINAL_CODE === undefined) delete process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-  else process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = ORIGINAL_CODE;
-});
 
 describe("tier catalogue", () => {
   it("orders tiers by ascending level and price", () => {
@@ -125,38 +116,6 @@ describe("bundles", () => {
 
   it("never awards a negative bonus", () => {
     for (const b of BUNDLES) expect(b.bonus).toBeGreaterThanOrEqual(0);
-  });
-});
-
-describe("test unlock code", () => {
-  it("is disabled when no code is configured", () => {
-    delete process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-    expect(testUnlockConfigured()).toBe(false);
-    expect(matchesTestCode("")).toBe(false);
-    expect(matchesTestCode("anything")).toBe(false);
-  });
-
-  it("rejects an empty entry even when a code is configured", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "s3cret";
-    expect(matchesTestCode("")).toBe(false);
-    expect(matchesTestCode("   ")).toBe(false);
-  });
-
-  it("matches the configured code, ignoring surrounding whitespace", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "s3cret";
-    expect(matchesTestCode("s3cret")).toBe(true);
-    expect(matchesTestCode("  s3cret  ")).toBe(true);
-  });
-
-  it("rejects a wrong code", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "s3cret";
-    expect(matchesTestCode("wrong")).toBe(false);
-  });
-
-  it("does not treat a blank configured code as an unlock", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "   ";
-    expect(testUnlockConfigured()).toBe(false);
-    expect(matchesTestCode("   ")).toBe(false);
   });
 });
 

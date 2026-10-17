@@ -98,7 +98,7 @@ export function JobSearch() {
       {result && (
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           {result.sources.map((s) => {
-            const color = s.state === "complete" ? "#34D399" : s.state === "external-search" ? "#4FC3F7" : s.state === "unconfigured" ? "#7878A8" : "#EF4444";
+            const color = s.state === "complete" ? "#34D399" : s.state === "external-search" ? "#4FC3F7" : s.state === "unconfigured" ? "#8E8EBC" : "#EF4444";
             const label = s.state === "complete" ? `${s.count} results` : s.state === "external-search" ? "open search" : s.state === "unconfigured" ? "not configured" : s.state === "timed_out" ? "timed out" : "unavailable";
             return (
               <span key={s.id} className="flex items-center gap-1.5 px-2 py-1 rounded-full border font-mono" style={{ borderColor: `${color}55`, color }}>

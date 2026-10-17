@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getSubscription,
   isSubscribed,
@@ -12,42 +12,39 @@ import {
 } from "../wallet";
 import { vaultSet } from "@/lib/deviceVault";
 
-const ORIGINAL_CODE = process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-
-beforeEach(() => {
-  localStorage.clear();
-  process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "unlock-me";
-});
-
-afterEach(() => {
-  localStorage.clear();
-  if (ORIGINAL_CODE === undefined) delete process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-  else process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = ORIGINAL_CODE;
-});
+beforeEach(() => localStorage.clear());
+afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
 
 describe("test unlock", () => {
+  const server = (ok: boolean) => vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok }), { status: 200 })));
+
   it("starts locked", () => {
     expect(isTestUnlocked()).toBe(false);
   });
 
-  it("rejects a wrong code and stays locked", () => {
-    expect(unlockTest("nope")).toBe(false);
+  it("stays locked when the server rejects the code", async () => {
+    server(false);
+    expect(await unlockTest("nope")).toBe(false);
     expect(isTestUnlocked()).toBe(false);
   });
 
-  it("unlocks with the configured code", () => {
-    expect(unlockTest("unlock-me")).toBe(true);
+  it("unlocks when the server accepts the code, and checks it there", async () => {
+    server(true);
+    expect(await unlockTest("unlock-me")).toBe(true);
     expect(isTestUnlocked()).toBe(true);
+    expect(fetch).toHaveBeenCalledWith("/api/billing/unlock", expect.objectContaining({ method: "POST", body: JSON.stringify({ code: "unlock-me" }) }));
   });
 
-  it("reports max tier and subscribed while unlocked", () => {
-    unlockTest("unlock-me");
+  it("reports max tier and subscribed while unlocked", async () => {
+    server(true);
+    await unlockTest("unlock-me");
     expect(currentTier()).toBe("max");
     expect(isSubscribed()).toBe(true);
   });
 
-  it("reverts to basic once cleared", () => {
-    unlockTest("unlock-me");
+  it("reverts to basic once cleared", async () => {
+    server(true);
+    await unlockTest("unlock-me");
     clearTestUnlock();
     expect(isTestUnlocked()).toBe(false);
     expect(currentTier()).toBe("basic");

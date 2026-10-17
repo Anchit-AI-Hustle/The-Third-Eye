@@ -33,7 +33,13 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
     let disposed = false;
     let cleanup = () => {};
 
-    import("three")
+    // Built once the page is idle, so loading three.js and compiling the scene
+    // never compete with first paint and the hero text being usable.
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1200));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    const idleId = idle(() => { if (!disposed) build(); }, { timeout: 2500 });
+
+    const build = () => import("three")
       .then((THREE) => {
         if (disposed || !mount) return;
 
@@ -277,12 +283,20 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           renderer.render(scene, camera);
         };
 
-        const loop = () => {
+        // Phones draw at 30 fps and at most 1.5x density: the scene reads the
+        // same, and it halves the GPU (or, without one, CPU) work per second.
+        const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+        const frameMs = coarse ? 1000 / 30 : 0;
+        if (coarse) renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        let lastFrame = 0;
+        const loop = (now = 0) => {
           if (!running()) {
             raf = 0;
             return;
           }
           raf = requestAnimationFrame(loop);
+          if (now - lastFrame < frameMs) return;
+          lastFrame = now;
           draw(clock.getElapsedTime());
         };
 
@@ -320,6 +334,7 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
 
     return () => {
       disposed = true;
+      cancelIdle(idleId);
       cleanup();
     };
   }, []);

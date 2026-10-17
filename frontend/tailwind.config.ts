@@ -44,7 +44,7 @@ const config: Config = {
         text: {
           primary:   "#FFFFFF",
           secondary: "#B0B8C8",
-          muted:     "#6B7394",
+          muted:     "#7F87A8",
         },
         accent: {
           blue:   "#4FC3F7",   // Arc Blue — primary brand

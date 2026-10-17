@@ -28,7 +28,7 @@ export const PERIODS: { id: BillingPeriod; label: string; days: number; factorVs
 ];
 
 export const TIERS: Record<Tier, PlanTier> = {
-  basic: { id: "basic", label: "Basic", level: 0, badge: "BASIC", color: "#7878A8", monthlyCredits: 200, priceMonthlyInr: 0,
+  basic: { id: "basic", label: "Basic", level: 0, badge: "BASIC", color: "#8E8EBC", monthlyCredits: 200, priceMonthlyInr: 0,
     features: ["Core apps", "200 credits / month", "Standard AI"], personas: false },
   plus: { id: "plus", label: "Plus", level: 1, badge: "PLUS", color: "#34D399", monthlyCredits: 2500, priceMonthlyInr: 399,
     features: ["Everything in Basic", "2,500 credits / month", "All Studio tools", "1 AI persona"], personas: true },
@@ -97,16 +97,3 @@ export function pricePer100(b: Bundle): number {
 // Sign-up gift: exactly enough to try every paid action once.
 export const WELCOME_CREDITS = Object.values(CREDIT_COSTS).reduce((a, b) => a + b, 0);
 
-// QA bypass — preview paid features without payment. The unlock code is read
-// from the environment (NEXT_PUBLIC_TEST_UNLOCK_CODE), never hardcoded, so no
-// credential ships in the source. Unset => the bypass is disabled. This is a
-// testing convenience, not a security control.
-export function testUnlockConfigured(): boolean {
-  return (process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE || "").trim().length > 0;
-}
-
-/** True if the entered code matches the configured test-unlock code. */
-export function matchesTestCode(entered: string): boolean {
-  const expected = (process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE || "").trim();
-  return expected.length > 0 && entered.trim() === expected;
-}

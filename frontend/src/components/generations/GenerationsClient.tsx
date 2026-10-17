@@ -37,7 +37,7 @@ export function GenerationsClient() {
     deleteGeneration(id);
   };
 
-  if (!ready) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-primary/20 border-t-accent-primary rounded-full animate-spin" /></div>;
+  if (!ready) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
 
   if (items.length === 0) {
     return (
@@ -70,7 +70,7 @@ export function GenerationsClient() {
           const meta = GEN_APPS[g.app] ?? { label: g.app, color: "#8891A8", icon: "FileText" };
           const Icon = ICONS[meta.icon] ?? FileText;
           return (
-            <div key={g.id} className="group relative rounded-card border border-border-default bg-background-surface hover:border-accent-primary/50 transition-colors">
+            <div key={g.id} className="group relative rounded-card border border-border-default bg-background-surface hover:border-accent-blue/50 transition-colors">
               <Link href={`/generations/${g.id}`} className="block p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-none" style={{ background: `${meta.color}1A`, color: meta.color }}><Icon size={14} /></span>
@@ -102,5 +102,5 @@ export function GenerationsClient() {
 }
 
 function chip(active: boolean): string {
-  return `px-3 py-2 rounded-card text-xs font-mono border transition-colors ${active ? "border-accent-primary text-accent-primary bg-accent-primary/10" : "border-border-default text-text-secondary hover:text-text-primary"}`;
+  return `px-3 py-2 rounded-card text-xs font-mono border transition-colors ${active ? "border-accent-blue text-accent-blue bg-accent-blue/10" : "border-border-default text-text-secondary hover:text-text-primary"}`;
 }

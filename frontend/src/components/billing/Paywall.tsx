@@ -8,7 +8,7 @@ import { useBilling } from "@/lib/billing/useBilling";
 import { TierBadge } from "./TierBadge";
 
 // Paywall / recharge popup. Raised either when a feature needs a higher tier
-// ("upgrade") or when the wallet can't cover an action ("recharge"). PIN 2803
+// ("upgrade") or when the wallet can't cover an action ("recharge"). A test code
 // unlocks everything for testing without any real payment.
 export function Paywall({
   open, onClose, reason = "upgrade", requiredTier = "plus", feature, cost,
@@ -28,8 +28,8 @@ export function Paywall({
   if (!open) return null;
 
   const t = TIERS[requiredTier];
-  const submitCode = () => {
-    if (tryUnlock(code)) { setUnlocked(true); setTimeout(onClose, 900); }
+  const submitCode = async () => {
+    if (await tryUnlock(code)) { setUnlocked(true); setTimeout(onClose, 900); }
     else { setCodeErr(true); setTimeout(() => setCodeErr(false), 1200); }
   };
 
@@ -94,7 +94,7 @@ export function Paywall({
                 </Link>
               </div>
 
-              {/* Test bypass — PIN 2803 (no real payment). */}
+              {/* Test bypass, checked on the server (no real payment). */}
               <div className="rounded-input border border-border-default bg-background-secondary/40 p-3">
                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-text-muted mb-2">
                   <KeyRound size={12} /> Testing? Enter the unlock code to bypass payment
@@ -108,9 +108,9 @@ export function Paywall({
                     inputMode="numeric"
                     autoComplete="off"
                     placeholder="Unlock code"
-                    className={`flex-1 rounded-input bg-background-primary border px-3 py-2 text-sm font-mono tracking-[0.4em] text-text-primary outline-none ${codeErr ? "border-red-500/70" : "border-border-default focus:border-accent-primary"}`}
+                    className={`flex-1 rounded-input bg-background-primary border px-3 py-2 text-sm font-mono tracking-[0.4em] text-text-primary outline-none ${codeErr ? "border-red-500/70" : "border-border-default focus:border-accent-blue"}`}
                   />
-                  <button onClick={submitCode} className="rounded-input px-4 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-primary">
+                  <button onClick={submitCode} className="rounded-input px-4 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-blue">
                     Unlock
                   </button>
                 </div>

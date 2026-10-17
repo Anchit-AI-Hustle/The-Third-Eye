@@ -27,7 +27,7 @@ const META: Record<Category, { color: string; icon: typeof Utensils }> = {
   Health:        { color: "#22D3EE", icon: HeartPulse },
   Entertainment: { color: "#A78BFA", icon: Clapperboard },
   Travel:        { color: "#60A5FA", icon: Plane },
-  Other:         { color: "#7878A8", icon: Wallet },
+  Other:         { color: "#8E8EBC", icon: Wallet },
 };
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
@@ -217,7 +217,7 @@ export function FinanceClient() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs transition-colors"
                 style={on
                   ? { borderColor: M.color, background: `${M.color}22`, color: M.color }
-                  : { borderColor: "var(--border-default, #1E1E38)", color: "#7878A8" }}
+                  : { borderColor: "var(--border-default, #1E1E38)", color: "#8E8EBC" }}
               >
                 <Icon size={12} /> {c}
               </button>

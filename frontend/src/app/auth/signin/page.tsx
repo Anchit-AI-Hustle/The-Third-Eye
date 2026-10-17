@@ -9,6 +9,11 @@ import { SignInClient } from "./SignInClient";
 // page and looked like a loop.
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Sign in - The Third Eye",
+  description: "Sign in with Google to open your personal AI workspace.",
+};
+
 export default async function SignInPage({
   searchParams,
 }: {

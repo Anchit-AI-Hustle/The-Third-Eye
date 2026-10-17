@@ -13,7 +13,7 @@ const STATUSES = [
 
 const STATUS_COLOR: Record<string, string> = {
   submitted: "#4FC3F7", interview: "#A78BFA", final_interview: "#A78BFA", offer: "#34D399",
-  accepted: "#34D399", rejected: "#EF4444", withdrawn: "#7878A8", archived: "#7878A8",
+  accepted: "#34D399", rejected: "#EF4444", withdrawn: "#8E8EBC", archived: "#8E8EBC",
 };
 
 export function ApplicationsPanel() {

@@ -73,7 +73,7 @@ export default function UpgradePage() {
 
         <div className="text-center mt-8">
           <button onClick={go} disabled={busy || loading}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-card bg-accent-blue text-white font-medium text-sm disabled:opacity-60 transition-opacity">
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-card bg-accent-blue text-black font-medium text-sm disabled:opacity-60 transition-opacity">
             <Zap size={15} />
             {isPremium ? "Manage subscription" : busy ? "Redirecting…" : `Upgrade - ${interval === "yearly" ? PRICING.yearly.label : PRICING.monthly.label}`}
           </button>

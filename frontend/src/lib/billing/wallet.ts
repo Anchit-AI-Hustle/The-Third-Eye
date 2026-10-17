@@ -1,7 +1,7 @@
 "use client";
 
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
-import { matchesTestCode, type BillingPeriod, type Tier } from "./plans";
+import type { BillingPeriod, Tier } from "./plans";
 
 // Device-side billing state: the test unlock and the plan shown on this device.
 // Credits are server-side (lib/credits.ts); no money moves here.
@@ -11,9 +11,14 @@ const APP = "billing";
 export interface Subscription { tier: Tier; period: BillingPeriod; status: "active" | "unsubscribed"; since: string; }
 
 export function isTestUnlocked(): boolean { return vaultGet<boolean>(APP, "testUnlock", false); }
-export function unlockTest(code: string): boolean {
-  if (matchesTestCode(code)) { vaultSet(APP, "testUnlock", true); return true; }
-  return false;
+/** Checks the code on the server (/api/billing/unlock) and unlocks this device if it matches. */
+export async function unlockTest(code: string): Promise<boolean> {
+  const r = await fetch("/api/billing/unlock", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+  }).catch(() => null);
+  const ok = Boolean(r?.ok && (await r.json().catch(() => ({})))?.ok);
+  if (ok) vaultSet(APP, "testUnlock", true);
+  return ok;
 }
 export function clearTestUnlock() { vaultSet(APP, "testUnlock", false); }
 

@@ -32,7 +32,7 @@ export function ModeScopeToggle({
         title="Show items from every mode"
         className={cn(
           "px-3 py-2 transition-colors border-l border-border-default font-mono",
-          showAll ? "bg-accent-blue text-white" : "bg-background-surface text-text-secondary hover:text-text-primary",
+          showAll ? "bg-accent-blue text-background-base" : "bg-background-surface text-text-secondary hover:text-text-primary",
         )}
       >
         All
