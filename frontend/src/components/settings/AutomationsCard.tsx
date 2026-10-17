@@ -77,7 +77,7 @@ export function AutomationsCard() {
         <span className="hud-label text-[#4FC3F7]">Automations</span>
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Scheduled automations</h2>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
+      <p className="text-text-muted text-xs mt-1 mb-4">
         Recurring actions the assistant runs on your behalf. Ask it to set one up - e.g. &quot;send me a morning brief every day at 8am&quot;.
       </p>
 
@@ -88,9 +88,9 @@ export function AutomationsCard() {
       )}
 
       {rows === null ? (
-        <p className="text-text-muted text-xs font-mono">Loading…</p>
+        <p className="text-text-muted text-xs">Loading…</p>
       ) : rows.length === 0 && !error ? (
-        <p className="text-text-muted text-xs font-mono">No automations scheduled yet.</p>
+        <p className="text-text-muted text-xs">No automations scheduled yet.</p>
       ) : (
         <ul className="divide-y divide-white/5">
           {rows.map((a) => (

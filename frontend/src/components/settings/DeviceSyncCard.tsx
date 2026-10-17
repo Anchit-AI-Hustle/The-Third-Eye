@@ -289,7 +289,7 @@ export function DeviceSyncCard() {
           <Cloud size={11} /> {health ? (health.database ? "Cloud sync on" : "This device only") : "Checking…"}
         </div>
       </div>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider leading-relaxed">
+      <p className="text-text-muted text-xs mt-1 mb-4 leading-relaxed">
         Add or import your contacts and files here. JARVIS uses the contacts to turn names (&ldquo;Mom&rdquo;, &ldquo;Priya&rdquo;) into numbers for WhatsApp, calls and SMS, and they follow you to every device you sign in on.
       </p>
 

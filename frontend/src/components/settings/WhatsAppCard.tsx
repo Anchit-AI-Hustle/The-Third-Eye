@@ -63,7 +63,7 @@ export function WhatsAppCard() {
       ) : pending ? (
         <div className="space-y-2 text-sm text-text-secondary">
           <p>Send this from your WhatsApp{pending.jarvisNumber ? <> to <span className="font-mono">+{pending.jarvisNumber}</span></> : null} within 15 minutes:</p>
-          <p className="font-mono text-lg text-text-primary">LINK {pending.code}</p>
+          <p className="text-lg text-text-primary">LINK {pending.code}</p>
           <div className="flex items-center gap-2">
             {pending.link && (
               <a href={pending.link} target="_blank" rel="noreferrer"

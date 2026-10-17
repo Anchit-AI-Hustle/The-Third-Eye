@@ -74,7 +74,7 @@ export function ConnectionsCard() {
         <span className="hud-label text-[#4FC3F7]">Connections</span>
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Google account</h2>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
+      <p className="text-text-muted text-xs mt-1 mb-4">
         Connect Gmail &amp; Calendar so the assistant can read/summarise mail, send email, check your schedule, and turn emails into tasks.
       </p>
 
@@ -156,7 +156,7 @@ export function ConnectionsCard() {
         )}
       </div>
 
-      <p className="text-text-muted text-[11px] font-mono mt-3 leading-relaxed">
+      <p className="text-text-muted text-[11px] mt-3 leading-relaxed">
         Sign-in does not grant mail. Connect here when you want the assistant to read or send it.
         While Google's review of those permissions is open, only listed accounts can start this step.
         Disconnecting revokes the permission at Google and deletes the token stored here.
@@ -166,7 +166,7 @@ export function ConnectionsCard() {
         <h2 className="font-display text-lg font-semibold text-text-primary flex items-center gap-2">
           <Link2 size={16} /> GitHub
         </h2>
-        <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
+        <p className="text-text-muted text-xs mt-1 mb-4">
           Connect GitHub so the assistant can read your repositories, issues, pull requests and code.
         </p>
         {banner === "github_connected" && (
@@ -187,7 +187,7 @@ export function ConnectionsCard() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {github?.configured === false ? (
-            <p className="text-xs text-text-muted font-mono">GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are not set on this deployment.</p>
+            <p className="text-xs text-text-muted">GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are not set on this deployment.</p>
           ) : (
             <a href="/api/connect/github" className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors">
               <Link2 size={14} /> {github?.connected ? "Reconnect GitHub" : "Connect GitHub"}
