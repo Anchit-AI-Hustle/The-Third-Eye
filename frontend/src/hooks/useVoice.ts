@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { naturalVoiceOn, speakNatural, stopNatural } from "@/lib/naturalVoice";
 
 import { useWakeLock } from "./useWakeLock";
 
@@ -703,14 +704,29 @@ export function useTTS(voicePreference?: string) {
     // "still speaking" marker set.
     if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
 
+    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
+    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
+    if (w.__jarvisDnd && !force) { onEnd?.(); return; }
+    const volume = typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1;
+    const started = () => {
+      lastSpoken.text = clean;
+      lastSpoken.startedAt = Date.now();
+      lastSpoken.until = Infinity;
+      setSpeaking(true);
+    };
+    const finished = () => {
+      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+      setSpeaking(false);
+      stopKeepalive();
+      onEnd?.();
+    };
+    if (naturalVoiceOn() && (await speakNatural(clean, { volume, onStart: started, onEnd: finished }))) return;
+
     const voices = await waitForVoices(1500);
     const u = new SpeechSynthesisUtterance(clean);
     u.rate = isIOS ? 1.0 : 1.05;
     u.pitch = 0.9;
-    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
-    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
-    if (w.__jarvisDnd && !force) { onEnd?.(); return; }
-    u.volume = typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1;
+    u.volume = volume;
     const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
     const preferred =
       voices.find((v) => pattern.test(v.name)) ??
@@ -720,28 +736,17 @@ export function useTTS(voicePreference?: string) {
       voices[0];
     if (preferred) u.voice = preferred;
 
-    u.onstart = () => {
-      lastSpoken.text = clean;
-      lastSpoken.startedAt = Date.now();
-      lastSpoken.until = Infinity;
-      setSpeaking(true);
-      startKeepalive();
-    };
-    const finish = () => {
-      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
-      setSpeaking(false);
-      stopKeepalive();
-      onEnd?.();
-    };
-    u.onend = finish;
-    u.onerror = finish;
+    u.onstart = () => { started(); startKeepalive(); };
+    u.onend = finished;
+    u.onerror = finished;
 
     setTimeout(() => {
-      try { window.speechSynthesis.speak(u); } catch { finish(); }
+      try { window.speechSynthesis.speak(u); } catch { finished(); }
     }, isIOS ? 80 : 0);
   }, [enabled, supported, voicePreference, startKeepalive, stopKeepalive]);
 
   const stop = useCallback(() => {
+    stopNatural();
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }

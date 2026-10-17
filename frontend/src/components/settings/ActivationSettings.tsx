@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Mic, Smartphone, Keyboard, Sparkles, Check } from "lucide-react";
+import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { maybeRequestShake } from "@/hooks/useJarvisTriggers";
@@ -12,6 +12,7 @@ import {
   type GestureId,
   type Hotkey,
 } from "@/lib/activation";
+import { loadNaturalVoice, NATURAL_VOICE_KEY, naturalVoiceOn, naturalVoiceProgress, naturalVoiceSupported } from "@/lib/naturalVoice";
 
 const GESTURES: { id: GestureId; label: string; desc: string }[] = [
   { id: "shake", label: "Device Shake", desc: "Shake your phone firmly twice" },
@@ -239,7 +240,47 @@ export function ActivationSettings() {
           </button>
         </div>
       </section>
+
+      <NaturalVoice />
     </div>
+  );
+}
+
+// Free neural voice that runs in the browser (lib/naturalVoice.ts).
+function NaturalVoice() {
+  const [on, setOn] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => { setOn(naturalVoiceOn()); setSupported(naturalVoiceSupported()); }, []);
+
+  async function toggle(v: boolean) {
+    setOn(v);
+    try { localStorage.setItem(NATURAL_VOICE_KEY, v ? "1" : "0"); } catch { /* private mode: stays off next visit */ }
+    if (!v) { setStatus(null); return; }
+    setStatus("Downloading the voice (about 86 MB, once)…");
+    const tick = setInterval(() => setStatus(`Downloading the voice… ${Math.round(naturalVoiceProgress() * 100)}%`), 500);
+    const ready = await loadNaturalVoice();
+    clearInterval(tick);
+    setStatus(ready ? "Ready. Replies read aloud use the natural voice." : "Couldn't load it here, so the system voice is used.");
+  }
+
+  return (
+    <section className="bg-background-surface border border-border-default rounded-card p-5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-input bg-accent-blue/10 text-accent-blue">
+            <AudioLines size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Natural voice</h3>
+            <p className="text-xs text-text-muted">A human-sounding voice that runs in your browser: free, no key, nothing leaves the device</p>
+          </div>
+        </div>
+        <Toggle enabled={on} onChange={(v) => void toggle(v)} />
+      </div>
+      {!supported && <p className="text-xs text-warning">This browser has no WebGPU, so the system voice is used. Recent Chrome or Edge on a computer has it.</p>}
+      {status && <p className="text-xs text-text-secondary">{status}</p>}
+    </section>
   );
 }
 
