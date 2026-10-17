@@ -2,6 +2,7 @@ import UIKit
 import Capacitor
 import Photos
 import UniformTypeIdentifiers
+import AppIntents
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -55,6 +56,73 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 class BridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(DeviceSyncPlugin())
+        NotificationCenter.default.addObserver(self, selector: #selector(openPendingAsk), name: AssistantLink.opened, object: nil)
+    }
+
+    // A Siri request that launched the app arrives before the web view is up.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        openPendingAsk()
+    }
+
+    @objc func openPendingAsk() {
+        guard let message = AssistantLink.pending, let base = bridge?.config.serverURL else { return }
+        AssistantLink.pending = nil
+        var link = URLComponents(url: base.appendingPathComponent("assistant"), resolvingAgainstBaseURL: false)
+        link?.queryItems = [URLQueryItem(name: "ask", value: message)]
+        guard let url = link?.url else { return }
+        DispatchQueue.main.async { _ = self.webView?.load(URLRequest(url: url)) }
+    }
+}
+
+// Siri and Shortcuts open the assistant at /assistant?ask=<message>, which
+// sends the message (frontend AssistantClient).
+enum AssistantLink {
+    static let opened = Notification.Name("ThirdEyeOpenAssistant")
+    static var pending: String?
+
+    static func open(_ message: String) {
+        pending = message
+        NotificationCenter.default.post(name: opened, object: nil)
+    }
+}
+
+@available(iOS 16.0, *)
+struct AskThirdEyeIntent: AppIntent {
+    static var title: LocalizedStringResource = "Ask The Third Eye"
+    static var description = IntentDescription("Opens The Third Eye and asks it your question.")
+    static var openAppWhenRun = true
+
+    @Parameter(title: "Question", requestValueDialog: "What would you like to ask?")
+    var question: String
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.open(question)
+        return .result()
+    }
+}
+
+@available(iOS 16.0, *)
+struct MorningBriefingIntent: AppIntent {
+    static var title: LocalizedStringResource = "Morning briefing"
+    static var description = IntentDescription("Opens The Third Eye with today's tasks, meetings and weather.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.open("Give me my morning briefing")
+        return .result()
+    }
+}
+
+// "Hey Siri, ask The Third Eye" (Siri then asks for the question) and
+// "Hey Siri, morning briefing in The Third Eye"; both also appear in Shortcuts.
+@available(iOS 16.0, *)
+struct ThirdEyeShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(intent: AskThirdEyeIntent(), phrases: ["Ask \(.applicationName)", "Talk to \(.applicationName)"])
+        AppShortcut(intent: MorningBriefingIntent(), phrases: ["Morning briefing in \(.applicationName)", "Brief me with \(.applicationName)"])
     }
 }
 
