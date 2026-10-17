@@ -81,6 +81,7 @@ body {
 
 /* Reduced motion: disable non-essential animations */
 @media (prefers-reduced-motion: reduce) {
+  .route-scan { display: none; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -226,6 +227,22 @@ body {
 
 /* ── Animations ───────────────────────────────────────── */
 @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+/* Page change: the page fades in under a scan line that sweeps the screen.
+   Opacity only on the page, with no fill afterwards: a transform left on
+   <main> would make it the containing block for every position:fixed child
+   (dialogs, the composer). */
+@keyframes pageEnter { from { opacity: 0; } }
+.page-enter { animation: pageEnter var(--dur-page) cubic-bezier(0, 0, 0.2, 1) backwards; }
+@keyframes routeScan {
+  from { transform: translateY(0); opacity: 0.9; }
+  to   { transform: translateY(100vh); opacity: 0; }
+}
+.route-scan {
+  position: fixed; inset: 0 0 auto 0; height: 2px; z-index: 60; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--color-accent-blue) 20%, #7B5CF0 50%, var(--color-accent-blue) 80%, transparent);
+  box-shadow: 0 0 18px rgba(79, 195, 247, 0.6);
+  animation: routeScan 520ms var(--ease-depth) forwards;
+}
 @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes slideIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 @keyframes pulseGlow {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
@@ -8,6 +9,7 @@ import { VoiceOverlay } from "../voice/VoiceOverlay";
 import { AiStatusBanner } from "./AiStatusBanner";
 import { useJarvisTriggers } from "@/hooks/useJarvisTriggers";
 import { activateAssistant } from "@/lib/activation";
+import { cn } from "@/lib/utils";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -16,6 +18,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, mainClassName }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
   useJarvisTriggers(activateAssistant);
 
   return (
@@ -37,14 +40,17 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       <main
         id="main-content"
         tabIndex={-1}
-        className={
+        className={cn(
           mainClassName ??
-          "flex-1 overflow-y-auto pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 pl-14 pr-16 lg:pl-0 lg:pr-40"
-        }
+          "flex-1 overflow-y-auto pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 pl-14 pr-16 lg:pl-0 lg:pr-40",
+          "page-enter",
+        )}
       >
         <AiStatusBanner />
         {children}
       </main>
+      {/* A scan line sweeps the screen on each page, the HUD's page change. */}
+      <div key={pathname} className="route-scan" aria-hidden="true" />
       <BottomNav />
       <VoiceOverlay />
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Card3D } from "@/components/hud/Card3D";
 import {
   MessageSquare, CheckSquare, Radio, FileText, Target, BookOpen,
   BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings, Wand2, Briefcase, LayoutGrid,
@@ -98,19 +99,27 @@ export function DashboardWidgets() {
         {widgets.map((w) => {
           const Icon = w.icon;
           return (
-            <Link key={w.label} href={w.href} data-widget
-              className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden hover:-translate-y-0.5 transition-transform duration-150">
-              <div className="flex items-center justify-between mb-3">
+            // The entrance animation moves the outer wrapper and the tilt turns
+            // the card inside it, so the two never fight over one transform.
+            <div key={w.label} data-widget>
+            <Card3D intensity={9} lift={10} className="rounded-card h-full">
+            <Link href={w.href}
+              className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden preserve-3d block h-full">
+              <div className="flex items-center justify-between mb-3 depth-2">
                 <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-none"
                   style={{ background: `${w.color}1A`, color: w.color }}>
                   <Icon size={16} />
                 </span>
                 <ArrowRight size={13} className="text-text-muted group-hover:text-[#4FC3F7] group-hover:translate-x-0.5 transition-all" />
               </div>
-              <div className="text-lg font-semibold text-text-primary tabular-nums leading-none">{w.stat}</div>
-              <div className="text-xs text-text-secondary mt-1">{w.label}</div>
-              <div className="text-[10px] text-text-muted font-mono mt-0.5">{w.sub}</div>
+              <div className="depth-1">
+                <div className="text-lg font-semibold text-text-primary tabular-nums leading-none">{w.stat}</div>
+                <div className="text-xs text-text-secondary mt-1">{w.label}</div>
+                <div className="text-[10px] text-text-muted font-mono mt-0.5">{w.sub}</div>
+              </div>
             </Link>
+            </Card3D>
+            </div>
           );
         })}
       </div>
