@@ -4,8 +4,10 @@ import { getCsrfToken } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
 
 // A home-screen app keeps its own cookies, apart from Safari where Google
-// sign-in finishes, so there it signs in through /auth/handoff instead.
+// sign-in finishes, and Google refuses sign-in inside the native app's web
+// view, so both sign in through /auth/handoff instead.
 function inHomeScreenApp(): boolean {
+  if ((window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) return true;
   return (navigator as { standalone?: boolean }).standalone === true || window.matchMedia?.("(display-mode: standalone)").matches === true;
 }
 

@@ -22,6 +22,35 @@ on any change to `android/`). Builds from `main` also publish the APK to the
 public `android-latest` release, which the site's `/install` page links for a
 one-tap download. A store release still needs the signed bundle below.
 
+## iOS on your own iPhone, free
+
+On a Mac with Xcode and the iPhone connected by cable:
+
+```bash
+scripts/ios-free-install.sh
+```
+
+It builds the native app, signs it with your free Apple ID (add it once in
+Xcode > Settings > Accounts) under a bundle ID of your own, and installs it.
+First time only, trust the developer in Settings > General > VPN & Device
+Management. A free signature lasts 7 days; run the script again to renew.
+App Store and TestFlight need the paid Apple Developer Program.
+
+### Device sync in the iOS app
+
+`DeviceSyncPlugin` (in `ios/App/App/AppDelegate.swift`) and
+`frontend/src/lib/deviceSync.ts` sync without file pickers, on every open
+and return to the app (at most every 10 minutes), and from Settings:
+
+- **Contacts:** the whole address book (Contacts plugin).
+- **Photos:** the whole library once Photos access is allowed: the newest
+  300 on the first run, then everything newer. Each photo is stored as a 384 px
+  thumbnail with date, size, place and favourite (`device_photos`).
+- **Files:** iOS lets no app read every file, so the person chooses one folder
+  once (for example iCloud Drive); new and changed documents in it then sync
+  to Knowledge on their own (text, Markdown, CSV, JSON, PDF and Word, up to
+  10 MB, 25 per run).
+
 ## iOS without a Mac
 
 The **iOS app** workflow (`.github/workflows/ios-app.yml`) builds an unsigned

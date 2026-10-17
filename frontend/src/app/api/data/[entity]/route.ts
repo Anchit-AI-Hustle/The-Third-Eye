@@ -44,6 +44,8 @@ const ENTITIES: Record<string, EntityCfg> = {
   // Assistant chat history: listed without messages, opened one at a time.
   conversations: { table: "conversations", order: [{ col: "updated_at", asc: false }], upsertOn: "user_id,id", listColumns: "id,title,project_id,updated_at" },
   projects: { table: "projects", order: [{ col: "updated_at", asc: false }], upsertOn: "user_id,id" },
+  // Synced from the iPhone photo library; thumbnails are read one row at a time.
+  device_photos: { table: "device_photos", order: [{ col: "taken_at", asc: false }], upsertOn: "user_id,id", listColumns: "id,taken_at,width,height,lat,lon,favorite" },
   // Pause/resume/delete for automations (lib/automations.ts) and plain reminders —
   // listing with joined last-run status is server-computed at /api/automations.
   // Creation and any change to what fires (body/fire_at/recurrence) must go

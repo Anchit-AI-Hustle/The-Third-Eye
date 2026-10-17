@@ -81,5 +81,20 @@ describe("SignInClient", () => {
     open.mockRestore();
     delete (window.navigator as { standalone?: boolean }).standalone;
   });
-});
 
+  it("in the native iPhone app, also signs in through Safari, since Google refuses sign-in inside an app's web view", async () => {
+    (window as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+
+    const { container } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    await act(async () => { screen.getByRole("button", { name: "Continue with Google" }).click(); });
+
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^\/auth\/handoff\?code=[0-9a-f]{64}$/), "_blank");
+    expect(container.querySelector("form[action='/api/auth/signin/google']")).toBeNull();
+
+    vi.unstubAllGlobals();
+    open.mockRestore();
+    delete (window as { Capacitor?: unknown }).Capacitor;
+  });
+});

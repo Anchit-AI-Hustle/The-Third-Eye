@@ -29,23 +29,23 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>JARVIS listens for your wake word, dictation, and voice commands. Recording only runs while you have it switched on.</string>
+	<string>The Third Eye listens for your wake word, dictation, and voice commands. Recording only runs while you have it switched on.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>JARVIS syncs your contacts so it can call, message or email the people you name.</string>
+	<string>The Third Eye syncs your contacts so it can call, message or email the people you name.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>JARVIS uses the camera to inspect objects, scan documents, and provide visual assistance.</string>
+	<string>The Third Eye uses the camera to inspect objects, scan documents, and provide visual assistance.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>JARVIS accesses your photos and documents vault when you ask to inspect, analyze, or attach media.</string>
+	<string>The Third Eye syncs your photo library so you can find and ask about your photos without picking them one by one.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>JARVIS saves generated visual reports, charts, and media directly to your Photos library.</string>
+	<string>The Third Eye saves generated visual reports, charts, and media directly to your Photos library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>JARVIS uses your location to answer questions about where you are and provide local weather and navigation.</string>
+	<string>The Third Eye uses your location to answer questions about where you are and provide local weather and navigation.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>JARVIS converts what you say into text so it can respond to spoken requests.</string>
+	<string>The Third Eye converts what you say into text so it can respond to spoken requests.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>JARVIS detects physical movement and gestures like shake-to-activate and device orientation.</string>
+	<string>The Third Eye detects physical movement and gestures like shake-to-activate and device orientation.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>JARVIS discovers and interacts with local smart devices and media hubs on your network.</string>
+	<string>The Third Eye discovers and interacts with local smart devices and media hubs on your network.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
