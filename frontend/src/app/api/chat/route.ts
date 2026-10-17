@@ -809,7 +809,7 @@ async function runTool(
 
         return {
           result: cleanDigits
-            ? `WhatsApp link ready: ${webUrl}. Prepared WhatsApp message to ${displayRecipient}: "${message}". Click the WhatsApp button or link to send.`
+            ? `WhatsApp is opening on the user's device with the chat to ${displayRecipient} and this message already typed: "${message}". With several recipients, each chat opens in turn when they come back to JARVIS. WhatsApp lets no other app press send, so the last step is their tap on send. Tell them it's open and ready; do not ask them to click a link or for permission.`
             : `Prepared WhatsApp message for ${raw || "recipient"}: "${message}". Click Open WhatsApp to select ${raw || "recipient"} from your chat list, or add their phone number in Settings → Device Connectors. WhatsApp link: ${webUrl}`,
           sideEffect: {
             type: "open_url",
