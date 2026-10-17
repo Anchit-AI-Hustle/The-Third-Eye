@@ -196,6 +196,14 @@ export default async function Home() {
           <span>© {new Date().getFullYear()} The Third Eye</span>
 
           <nav className="flex items-center gap-4 font-mono" aria-label="Legal and product links">
+            <Link href="/install" className="transition-colors hover:text-text-secondary">
+              Get the app
+            </Link>
+
+            <span className="text-border-default" aria-hidden="true">
+              ·
+            </span>
+
             <Link href="/capabilities" className="transition-colors hover:text-text-secondary">
               Capabilities
             </Link>

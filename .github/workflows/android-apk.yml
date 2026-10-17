@@ -1,8 +1,9 @@
 name: Android APK
 # A debug APK of the Capacitor shell, built on GitHub's runner (free on a
 # public repo, and its image already carries the Android SDK and JDK 21).
-# Install it by downloading the artifact on the phone and allowing installs
-# from that source. Store releases still need a signed bundle (NATIVE_BUILD.md).
+# Builds from main also replace the asset on the public "android-latest"
+# release, which the site's /install page links for a one-tap download.
+# Store releases still need a signed bundle (NATIVE_BUILD.md).
 on:
   workflow_dispatch: {}
   push:
@@ -15,6 +16,8 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -29,3 +32,11 @@ jobs:
           name: jarvis-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish to the android-latest release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk the-third-eye.apk
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "Android app" --notes "Install: open the-third-eye.apk on your phone and allow installs from your browser. The app loads the live site, so it stays current."
+          gh release upload android-latest the-third-eye.apk --clobber
