@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { generateStudio } from "@/lib/studioGenerate";
 import { generationFailure } from "@/lib/llmCascade";
+import { chargedRoute } from "@/lib/credits";
+import { getTool } from "@/lib/studioTools";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,7 +14,7 @@ export const maxDuration = 60;
 // (it spends provider credits) and routed through the shared studioGenerate →
 // llmCascade, so no new API keys are required.
 
-export async function POST(req: NextRequest) {
+async function create(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -35,3 +37,10 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: generationFailure(e) }, { status: 503 });
   }
 }
+
+async function studioAction(req: Request): Promise<string> {
+  const body = (await req.json().catch(() => ({}))) as { tool?: string };
+  return getTool(String(body.tool ?? ""))?.format === "html" ? "studio.html" : "studio.text";
+}
+
+export const POST = chargedRoute(studioAction, create);

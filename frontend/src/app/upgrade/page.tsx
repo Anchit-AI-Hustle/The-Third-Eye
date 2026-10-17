@@ -50,11 +50,6 @@ export default function UpgradePage() {
           <p className="text-text-secondary mt-1">Let JARVIS act for you - not just answer.</p>
         </div>
 
-        <div className="mb-8 rounded-card border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-center">
-          <p className="text-sm text-amber-300 font-medium">🎉 Everything is free during launch</p>
-          <p className="text-xs text-text-muted mt-0.5">Every feature below is fully unlocked right now. This is a preview of what Premium will include.</p>
-        </div>
-
         <div className="flex items-center justify-center gap-2 mb-8">
           <button onClick={() => setInterval("monthly")}
             className={cn("px-4 py-1.5 rounded-input text-sm border transition-colors",
@@ -69,7 +64,7 @@ export default function UpgradePage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Plan title="Free" price="$0" features={FREE} />
+          <Plan title="Basic" price="$0" features={FREE} />
           <Plan title="Premium" price={interval === "yearly" ? PRICING.yearly.label : PRICING.monthly.label}
             features={PREMIUM} highlight />
         </div>

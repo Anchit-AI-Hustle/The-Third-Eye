@@ -117,7 +117,7 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
   // each other produce one track, not two paid renders.
   const { data: row, error } = await db.from("music_daily_tracks").insert({
     user_id: userId, day, title: concept.title, theme: concept.description,
-    tags: inCode ? `${plan.tags}, composed in code (instrumental)` : plan.tags, lyrics: plan.lyrics, bpm: brief.bpm, token,
+    tags: inCode ? `${plan.tags}, instrumental` : plan.tags, lyrics: plan.lyrics, bpm: brief.bpm, token,
   }).select("id").single();
   if (error) return error.code === "23505" ? "exists" : "failed";
 

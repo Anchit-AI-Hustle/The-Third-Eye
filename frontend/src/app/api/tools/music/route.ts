@@ -9,6 +9,7 @@ import { elevenLabsConfigured, composeElevenLabs, elevenPrompt, clipSecondsFor }
 import { storeStudioAudio, audioPath } from "@/lib/music/studioAudio";
 import { renderWav } from "@/lib/music/synth";
 import { getDb } from "@/lib/db";
+import { chargedRoute } from "@/lib/credits";
 
 export const runtime = "nodejs";
 // Eleven Music returns the finished song in one call, which can take a few
@@ -106,7 +107,7 @@ async function tryHuggingFaceMusic(promptText: string, seconds: number): Promise
 }
 
 
-export async function POST(req: NextRequest) {
+async function create(req: NextRequest) {
   const startedAt = Date.now();
   const user = await email();
   if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -167,9 +168,7 @@ export async function POST(req: NextRequest) {
     const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
     if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
     const keySet = !!process.env.ELEVENLABS_API_KEY?.trim();
-    const keyNote = keySet && !elevenLabsConfigured()
-      ? "The saved ElevenLabs value is a key id, not the secret. A working key starts with sk_ and is shown once when it is created or rotated. "
-      : "";
+    if (keySet && !elevenLabsConfigured()) console.warn("ELEVENLABS_API_KEY is a key id, not the sk_ secret; songs fall back to instrumentals");
     // No music model is reachable: compose the instrumental in code so the
     // Studio still plays a real track, and say exactly what it is.
     const db = getDb();
@@ -183,7 +182,7 @@ export async function POST(req: NextRequest) {
     return Response.json({
       configured: true, done: true, audioUrl, model: "code:synth", provider: "code",
       prompt, tags, lyrics, sessionSeconds, clipSeconds: seconds, loop: sessionSeconds > seconds, ...briefMeta, ...elMeta,
-      note: `${keyNote}No music AI is set up, so this instrumental was composed in code: synth parts, no vocals${sing ? " (the lyrics are below)" : ""}. Add an sk_ ELEVENLABS_API_KEY or a REPLICATE_API_TOKEN for AI songs with sung vocals.`,
+      note: `This track is instrumental, with no vocals${sing ? " (the lyrics are below)" : ""}.`,
     });
   }
 
@@ -255,3 +254,5 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: e instanceof Error ? e.message : "poll failed" }, { status: 502 });
   }
 }
+
+export const POST = chargedRoute("music.generate", create);
