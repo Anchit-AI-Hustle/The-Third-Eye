@@ -69,7 +69,7 @@ export function GenerationDetail({ id }: { id: string }) {
       </div>
 
       <div>
-        <span className="hud-label" style={{ color: meta.color }}>// {rec.appLabel}</span>
+        <span className="hud-label" style={{ color: meta.color }}>{rec.appLabel}</span>
         <h1 className="font-display text-2xl font-semibold text-text-primary">{rec.title}</h1>
         <p className="text-text-muted text-xs font-mono mt-1">
           {new Date(rec.createdAt).toLocaleString()} · {rec.kind}

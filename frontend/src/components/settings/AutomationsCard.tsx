@@ -74,7 +74,7 @@ export function AutomationsCard() {
     <div className="holo-card rounded-card p-5 mt-5">
       <div className="flex items-center gap-2 mb-1">
         <Workflow size={14} className="text-[#4FC3F7]" />
-        <span className="hud-label text-[#4FC3F7]">// Automations</span>
+        <span className="hud-label text-[#4FC3F7]">Automations</span>
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Scheduled automations</h2>
       <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">

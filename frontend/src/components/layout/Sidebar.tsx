@@ -86,7 +86,7 @@ function SettingsLink({ collapsed }: { collapsed?: boolean }) {
         collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
       )}>
       <Settings size={16} className="flex-none" />
-      {!collapsed && <span className="flex-1 text-left font-mono text-xs tracking-wide">Settings</span>}
+      {!collapsed && <span className="flex-1 text-left text-sm">Settings</span>}
     </Link>
   );
 }
@@ -104,7 +104,7 @@ function SignOutButton({ collapsed }: { collapsed?: boolean }) {
       )}
     >
       <LogOut size={16} className="flex-none" />
-      {!collapsed && <span className="flex-1 text-left font-mono text-xs tracking-wide">Sign out</span>}
+      {!collapsed && <span className="flex-1 text-left text-sm">Sign out</span>}
     </button>
   );
 }
@@ -164,7 +164,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
             <div className="font-display font-semibold text-text-primary tracking-tight leading-none gradient-text-arc">
               The Third Eye
             </div>
-            <div className="text-[10px] font-mono text-text-muted mt-0.5 tracking-wider">v0.1.0 · ONLINE</div>
+            <div className="text-[11px] text-text-muted mt-0.5">v0.1.0</div>
           </div>
         )}
 
@@ -255,7 +255,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
                         </>
                       )}
                       <Icon size={16} className="flex-none" />
-                      {!collapsed && <span className="flex-1 font-mono text-xs tracking-wide">{label}</span>}
+                      {!collapsed && <span className="flex-1 text-sm">{label}</span>}
                     </Link>
                   );
                 })}
@@ -292,7 +292,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
               </div>
             )}
             {!collapsed && (
-              <span className="text-text-secondary text-xs truncate flex-1 font-mono">
+              <span className="text-text-secondary text-sm truncate flex-1">
                 {session.user.name?.split(" ")[0] ?? session.user.email}
               </span>
             )}

@@ -31,7 +31,7 @@ function useClock() {
     const tick = () => {
       const now = new Date();
       setTime(now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }));
-      setSeconds(now.toLocaleTimeString("en-US", { second: "2-digit", hour12: false }).split(":")[2]);
+      setSeconds(String(now.getSeconds()).padStart(2, "0"));
       setDate(now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }));
     };
     tick();
@@ -134,11 +134,10 @@ export function DashboardClient() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Clock + HUD */}
-        <div className="lg:col-span-2 holo-card rounded-card p-6 relative hud-scanline hud-frame">
-          <div className="absolute inset-0 hud-grid pointer-events-none rounded-card" />
+        <div className="lg:col-span-2 holo-card rounded-card p-6 relative">
           <div className="relative">
             {/* Status bar */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
               <div className="flex items-center gap-2">
                 <span
                   className="status-dot"
@@ -149,7 +148,7 @@ export function DashboardClient() {
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <span className="hud-label">uptime {uptime}</span>
+                <span className="hud-label hidden sm:inline">uptime {uptime}</span>
                 <span className={cn("hud-label", killed || health?.ai === "down" ? "text-accent-red" : "text-success")}>
                   {killed ? "kill switch engaged" : !health ? "checking" : health.ai === "down" ? "assistant offline" : health.ai === "degraded" ? "backup ai" : "all systems nominal"}
                 </span>
@@ -157,30 +156,30 @@ export function DashboardClient() {
             </div>
 
             {/* Time display */}
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="font-mono text-5xl sm:text-6xl font-bold text-[#4FC3F7] tracking-tight" style={{ textShadow: '0 0 30px rgba(79,195,247,0.3)' }}>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="font-display text-4xl sm:text-5xl font-semibold text-text-primary tracking-tight tabular-nums">
                 {time || "--:--"}
               </span>
-              <span className="font-mono text-2xl text-[#4FC3F7]/50 animate-blink">
+              <span className="font-display text-xl text-text-muted tabular-nums">
                 :{seconds || "--"}
               </span>
             </div>
-            <div className="text-text-secondary text-sm font-mono mb-6">{date}</div>
+            <div className="text-text-secondary text-sm mb-6">{date}</div>
 
             {/* Stats row */}
             <div className="flex flex-wrap gap-5">
-              <HUDStat icon={<CheckSquare size={14} />} label="ACTIVE" value={ready ? open.length : "-"} />
-              <HUDStat icon={<AlertTriangle size={14} />} label="URGENT" value={ready ? urgent.length : "-"} alert={urgent.length > 0} />
-              <HUDStat icon={<Zap size={14} />} label="COMPLETED" value={ready ? doneToday.length : "-"} />
+              <HUDStat icon={<CheckSquare size={14} />} label="Active" value={ready ? open.length : "-"} />
+              <HUDStat icon={<AlertTriangle size={14} />} label="Urgent" value={ready ? urgent.length : "-"} alert={urgent.length > 0} />
+              <HUDStat icon={<Zap size={14} />} label="Completed" value={ready ? doneToday.length : "-"} />
               {overdue.length > 0 && (
-                <HUDStat icon={<Clock size={14} />} label="OVERDUE" value={overdue.length} alert />
+                <HUDStat icon={<Clock size={14} />} label="Overdue" value={overdue.length} alert />
               )}
             </div>
           </div>
         </div>
 
         {/* Arc Reactor + System Status */}
-        <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center hud-frame">
+        <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center">
           {/* Arc reactor — live 3D */}
           <ReactorCanvas size={150} />
           <span className="hud-label mt-2 mb-4">{agent.name}</span>
@@ -193,22 +192,6 @@ export function DashboardClient() {
             <StatusRow icon={<Shield size={12} />} label="Auth" value="Signed in" status="online" />
             <StatusRow icon={<Database size={12} />} label="Knowledge" value={health?.database ? "Cloud" : health ? "This device only" : "…"} status={health?.database ? "online" : "idle"} />
           </div>
-        </div>
-      </div>
-
-      {/* ── Data ticker ──────────────────────────────────────── */}
-      <div className="data-ticker rounded-card px-4 py-1.5">
-        <div className="data-ticker-inner">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="flex items-center gap-6 mr-6">
-              <TickerItem label="TASKS" value={`${open.length} active`} />
-              <TickerItem label="PRIORITY" value={`${urgent.length} high/urgent`} />
-              <TickerItem label="COMPLETED" value={`${doneToday.length} today`} />
-              <TickerItem label="VOICE" value="STT + TTS" />
-              <TickerItem label="AI" value={health?.aiProvider ?? "checking"} />
-              <TickerItem label="STATUS" value={killed ? "halted" : health?.ai === "down" ? "offline" : "operational"} />
-            </div>
-          ))}
         </div>
       </div>
 
@@ -314,7 +297,7 @@ export function DashboardClient() {
       </div>
 
       {/* ── Row 3: Capabilities ──────────────────────────────── */}
-      <div className="holo-card rounded-card p-5 hud-frame">
+      <div className="holo-card rounded-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <Activity size={12} className="text-[#4FC3F7]" />
           <span className="hud-label text-[#4FC3F7]">Subsystem Matrix</span>
@@ -412,8 +395,7 @@ function HUDStat({ icon, label, value, alert }: { icon: React.ReactNode; label: 
   return (
     <div className="flex items-center gap-2">
       <span className={alert ? "text-accent-red" : "text-[#4FC3F7]"}>{icon}</span>
-      <span className={cn("font-mono font-bold text-xl", alert ? "text-accent-red" : "text-[#4FC3F7]")}
-        style={!alert ? { textShadow: '0 0 10px rgba(79,195,247,0.3)' } : undefined}>
+      <span className={cn("font-display font-semibold text-xl tabular-nums", alert ? "text-accent-red" : "text-text-primary")}>
         {value}
       </span>
       <span className="hud-label">{label}</span>
@@ -425,15 +407,15 @@ function StatusRow({ icon, label, value, status }: {
   icon: React.ReactNode; label: string; value: string; status: "online" | "idle" | "pending";
 }) {
   const dotCls = {
-    online: "bg-[#4FC3F7] shadow-[0_0_6px_rgba(79,195,247,0.5)] animate-pulse",
+    online: "bg-success",
     idle: "bg-accent-blue/50",
     pending: "bg-text-muted",
   }[status];
   return (
     <div className="flex items-center gap-3">
       <span className="text-[#4FC3F7]/40 flex-none">{icon}</span>
-      <span className="text-text-secondary text-xs flex-1 font-mono">{label}</span>
-      <span className="text-text-muted text-[10px] font-mono hidden sm:block">{value}</span>
+      <span className="text-text-secondary text-xs flex-1">{label}</span>
+      <span className="text-text-muted text-xs hidden sm:block">{value}</span>
       <span className={cn("w-1.5 h-1.5 rounded-full flex-none", dotCls)} />
     </div>
   );
@@ -454,15 +436,5 @@ function QuickCard({ href, icon, label, sub, glow }: {
       </div>
       <ArrowRight size={13} className="ml-auto text-text-muted flex-none" />
     </Link>
-  );
-}
-
-function TickerItem({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="w-1 h-1 rounded-full bg-[#4FC3F7]/40" />
-      <span className="hud-label text-[#4FC3F7]/60">{label}</span>
-      <span className="text-[10px] font-mono text-text-muted">{value}</span>
-    </span>
   );
 }

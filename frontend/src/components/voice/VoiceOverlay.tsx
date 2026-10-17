@@ -477,7 +477,7 @@ export function VoiceOverlay() {
 
       {/* ── Expanded panel ── */}
       {expanded && (
-        <div className="holo-card rounded-card shadow-2xl animate-slide-in flex flex-col card-glow-arc hud-frame overflow-hidden"
+        <div className="holo-card rounded-card shadow-2xl animate-slide-in flex flex-col card-glow-arc overflow-hidden"
           style={{ maxHeight: "min(65vh, 480px)" }}>
 
           {/* Header */}
