@@ -51,6 +51,18 @@ and return to the app (at most every 10 minutes), and from Settings:
   to Knowledge on their own (text, Markdown, CSV, JSON, PDF and Word, up to
   10 MB, 25 per run).
 
+### Share to The Third Eye
+
+Text and links shared to the app go to the site's `/share`, which opens the
+assistant asking it to save them as a note:
+
+- **Android app:** "The Third Eye" in the share sheet (`ACTION_SEND` text,
+  `MainActivity.openShared`).
+- **Installed web app (Android Chrome):** `share_target` in `manifest.json`.
+- **iPhone:** the "Save to The Third Eye" action. Make it a share-sheet
+  Shortcut once: Shortcuts > + > add "Save to The Third Eye", set Content to
+  Shortcut Input, then in the shortcut's settings turn on Show in Share Sheet.
+
 ### Siri and Shortcuts
 
 `AppDelegate.swift` declares App Intents (iOS 16+): "Hey Siri, ask The Third
