@@ -294,6 +294,23 @@ export function useLocalContacts() {
   const syncDeviceContacts = useCallback(async (): Promise<{ count: number; supported: boolean; error?: string }> => {
     setSyncing(true);
     try {
+      // The Android and iOS apps read the whole address book through the
+      // native Contacts plugin, once the user allows it.
+      const C = (window as any).Capacitor;
+      const native = C?.isNativePlatform?.() ? C.Plugins?.Contacts : null;
+      if (native) {
+        const perm = await native.requestPermissions();
+        if (perm.contacts !== "granted" && perm.contacts !== "limited") {
+          return { count: 0, supported: true, error: "Contacts access is off. Turn it on in your phone's Settings for JARVIS, then sync again." };
+        }
+        const { contacts: book } = await native.getContacts({ projection: { name: true, phones: true, emails: true } });
+        const imported: Omit<DeviceContact, "id" | "updated_at">[] = (book ?? []).flatMap((c: any) => {
+          const name = c.name?.display?.trim();
+          if (!name) return [];
+          return [{ name, phone: c.phones?.[0]?.number ?? undefined, email: c.emails?.[0]?.address ?? undefined, source: "device" }];
+        });
+        return { count: importBatch(imported), supported: true };
+      }
       const nav = navigator as any;
       if ("contacts" in nav && "ContactsManager" in window) {
         const props = ["name", "email", "tel"];
@@ -312,11 +329,10 @@ export function useLocalContacts() {
         return { count: 0, supported: true };
       }
 
-      // Not supported natively on this browser (e.g. iOS Safari, Firefox, Mac Safari)
       return {
         count: 0,
         supported: false,
-        error: "Native Contacts Picker is available in Chrome/Android. On iOS / Mac / Safari, use the 'Import Contacts (.vcf / iCloud)' button below.",
+        error: "The JARVIS app for Android and iPhone syncs your whole address book. In a browser, Chrome on Android lets you pick contacts; anywhere else, import a .vcf or CSV file below.",
       };
     } catch (err: any) {
       return { count: 0, supported: true, error: err?.message || "Sync cancelled or not allowed." };

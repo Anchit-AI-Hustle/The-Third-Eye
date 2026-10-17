@@ -30,6 +30,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>JARVIS listens for your wake word, dictation, and voice commands. Recording only runs while you have it switched on.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>JARVIS syncs your contacts so it can call, message or email the people you name.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>JARVIS uses the camera to inspect objects, scan documents, and provide visual assistance.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

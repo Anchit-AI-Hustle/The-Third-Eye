@@ -34,13 +34,14 @@ npm run cap:android         # syncs + opens Android Studio → Build ▸ Generat
 ## Permissions
 
 `AndroidManifest.xml` and `Info.plist` declare the grants the web layer needs.
-Capacitor's WebView maps the web APIs onto them, so no bridge code is required:
+Capacitor's WebView maps the web APIs onto them, so no bridge code is required (contacts is the exception: it uses the native plugin, called from `hooks/useLocalContacts.ts`):
 
 | Web call | Android | iOS |
 | --- | --- | --- |
 | `getUserMedia` (wake word, day recorder) | `RECORD_AUDIO` | `NSMicrophoneUsageDescription` |
 | `Notification.requestPermission()` | `POST_NOTIFICATIONS` | n/a — see below |
 | `geolocation` | `ACCESS_*_LOCATION` | `NSLocationWhenInUseUsageDescription` |
+| Contacts sync (`@capacitor-community/contacts`) | `READ_CONTACTS`, `WRITE_CONTACTS` | `NSContactsUsageDescription` |
 
 Without these the calls fail silently inside the app while still working in a
 browser tab, which is the confusing failure mode they exist to prevent.
