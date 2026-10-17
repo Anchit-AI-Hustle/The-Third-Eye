@@ -98,7 +98,7 @@ describe("communicate tool in /api/chat", () => {
     expect(res.text).toContain("WhatsApp sent directly");
   });
 
-  it("automatically resolves Aviral Vahdam from essential contacts even if request contacts is empty", async () => {
+  it("does not resolve a name nobody saved to a built-in number", async () => {
     script = [
       { calls: [{ name: "communicate", args: { action: "whatsapp", to: "Aviral Vahdam", message: "Project update ready" } }] },
       { text: "WhatsApp link prepared for Aviral Vahdam." },
@@ -111,9 +111,7 @@ describe("communicate tool in /api/chat", () => {
 
     expect(res.done?.sideEffects).toBeDefined();
     const openUrl = res.done.sideEffects.find((fx: any) => fx.type === "open_url");
-    expect(openUrl).toBeDefined();
-    expect(openUrl.data.url).toContain("919811122334");
-    expect(openUrl.data.nativeUrl).toContain("whatsapp://send?phone=919811122334");
+    expect(openUrl?.data.url ?? "").not.toContain("919811122334");
   });
 
   it("manage_contacts searches and retrieves synced phone contacts", async () => {
