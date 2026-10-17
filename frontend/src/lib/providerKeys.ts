@@ -7,7 +7,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 // doesn't stop them. "ollama" holds a URL (their own machine, usually through
 // a tunnel) instead of a key.
 
-export const OWN_KEY_PROVIDERS = ["gemini", "groq", "openrouter", "mistral", "cerebras", "anthropic", "openai", "ollama"] as const;
+export const OWN_KEY_PROVIDERS = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "ollama"] as const;
 export type OwnKeyProvider = (typeof OWN_KEY_PROVIDERS)[number];
 export type OwnKeys = Partial<Record<OwnKeyProvider, string>> & { userId: string };
 

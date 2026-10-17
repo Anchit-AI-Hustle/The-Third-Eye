@@ -43,12 +43,25 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("model IDs come from the providers' current lists", () => {
-  it("asks Groq, Cerebras, Anthropic and OpenRouter for models they still serve", async () => {
-    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c"; process.env.ANTHROPIC_API_KEY = "a"; process.env.OPENROUTER_API_KEY = "o";
-    stubFetch({ "api.anthropic.com": { status: 200, body: { content: [{ type: "text", text: "hi" }] } }, "api.groq.com": okChat, "api.cerebras.ai": okChat, "openrouter.ai": okChat });
+  it("asks Groq, Cerebras and OpenRouter for models they still serve", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c"; process.env.OPENROUTER_API_KEY = "o";
+    stubFetch({ "api.groq.com": okChat, "api.cerebras.ai": okChat, "openrouter.ai": okChat });
     const { llmCascade } = await import("@/lib/llmCascade");
-    for (const p of ["anthropic", "groq", "cerebras", "openrouter"] as const) await llmCascade({ preferProvider: p, messages: [{ role: "user", content: "x" }] });
-    expect(calls.map((c) => c.model)).toEqual(["claude-haiku-5-5", "openai/gpt-oss-120b", "gpt-oss-120b", "nvidia/nemotron-3-super-120b-a12b:free"]);
+    for (const p of ["groq", "cerebras", "openrouter"] as const) await llmCascade({ preferProvider: p, messages: [{ role: "user", content: "x" }] });
+    expect(calls.map((c) => c.model)).toEqual(["openai/gpt-oss-120b", "gpt-oss-120b", "nvidia/nemotron-3-super-120b-a12b:free"]);
+  });
+});
+
+describe("Anthropic is not in the cascade", () => {
+  it("never calls Anthropic, even with ANTHROPIC_API_KEY set", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.GROQ_API_KEY = "g";
+    stubFetch({ "api.groq.com": { status: 429, body: { error: { message: "Rate limit reached" } } } });
+    const { llmCascade, toolCallCascade, cascadeOrder, configuredProviders } = await import("@/lib/llmCascade");
+    await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch(() => {});
+    await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] }).catch(() => {});
+    expect(calls.some((c) => c.host === "api.anthropic.com")).toBe(false);
+    expect(cascadeOrder()).not.toContain("anthropic");
+    expect(configuredProviders()).toEqual(["groq"]);
   });
 });
 
@@ -70,11 +83,11 @@ describe("JSON mode reaches every OpenAI-compatible provider", () => {
 describe("free tiers first by default", () => {
   it("orders free providers by daily headroom, paid ones last", async () => {
     const { cascadeOrder } = await import("@/lib/llmCascade");
-    expect(cascadeOrder()).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "anthropic", "grok"]);
+    expect(cascadeOrder()).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"]);
   });
 
   it("sends tool calls to Groq before any paid key, with no env var set", async () => {
-    process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENAI_API_KEY = "sk-oai";
+    process.env.GROQ_API_KEY = "g"; process.env.XAI_API_KEY = "xai"; process.env.OPENAI_API_KEY = "sk-oai";
     stubFetch({ "api.groq.com": okChat });
     const { toolCallCascade } = await import("@/lib/llmCascade");
     const out = await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] });
@@ -141,28 +154,28 @@ describe("requests too big for a provider's free per-minute token cap", () => {
 
 describe("a provider chosen by env goes first", () => {
   it("LLM_PRIMARY_PROVIDER moves that provider to the front, the free order follows", async () => {
-    process.env.LLM_PRIMARY_PROVIDER = "anthropic";
+    process.env.LLM_PRIMARY_PROVIDER = "openai";
     const { cascadeOrder } = await import("@/lib/llmCascade");
-    expect(cascadeOrder()).toEqual(["anthropic", "groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"]);
+    expect(cascadeOrder()).toEqual(["openai", "groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "grok"]);
   });
 
-  it("puts the primary first for tool calls too, Anthropic through its OpenAI-compatible endpoint", async () => {
-    process.env.GROQ_API_KEY = "g"; process.env.ANTHROPIC_API_KEY = "sk-ant";
-    process.env.LLM_PRIMARY_PROVIDER = "anthropic";
-    stubFetch({ "api.anthropic.com": okChat });
+  it("puts the primary first for tool calls too", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.OPENAI_API_KEY = "sk-oai";
+    process.env.LLM_PRIMARY_PROVIDER = "openai";
+    stubFetch({ "api.openai.com": okChat });
     const { toolCallCascade } = await import("@/lib/llmCascade");
     const out = await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] });
-    expect(out.provider).toBe("anthropic");
-    expect(calls[0]).toMatchObject({ host: "api.anthropic.com", path: "/v1/chat/completions", auth: "Bearer sk-ant", model: "claude-haiku-5-5" });
+    expect(out.provider).toBe("openai");
+    expect(calls[0]).toMatchObject({ host: "api.openai.com", path: "/v1/chat/completions", auth: "Bearer sk-oai", model: "gpt-4o-mini" });
   });
 });
 
 describe("every failure type falls through, then one clear message", () => {
   it("tries each configured provider in order and ends with a plain sentence", async () => {
-    process.env.ANTHROPIC_API_KEY = "a"; process.env.GEMINI_API_KEY = "x".repeat(39); process.env.GROQ_API_KEY = "g";
+    process.env.OPENAI_API_KEY = "a"; process.env.GEMINI_API_KEY = "x".repeat(39); process.env.GROQ_API_KEY = "g";
     process.env.CEREBRAS_API_KEY = "c"; process.env.OPENROUTER_API_KEY = "o"; process.env.MISTRAL_API_KEY = "m";
     stubFetch({
-      "api.anthropic.com": { status: 400, body: { error: { message: "Your credit balance is too low to access the Anthropic API." } } },
+      "api.openai.com": { status: 429, body: { error: { message: "You exceeded your current quota, please check your plan and billing details." } } },
       "generativelanguage.googleapis.com": { status: 429, body: { error: { message: "You exceeded your current quota" } } },
       "api.groq.com": { status: 404, body: { error: { message: "The model `openai/gpt-oss-120b` does not exist" } } },
       "api.cerebras.ai": { status: 402, body: { message: "Payment required to access this resource." } },
@@ -172,7 +185,7 @@ describe("every failure type falls through, then one clear message", () => {
     const { llmCascade, LlmCascadeError, userFacingLlmError } = await import("@/lib/llmCascade");
     const err = await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch((e) => e);
     expect(err).toBeInstanceOf(LlmCascadeError);
-    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "anthropic"]);
+    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai"]);
     const msg = userFacingLlmError(err);
     expect(msg).toMatch(/^[A-Z][^{}[\]]+\.$/);
     expect(msg).not.toMatch(/\bat \w|Error:|\{/);
@@ -206,16 +219,17 @@ describe("retry-after is honoured", () => {
 
 describe("/api/health", () => {
   it("reports each provider as ok, quota or misconfigured with no secrets, and an overall state", async () => {
-    process.env.GROQ_API_KEY = "gsk_secret_value"; process.env.ANTHROPIC_API_KEY = "sk-ant-secret";
-    health.anthropic = { provider: "anthropic", status: "credit", model: "m", reason: "credit balance", benched_until: new Date(Date.now() + 3_600_000).toISOString(), checked_at: new Date().toISOString() };
+    process.env.GROQ_API_KEY = "gsk_secret_value"; process.env.OPENAI_API_KEY = "sk-oai-secret";
+    health.openai = { provider: "openai", status: "credit", model: "m", reason: "credit balance", benched_until: new Date(Date.now() + 3_600_000).toISOString(), checked_at: new Date().toISOString() };
     health.groq = { provider: "groq", status: "ok", model: "m", reason: null, benched_until: null, checked_at: new Date().toISOString() };
     const { GET } = await import("@/app/api/health/route");
     const res = await GET();
     const text = await res.text();
-    expect(text).not.toMatch(/gsk_secret_value|sk-ant-secret/);
+    expect(text).not.toMatch(/gsk_secret_value|sk-oai-secret/);
     const body = JSON.parse(text);
     expect(body.llm.status).toBe("degraded");
-    expect(body.llm.providers.anthropic).toBe("quota");
+    expect(body.llm.providers.openai).toBe("quota");
+    expect(body.llm.providers).not.toHaveProperty("anthropic");
     expect(body.llm.providers.groq).toBe("ok");
     expect(body.llm.providers.mistral).toBe("misconfigured");
   });

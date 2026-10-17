@@ -2474,7 +2474,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         // Tier 3: the multi-provider cascade for a plain-text answer so the
         // assistant stays at least conversational. Tools are unavailable on
         // this path (it's a text completion), and it needs at least one other
-        // provider key (e.g. OPENAI_API_KEY/ANTHROPIC_API_KEY) configured.
+        // provider key (e.g. GROQ_API_KEY/OPENAI_API_KEY) configured.
         try {
           const { llmCascade } = await import("@/lib/llmCascade");
           const fbMessages = [
