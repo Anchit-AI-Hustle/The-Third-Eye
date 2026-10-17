@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const FREE = [
   "20 assistant messages / day",
   "Tasks, notes, goals & knowledge base",
-  "Calendar & inbox — read and ask",
+  "Calendar & inbox - read and ask",
   "3 active reminders",
   "Web search & weather",
 ];
@@ -47,7 +47,7 @@ export default function UpgradePage() {
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-semibold text-text-primary">JARVIS Premium</h1>
-          <p className="text-text-secondary mt-1">Let JARVIS act for you — not just answer.</p>
+          <p className="text-text-secondary mt-1">Let JARVIS act for you - not just answer.</p>
         </div>
 
         <div className="mb-8 rounded-card border border-amber-400/30 bg-amber-400/5 px-4 py-3 text-center">
@@ -80,7 +80,7 @@ export default function UpgradePage() {
           <button onClick={go} disabled={busy || loading}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-card bg-accent-blue text-white font-medium text-sm disabled:opacity-60 transition-opacity">
             <Zap size={15} />
-            {isPremium ? "Manage subscription" : busy ? "Redirecting…" : `Upgrade — ${interval === "yearly" ? PRICING.yearly.label : PRICING.monthly.label}`}
+            {isPremium ? "Manage subscription" : busy ? "Redirecting…" : `Upgrade - ${interval === "yearly" ? PRICING.yearly.label : PRICING.monthly.label}`}
           </button>
           <p className="text-text-muted text-xs mt-3">Cancel anytime. Secured by Stripe.</p>
         </div>

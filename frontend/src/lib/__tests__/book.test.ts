@@ -18,7 +18,7 @@ Stakes.
 - She hears it.
 - Nobody believes her.
 
-### Chapter 2 — The Tower
+### Chapter 2 - The Tower
 - She climbs.
 
 ## Voice

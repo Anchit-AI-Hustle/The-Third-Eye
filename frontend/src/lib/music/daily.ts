@@ -60,7 +60,7 @@ export async function variation(preset: MusicInput, refs: string, recent: string
           `Style: ${preset.description ?? ""}`,
           `Genre: ${preset.genre ?? ""}${preset.subgenre ? ` / ${preset.subgenre}` : ""}, ${preset.tempo ?? ""} BPM, mood ${preset.mood ?? ""}`,
           refs ? `The producer's own tracks this should sound like: ${refs}` : "",
-          recent.length ? `Titles already used — do not reuse: ${recent.join(", ")}` : "",
+          recent.length ? `Titles already used - do not reuse: ${recent.join(", ")}` : "",
         ].filter(Boolean).join("\n"),
       }],
       jsonMode: true, maxTokens: 300, temperature: 0.95, stage: "music:daily",

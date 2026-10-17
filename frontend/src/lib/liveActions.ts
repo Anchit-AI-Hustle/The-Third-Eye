@@ -26,9 +26,9 @@ export function gmailSendError(status: number, body: string): string {
   const reason = /SERVICE_DISABLED|accessNotConfigured|has not been used in project|is disabled/i.test(body) ? "disabled"
     : /insufficient|ACCESS_TOKEN_SCOPE_INSUFFICIENT|PERMISSION_DENIED/i.test(body) ? "scope"
     : status === 401 ? "expired" : "other";
-  if (reason === "disabled") return "Email sending failed — the Gmail API is switched off for this app's Google Cloud project. The owner needs to enable it (console.cloud.google.com → APIs & Services → Gmail API → Enable). No email was sent.";
-  if (reason === "scope") return "Email sending failed — Gmail send permission isn't granted. Reconnect from Connectors → Google and tick \"Send email on your behalf\". No email was sent.";
-  if (reason === "expired") return "Email sending failed — Google signed this connection out. Reconnect from Connectors → Google. No email was sent.";
+  if (reason === "disabled") return "Email sending failed - the Gmail API is switched off for this app's Google Cloud project. The owner needs to enable it (console.cloud.google.com → APIs & Services → Gmail API → Enable). No email was sent.";
+  if (reason === "scope") return "Email sending failed - Gmail send permission isn't granted. Reconnect from Connectors → Google and tick \"Send email on your behalf\". No email was sent.";
+  if (reason === "expired") return "Email sending failed - Google signed this connection out. Reconnect from Connectors → Google. No email was sent.";
   const msg = body.match(/"message":\s*"([^"]{1,200})"/)?.[1];
   return `Gmail rejected the send${msg ? `: ${msg}` : ""}. No email was sent.`;
 }

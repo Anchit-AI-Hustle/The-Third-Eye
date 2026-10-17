@@ -12,7 +12,7 @@ const plan = (c: Checklist) =>
 
 describe("classifyResult", () => {
   it("reads a handler's own failure phrasing, not words inside the user's data", () => {
-    expect(classifyResult("Couldn't build the calendar link — missing details.")).toBe("failed");
+    expect(classifyResult("Couldn't build the calendar link - missing details.")).toBe("failed");
     expect(classifyResult("[News fetch failed: timeout]")).toBe("failed");
     expect(classifyResult("Calculation failed: bad input")).toBe("failed");
     expect(classifyResult("GitHub isn't connected. The connect screen is open.")).toBe("failed");
@@ -83,7 +83,7 @@ describe("Checklist", () => {
     c.apply("fail_step", { step: 2, reason: "Gmail not connected" });
     const gap = c.shortfall()!;
     expect(gap).toContain("1/3 verified");
-    expect(gap).toContain("Email the invite (failed — Gmail not connected)");
+    expect(gap).toContain("Email the invite (failed - Gmail not connected)");
     expect(gap).toContain("Summarise for the user (not verified yet)");
   });
 

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body || typeof body !== "object") return Response.json({ error: "Invalid JSON" }, { status: 400 });
   const book = (body.book && typeof body.book === "object" ? body.book : {}) as Book;
-  if (!str(book.outline, 12_000)) return Response.json({ error: "Plan the book first — the outline is missing." }, { status: 400 });
+  if (!str(book.outline, 12_000)) return Response.json({ error: "Plan the book first - the outline is missing." }, { status: 400 });
 
   try {
     if (body.action === "listing") {
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       let listing: Record<string, unknown> = {};
       try { listing = JSON.parse(out.text.slice(s, e + 1)); } catch { /* reported below */ }
       if (typeof listing.description !== "string" || !Array.isArray(listing.keywords)) {
-        return Response.json({ error: "The listing came back incomplete — try again." }, { status: 502 });
+        return Response.json({ error: "The listing came back incomplete - try again." }, { status: 502 });
       }
       return Response.json({ listing: { ...listing, keywords: listing.keywords.slice(0, 7), categories: Array.isArray(listing.categories) ? listing.categories.slice(0, 3) : [] } });
     }
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const out = await llmCascade({
       system: `You are writing a book, one chapter at a time, in the voice set by the outline. Write finished prose, not notes.
 - Write ONLY the chapter text: no chapter heading, no title, no commentary, no "In this chapter".
-- About ${target} words${of > 1 ? ` — this is part ${part} of ${of} of the chapter, so ${part < of ? "stop at a natural break without wrapping the chapter up" : "carry on from where the text left off and land the chapter's ending"}` : ""}.
+- About ${target} words${of > 1 ? ` - this is part ${part} of ${of} of the chapter, so ${part < of ? "stop at a natural break without wrapping the chapter up" : "carry on from where the text left off and land the chapter's ending"}` : ""}.
 - Follow the chapter's beats from the outline, in order, and stay consistent with everything before it: names, facts, timeline, tone.
 - Paragraphs separated by a blank line. Scene breaks as "* * *". Use Markdown only for *emphasis*${/non-fiction|business|self-help/i.test(str(book.genre, 80)) ? " and short ## subheadings where a reader needs them" : ""}.`,
       messages: [{
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       stage: "book:chapter",
     });
     const text = out.text.trim().replace(/^```[a-z]*\n?|\n?```$/g, "").replace(/^#{1,3}\s*Chapter\s+\d+[^\n]*\n+/i, "").trim();
-    if (text.split(/\s+/).length < 80) return Response.json({ error: "The chapter came back too short — try again." }, { status: 502 });
+    if (text.split(/\s+/).length < 80) return Response.json({ error: "The chapter came back too short - try again." }, { status: 502 });
     return Response.json({ text });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Writing failed" }, { status: 502 });

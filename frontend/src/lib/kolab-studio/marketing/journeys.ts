@@ -98,7 +98,7 @@ export const JOURNEY_TEMPLATES: JourneyTemplate[] = [
     priority: 78,
     starter: true,
     steps: [
-      { step: 1, message: "We miss you — what's new" },
+      { step: 1, message: "We miss you - what's new" },
       { step: 2, message: "A reason to come back", offer: "free_sample_or_addon", waitDays: 5 },
       { step: 3, message: "Final win-back", offer: "comeback_discount", waitDays: 5 },
     ],
@@ -106,7 +106,7 @@ export const JOURNEY_TEMPLATES: JourneyTemplate[] = [
   {
     id: "vip_early_access",
     name: "VIP early access",
-    description: "Status-driven early access to drops for your best customers — no discount (protects the halo).",
+    description: "Status-driven early access to drops for your best customers - no discount (protects the halo).",
     packs: ["commerce", "local"],
     eligibleStages: ["VIP"],
     eligibleSegments: ["Champions", "Loyal"],
@@ -159,7 +159,7 @@ export const JOURNEY_TEMPLATES: JourneyTemplate[] = [
     throttleDays: 45,
     priority: 72,
     steps: [
-      { step: 1, message: "We miss you — here's what's new" },
+      { step: 1, message: "We miss you - here's what's new" },
       { step: 2, message: "A reason to come back this week", offer: "return_visit", waitDays: 30 },
     ],
   },

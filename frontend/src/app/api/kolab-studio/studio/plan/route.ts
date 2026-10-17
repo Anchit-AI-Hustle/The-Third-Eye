@@ -37,7 +37,7 @@ export async function POST(req: Request) {
           asset_type: asset[i],
           date: d.toISOString().slice(0, 10),
           time: "19:30",
-          hook: `${days[i]} post — edit me`,
+          hook: `${days[i]} post - edit me`,
           status: "to_shoot" as const,
           done: false,
         };

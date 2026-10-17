@@ -186,7 +186,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         });
         setIdeas((prev) => uniq([...prev, ...(d.ideas || [])]));
       }
-    } catch { /* transient — keep listening */ }
+    } catch { /* transient - keep listening */ }
     setAnalyzing(false);
   }, [buildRow]);
 

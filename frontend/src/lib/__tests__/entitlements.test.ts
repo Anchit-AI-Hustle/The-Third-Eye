@@ -82,7 +82,7 @@ describe("limitsFor", () => {
     expect(limitsFor("enterprise" as never)).toBe(TIERS.free);
   });
 
-  it("fails closed — an unknown tier never gets a premium capability", () => {
+  it("fails closed - an unknown tier never gets a premium capability", () => {
     const limits = limitsFor(undefined as never);
     expect(limits.canSendEmail).toBe(false);
     expect(limits.multiAgent).toBe(false);

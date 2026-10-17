@@ -1,6 +1,6 @@
 import { GoalsClient } from "@/components/goals/GoalsClient";
 
-export const metadata = { title: "Objectives — The Third Eye" };
+export const metadata = { title: "Objectives - The Third Eye" };
 
 export default function GoalsPage() {
   return (

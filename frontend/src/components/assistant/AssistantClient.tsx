@@ -194,7 +194,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     for (const f of array) {
       const used = next.reduce((n, a) => n + a.size, 0);
       if (next.length >= MAX_ATTACHMENTS) { setFileNote(`Up to ${MAX_ATTACHMENTS} files per message.`); break; }
-      if (used + f.size > MAX_ATTACHMENT_BYTES) { setFileNote(`"${f.name}" is too large — files can total 3 MB per message.`); continue; }
+      if (used + f.size > MAX_ATTACHMENT_BYTES) { setFileNote(`"${f.name}" is too large - files can total 3 MB per message.`); continue; }
       next.push({ name: f.name, mimeType: f.type || "text/plain", data: await readAsBase64(f), size: f.size });
     }
     setFiles(next);
@@ -1006,8 +1006,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           )}>
             {killed ? "Agent stopped · turn it back on in Settings"
               : systemOnline ? "JARVIS activated · all systems online"
-              : stt.recognitionIssue === "server" ? "I heard you, but transcription failed — say it once more"
-              : stt.recognitionIssue ? "Browser speech recognition stalled — keep talking, I'll transcribe it here"
+              : stt.recognitionIssue === "server" ? "I heard you, but transcription failed - say it once more"
+              : stt.recognitionIssue ? "Browser speech recognition stalled - keep talking, I'll transcribe it here"
               : tts.speaking ? "Speaking · hold on…"
               : doneMsg ?? (
                 isStreaming ? "Processing · composing response…"
@@ -1238,7 +1238,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <div className="flex items-center gap-1">
               <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
                 onChange={(e) => void addFiles(e.target.files)} />
-              <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, code, text" aria-label="Attach files"
+              <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files - images, PDFs, code, text" aria-label="Attach files"
                 className="flex-none p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
                 <Paperclip size={15} />
               </button>
@@ -1269,16 +1269,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <div className="flex items-center gap-1 sm:order-3">
               {/* Reply selector: how answers come back */}
               <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5" role="group" aria-label="How replies come back">
-                <button type="button" onClick={() => setReplyMode("text")} title="Text only — silent answers"
+                <button type="button" onClick={() => setReplyMode("text")} title="Text only - silent answers"
                   className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
                   <Type size={13} />
                 </button>
-                <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply — answers read aloud"
+                <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply - answers read aloud"
                   className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "voice" ? "bg-accent-violet/15 text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
                   <Volume2 size={13} />
                 </button>
                 {stt.supported && (
-                  <button type="button" onClick={() => setReplyMode("call")} title="Call — hands-free voice conversation"
+                  <button type="button" onClick={() => setReplyMode("call")} title="Call - hands-free voice conversation"
                     className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "call" ? "bg-success/15 text-success" : "text-text-muted hover:text-text-secondary")}>
                     <Phone size={13} />
                   </button>
@@ -1286,7 +1286,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
               </div>
               {stt.supported && (
                 <button onClick={toggleDictate}
-                  title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate — speech fills the box, doesn't send"}
+                  title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate - speech fills the box, doesn't send"}
                   className={cn("flex-none p-1.5 rounded-input transition-colors",
                     micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
                   {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
@@ -1303,7 +1303,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   updateActivation("wakeWordEnabled", true);
                 }}
                 title={
-                  wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`
+                  wakeEnabled ? `Wake word on - say "${agent?.name ?? "JARVIS"}" to go hands-free`
                     : "Enable wake word (\"Hey JARVIS\")"
                 }
                 className={cn("flex-none p-1.5 rounded-input transition-colors",
@@ -1328,7 +1328,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         </div>
         <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted")}>
           {stt.permissionDenied
-            ? "Microphone blocked for this site — click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
+            ? "Microphone blocked for this site - click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
             : micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
             : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
@@ -1366,7 +1366,7 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking, childre
           {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
         </p>
         <p className="text-text-secondary text-sm">
-          {supported ? "Just speak — or tap a suggestion below." : "Type below to begin."}
+          {supported ? "Just speak - or tap a suggestion below." : "Type below to begin."}
         </p>
       </div>
       {children}

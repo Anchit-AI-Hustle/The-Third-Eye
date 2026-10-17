@@ -41,7 +41,7 @@ export function HealthEvents() {
         </div>
         {showAdd && <AddEvent onAdd={addEvent} onCancel={() => setShowAdd(false)} />}
         {mine.length === 0 && !showAdd ? (
-          <p className="text-sm text-text-muted py-6 text-center rounded-card border border-border-default bg-background-surface/30">Nothing scheduled yet. Subscribe to a class, run, or game — daily, weekly, or any custom rhythm — and it stays on your device with reminders.</p>
+          <p className="text-sm text-text-muted py-6 text-center rounded-card border border-border-default bg-background-surface/30">Nothing scheduled yet. Subscribe to a class, run, or game - daily, weekly, or any custom rhythm - and it stays on your device with reminders.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2">
             {mine.map((e) => (
@@ -90,7 +90,7 @@ export function HealthEvents() {
             </a>
           ))}
         </div>
-        <p className="text-[10px] text-text-muted mt-3">Live timings, slots &amp; prices are shown on each provider when you open it — we link out, we don't book on your behalf.</p>
+        <p className="text-[10px] text-text-muted mt-3">Live timings, slots &amp; prices are shown on each provider when you open it - we link out, we don't book on your behalf.</p>
       </section>
     </div>
   );

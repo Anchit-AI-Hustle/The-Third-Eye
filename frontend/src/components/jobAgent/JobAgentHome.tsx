@@ -38,7 +38,7 @@ export function JobAgentHome() {
       {completeness < 60 && (
         <div className="rounded-card border border-[#F0C94E]/30 bg-[#F0C94E]/5 p-4 text-sm text-text-secondary flex items-center gap-3">
           <User size={16} className="text-[#F0C94E] flex-none" />
-          <span className="flex-1">Complete your profile so tailoring can cite real, verified evidence — no fabrication.</span>
+          <span className="flex-1">Complete your profile so tailoring can cite real, verified evidence - no fabrication.</span>
           <Link href="/job-agent/profile" className="text-[#F0C94E] text-xs font-mono hover:underline flex items-center gap-1">Finish profile <ArrowRight size={12} /></Link>
         </div>
       )}
@@ -55,7 +55,7 @@ export function JobAgentHome() {
             {savedActive.slice(0, 6).map((s) => (
               <div key={s.id} className="rounded-card border border-border-default bg-background-surface/40 p-4">
                 <div className="text-sm font-semibold text-text-primary truncate">{s.job_json.title}</div>
-                <div className="text-xs text-text-muted">{s.job_json.company} · {s.job_json.locationText || "—"}</div>
+                <div className="text-xs text-text-muted">{s.job_json.company} · {s.job_json.locationText || "-"}</div>
                 <div className="mt-2 flex items-center gap-2">
                   <a href={s.job_json.applyUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[#4FC3F7] hover:underline">Open posting →</a>
                   <span className="text-[10px] font-mono text-text-muted">{s.job_json.sourceAttribution}</span>

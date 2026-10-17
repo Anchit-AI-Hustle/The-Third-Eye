@@ -41,7 +41,7 @@ export function resolveIntent(tool: string, a: any): ResolvedIntent | null {
       if (note) q.set("tn", note);
       return {
         url: `upi://pay?${q.toString()}`,
-        label: `Pay ${cur === "INR" ? "₹" : cur + " "}${amount} to ${pn || pa}${note ? ` — “${note}”` : ""}`,
+        label: `Pay ${cur === "INR" ? "₹" : cur + " "}${amount} to ${pn || pa}${note ? ` - “${note}”` : ""}`,
         openLabel: "Approve & pay",
       };
     }

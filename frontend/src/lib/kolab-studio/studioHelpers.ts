@@ -42,7 +42,7 @@ export const BLUEPRINTS: { t: string; steps: string[] }[] = [
     t: "Carousel",
     steps: [
       "Slide 1 = the hook, big and readable",
-      "One point per slide (5–8 slides)",
+      "One point per slide (5-8 slides)",
       "Show, don't just tell",
       "Recap slide",
       "Save / share prompt on the last slide",

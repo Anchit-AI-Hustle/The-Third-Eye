@@ -30,7 +30,7 @@ const TASK_SHAPE_HINT = `
 Each task is an object:
 {
   "task_heading": "specific imperative, <= 70 chars",
-  "task_description": "full context — SKU/customer/campaign/geo/amount, <= 180 chars",
+  "task_description": "full context - SKU/customer/campaign/geo/amount, <= 180 chars",
   "rationale": "why this matters (tie to a revenue lever)",
   "growth_pillar": one of ${JSON.stringify(GROWTH_PILLARS)},
   "deadline": "ISO date, natural-language phrase, or null",

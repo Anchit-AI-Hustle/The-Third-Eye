@@ -42,7 +42,7 @@ describe("welcome credits", () => {
     expect(getBalance()).toBe(WELCOME_CREDITS);
   });
 
-  it("is idempotent — never grants twice", () => {
+  it("is idempotent - never grants twice", () => {
     ensureWelcome();
     ensureWelcome();
     ensureWelcome();
@@ -229,7 +229,7 @@ describe("bundle purchase", () => {
     expect(getBalance()).toBe(before);
   });
 
-  it("works without a subscription — anyone can top up", () => {
+  it("works without a subscription - anyone can top up", () => {
     expect(isSubscribed()).toBe(false);
     expect(purchaseBundle("spark").ok).toBe(true);
     expect(getBalance()).toBeGreaterThan(0);

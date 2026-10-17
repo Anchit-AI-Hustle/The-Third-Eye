@@ -14,7 +14,7 @@ describe("leadRecommendation", () => {
 
   it("leads with the overdue task", () => {
     const lead = leadRecommendation([task({ title: "File GST", due_date: "2026-08-10" })], [], TODAY);
-    expect(lead?.text).toBe("Start with File GST — it's 3 days overdue.");
+    expect(lead?.text).toBe("Start with File GST - it's 3 days overdue.");
   });
 
   it("uses the singular for one day overdue", () => {
@@ -54,7 +54,7 @@ describe("leadRecommendation", () => {
 
   it("falls through to tasks due today when nothing is overdue", () => {
     const lead = leadRecommendation([task({ title: "Ship audit", due_date: TODAY })], [], TODAY);
-    expect(lead?.text).toBe("Start with Ship audit — due today.");
+    expect(lead?.text).toBe("Start with Ship audit - due today.");
   });
 
   it("ignores done and cancelled tasks", () => {

@@ -10,7 +10,7 @@ const post = async (body: unknown) => {
   return POST(new Request("https://x.test/api/tools/book", { method: "POST", body: JSON.stringify(body) }) as never);
 };
 
-const book = { title: "The Last Signal", genre: "Fiction — thriller", outline: "### Chapter 1: Static\n- She hears it." };
+const book = { title: "The Last Signal", genre: "Fiction - thriller", outline: "### Chapter 1: Static\n- She hears it." };
 const chapter = { n: 1, title: "Static", beats: "- She hears it." };
 const prose = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ");
 

@@ -16,7 +16,7 @@ export const OPERATOR_PERSONA: PersonaDef = {
   id: "operator",
   name: "You",
   color: "#7B5CF0",
-  purpose: "Your own persona — fronts your resume and represents you across agents.",
+  purpose: "Your own persona - fronts your resume and represents you across agents.",
 };
 
 /** Every voice agent (kind: "agent") as a persona, plus the operator. */

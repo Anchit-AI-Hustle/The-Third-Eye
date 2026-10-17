@@ -31,7 +31,7 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 
 function instruction(type: FieldType, options: string[]): string {
   if (type === "select") return `Answer with exactly one of these options, copied verbatim: ${options.join(" | ")}.`;
-  if (type === "textarea") return "Write the field's content in full — specific, concrete and ready to use as-is. Plain text; no headings or commentary about what you wrote.";
+  if (type === "textarea") return "Write the field's content in full - specific, concrete and ready to use as-is. Plain text; no headings or commentary about what you wrote.";
   return "Give one concise value on a single line.";
 }
 
@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
   // than truncated (which silently dropped the rest). New only needs a gist.
   const raw = typeof body.value === "string" ? body.value.trim() : "";
   if (action !== "new" && raw.length > VALUE_MAX) {
-    return Response.json({ error: `Too long to ${action} in one go (over ${VALUE_MAX.toLocaleString("en-IN")} characters) — work on a part of it instead.` }, { status: 400 });
+    return Response.json({ error: `Too long to ${action} in one go (over ${VALUE_MAX.toLocaleString("en-IN")} characters) - work on a part of it instead.` }, { status: 400 });
   }
   const value = raw.slice(0, VALUE_MAX);
-  if (action === "enhance" && !value) return Response.json({ error: "Nothing to enhance yet — type something or use Suggest." }, { status: 400 });
+  if (action === "enhance" && !value) return Response.json({ error: "Nothing to enhance yet - type something or use Suggest." }, { status: 400 });
 
   const context = body.context && typeof body.context === "object"
     ? Object.entries(body.context as Record<string, unknown>)
@@ -67,14 +67,14 @@ export async function POST(req: NextRequest) {
   const previous = Array.isArray(body.previous) ? body.previous.map((p) => str(p, 120)).filter(Boolean).slice(-6) : [];
 
   const system = [
-    `You fill in ONE field of the "${str(body.tool?.label, 80) || "Studio"}" form${str(body.tool?.purpose, 300) ? ` — ${str(body.tool?.purpose, 300)}` : ""}.`,
+    `You fill in ONE field of the "${str(body.tool?.label, 80) || "Studio"}" form${str(body.tool?.purpose, 300) ? ` - ${str(body.tool?.purpose, 300)}` : ""}.`,
     `Field: "${label}"${str(body.field?.placeholder, 160) ? ` (hint: ${str(body.field?.placeholder, 160)})` : ""}.`,
     instruction(type, options),
-    "Stay coherent with everything else already filled in on the form. Correct obvious spelling. When enhancing, keep the intent and add specific detail — do not return the same words unchanged. A title or name must not be a copy of another field. Output ONLY the value — no label, no quotes, no explanation.",
+    "Stay coherent with everything else already filled in on the form. Correct obvious spelling. When enhancing, keep the intent and add specific detail - do not return the same words unchanged. A title or name must not be a copy of another field. Output ONLY the value - no label, no quotes, no explanation.",
   ].join("\n");
   const user = [
     context.length ? `Rest of the form:\n${context.map(([k, v]) => `- ${k}: ${v}`).join("\n")}` : "The rest of the form is empty.",
-    action === "enhance" ? `Improve this value — keep its intent, make it more specific and vivid:\n${value}`
+    action === "enhance" ? `Improve this value - keep its intent, make it more specific and vivid:\n${value}`
       : action === "new" ? `Give a clearly different alternative${value ? ` to: ${value}` : ""}.`
       : value ? `Suggest a better value than: ${value}` : "Suggest a strong value.",
     previous.length ? `Do not repeat: ${previous.map((p) => `"${p}"`).join(", ")}.` : "",
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       stage: "studio:suggest",
     });
     const suggestion = normalize(out.text, type, options);
-    if (!suggestion) return Response.json({ error: "No usable suggestion came back — try again." }, { status: 502 });
+    if (!suggestion) return Response.json({ error: "No usable suggestion came back - try again." }, { status: 502 });
     return Response.json({ suggestion });
   } catch (e) {
     return Response.json({ error: `Suggestion failed: ${e instanceof Error ? e.message : "unknown"}` }, { status: 502 });

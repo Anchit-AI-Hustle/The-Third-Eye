@@ -31,7 +31,7 @@ function fieldInstruction(field: string, genres: string[]): string {
   switch (field) {
     case "description":
     case "prompt":
-      return `Write a single vivid music-generation prompt of 80-180 words as flowing prose. Correct spelling first (psychadelic means psychedelic). Keep the user's genre and intent — expand it, do not switch style and do not return their note unchanged. Cover genre, BPM, instruments, energy, reference artists, and the section arc.`;
+      return `Write a single vivid music-generation prompt of 80-180 words as flowing prose. Correct spelling first (psychadelic means psychedelic). Keep the user's genre and intent - expand it, do not switch style and do not return their note unchanged. Cover genre, BPM, instruments, energy, reference artists, and the section arc.`;
     case "title": return "Return a single evocative 2-5 word song title. No quotes. Never use the description, the prompt, or any phrase copied from them as the title.";
     case "genre": return "Return a comma-separated list of 1-3 fitting genres. Name every genre the description actually asks for.";
     case "subgenre": return "Return 1-2 specific sub-genres of the context's genre, comma-separated.";
@@ -42,11 +42,11 @@ function fieldInstruction(field: string, genres: string[]): string {
     case "vocalLanguage": return "Return 1-2 languages the vocals should be sung/spoken in, comma-separated.";
     case "vocalIntensity": return "Return a single whole number from 1 to 10 (1 = soft whisper, 10 = powerful belted performance) fitting the mood and energy.";
     case "vocalEffects": return "Return 1-3 fitting vocal production effects, comma-separated (e.g. reverb, autotune, delay, choir layer, vocoder, distortion).";
-    case "structure": return `Return ONE song structure as section names joined by '–'. Prefer one of these genre-idiomatic structures, or adapt one: ${structuresFor(genres).slice(0, 6).join(" | ")}.`;
+    case "structure": return `Return ONE song structure as section names joined by ' - '. Prefer one of these genre-idiomatic structures, or adapt one: ${structuresFor(genres).slice(0, 6).join(" | ")}.`;
     case "tempo": return "Return a single whole number: the BPM, between 40 and 400, inside the real range of the context's genre (e.g. full-on psytrance 142-148, hi-tech 175-200, psycore 200-260, speedcore 250-400).";
     case "energy": return "Return a single whole number from 1 to 10 for the track's overall energy.";
     case "duration": return "Return a single number: a fitting length in seconds.";
-    case "lyricsText": return "Write short, singable, original lyrics with lowercase section tags on their own lines; sparse chants and hooks for club genres. The description is a production brief, not a lyric — do not quote it or reuse any phrase from it as a sung line.";
+    case "lyricsText": return "Write short, singable, original lyrics with lowercase section tags on their own lines; sparse chants and hooks for club genres. The description is a production brief, not a lyric - do not quote it or reuse any phrase from it as a sung line.";
     default: return "Return one concise, fitting value for this field.";
   }
 }
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   const action: Action = body.action ?? "suggest";
   const value = correctSpelling((body.value ?? "").trim());
   const previous = (body.previous ?? []).slice(-6);
-  if (action === "enhance" && !value) return Response.json({ error: "Nothing to enhance yet — type something or use Suggest." }, { status: 400 });
+  if (action === "enhance" && !value) return Response.json({ error: "Nothing to enhance yet - type something or use Suggest." }, { status: 400 });
 
   const brief = briefOf(field, value, body.context);
   const genre = preferGenre(cleanValue(body.context?.genre), inferGenre(brief || value));
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     .map(([k, v]) => `${k}: ${correctSpelling(String(v))}`).join("; ");
 
   const actionLine =
-    action === "enhance" ? `Enhance and enrich the current value. Correct spelling. Keep its intent and add concrete detail — do not return it unchanged.\nCurrent value: "${value}"`
+    action === "enhance" ? `Enhance and enrich the current value. Correct spelling. Keep its intent and add concrete detail - do not return it unchanged.\nCurrent value: "${value}"`
     : action === "new" ? `Produce a fresh ALTERNATIVE that is clearly different from the current value and from anything tried before.`
     : `Suggest a strong value.`;
 
@@ -85,9 +85,9 @@ export async function POST(req: NextRequest) {
     ? `\nGenre knowledge to stay accurate to:\n${knowledgeContext({ genre: genres.join(", "), subgenre: cleanValue(body.context?.subgenre), description: brief })}`
     : "";
   const system = `You are a world-class music production assistant. ${fieldInstruction(field, genres)}
-${anchor} Generate dynamically — never return template/placeholder text. Output ONLY the value, no labels, no commentary, no surrounding quotes.${grounding}`;
+${anchor} Generate dynamically - never return template/placeholder text. Output ONLY the value, no labels, no commentary, no surrounding quotes.${grounding}`;
   const user = [
-    ctx && `Context — ${ctx}.`,
+    ctx && `Context - ${ctx}.`,
     actionLine,
     previous.length ? `Do NOT repeat any of these previous outputs: ${previous.map((p) => `"${p.slice(0, 60)}"`).join(", ")}.` : "",
   ].filter(Boolean).join("\n");
@@ -100,12 +100,12 @@ ${anchor} Generate dynamically — never return template/placeholder text. Outpu
       stage: `music:suggest:${field}`,
     });
     const suggestion = finishSuggestion(field, action, value, brief, genre, normalizeSuggestion(field, out.text));
-    if (!suggestion) return Response.json({ error: "The suggestion came back empty — try again." }, { status: 502 });
+    if (!suggestion) return Response.json({ error: "The suggestion came back empty - try again." }, { status: 502 });
     return Response.json({ field, action, suggestion });
   } catch {
     const suggestion = offlineSuggestion(field, action, value, brief, genre);
     if (suggestion) return Response.json({ field, action, suggestion });
-    return Response.json({ error: "Suggestion failed — try again." }, { status: 502 });
+    return Response.json({ error: "Suggestion failed - try again." }, { status: 502 });
   }
 }
 

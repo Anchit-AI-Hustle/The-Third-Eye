@@ -3,9 +3,9 @@ import Link from "next/link";
 import { calculators, categories } from "@/lib/calculators/data";
 import { SITE_URL } from "@/lib/site";
 
-const TITLE = "Free Financial Calculators — SIP, EMI, Loan, Retirement & More";
+const TITLE = "Free Financial Calculators - SIP, EMI, Loan, Retirement & More";
 const DESCRIPTION =
-  "A growing library of free financial calculators — SIP, lumpsum, compound interest, EMI, loan prepayment, retirement, inflation and more. No sign-up, instant results, everything runs in your browser.";
+  "A growing library of free financial calculators - SIP, lumpsum, compound interest, EMI, loan prepayment, retirement, inflation and more. No sign-up, instant results, everything runs in your browser.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -53,7 +53,7 @@ export default function CalculatorsIndexPage() {
         </h1>
         <p className="mt-4 max-w-2xl text-text-secondary leading-relaxed">
           {calculators.length} free calculators for investing, loans, retirement and everyday money decisions. No
-          sign-up, no ads-first nonsense — enter your numbers and see the answer instantly, with the maths shown.
+          sign-up, no ads-first nonsense - enter your numbers and see the answer instantly, with the maths shown.
         </p>
       </section>
 

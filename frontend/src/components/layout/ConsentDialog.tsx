@@ -21,9 +21,9 @@ interface ConsentItem {
 
 const ITEMS: ConsentItem[] = [
   { key: "microphone",    icon: Mic,     title: "Microphone",    reason: "Voice commands & wake-word (JARVIS / FRIDAY / EDITH)" },
-  { key: "location",      icon: MapPin,  title: "Location",      reason: "Local weather, traffic, nearby search — never stored" },
+  { key: "location",      icon: MapPin,  title: "Location",      reason: "Local weather, traffic, nearby search - never stored" },
   { key: "notifications", icon: Bell,    title: "Notifications", reason: "Reminders, daily briefings, urgent task alerts" },
-  { key: "camera",        icon: Camera,  title: "Camera",        reason: "Vision analysis (EDITH-mode) — describe what you see" },
+  { key: "camera",        icon: Camera,  title: "Camera",        reason: "Vision analysis (EDITH-mode) - describe what you see" },
 ];
 
 export function ConsentDialog() {
@@ -88,7 +88,7 @@ export function ConsentDialog() {
             </div>
             <div>
               <h2 className="text-lg font-semibold">Activate Assistant</h2>
-              <p className="text-xs text-text-muted">Grant once — never asked again unless reset</p>
+              <p className="text-xs text-text-muted">Grant once - never asked again unless reset</p>
             </div>
           </div>
         </div>

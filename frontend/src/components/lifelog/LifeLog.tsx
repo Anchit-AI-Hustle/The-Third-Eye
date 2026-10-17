@@ -133,7 +133,7 @@ export function LifeLog() {
           {rec.recording && <p className="text-[11px] font-mono text-text-muted flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-accent-red animate-pulse" /> Listening · {day.segments.length} segment{day.segments.length === 1 ? "" : "s"}{rec.lastAt ? ` · last ${fmtTime(rec.lastAt)}` : ""}</p>}
           {rec.error && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{rec.error}</p>}
           {extractError && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{extractError}</p>}
-          <p className="text-[10px] text-text-muted leading-relaxed">Records while this screen is open. Phones pause the mic when the app is in the background or the screen is locked — keep it foregrounded for a continuous log.</p>
+          <p className="text-[10px] text-text-muted leading-relaxed">Records while this screen is open. Phones pause the mic when the app is in the background or the screen is locked - keep it foregrounded for a continuous log.</p>
         </div>
 
         <CalendarCard cursor={monthCursor} setCursor={setMonthCursor} selected={selectedDate} today={today} dates={dates} onPick={setSelectedDate} />

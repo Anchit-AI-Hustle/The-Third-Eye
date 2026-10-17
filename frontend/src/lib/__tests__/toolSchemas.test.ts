@@ -20,8 +20,8 @@ type Decl = { name: string; parameters?: Schema };
 function offenders(schema: Schema | undefined, path: string, out: string[]) {
   if (!schema) return;
   if (schema.enum !== undefined) {
-    if (schema.type !== "STRING") out.push(`${path} — enum on a ${schema.type ?? "untyped"} property`);
-    else if (!schema.enum.every((v) => typeof v === "string")) out.push(`${path} — non-string value in a STRING enum`);
+    if (schema.type !== "STRING") out.push(`${path} - enum on a ${schema.type ?? "untyped"} property`);
+    else if (!schema.enum.every((v) => typeof v === "string")) out.push(`${path} - non-string value in a STRING enum`);
   }
   for (const [k, v] of Object.entries(schema.properties ?? {})) offenders(v, `${path}.${k}`, out);
   if (schema.items) offenders(schema.items, `${path}[]`, out);

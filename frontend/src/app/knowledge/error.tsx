@@ -23,7 +23,7 @@ export default function KnowledgeError({
           Knowledge base error
         </h2>
         <p className="text-text-secondary text-sm mb-5">
-          The knowledge system encountered an issue. Your documents are safe — try again.
+          The knowledge system encountered an issue. Your documents are safe - try again.
         </p>
         <div className="flex items-center justify-center gap-3">
           <button

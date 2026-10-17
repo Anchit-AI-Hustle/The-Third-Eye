@@ -38,7 +38,7 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
         if (cancelled) return;
         if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
         setKit(d.kit);
-      } catch { if (!cancelled) setError("Generation failed — please try again."); }
+      } catch { if (!cancelled) setError("Generation failed - please try again."); }
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
@@ -74,13 +74,13 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
     // Persist immutable snapshots (best-effort; localStorage fallback handled by dataClient).
     setSaveError(null);
     const resumeSaved = await dataSave("resume_documents", {
-      id: resumeId, name: `${job.company} — ${job.title}`, target_job_id: job.id,
+      id: resumeId, name: `${job.company} - ${job.title}`, target_job_id: job.id,
       document_json: kit.resume, template_id: kit.resume.templateId, version_number: 1,
       validation_json: { warnings: kit.warnings }, generation_metadata_json: { generatedAt: kit.generatedAt, provider: kit.provider },
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     });
     const coverSaved = await dataSave("cover_letters", {
-      id: coverId, target_job_id: job.id, title: `${job.company} — ${job.title}`,
+      id: coverId, target_job_id: job.id, title: `${job.company} - ${job.title}`,
       document_json: kit.coverLetter, version_number: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     });
     if (resumeSaved === "failed" || coverSaved === "failed") {
@@ -105,7 +105,7 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border-default sticky top-0 bg-background-elevated z-10">
           <Sparkles size={16} className="text-[#4FC3F7]" />
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-text-primary text-sm truncate">Tailor &amp; Apply — {job.title}</div>
+            <div className="font-semibold text-text-primary text-sm truncate">Tailor &amp; Apply - {job.title}</div>
             <div className="text-[11px] text-text-muted">{job.company} · {job.sourceAttribution}</div>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary"><X size={18} /></button>
@@ -192,7 +192,7 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
             <div className="rounded-card border border-border-default bg-background-surface/40 p-4">
               {!approved ? (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1 text-xs text-text-muted">Approving saves an immutable snapshot of these documents to your tracker. <strong className="text-text-secondary">Nothing is submitted automatically</strong> — you apply on the employer's site yourself.</div>
+                  <div className="flex-1 text-xs text-text-muted">Approving saves an immutable snapshot of these documents to your tracker. <strong className="text-text-secondary">Nothing is submitted automatically</strong> - you apply on the employer's site yourself.</div>
                   <button onClick={approve} className="flex items-center gap-2 px-4 py-2.5 rounded-input bg-[#34D399] text-[#07070F] text-sm font-semibold hover:brightness-110"><Check size={15} /> Approve &amp; save</button>
                   {saveError && <p className="text-xs text-accent-red basis-full">{saveError}</p>}
                 </div>
@@ -212,7 +212,7 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
               )}
             </div>
 
-            <p className="text-[10px] text-text-muted text-center">Match scores are a candidate-side relevance heuristic — not an employer decision or a guarantee of an interview or offer.</p>
+            <p className="text-[10px] text-text-muted text-center">Match scores are a candidate-side relevance heuristic - not an employer decision or a guarantee of an interview or offer.</p>
           </div>
         )}
       </div>

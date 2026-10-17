@@ -19,7 +19,7 @@ export function StorefrontGrid({ deals }: { deals: Deal[] }) {
   if (deals.length === 0) {
     return (
       <div className="rounded-xl border border-kolab-line bg-kolab-surface p-6 text-center text-[14px] text-kolab-muted">
-        No live deals yet — add some in Creator Studio → Brand Deals.
+        No live deals yet - add some in Creator Studio → Brand Deals.
       </div>
     );
   }

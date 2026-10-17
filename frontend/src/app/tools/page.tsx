@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { StudioHub } from "@/components/studio/StudioHub";
 import { isAnchorOperator } from "@/lib/anchor";
 
-export const metadata = { title: "Studio — The Third Eye" };
+export const metadata = { title: "Studio - The Third Eye" };
 
 export default async function ToolsPage() {
   const session = await getServerSession(authOptions);
@@ -18,7 +18,7 @@ export default async function ToolsPage() {
         </div>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Studio</h1>
         <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">
-          Tools for your current mode — switch modes to see the Startup, Office or Hobby studio
+          Tools for your current mode - switch modes to see the Startup, Office or Hobby studio
         </p>
       </div>
       <StudioHub showAnchor={isAnchorOperator(session.user?.email)} />

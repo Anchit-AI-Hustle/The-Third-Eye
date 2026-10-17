@@ -185,7 +185,7 @@ export function VoiceWidget() {
     : liveBubble?.text
     ? "Listening…"
     : micOn
-    ? "Ready — speak"
+    ? "Ready - speak"
     : "JARVIS Widget";
 
   return (
@@ -279,7 +279,7 @@ export function VoiceWidget() {
             {!liveBubble && !lastTurn && !isStreaming && (
               <div className="text-center py-4">
                 <p className="text-xs text-text-muted">
-                  {micOn ? "Speak to JARVIS — listening now" : "Enable mic or type in the assistant"}
+                  {micOn ? "Speak to JARVIS - listening now" : "Enable mic or type in the assistant"}
                 </p>
                 <button
                   onClick={() => router.push("/assistant")}

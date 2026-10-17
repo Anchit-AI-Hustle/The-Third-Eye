@@ -17,7 +17,7 @@ export function safeHref(v: string | null | undefined): string | undefined {
 export const otpSchema = z
   .string()
   .trim()
-  .regex(/^\d{4,8}$/, "OTP must be 4–8 digits");
+  .regex(/^\d{4,8}$/, "OTP must be 4-8 digits");
 
 /** Indian 6-digit pincode. */
 export const pincodeSchema = z.string().trim().regex(/^\d{6}$/, "Pincode must be 6 digits");

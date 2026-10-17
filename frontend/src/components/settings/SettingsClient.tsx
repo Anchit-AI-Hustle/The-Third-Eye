@@ -156,7 +156,7 @@ export function SettingsClient({ user }: Props) {
         </div>
         <div className="p-5 space-y-3">
           <p className="text-sm text-text-secondary">
-            Permanently delete your account and <span className="text-text-primary">all associated data</span> —
+            Permanently delete your account and <span className="text-text-primary">all associated data</span> -
             tasks, notes, goals, knowledge, music, life-log recordings, job-agent data, memory and connected tokens,
             on this device and in the cloud. This cannot be undone.
           </p>
@@ -223,7 +223,7 @@ function StatusRow({ label, ok, hint }: { label: string; ok?: boolean; hint: str
         <p className="text-xs text-text-muted mt-0.5">{hint}</p>
       </div>
       {ok === undefined ? (
-        <span className="text-xs text-text-muted font-mono">—</span>
+        <span className="text-xs text-text-muted font-mono">-</span>
       ) : ok ? (
         <div className="flex items-center gap-1 text-success">
           <CheckCircle2 size={13} />

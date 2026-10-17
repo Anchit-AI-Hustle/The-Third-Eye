@@ -10,7 +10,7 @@ const ACCENT = "#FF3B1F";
 // its own repo's GitHub Actions; these buttons start the same workflows as the
 // Actions tab. Jarvis can do all of this from chat too ("run today's ANCHOR drop").
 
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—");
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "-");
 const mmss = (s: number | null) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "");
 
 export function AnchorPanel() {
@@ -87,7 +87,7 @@ export function AnchorPanel() {
             {busy === "drop" ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Run today&apos;s drop
           </button>
           <button disabled={!data.canRun || !!busy} className={btn}
-            onClick={() => run("rehearse", { action: "drop", dryRun: true }, "Rehearse today's drop? It renders only — nothing is released or posted.")}>
+            onClick={() => run("rehearse", { action: "drop", dryRun: true }, "Rehearse today's drop? It renders only - nothing is released or posted.")}>
             {busy === "rehearse" ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Rehearse (render only)
           </button>
           <button disabled={!data.canRun || !!busy} className={btn}

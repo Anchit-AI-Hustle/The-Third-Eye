@@ -124,7 +124,7 @@ describe("what the endpoint accepts", () => {
     expect(String(body.error)).toMatch(/non-confirmable/i);
   });
 
-  it("rejects communicate's deep-link modes — they are not confirmed here", async () => {
+  it("rejects communicate's deep-link modes - they are not confirmed here", async () => {
     // whatsapp/sms/call open a prefilled app on the tap; routing them through
     // this endpoint would mean a send with no app involved.
     for (const action of ["whatsapp", "sms", "call", "read_emails"]) {
@@ -170,7 +170,7 @@ describe("confirmed connector writes", () => {
     expect(callMcpTool).toHaveBeenCalledWith("mcp__google__gmail_send", { to: "a@b.com" }, SIGNED_IN);
   });
 
-  it("does not accept an MCP read here — reads never need confirming", async () => {
+  it("does not accept an MCP read here - reads never need confirming", async () => {
     const { status } = await post({ tool: "mcp__google__gmail_search", args: { query: "x" } });
     expect(status).toBe(400);
     expect(callMcpTool).not.toHaveBeenCalled();

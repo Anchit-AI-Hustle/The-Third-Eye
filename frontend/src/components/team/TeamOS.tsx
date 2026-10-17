@@ -296,7 +296,7 @@ function ProjectModal({ project, verticalId, onSave, onClose }: {
               {PROJECT_STATUS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </Field>
-          <Field label={`Progress — ${progress}%`}>
+          <Field label={`Progress - ${progress}%`}>
             <input type="range" min={0} max={100} value={progress} onChange={(e) => setProgress(+e.target.value)} className="w-full accent-accent-violet" />
           </Field>
         </div>
@@ -304,7 +304,7 @@ function ProjectModal({ project, verticalId, onSave, onClose }: {
           <Field label="Owner"><input value={owner} onChange={(e) => setOwner(e.target.value)} className={input} placeholder="Name" /></Field>
           <Field label="Due"><input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={input} /></Field>
         </div>
-        <Field label="Reason / expected impact"><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className={cn(input, "resize-none")} placeholder="Why this matters — the outcome it drives" /></Field>
+        <Field label="Reason / expected impact"><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className={cn(input, "resize-none")} placeholder="Why this matters - the outcome it drives" /></Field>
 
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -504,7 +504,7 @@ function RoadmapPanel({ goals, upsert, remove, hasMax, onUpsell }: {
                           <span className="text-text-primary text-sm">{g.title}</span>
                           {g.metric && (
                             <div className="text-[11px] font-mono text-text-muted mt-0.5">
-                              {g.metric}: {g.current?.toLocaleString() ?? "—"}{g.target !== undefined ? ` / ${g.target.toLocaleString()}` : ""}{g.unit ?? ""}
+                              {g.metric}: {g.current?.toLocaleString() ?? "-"}{g.target !== undefined ? ` / ${g.target.toLocaleString()}` : ""}{g.unit ?? ""}
                             </div>
                           )}
                           {g.note && <p className="text-text-muted text-xs mt-0.5">{g.note}</p>}

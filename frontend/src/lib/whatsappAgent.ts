@@ -28,7 +28,7 @@ async function chatTurn(token: string, message: string, link: WhatsAppLink) {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ message, history: link.history, tasks, notes, goals, timezone: process.env.WHATSAPP_TIMEZONE || "Asia/Kolkata" }),
   });
-  if (!res.ok || !res.body) return { text: "I couldn't reach my brain just now — try again in a minute.", confirm: null, effects: [] as Effect[] };
+  if (!res.ok || !res.body) return { text: "I couldn't reach my brain just now - try again in a minute.", confirm: null, effects: [] as Effect[] };
 
   let text = "";
   let confirm: { tool: string; args: unknown; summary: string } | null = null;
@@ -76,7 +76,7 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
     await db.from("whatsapp_links").update({
       phone: msg.from, link_code: null, code_expires_at: null, linked_at: new Date().toISOString(), last_inbound_at: new Date().toISOString(),
     }).eq("user_id", row.user_id);
-    await sendWhatsAppText(msg.from, "Linked ✅ This is JARVIS. Message me here like you do in the app — tasks, email, calendar, questions — and I'll send your reminders and briefings here too.");
+    await sendWhatsAppText(msg.from, "Linked ✅ This is JARVIS. Message me here like you do in the app - tasks, email, calendar, questions - and I'll send your reminders and briefings here too.");
     return;
   }
 
@@ -89,12 +89,12 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
   }
   await db.from("whatsapp_links").update({ last_inbound_at: new Date().toISOString() }).eq("user_id", link.user_id);
   if (!body) {
-    await sendWhatsAppText(msg.from, "I can read text messages here for now — type what you need.");
+    await sendWhatsAppText(msg.from, "I can read text messages here for now - type what you need.");
     return;
   }
 
   if (link.pending && (YES.test(body) || NO.test(body))) {
-    const reply = YES.test(body) ? await act(token, link.pending) : "Cancelled — nothing was done.";
+    const reply = YES.test(body) ? await act(token, link.pending) : "Cancelled - nothing was done.";
     await db.from("whatsapp_links").update({ pending: null }).eq("user_id", link.user_id);
     await sendWhatsAppText(msg.from, reply);
     return;

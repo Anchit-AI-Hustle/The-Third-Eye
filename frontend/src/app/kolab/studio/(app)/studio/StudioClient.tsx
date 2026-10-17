@@ -209,7 +209,7 @@ function Calendar({ pillars, plan, call, busy }: { pillars: Pillar[]; plan: Plan
           <div>
             <Label>Pillar</Label>
             <select className="w-full rounded-[10px] border border-kolab-line bg-kolab-surface2 px-3 py-[11px] text-[14px] text-kolab-ink" value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
-              <option value="">—</option>
+              <option value="">-</option>
               {pillars.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -273,7 +273,7 @@ function Calendar({ pillars, plan, call, busy }: { pillars: Pillar[]; plan: Plan
               <div>
                 <div className="text-[14px] font-semibold">{x.hook || "(idea)"}</div>
                 <div className="mt-1 font-kolab-mono text-[10px] uppercase text-kolab-muted">
-                  {(pil?.name || "—") + (x.format ? " · " + x.format : "")}
+                  {(pil?.name || "-") + (x.format ? " · " + x.format : "")}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -301,7 +301,7 @@ function Calendar({ pillars, plan, call, busy }: { pillars: Pillar[]; plan: Plan
 function Blueprints() {
   return (
     <div>
-      <ModuleHead title="Post blueprints" sub="Reusable skeletons — every post follows the same five-beat backbone: Hook → Relate → Value → Proof → CTA." />
+      <ModuleHead title="Post blueprints" sub="Reusable skeletons - every post follows the same five-beat backbone: Hook → Relate → Value → Proof → CTA." />
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]">
         {BLUEPRINTS.map((b) => (
           <Card key={b.t} className="p-[18px]">
@@ -330,14 +330,14 @@ function AssetMap({ plan }: { plan: PlanItem[] }) {
   if (!total) {
     return (
       <div>
-        <ModuleHead title="Asset & shot map" sub="Live from your calendar — the production load before you film." />
+        <ModuleHead title="Asset & shot map" sub="Live from your calendar - the production load before you film." />
         <p className="text-[14px] text-kolab-muted">Build your calendar to see the asset mix.</p>
       </div>
     );
   }
   return (
     <div>
-      <ModuleHead title="Asset & shot map" sub="Live from your calendar — the production load before you film." />
+      <ModuleHead title="Asset & shot map" sub="Live from your calendar - the production load before you film." />
       <div className="mb-4 flex h-10 overflow-hidden rounded-[11px] border border-kolab-line">
         {order
           .filter((k) => counts[k] > 0)
@@ -446,7 +446,7 @@ function Scheduler({ schedule, channels, call, busy }: { schedule: ScheduledPost
                     {dt.toLocaleDateString("en-GB", { month: "short" })}
                   </>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </div>
               <div>
@@ -571,7 +571,7 @@ function Tracker({ pillars, plan, call, busy }: { pillars: Pillar[]; plan: PlanI
 
   return (
     <div>
-      <ModuleHead title="Tracker" sub="Your plan as an editable checklist — set status, tick when live, export to Excel." />
+      <ModuleHead title="Tracker" sub="Your plan as an editable checklist - set status, tick when live, export to Excel." />
       <div className="mb-4 flex flex-wrap items-center gap-3.5">
         <div className="min-w-[200px] flex-1">
           <div className="mb-1.5 flex justify-between font-kolab-mono text-[11px] uppercase tracking-[0.08em] text-kolab-muted">
@@ -590,7 +590,7 @@ function Tracker({ pillars, plan, call, busy }: { pillars: Pillar[]; plan: PlanI
       </div>
 
       {plan.length === 0 ? (
-        <p className="text-[14px] text-kolab-muted">Nothing to track yet — build your calendar.</p>
+        <p className="text-[14px] text-kolab-muted">Nothing to track yet - build your calendar.</p>
       ) : (
         plan.map((x) => {
           const done = x.done || x.status === "posted";

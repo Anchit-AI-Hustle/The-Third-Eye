@@ -64,7 +64,7 @@ export function resolveTask(
   }
 
   return {
-    message: `No task matching "${input.title}" is in the tracker, so nothing was changed. Tell the user it wasn't found — do not claim it was updated or deleted.`,
+    message: `No task matching "${input.title}" is in the tracker, so nothing was changed. Tell the user it wasn't found - do not claim it was updated or deleted.`,
   };
 }
 

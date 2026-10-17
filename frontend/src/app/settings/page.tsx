@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SettingsHub } from "@/components/settings/SettingsHub";
 
-export const metadata = { title: "Settings — The Third Eye" };
+export const metadata = { title: "Settings - The Third Eye" };
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);

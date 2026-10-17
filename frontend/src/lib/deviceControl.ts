@@ -241,7 +241,7 @@ async function share(value?: string | null): Promise<DeviceExecResult> {
       return { ok: true, action: "share", via: "web", applied: "Share sheet opened" };
     }
     await navigator.clipboard.writeText(text);
-    return { ok: true, action: "share", via: "web", applied: "Share API missing — copied instead" };
+    return { ok: true, action: "share", via: "web", applied: "Share API missing - copied instead" };
   } catch {
     return { ok: false, action: "share", via: "web", applied: "Share cancelled" };
   }

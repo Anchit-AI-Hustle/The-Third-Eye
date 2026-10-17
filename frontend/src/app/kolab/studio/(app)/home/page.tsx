@@ -25,7 +25,7 @@ export default async function HomePage() {
           <Eyebrow>Everything Kolab does</Eyebrow>
           <h2 className="mb-2 text-[clamp(24px,4vw,36px)]">Your whole creator business, in one place</h2>
           <p className="text-[15px] text-kolab-muted">
-            Browse every offering below. Complete your profile and verify to unlock the tools — until
+            Browse every offering below. Complete your profile and verify to unlock the tools - until
             then this is a full preview of what&apos;s inside.
           </p>
         </div>
@@ -66,7 +66,7 @@ export default async function HomePage() {
 
       {isLifecyclePack && (
         <>
-          <h3 className="mb-3 text-[16px]">Starter journeys — switch on in draft</h3>
+          <h3 className="mb-3 text-[16px]">Starter journeys - switch on in draft</h3>
           <div className="mb-7 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
             {journeys.map((j) => (
               <Card key={j.id} className="p-4">

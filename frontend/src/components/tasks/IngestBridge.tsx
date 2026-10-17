@@ -29,7 +29,7 @@ export function IngestBridge() {
           const d = await res.json().catch(() => ({}));
           if (d.changed) window.dispatchEvent(new CustomEvent("te:tasks-updated"));
         }
-      } catch { /* transient — next tick retries */ }
+      } catch { /* transient - next tick retries */ }
       runningRef.current = false;
     };
 

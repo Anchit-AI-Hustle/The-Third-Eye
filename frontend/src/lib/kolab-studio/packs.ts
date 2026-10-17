@@ -31,7 +31,7 @@ export const PACK_META: Record<PackType, PackMeta> = {
     question: "I sell products",
     label: "Brand · Commerce",
     icon: "🛍️",
-    blurb: "D2C & retail — fashion, footwear, beauty, F&B, electronics.",
+    blurb: "D2C & retail - fashion, footwear, beauty, F&B, electronics.",
     verticals: ["Fashion", "Footwear", "Beauty", "Packaged F&B", "Supplements", "Electronics", "Home"],
   },
   local: {

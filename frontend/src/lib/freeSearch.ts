@@ -114,5 +114,5 @@ export async function freeNearby(query: string, location?: { latitude: number; l
     : "";
   const r = await get(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=0&limit=6&q=${encodeURIComponent(query)}${bounds}`);
   const places = r ? ((await r.json().catch(() => [])) as { name?: string; display_name?: string; lat?: string; lon?: string }[]) : [];
-  return places.slice(0, 6).map((p) => `- **${p.name || p.display_name?.split(",")[0]}** — ${p.display_name ?? ""}\n  https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`).join("\n");
+  return places.slice(0, 6).map((p) => `- **${p.name || p.display_name?.split(",")[0]}** - ${p.display_name ?? ""}\n  https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`).join("\n");
 }

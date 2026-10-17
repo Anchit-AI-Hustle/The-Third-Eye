@@ -465,13 +465,13 @@ const INTENT_PATTERNS: Array<{ re: RegExp; tool: string; action?: string; needs?
 ];
 
 const CAPABILITY_LABEL: Record<string, string> = {
-  gmailSend: "Gmail send — Google account not connected with send access",
-  gmailRead: "Gmail read — Google account not connected",
-  calendar: "Google Calendar — not connected",
-  reminders: "Reminders — cloud sync (database) not configured",
-  webSearch: "Web search / news / nearby — SERPER_API_KEY not set",
-  health: "Health data — no health service connected",
-  smartHome: "Smart home control — no Matter/HomeKit hub connected",
+  gmailSend: "Gmail send - Google account not connected with send access",
+  gmailRead: "Gmail read - Google account not connected",
+  calendar: "Google Calendar - not connected",
+  reminders: "Reminders - cloud sync (database) not configured",
+  webSearch: "Web search / news / nearby - SERPER_API_KEY not set",
+  health: "Health data - no health service connected",
+  smartHome: "Smart home control - no Matter/HomeKit hub connected",
 };
 
 export function detectIntents(
@@ -523,20 +523,20 @@ function findMissing(text: string, intents: DetectedIntent[], hasWhen: boolean):
     intents.some((i) => i.tool === tool && (action === undefined || i.action === action));
 
   if (has("manage_reminders", "set") && !hasWhen) {
-    missing.push("manage_reminders(set) needs fire_at — the message gives no resolvable time");
+    missing.push("manage_reminders(set) needs fire_at - the message gives no resolvable time");
   }
   // `@` and `.` are excluded from the surrounding classes so there is exactly
   // one way to match any candidate — `\S+@\S+\.\S+` is the textbook quadratic
   // case and this runs on request input.
   const looksLikeEmail = /[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+/.test(text);
   if (has("communicate", "email") && !looksLikeEmail && !/\b(?:to|email)\s+[A-Z][a-z]+/.test(text)) {
-    missing.push("communicate(email) needs a recipient — no address or named contact in the message");
+    missing.push("communicate(email) needs a recipient - no address or named contact in the message");
   }
   if (has("pay") && !/(?:₹|\brs\.?\b|\brupees\b)?\s*\d+/.test(text)) {
     missing.push("pay needs an amount");
   }
   if (has("manage_calendar", "add") && !hasWhen) {
-    missing.push("manage_calendar(add) needs a date/time — none resolvable from the message");
+    missing.push("manage_calendar(add) needs a date/time - none resolvable from the message");
   }
   return missing;
 }
@@ -587,7 +587,7 @@ export function normalizePrompt(input: NormalizeInput): NormalizedPrompt {
   }
 
   if (times.length > 0) {
-    lines.push("Resolved time references — use these exact values, do not recompute:");
+    lines.push("Resolved time references - use these exact values, do not recompute:");
     for (const t of times) {
       lines.push(`  - "${t.phrase}" → ${t.iso}${t.assumed ? ` [assumed: ${t.assumed}]` : ""}`);
     }
@@ -610,12 +610,12 @@ export function normalizePrompt(input: NormalizeInput): NormalizedPrompt {
   }
 
   if (missing.length > 0) {
-    lines.push("Missing required detail — ask one short question instead of guessing:");
+    lines.push("Missing required detail - ask one short question instead of guessing:");
     for (const m of missing) lines.push(`  - ${m}`);
   }
 
   if (unavailable.length > 0) {
-    lines.push("Not available this turn — say so plainly, never imply success:");
+    lines.push("Not available this turn - say so plainly, never imply success:");
     for (const u of unavailable) lines.push(`  - ${u}`);
   }
 
@@ -633,7 +633,7 @@ export function normalizePrompt(input: NormalizeInput): NormalizedPrompt {
     rules.push("A resolved time is marked [assumed]. State the assumption in your reply, and confirm before any irreversible action that depends on it.");
   }
   if (intents.length > 1) {
-    rules.push("This turn carries more than one intent. Do not answer only the first — call a tool for each listed intent before replying.");
+    rules.push("This turn carries more than one intent. Do not answer only the first - call a tool for each listed intent before replying.");
   }
   lines.push("Rules for this turn:");
   for (const r of rules) lines.push(`  - ${r}`);

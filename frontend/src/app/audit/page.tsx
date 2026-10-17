@@ -53,8 +53,8 @@ const AUDITS: Audit[] = [
     verdict:
       "Data flows through the session-scoped server route (RLS enforced), the Command Center surfaces every feature as a live widget, and the duplicated task list is gone. Solid.",
     issues: [
-      { severity: "critical", text: "Browser Supabase client used the anon key with no NextAuth→Supabase bridge, so RLS blocked reads/writes once Supabase was configured.", fix: "All reads/writes go through a server route (/api/data/[entity]) that authenticates via the session and uses the service-role client scoped to the user's email — verified: the anon client is now unused anywhere in the app.", status: "fixed" },
-      { severity: "high", text: "RLS + owner policies lived only in loose hand-run SQL files, so a fresh/unmigrated database could have RLS OFF while the public anon key shipped to browsers.", fix: "Added an idempotent RLS-hardening migration (supabase/migrations) that enables RLS + a WITH CHECK owner policy on every user table and locks token/ingestion tables to service-role only — reproducible via `supabase db push`.", status: "fixed" },
+      { severity: "critical", text: "Browser Supabase client used the anon key with no NextAuth→Supabase bridge, so RLS blocked reads/writes once Supabase was configured.", fix: "All reads/writes go through a server route (/api/data/[entity]) that authenticates via the session and uses the service-role client scoped to the user's email - verified: the anon client is now unused anywhere in the app.", status: "fixed" },
+      { severity: "high", text: "RLS + owner policies lived only in loose hand-run SQL files, so a fresh/unmigrated database could have RLS OFF while the public anon key shipped to browsers.", fix: "Added an idempotent RLS-hardening migration (supabase/migrations) that enables RLS + a WITH CHECK owner policy on every user table and locks token/ingestion tables to service-role only - reproducible via `supabase db push`.", status: "fixed" },
       { severity: "medium", text: "A missing service-role key silently dropped the app into localStorage-only mode with no indication.", fix: "Added a Cloud synced / Local only badge (sidebar) backed by /api/sync-status so the persistence state is always visible.", status: "fixed" },
       { severity: "medium", text: "Task list was duplicated (two near-identical render blocks).", fix: "Removed the duplicate; the Mission Queue renders once.", status: "fixed" },
       { severity: "low", text: "Empty/loading states could be richer.", fix: "Per-card skeletons already present; further polish optional.", status: "fixed" },
@@ -69,7 +69,7 @@ const AUDITS: Audit[] = [
     verdict:
       "The strongest page. Streaming chat, Dictate mode, honest ✓/✗ results, cascade fallback, persona-driven tone + voice, and now a short-lived Undo when the agent creates a task/note/goal.",
     issues: [
-      { severity: "high", text: "Selected agent profile barely changed model behaviour — mostly a voice label.", fix: "The profile's persona is now sent to the chat route and prepended to the system prompt, and its voice preference drives TTS.", status: "fixed" },
+      { severity: "high", text: "Selected agent profile barely changed model behaviour - mostly a voice label.", fix: "The profile's persona is now sent to the chat route and prepended to the system prompt, and its voice preference drives TTS.", status: "fixed" },
       { severity: "medium", text: "Agent actions applied immediately with no undo.", fix: "Agent-created items now show a 12s Undo affordance in the assistant.", status: "fixed" },
     ],
   },
@@ -81,7 +81,7 @@ const AUDITS: Audit[] = [
     dims: { accuracy: 9, implementation: 10, execution: 9, results: 10 },
     verdict: "TwinMind-style ambient capture, now unified into the Task Tracker as a single feature: the mic listens live and Gmail is scraped, both auto-extracting tasks/reminders/ideas into one shared queue (with an undo log). Lives in the collapsible “Live Capture & Sources” panel above the tracker. A screen Wake Lock keeps the mic alive mid-session, and the status panel shows Gmail connection + a Scan-now with results. The 0.1 gap is the one honest platform limit below.",
     issues: [
-      { severity: "medium", text: "Browser can only listen while the tab is open — not system-wide.", fix: "Web scope is now maximised (auto-create tasks, screen Wake Lock, visible foreground status). True always-on capture with the app closed/screen off is a hard web-platform limit — no browser API allows it — and needs the native desktop agent (the existing Personal-AI-OS already does this).", status: "pending" },
+      { severity: "medium", text: "Browser can only listen while the tab is open - not system-wide.", fix: "Web scope is now maximised (auto-create tasks, screen Wake Lock, visible foreground status). True always-on capture with the app closed/screen off is a hard web-platform limit - no browser API allows it - and needs the native desktop agent (the existing Personal-AI-OS already does this).", status: "pending" },
     ],
   },
   {
@@ -140,7 +140,7 @@ const AUDITS: Audit[] = [
     current: 9.5,
     target: 9.5,
     dims: { accuracy: 10, implementation: 9, execution: 9, results: 10 },
-    verdict: "A working expense tracker — log by natural language (\"250 coffee\") or voice, one-tap categories, edit any entry inline, month totals, category breakdown and recent transactions, all persisted per-user. Optional bank import is the only stretch left.",
+    verdict: "A working expense tracker - log by natural language (\"250 coffee\") or voice, one-tap categories, edit any entry inline, month totals, category breakdown and recent transactions, all persisted per-user. Optional bank import is the only stretch left.",
     issues: [
       { severity: "critical", text: "No connected data source; numbers were static/sample.", fix: "Built a real expense tracker (amount/category/note/date) with add + inline edit, persisted via the server data route, plus NL + voice quick-add.", status: "fixed" },
       { severity: "low", text: "No automatic bank/card import (optional).", fix: "Manual + NL/voice entry covers the core need; a statement/aggregator import can be added later.", status: "pending" },
@@ -152,11 +152,11 @@ const AUDITS: Audit[] = [
     current: 9.5,
     target: 9.5,
     dims: { accuracy: 10, implementation: 9, execution: 10, results: 9 },
-    verdict: "An honest inventory — gated behind auth, RAG badges corrected, and two former 'planned' items now genuinely live: Vision analysis (screen/webcam → AI) and wake-word detection (hands-free on the agent's name).",
+    verdict: "An honest inventory - gated behind auth, RAG badges corrected, and two former 'planned' items now genuinely live: Vision analysis (screen/webcam → AI) and wake-word detection (hands-free on the agent's name).",
     issues: [
       { severity: "high", text: "Page had no auth guard (deployment info exposed to anon).", fix: "Added /capabilities (and other app routes) to the middleware matcher.", status: "fixed" },
       { severity: "medium", text: "Knowledge/Document Q&A were badged 'live' as RAG, but run keyword search.", fix: "Downgraded to 'partial' and relabelled as keyword search until embeddings land.", status: "fixed" },
-      { severity: "low", text: "Vision analysis was badged 'planned'.", fix: "Shipped it — /api/vision analyzes a shared screen or webcam frame; badge is now 'live'.", status: "fixed" },
+      { severity: "low", text: "Vision analysis was badged 'planned'.", fix: "Shipped it - /api/vision analyzes a shared screen or webcam frame; badge is now 'live'.", status: "fixed" },
     ],
   },
   {
@@ -165,7 +165,7 @@ const AUDITS: Audit[] = [
     current: 9.5,
     target: 9.5,
     dims: { accuracy: 10, implementation: 9, execution: 10, results: 9 },
-    verdict: "Google connect flow and live status badges work, cosmetic toggles are gone, and the storage claim is accurate — now reinforced by a live Cloud synced / Local only indicator in the shell.",
+    verdict: "Google connect flow and live status badges work, cosmetic toggles are gone, and the storage claim is accurate - now reinforced by a live Cloud synced / Local only indicator in the shell.",
     issues: [
       { severity: "medium", text: "A few 'toggles' were fake (disabled) and the storage line claimed 'local only'.", fix: "Always-on facts (caching/memory/streaming) shown as status, not fake switches; storage line now says data syncs to your private Supabase per-user.", status: "fixed" },
     ],
@@ -190,8 +190,8 @@ const AUDITS: Audit[] = [
     verdict:
       "Cascade + connectors are real, open routes are gated, the NextAuth secret fails closed, RLS is now enforced via a tracked migration, and ingestion is hardened (owner-less dedup + chat watermark advance only after successful processing).",
     issues: [
-      { severity: "critical", text: "/api/llm and /api/transcribe were open — anyone could spend provider credits.", fix: "Require a signed-in session (401 otherwise); cap audio at 25 MB.", status: "fixed" },
-      { severity: "critical", text: "NEXTAUTH_SECRET fell back to a hard-coded string — session JWTs were forgeable.", fix: "Fail closed in production; dev + build phase exempted.", status: "fixed" },
+      { severity: "critical", text: "/api/llm and /api/transcribe were open - anyone could spend provider credits.", fix: "Require a signed-in session (401 otherwise); cap audio at 25 MB.", status: "fixed" },
+      { severity: "critical", text: "NEXTAUTH_SECRET fell back to a hard-coded string - session JWTs were forgeable.", fix: "Fail closed in production; dev + build phase exempted.", status: "fixed" },
       { severity: "medium", text: "Cron secret in query string; host-header open-redirect risk; prompt-injection surface in chat.", fix: "Cron auth is header-only now; OAuth origin validates the host against a configured allowlist; the chat system prompt treats ingested content as data, never instructions.", status: "fixed" },
     ],
   },
@@ -253,7 +253,7 @@ export default function AuditPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold">App Audit</h1>
           <p className="text-sm text-text-muted max-w-2xl">
-            An honest, self-critical review of every page — rated on accuracy, implementation,
+            An honest, self-critical review of every page - rated on accuracy, implementation,
             execution and results. The target for every page is 9.5. We don&apos;t fake the number:
             the path to 9.5 is the fix list below, and each item shows whether it&apos;s already done.
           </p>

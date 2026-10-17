@@ -13,8 +13,8 @@ interface Status {
 function scopeLabels(scopes: string[]): string[] {
   const out = new Set<string>();
   for (const s of scopes) {
-    if (s.includes("gmail.send")) out.add("Gmail — send");
-    else if (s.includes("gmail")) out.add("Gmail — read");
+    if (s.includes("gmail.send")) out.add("Gmail - send");
+    else if (s.includes("gmail")) out.add("Gmail - read");
     if (s.includes("calendar")) out.add("Calendar");
   }
   return [...out];
@@ -90,14 +90,14 @@ export function ConnectionsCard() {
       )}
       {banner === "pending" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-text-muted">
-          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app — it opens to everyone once approved.
+          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app - it opens to everyone once approved.
         </div>
       )}
       {banner === "no_scopes" && (
         <div className="flex items-start gap-2 mb-4 text-xs text-warning">
           <AlertCircle size={13} className="mt-px shrink-0" />
           <span>
-            Nothing was connected — none of the Gmail or Calendar boxes were ticked on
+            Nothing was connected - none of the Gmail or Calendar boxes were ticked on
             Google&apos;s screen. Any access you had already granted is untouched. Try again and
             allow at least one.
           </span>
@@ -105,7 +105,7 @@ export function ConnectionsCard() {
       )}
       {banner === "error" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-accent-red">
-          <AlertCircle size={13} /> Couldn&apos;t connect — the sign-in was cancelled or the app isn&apos;t authorised for these scopes yet.
+          <AlertCircle size={13} /> Couldn&apos;t connect - the sign-in was cancelled or the app isn&apos;t authorised for these scopes yet.
         </div>
       )}
 

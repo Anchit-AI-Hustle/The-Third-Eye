@@ -1,6 +1,6 @@
 import { ActivityClient } from "@/components/activity/ActivityClient";
 
-export const metadata = { title: "Agent Activity — The Third Eye" };
+export const metadata = { title: "Agent Activity - The Third Eye" };
 
 export default function ActivityPage() {
   return (
@@ -11,7 +11,7 @@ export default function ActivityPage() {
         </div>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Agent Activity</h1>
         <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">
-          Kill switch · append-only log of what your agents &amp; apps do — assistant actions, generations, voice captures &amp; system events
+          Kill switch · append-only log of what your agents &amp; apps do - assistant actions, generations, voice captures &amp; system events
         </p>
       </div>
       <ActivityClient />

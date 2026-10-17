@@ -11,7 +11,7 @@ export async function generateMetadata(props: { params: Promise<{ handle: string
   const params = await props.params;
   const data = await getPublicStorefront(decodeURIComponent(params.handle)).catch(() => null);
   const who = data?.name || data?.handle || "Creator";
-  return { title: `${who}'s storefront — Kolab`, description: `Shop ${who}'s picks with their codes.` };
+  return { title: `${who}'s storefront - Kolab`, description: `Shop ${who}'s picks with their codes.` };
 }
 
 export default async function PublicStorefrontPage(props: { params: Promise<{ handle: string }> }) {
@@ -33,7 +33,7 @@ export default async function PublicStorefrontPage(props: { params: Promise<{ ha
         <div className="mb-1 font-kolab-mono text-[11px] uppercase tracking-[0.16em] text-kolab-lime">@{data.handle}</div>
         <h1 className="mb-2 text-[clamp(24px,4vw,40px)]">Shop {first}&apos;s edit</h1>
         <p className="mb-6 max-w-[52ch] text-[15px] text-kolab-muted">
-          Hand-picked deals — tap a code to copy it, then shop on each brand&apos;s own site.
+          Hand-picked deals - tap a code to copy it, then shop on each brand&apos;s own site.
         </p>
         <StorefrontGrid deals={data.deals} />
       </section>

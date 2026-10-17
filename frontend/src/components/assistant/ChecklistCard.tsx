@@ -16,7 +16,7 @@ const LABEL: Record<Step["status"], string> = {
   done: "verified",
   active: "working",
   awaiting: "needs your Confirm",
-  failed: "failed — retrying or blocked",
+  failed: "failed - retrying or blocked",
   pending: "to do",
 };
 

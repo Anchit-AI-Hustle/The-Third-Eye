@@ -44,7 +44,7 @@ export async function getDeviceInfo(): Promise<DeviceInfo> {
         info.battery = { levelPercent: Math.round(b.level * 100), charging: b.charging };
       } catch { /* not available */ }
     }
-  } catch { /* best-effort — return whatever we gathered */ }
+  } catch { /* best-effort - return whatever we gathered */ }
 
   return info;
 }

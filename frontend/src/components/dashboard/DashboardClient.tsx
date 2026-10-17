@@ -115,11 +115,11 @@ export function DashboardClient() {
   // Generate AI Insights from available data
   const insights: string[] = [];
   if (ready) {
-    if (overdue.length > 0)    insights.push(`${overdue.length} task${overdue.length > 1 ? "s are" : " is"} overdue — review needed.`);
+    if (overdue.length > 0)    insights.push(`${overdue.length} task${overdue.length > 1 ? "s are" : " is"} overdue - review needed.`);
     if (urgent.length > 0)     insights.push(`${urgent.length} high-priority item${urgent.length > 1 ? "s" : ""} require your attention.`);
-    if (doneToday.length > 0)  insights.push(`${doneToday.length} task${doneToday.length > 1 ? "s" : ""} completed today — good momentum.`);
+    if (doneToday.length > 0)  insights.push(`${doneToday.length} task${doneToday.length > 1 ? "s" : ""} completed today - good momentum.`);
     if (inProgress.length > 0) insights.push(`${inProgress.length} task${inProgress.length > 1 ? "s" : ""} currently in progress.`);
-    if (open.length === 0)     insights.push("All clear — no open tasks. Time to plan ahead.");
+    if (open.length === 0)     insights.push("All clear - no open tasks. Time to plan ahead.");
     if (insights.length === 0) insights.push(`System ready. Ask ${agent.name} anything to get started.`);
   }
 
@@ -159,19 +159,19 @@ export function DashboardClient() {
             {/* Time display */}
             <div className="flex items-baseline gap-2 mb-1">
               <span className="font-mono text-5xl sm:text-6xl font-bold text-[#4FC3F7] tracking-tight" style={{ textShadow: '0 0 30px rgba(79,195,247,0.3)' }}>
-                {time || "––:––"}
+                {time || "--:--"}
               </span>
               <span className="font-mono text-2xl text-[#4FC3F7]/50 animate-blink">
-                :{seconds || "––"}
+                :{seconds || "--"}
               </span>
             </div>
             <div className="text-text-secondary text-sm font-mono mb-6">{date}</div>
 
             {/* Stats row */}
             <div className="flex flex-wrap gap-5">
-              <HUDStat icon={<CheckSquare size={14} />} label="ACTIVE" value={ready ? open.length : "—"} />
-              <HUDStat icon={<AlertTriangle size={14} />} label="URGENT" value={ready ? urgent.length : "—"} alert={urgent.length > 0} />
-              <HUDStat icon={<Zap size={14} />} label="COMPLETED" value={ready ? doneToday.length : "—"} />
+              <HUDStat icon={<CheckSquare size={14} />} label="ACTIVE" value={ready ? open.length : "-"} />
+              <HUDStat icon={<AlertTriangle size={14} />} label="URGENT" value={ready ? urgent.length : "-"} alert={urgent.length > 0} />
+              <HUDStat icon={<Zap size={14} />} label="COMPLETED" value={ready ? doneToday.length : "-"} />
               {overdue.length > 0 && (
                 <HUDStat icon={<Clock size={14} />} label="OVERDUE" value={overdue.length} alert />
               )}
@@ -363,30 +363,30 @@ function StartHere({ agentName }: { agentName: string }) {
       href: "/assistant",
       icon: <MessageSquare size={16} />,
       title: `Talk to ${agentName}`,
-      body: "Ask it anything in plain English — it can search the web, answer questions about your own documents, and create tasks, notes, and reminders for you.",
+      body: "Ask it anything in plain English - it can search the web, answer questions about your own documents, and create tasks, notes, and reminders for you.",
     },
     {
       href: "/tasks",
       icon: <CheckSquare size={16} />,
       title: "Add your first task",
-      body: "Or just tell the assistant to add one — either way, it shows up here on the dashboard and in the Task Tracker.",
+      body: "Or just tell the assistant to add one - either way, it shows up here on the dashboard and in the Task Tracker.",
     },
     {
       href: "/apps",
       icon: <Target size={16} />,
       title: "See what's built in",
-      body: "25 tools you can use right now — Music Studio, financial calculators, a knowledge base, and more.",
+      body: "25 tools you can use right now - Music Studio, financial calculators, a knowledge base, and more.",
     },
   ];
 
   return (
     <div className="holo-card rounded-card p-5 sm:p-6 border-[#4FC3F7]/20">
       <h2 className="font-display text-lg font-semibold text-text-primary">
-        Welcome — here&apos;s what this is
+        Welcome - here&apos;s what this is
       </h2>
       <p className="text-text-secondary text-sm mt-1.5 max-w-2xl">
         The Third Eye is a private AI assistant that keeps your tasks, notes, and knowledge in one
-        place and can act on them for you. Nothing below is real activity yet — pick one of these
+        place and can act on them for you. Nothing below is real activity yet - pick one of these
         to get started.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
