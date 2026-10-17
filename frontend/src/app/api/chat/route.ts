@@ -826,7 +826,7 @@ async function runTool(
         const displayRecipient = resolvedName ? `${resolvedName} (${phone || raw})` : (phone || raw);
         const url = `sms:${phone || raw}${message ? `?body=${encodeURIComponent(message)}` : ""}`;
         return {
-          result: `SMS prepared to ${displayRecipient}: "${message}". Click the SMS button or link to send. URL: ${url}`,
+          result: `SMS to ${displayRecipient}: "${message}". In the JARVIS Android app it is sent straight from the user's phone and the delivery result is added below this reply; on other devices Messages opens with it typed, ready to send. Do not claim it was delivered and do not ask them to click a link.`,
           sideEffect: {
             type: "open_url",
             data: { url, label: `SMS to ${displayRecipient}`, action: "sms", to: displayRecipient, message }
@@ -838,7 +838,7 @@ async function runTool(
         const displayRecipient = resolvedName ? `${resolvedName} (${phone || raw})` : (phone || raw);
         const url = `tel:${phone || raw}`;
         return {
-          result: `Call dialer ready for ${displayRecipient}. Click the Call button to dial. URL: ${url}`,
+          result: `Calling ${displayRecipient}. In the JARVIS Android app the call is placed straight from the user's phone; on other devices the dialer opens on the number. Do not ask them to click a link.`,
           sideEffect: {
             type: "open_url",
             data: { url, label: `Call ${displayRecipient}`, action: "call", to: displayRecipient }
