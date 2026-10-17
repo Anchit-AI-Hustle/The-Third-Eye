@@ -42,6 +42,11 @@ describe("/api/tasks/autopilot", () => {
     expect(await call({ taskId: "t1", action: "claim" })).toEqual({ claimed: false });
   });
 
+  it("marks a claim of a run left stuck by a closed tab as a retry", async () => {
+    Object.assign(task(), { autopilot_status: "running", autopilot_at: new Date(Date.now() - 30 * 60_000).toISOString() });
+    expect(await call({ taskId: "t1", action: "claim" })).toMatchObject({ claimed: true, task: { retry: true } });
+  });
+
   it("never touches another user's task", async () => {
     expect(await call({ taskId: "t9", action: "claim" })).toEqual({ error: "Task not found" });
   });

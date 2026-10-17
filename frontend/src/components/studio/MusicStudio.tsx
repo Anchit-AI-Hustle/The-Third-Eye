@@ -516,7 +516,10 @@ export function MusicStudio() {
   }
   function poll(jobId: string) {
     stopPoll();
+    // A job a provider never finishes would otherwise be polled for as long as the page is open.
+    const giveUp = Date.now() + 10 * 60_000;
     pollRef.current = setInterval(async () => {
+      if (Date.now() > giveUp) { stopPoll(); setPhase("error"); setError("Still not finished after 10 minutes. The provider may be stuck; try again."); return; }
       try {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();

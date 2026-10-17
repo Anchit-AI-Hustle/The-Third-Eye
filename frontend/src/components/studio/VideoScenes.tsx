@@ -8,6 +8,8 @@ import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
+const POLL_LIMIT_MS = 10 * 60_000;
+
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
 type JobState = { status: "idle" | "rendering" | "done" | "error"; url?: string; msg?: string };
 type Episode = { status: "idle" | "building" | "done" | "error"; progress?: number; url?: string; ext?: string; msg?: string };
@@ -76,7 +78,9 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
       const d = await res.json();
       if (!res.ok || !d.jobId) return fail(d.error ?? `HTTP ${res.status}`);
       stopPoll(key);
+      const giveUp = Date.now() + POLL_LIMIT_MS;
       polls.current[key] = setInterval(async () => {
+        if (Date.now() > giveUp) { stopPoll(key); return fail("Still not finished after 10 minutes. The provider may be stuck; try again."); }
         try {
           const r = await fetch(`/api/tools/video?id=${encodeURIComponent(d.jobId)}`);
           const s = await r.json();
