@@ -15,6 +15,7 @@ import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 
 import { getAgentLog, isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { localDay } from "@/lib/localDay";
+import { reducedMotion } from "@/lib/motion";
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
@@ -78,7 +79,7 @@ export function DashboardWidgets() {
     let ctx: { revert: () => void } | undefined;
     import("gsap").then(({ gsap }) => {
       if (!root.current) return;
-      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const reduce = reducedMotion();
       ctx = gsap.context(() => {
         const items = gsap.utils.toArray<HTMLElement>("[data-widget]");
         if (reduce) { gsap.set(items, { opacity: 1, y: 0 }); return; }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines, ShieldCheck } from "lucide-react";
+import { deviceReducesMotion, motionPref, setMotionPref } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { maybeRequestShake } from "@/hooks/useJarvisTriggers";
@@ -243,8 +244,36 @@ export function ActivationSettings() {
       </section>
 
       <NaturalVoice />
+      <Animations />
       <AskBeforeActing />
     </div>
+  );
+}
+
+// On: animations and 3D effects run even when the device asks for reduced motion.
+function Animations() {
+  const [full, setFull] = useState(false);
+  const [deviceReduces, setDeviceReduces] = useState(false);
+  useEffect(() => { setFull(motionPref() === "full"); setDeviceReduces(deviceReducesMotion()); }, []);
+  const toggle = (v: boolean) => { setFull(v); setMotionPref(v ? "full" : "device"); };
+  return (
+    <section className="bg-background-surface border border-border-default rounded-card p-5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-input bg-accent-blue/10 text-accent-blue">
+            <Sparkles size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Always show animations</h3>
+            <p className="text-xs text-text-muted">
+              Motion, 3D effects and page transitions, even when this device has Reduce Motion on.
+              {deviceReduces ? " Reduce Motion is on here, so they are paused unless this is on." : " Reduce Motion is off here, so they already run."}
+            </p>
+          </div>
+        </div>
+        <Toggle enabled={full} onChange={toggle} />
+      </div>
+    </section>
   );
 }
 

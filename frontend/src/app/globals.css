@@ -81,18 +81,18 @@ body {
 
 /* Reduced motion: disable non-essential animations */
 @media (prefers-reduced-motion: reduce) {
-  .route-scan { display: none; }
-  *, *::before, *::after {
+  html:not([data-motion-full]) :is(.route-scan, .route-shutter, .ambient-scene) { display: none; }
+  html:not([data-motion-full]) *, html:not([data-motion-full]) *::before, html:not([data-motion-full]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .hud-scanline::after { animation: none !important; }
-  .arc-reactor::before, .arc-reactor::after { animation: none !important; }
-  .arc-reactor-core { animation: none !important; }
-  .holo-card::before { transition: none !important; }
-  .data-ticker-inner { animation: none !important; }
+  html:not([data-motion-full]) .hud-scanline::after { animation: none !important; }
+  html:not([data-motion-full]) .arc-reactor::before, html:not([data-motion-full]) .arc-reactor::after { animation: none !important; }
+  html:not([data-motion-full]) .arc-reactor-core { animation: none !important; }
+  html:not([data-motion-full]) .holo-card::before { transition: none !important; }
+  html:not([data-motion-full]) .data-ticker-inner { animation: none !important; }
 }
 
 /* Touch target sizing handled via Tailwind min-h-[48px] on BottomNav */
@@ -231,8 +231,97 @@ body {
    Opacity only on the page, with no fill afterwards: a transform left on
    <main> would make it the containing block for every position:fixed child
    (dialogs, the composer). */
-@keyframes pageEnter { from { opacity: 0; } }
-.page-enter { animation: pageEnter var(--dur-page) cubic-bezier(0, 0, 0.2, 1) backwards; }
+@keyframes pageEnter {
+  from { opacity: 0; clip-path: circle(0% at 50% 35%); }
+  60%  { opacity: 1; }
+  to   { clip-path: circle(150% at 50% 35%); }
+}
+.page-enter { animation: pageEnter 650ms var(--ease-depth) backwards; }
+
+/* Cards rise into place one after another on every page. Transform only while
+   the animation runs (no fill), so nothing is left holding a transform. */
+@keyframes cardRise {
+  from { opacity: 0; transform: perspective(900px) translateY(28px) rotateX(14deg) scale(0.96); }
+}
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card) {
+  animation: cardRise 560ms var(--ease-depth) backwards;
+}
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(2) { animation-delay: 60ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(3) { animation-delay: 120ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(4) { animation-delay: 180ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(5) { animation-delay: 240ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(n+6) { animation-delay: 300ms; }
+
+/* Page change shutter: two holographic panels swing open in 3D. */
+@keyframes shutterLeft  { from { transform: rotateY(0deg); opacity: 0.85; } to { transform: rotateY(88deg); opacity: 0; } }
+@keyframes shutterRight { from { transform: rotateY(0deg); opacity: 0.85; } to { transform: rotateY(-88deg); opacity: 0; } }
+.route-shutter {
+  position: fixed; inset: 0; z-index: 59; pointer-events: none; display: flex; perspective: 1200px;
+}
+.route-shutter > span {
+  flex: 1; height: 100%;
+  background: linear-gradient(135deg, rgba(79, 195, 247, 0.22), rgba(123, 92, 240, 0.18) 55%, rgba(8, 12, 22, 0.6));
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  backdrop-filter: blur(6px);
+  animation: shutterLeft 620ms var(--ease-depth) forwards;
+  transform-origin: left center;
+}
+.route-shutter > span + span { animation-name: shutterRight; transform-origin: right center; }
+
+/* Tap feedback everywhere: the `scale` property composes with any transform. */
+:where(button, a, [role="button"], .holo-card, .card-3d):active:not(:disabled) { scale: 0.96; }
+
+/* ── Ambient scene behind every page ─────────────────────── */
+.ambient-scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; perspective: 700px; }
+.ambient-orb {
+  position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%;
+  filter: blur(70px); opacity: 0.32; will-change: transform;
+  animation: orbDrift 16s ease-in-out infinite alternate;
+}
+.ambient-orb-a { background: radial-gradient(circle, #4FC3F7, transparent 65%); top: -25vmax; left: -20vmax; }
+.ambient-orb-b { background: radial-gradient(circle, #7B5CF0, transparent 65%); bottom: -30vmax; right: -25vmax; animation-duration: 21s; animation-delay: -6s; }
+.ambient-orb-c { background: radial-gradient(circle, #10B981, transparent 65%); top: 30%; left: 40%; width: 40vmax; height: 40vmax; opacity: 0.16; animation-duration: 26s; animation-delay: -12s; }
+@keyframes orbDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(12vw, 8vh, 0) scale(1.15); }
+  100% { transform: translate3d(-8vw, 14vh, 0) scale(0.9); }
+}
+.ambient-floor {
+  position: absolute; left: -60%; right: -60%; bottom: -8%; height: 62%;
+  transform: rotateX(74deg); transform-origin: 50% 100%; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to top, #000 25%, transparent 95%);
+  mask-image: linear-gradient(to top, #000 25%, transparent 95%);
+}
+.ambient-grid {
+  position: absolute; left: 0; right: 0; top: -56px; bottom: 0; will-change: transform;
+  background-image:
+    linear-gradient(rgba(79, 195, 247, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 195, 247, 0.35) 1px, transparent 1px);
+  background-size: 56px 56px;
+  animation: gridRun 2.6s linear infinite;
+}
+@keyframes gridRun { to { transform: translateY(56px); } }
+.ambient-gyro {
+  position: absolute; top: 9vh; right: 6vw; width: 26vmin; height: 26vmin;
+  transform-style: preserve-3d; animation: gyroSpin 18s linear infinite; opacity: 0.4;
+}
+.ambient-gyro > span {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 1.5px solid rgba(79, 195, 247, 0.7); box-shadow: 0 0 16px rgba(79, 195, 247, 0.35);
+}
+.ambient-gyro > span:nth-child(2) { transform: rotateX(70deg); border-color: rgba(123, 92, 240, 0.75); }
+.ambient-gyro > span:nth-child(3) { transform: rotateY(70deg); border-color: rgba(16, 185, 129, 0.6); }
+@keyframes gyroSpin { to { transform: rotateX(360deg) rotateY(720deg); } }
+.ambient-spark {
+  position: absolute; bottom: -10px; border-radius: 50%;
+  background: #8FE3FF; box-shadow: 0 0 8px #4FC3F7;
+  animation: sparkRise 12s linear infinite;
+}
+@keyframes sparkRise {
+  0%   { transform: translate3d(0, 0, 0); opacity: 0; }
+  10%  { opacity: 0.9; }
+  100% { transform: translate3d(4vw, -110vh, 0); opacity: 0; }
+}
 @keyframes routeScan {
   from { transform: translateY(0); opacity: 0.9; }
   to   { transform: translateY(100vh); opacity: 0; }
@@ -539,21 +628,20 @@ body {
    already on screen would blink back out each time the window is resized. */
 [data-reveal-armed="true"] [data-reveal]:not([data-revealed]) { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  [data-reveal-armed="true"] [data-reveal] { opacity: 1; transform: none; }
+  html:not([data-motion-full]) [data-reveal-armed="true"] [data-reveal] { opacity: 1; transform: none; }
 }
 
 /* ── Reduced motion: flatten the entire depth system ─────── */
 @media (prefers-reduced-motion: reduce) {
-  .card-3d {
+  html:not([data-motion-full]) .card-3d {
     transform: none !important;
     transition: border-color var(--dur-interaction) linear !important;
   }
-  .card-3d::after { opacity: 0 !important; }
-  .card-3d[data-inview="false"] { opacity: 1 !important; }
-  .depth-1, .depth-2, .depth-3 { transform: none !important; }
-  .depth-field { transform: none !important; }
+  html:not([data-motion-full]) .card-3d::after { opacity: 0 !important; }
+  html:not([data-motion-full]) .card-3d[data-inview="false"] { opacity: 1 !important; }
+  html:not([data-motion-full]) .depth-1, html:not([data-motion-full]) .depth-2, html:not([data-motion-full]) .depth-3 { transform: none !important; }
+  html:not([data-motion-full]) .depth-field { transform: none !important; }
   /* Hold the brackets at their resting length instead of pinning every
      variant to the md value, which shrank the lg frame. */
-  .holo-frame:hover > .holo-frame-corner,
-  .holo-frame:focus-within > .holo-frame-corner { --frame-extend: 0px; }
+  html:not([data-motion-full]) .holo-frame:hover > .holo-frame-corner, html:not([data-motion-full]) .holo-frame:focus-within > .holo-frame-corner { --frame-extend: 0px; }
 }
