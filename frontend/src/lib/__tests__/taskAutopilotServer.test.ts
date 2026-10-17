@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dueForRun, failedAttempts, MAX_ATTEMPTS, RETRY_AFTER_MS } from "@/lib/taskAutopilotServer";
-import { STALE_MS, workOrder } from "@/lib/taskAutopilot";
+import { NO_PROVIDER, STALE_MS, workOrder } from "@/lib/taskAutopilot";
 
 const now = Date.parse("2026-10-17T12:00:00Z");
 const ago = (ms: number) => new Date(now - ms).toISOString();
@@ -25,8 +25,23 @@ describe("which tasks the autopilot takes", () => {
     expect(dueForRun(spent, now)).toBe(false);
   });
 
+  it("retries a run stopped by a provider outage on the next run, without using up an attempt", () => {
+    const waiting = { status: "todo", autopilot_status: "failed", autopilot_report: `${NO_PROVIDER}, so JARVIS will try again.`, autopilot_at: ago(60_000), all_updates: Array(5).fill("JARVIS is waiting for a free AI provider").join("\n") };
+    expect(dueForRun(waiting, now)).toBe(true);
+  });
+
+  it("takes in-progress tasks it has not worked yet", () => {
+    expect(dueForRun({ status: "in_progress", autopilot_status: null }, now)).toBe(true);
+  });
+
+  it("re-works a 'needs you' run where nothing was verified, up to the attempt limit", () => {
+    const empty = { status: "in_progress", autopilot_status: "needs_you", autopilot_report: "Sure.\n\nNo step could be verified, so this is not marked done.", all_updates: "JARVIS worked on it; needs you: Sure." };
+    expect(dueForRun(empty, now)).toBe(true);
+    expect(dueForRun({ ...empty, all_updates: Array(MAX_ATTEMPTS).fill(empty.all_updates).join("\n") }, now)).toBe(false);
+  });
+
   it("leaves tasks that need the user, finished tasks and its own follow-ups alone", () => {
-    expect(dueForRun({ status: "in_progress", autopilot_status: "needs_you" }, now)).toBe(false);
+    expect(dueForRun({ status: "in_progress", autopilot_status: "needs_you", autopilot_report: "Verified:\n- Draft: saved\n\nWaiting for your approval:\n- Send" }, now)).toBe(false);
     expect(dueForRun({ status: "done", autopilot_status: "done" }, now)).toBe(false);
     expect(dueForRun({ status: "todo", autopilot_status: null, source_type: "Autopilot" }, now)).toBe(false);
   });

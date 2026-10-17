@@ -1,6 +1,6 @@
 import type { Db } from "@/lib/db";
 import { applySideEffects } from "@/lib/whatsapp";
-import { judgeRun, STALE_MS, type AutopilotRun, type AutopilotStatus, type AutopilotTask } from "@/lib/taskAutopilot";
+import { judgeRun, NO_PROVIDER, STALE_MS, type AutopilotRun, type AutopilotStatus, type AutopilotTask } from "@/lib/taskAutopilot";
 
 // Claiming a task and recording a run's outcome, shared by the browser path
 // (/api/tasks/autopilot) and the scheduled server run (/api/cron/autopilot).
@@ -9,7 +9,7 @@ const SOURCE = "Autopilot";
 type Effect = { type: string; data?: Record<string, unknown> };
 export type TaskRow = Record<string, any>;
 
-export const TASK_COLUMNS = "id, title, description, due_date, priority, status, all_updates, autopilot_status, autopilot_at, source_type";
+export const TASK_COLUMNS = "id, title, description, due_date, priority, status, all_updates, autopilot_status, autopilot_at, autopilot_report, source_type";
 
 /** Takes a task for one run. Conditional on the status read, so two runners never both win. */
 export async function claimTask(sb: Db, email: string, task: TaskRow): Promise<AutopilotTask | null> {
@@ -40,7 +40,8 @@ export async function recordRun(sb: Db, email: string, task: TaskRow, run: Autop
     });
   }
   const agent = agentName?.trim() ? agentName.trim().slice(0, 40) : "JARVIS";
-  const label = status === "done" ? `Done by ${agent}` : status === "needs_you" ? `${agent} worked on it; needs you` : `${agent} couldn't work on it`;
+  const label = status === "done" ? `Done by ${agent}` : status === "needs_you" ? `${agent} worked on it; needs you`
+    : report.startsWith(NO_PROVIDER) ? `${agent} is waiting for a free AI provider` : `${agent} couldn't work on it`;
   const line = `[${now.slice(0, 16).replace("T", " ")} · ${SOURCE}] ${label}: ${report.split("\n")[0].slice(0, 200)}`;
   const patch: Record<string, unknown> = {
     autopilot_status: status, autopilot_report: report, autopilot_at: now, updated_at: now,
@@ -60,16 +61,21 @@ export function failedAttempts(task: TaskRow): number {
   return (String(task.all_updates ?? "").match(/couldn't work on it/g) ?? []).length;
 }
 
+export const OPEN_STATUSES = ["todo", "in_progress"];
+
 /**
- * Open tasks a run should take: never worked, interrupted mid-run, or failed
- * outright and due a retry (at most MAX_ATTEMPTS, RETRY_AFTER_MS apart).
- * "needs you" tasks are left for the user, and follow-ups the autopilot made are skipped.
+ * Open tasks a run should take: never worked, interrupted mid-run, stopped by a
+ * provider outage, failed outright and due a retry (at most MAX_ATTEMPTS,
+ * RETRY_AFTER_MS apart), or "needs you" with nothing verified (at most MAX_ATTEMPTS).
+ * Other "needs you" tasks are left for the user, and follow-ups the autopilot made are skipped.
  */
 export function dueForRun(task: TaskRow, now = Date.now()): boolean {
-  if (task.status !== "todo" || task.source_type === SOURCE) return false;
+  if (!OPEN_STATUSES.includes(task.status) || task.source_type === SOURCE) return false;
   const at = new Date(task.autopilot_at ?? 0).getTime();
+  const report = String(task.autopilot_report ?? "");
   if (task.autopilot_status == null) return true;
   if (task.autopilot_status === "running") return now - at > STALE_MS;
-  if (task.autopilot_status === "failed") return failedAttempts(task) < MAX_ATTEMPTS && now - at > RETRY_AFTER_MS;
+  if (task.autopilot_status === "failed") return report.startsWith(NO_PROVIDER) || (failedAttempts(task) < MAX_ATTEMPTS && now - at > RETRY_AFTER_MS);
+  if (task.autopilot_status === "needs_you") return report.includes("No step could be verified") && (String(task.all_updates ?? "").match(/needs you/g) ?? []).length < MAX_ATTEMPTS;
   return false;
 }

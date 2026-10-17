@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { mintToken } from "@/lib/gatewayAuth";
-import { runThroughChat, workOrder } from "@/lib/taskAutopilot";
-import { claimTask, dueForRun, recordRun, TASK_COLUMNS, type TaskRow } from "@/lib/taskAutopilotServer";
+import { llmStatus } from "@/lib/llmCascade";
+import { NO_PROVIDER, runThroughChat, workOrder } from "@/lib/taskAutopilot";
+import { claimTask, dueForRun, OPEN_STATUSES, recordRun, TASK_COLUMNS, type TaskRow } from "@/lib/taskAutopilotServer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,6 +12,8 @@ export const maxDuration = 60;
 // scheduled-jobs.yml) it takes the most urgent open tasks across all users and
 // runs each through /api/chat as its owner, with a single-use chat token.
 // A run cut off by the time limit is picked up again once it goes stale.
+// While no AI provider is free it works nothing and says so ("waiting"), so
+// the scheduled loop stops instead of spending tasks on an outage.
 
 const PER_RUN = 3;
 const RUN_MS = 50_000;
@@ -24,7 +27,10 @@ export async function GET(req: NextRequest) {
   const origin = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
   if (!sb || !origin) return Response.json({ error: "Autopilot needs the database and NEXTAUTH_URL." }, { status: 501 });
 
-  const { data } = await sb.from("tasks").select(`user_id, ${TASK_COLUMNS}`).eq("status", "todo").limit(2000);
+  const waiting = `${NO_PROVIDER} right now; tasks wait for the next run.`;
+  if ((await llmStatus()).status === "down") return Response.json({ worked: [], waiting });
+
+  const { data } = await sb.from("tasks").select(`user_id, ${TASK_COLUMNS}`).in("status", OPEN_STATUSES).limit(2000);
   const picked = workOrder(((data ?? []) as TaskRow[]).filter((t) => dueForRun(t))).slice(0, PER_RUN);
 
   const results = await Promise.all(picked.map(async (task) => {
@@ -40,11 +46,11 @@ export async function GET(req: NextRequest) {
         timezone: process.env.WHATSAPP_TIMEZONE || "Asia/Kolkata",
         signal: AbortSignal.timeout(RUN_MS),
       });
-      const { status } = await recordRun(sb, email, task, run, effects);
-      return { id: task.id, status };
+      const { status, report } = await recordRun(sb, email, task, run, effects);
+      return { id: task.id, status: report.startsWith(NO_PROVIDER) ? "waiting" : status };
     } finally {
       await sb.from("gateway_tokens").update({ revoked_at: new Date().toISOString() }).eq("token_hash", hash);
     }
   }));
-  return Response.json({ worked: results });
+  return Response.json({ worked: results, ...(results.some((r) => r.status === "waiting") ? { waiting } : {}) });
 }
