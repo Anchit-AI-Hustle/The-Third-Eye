@@ -1,4 +1,5 @@
-import { startAssistantMedia } from "@/lib/assistantMedia";
+import { startAssistantMedia, studioVideoLink } from "@/lib/assistantMedia";
+import { replicateConfigured } from "@/lib/replicate";
 import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
 import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart } from "@/lib/shopping";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
@@ -886,7 +887,15 @@ async function runTool(
       switch (type) {
         case "image": return await startAssistantMedia(ctx.email, "image", input.prompt ?? "", { style: input.style, size: input.size });
         case "music": return await generateMusic(ctx.email, input.prompt ?? input.description ?? "");
-        case "video": return await startAssistantMedia(ctx.email, "video", input.prompt ?? input.description ?? "");
+        case "video": {
+          const prompt = input.prompt ?? input.description ?? "";
+          if (replicateConfigured()) return await startAssistantMedia(ctx.email, "video", prompt);
+          const url = studioVideoLink(prompt);
+          return {
+            result: `No video model is set up, so the video is made in code in the browser instead. Opening ${url.startsWith("/tools/reel") ? "Reel" : "Video"} Studio with the idea filled in: the user writes the script there and taps render to get the finished file. Nothing has been rendered yet.`,
+            sideEffect: { type: "open_url", data: { url, label: "Open the studio" } },
+          };
+        }
         case "qr": return { result: generateQR(input.data ?? "", input.label) };
         case "chart": return { result: createChart(input.title ?? "Chart", input.chart_type ?? "bar", input.data ?? "") };
         case "invoice": return { result: generateInvoice(String(input.client ?? ""), String(input.items ?? ""), input.tax_rate, input.notes) };
@@ -1645,7 +1654,6 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
   try {
     const { elevenLabsConfigured, composeElevenLabs } = await import("@/lib/music/elevenlabs");
     const { storeStudioAudio, audioPath } = await import("@/lib/music/studioAudio");
-    const { replicateConfigured } = await import("@/lib/replicate");
     const db = getDb();
     if (elevenLabsConfigured() && db && userId) {
       const song = await composeElevenLabs({

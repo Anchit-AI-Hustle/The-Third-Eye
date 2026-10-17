@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Loader2, Copy, Check, Download, Sparkles, BookmarkPlus, Eye, Code2, RotateCcw } from "lucide-react";
@@ -30,6 +30,12 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const [view, setView] = useState<"preview" | "code">("preview");
 
   const set = (name: string) => (v: string) => setInputs((p) => ({ ...p, [name]: v }));
+
+  // The chat opens a studio with ?prefill= when it hands an idea over.
+  useEffect(() => {
+    const idea = new URLSearchParams(window.location.search).get("prefill");
+    if (idea) setInputs((p) => ({ ...p, [tool.fields[0].name]: idea.slice(0, 2000) }));
+  }, [tool]);
   // What the rest of the form says, for a field's AI suggestion to fit.
   const contextFor = (name: string) =>
     Object.fromEntries(tool.fields.filter((x) => x.name !== name && inputs[x.name]?.trim()).map((x) => [x.label, inputs[x.name]]));

@@ -33,3 +33,10 @@ export async function assistantMediaStatus(user: string, ticket: string) {
   const url = output?.startsWith("https://") ? output : null;
   return { kind: job.kind, status: prediction.status, url, error: prediction.error ?? (prediction.status === "succeeded" && !url ? "Provider returned no downloadable output" : null) };
 }
+
+// With no video model, video is drawn and recorded in the browser by Video
+// Studio or Reel Studio; the chat opens the right one with the idea filled in.
+export function studioVideoLink(prompt: string): string {
+  const reel = /\b(reels?|shorts?|tiktok|vertical|9:16|story|stories)\b/i.test(prompt);
+  return `/tools/${reel ? "reel" : "video"}?prefill=${encodeURIComponent(prompt.slice(0, 1500))}`;
+}
