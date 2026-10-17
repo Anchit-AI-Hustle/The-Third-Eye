@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Card3D } from "@/components/hud/Card3D";
 import { useEffect, useState } from "react";
 import {
   Music, Clapperboard, Play, Music2, AudioLines, Mic, MessageCircle, Camera,
@@ -104,14 +105,15 @@ function AppTile({ app }: { app: AppEntry }) {
   const Icon = ICONS[app.icon] ?? Wand2;
   const accent = app.emergency ? "#EF4444" : app.selfBuilt ? "#34D399" : "#4FC3F7";
   const inner = (
-    <div className={`group holo-card rounded-card p-3 h-full flex flex-col gap-2 hover:-translate-y-0.5 transition-transform ${app.emergency ? "border-accent-red/40" : ""}`}>
-      <div className="flex items-center justify-between">
+    <Card3D intensity={8} lift={8} className="rounded-card h-full">
+    <div className={`group holo-card rounded-card p-3 h-full flex flex-col gap-2 preserve-3d ${app.emergency ? "border-accent-red/40" : ""}`}>
+      <div className="flex items-center justify-between depth-2">
         <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-none" style={{ background: `${accent}1A`, color: accent }}>
           <Icon size={18} />
         </span>
         {app.kind === "external" && <ArrowUpRight size={13} className="text-text-muted group-hover:text-text-primary transition-colors" />}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 depth-1">
         <div className="text-sm font-medium text-text-primary truncate">{app.label}</div>
         <div className="text-[10px] font-mono mt-0.5" style={{ color: accent }}>
           {app.emergency ? "emergency" : app.selfBuilt ? "on-device" : "opens app"}
@@ -119,6 +121,7 @@ function AppTile({ app }: { app: AppEntry }) {
         {app.blurb && <div className="text-[11px] text-text-muted mt-0.5 line-clamp-2">{app.blurb}</div>}
       </div>
     </div>
+    </Card3D>
   );
   if (app.kind === "internal") return <Link href={app.href}>{inner}</Link>;
   const isTel = app.href.startsWith("tel:");

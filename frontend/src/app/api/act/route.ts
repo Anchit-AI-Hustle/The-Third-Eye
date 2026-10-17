@@ -7,8 +7,11 @@ import { getGoogleAccessToken } from "@/lib/googleToken";
 import { emailRecipients, gmailComposeUrl, gmailSendError } from "@/lib/liveActions";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
+import { generateApp, publishApp } from "@/lib/appBuilder";
+import { getGithubAccessToken } from "@/lib/github";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 // Executes a single user-confirmed action, exactly as it was shown for approval.
 export async function POST(req: NextRequest) {
@@ -66,6 +69,23 @@ export async function POST(req: NextRequest) {
       if (sent.ok) return json({ ok: true, result: `Email sent to ${to}.` });
       console.error("gmail send failed", sent.status, sent.error.slice(0, 400));
       return json({ ok: false, openUrl: compose, result: `${gmailSendError(sent.status, sent.error)} You can open the Gmail draft below.` });
+    }
+    case "build_app": {
+      const gh = await getGithubAccessToken(email);
+      if (!gh?.token) return json({ ok: false, openUrl: "/api/connect/github", result: "GitHub isn't connected, so no app was built. Connect GitHub and ask again." });
+      const name = String(args?.name ?? "app");
+      const description = String(args?.description ?? "");
+      const files = await generateApp(`${name}: ${description}`).catch((e) => `the AI providers failed (${e instanceof Error ? e.message : e})`);
+      if (typeof files === "string") return json({ ok: false, result: `The app wasn't built: ${files} Nothing was created on GitHub.` });
+      const out = await publishApp(gh.token, name, description, files).catch((e) => (e instanceof Error ? e.message : String(e)));
+      if (typeof out === "string") return json({ ok: false, result: `Publishing to GitHub failed: ${out}` });
+      return json({
+        ok: true,
+        openUrl: out.pages ? out.pagesUrl : out.repoUrl,
+        result: out.pages
+          ? `Built ${files.length} files and published them to ${out.repoUrl}. GitHub Pages is building it; it goes live at ${out.pagesUrl} in a minute or two.`
+          : `Built ${files.length} files and pushed them to ${out.repoUrl}, but GitHub Pages could not be turned on (${out.pagesError}). Turn it on in the repo's Settings > Pages.`,
+      });
     }
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));

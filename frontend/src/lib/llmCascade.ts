@@ -15,6 +15,7 @@
 
 import { usableGeminiKey } from "@/lib/providerReady";
 import { backgroundBlocked, benchedReason, classifyFailure, healthMap, noteFailure, noteSuccess } from "@/lib/providerHealth";
+import { currentOwnKeys } from "@/lib/providerKeys";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -52,25 +53,37 @@ const GROQ_BASE      = "https://api.groq.com/openai/v1";
 const CEREBRAS_BASE  = "https://api.cerebras.ai/v1";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MISTRAL_BASE   = "https://api.mistral.ai/v1";
-const OLLAMA_BASE    = process.env.OLLAMA_BASE ?? "http://localhost:11434";
+// A user's own Ollama (their Mac, through a tunnel) wins over the deployment's.
+const ollamaBase = () => (currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "");
 
 // Vercel env-var names are case-sensitive; we also strip BOM/zero-width chars
 // because Powershell-piped values sometimes inject them.
 const clean = (s?: string) =>
   (s ?? "").replace(/[​‎‏﻿]/g, "").trim();
 
+// A signed-in user's own keys (Settings → AI providers) come before the
+// deployment's, so their requests run on their own quota first.
 function loadKeys() {
+  const own = currentOwnKeys();
   return {
-    openai:    [process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3].map(clean).filter(Boolean),
-    anthropic: clean(process.env.ANTHROPIC_API_KEY),
-    gemini:    clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY),
+    openai:    [own?.openai, process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3].map(clean).filter(Boolean),
+    anthropic: clean(own?.anthropic) || clean(process.env.ANTHROPIC_API_KEY),
+    gemini:    clean(own?.gemini) || clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY),
     grok:      clean(process.env.XAI_API_KEY),
-    groq:      clean(process.env.GROQ_API_KEY),
-    cerebras:  clean(process.env.CEREBRAS_API_KEY),
-    openrouter: clean(process.env.OPENROUTER_API_KEY),
-    mistral:   clean(process.env.MISTRAL_API_KEY),
-    ollama:    process.env.OLLAMA_ENABLED === "1",
+    groq:      clean(own?.groq) || clean(process.env.GROQ_API_KEY),
+    cerebras:  clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY),
+    openrouter: clean(own?.openrouter) || clean(process.env.OPENROUTER_API_KEY),
+    mistral:   clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY),
+    ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
+}
+
+// A user's own key has its own quota, so it is benched apart from the
+// deployment's key for the same provider.
+function healthName(provider: string): string {
+  const own = currentOwnKeys();
+  const base = provider === "gemini-lite" ? "gemini" : provider;
+  return own?.[base as keyof typeof own] ? `${provider}@${own.userId}` : provider;
 }
 
 // One model per provider, each overridable by env (ANTHROPIC_MODEL, GEMINI_MODEL,
@@ -517,7 +530,7 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
 async function callOllama(model: string, opts: LlmCascadeOptions) {
   const { signal, clear } = withTimeout(opts.timeoutMs ?? 60_000);
   try {
-    const r = await fetch(`${OLLAMA_BASE}/api/chat`, {
+    const r = await fetch(`${ollamaBase()}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -543,12 +556,16 @@ async function callOllama(model: string, opts: LlmCascadeOptions) {
 
 // ─── Cascade entrypoint ──────────────────────────────────────────────────
 
+// Unattended work (Gmail scan, log sync) never spends paid credit.
+const PAID = new Set<CloudProvider>(["openai", "anthropic", "grok"]);
+
 export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeResult> {
   const keys = loadKeys();
   const attempts: LlmCascadeResult["attempts"] = [];
   const pref = opts.preferProvider;
 
-  const order: (CloudProvider | "ollama")[] = pref ? [pref] : [...cascadeOrder(), "ollama"];
+  const order: (CloudProvider | "ollama")[] = pref ? [pref]
+    : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))] : [...cascadeOrder(), "ollama"];
   const tokens = estimateTokens([opts.system, opts.messages]);
 
   for (const provider of order) {
@@ -560,8 +577,9 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     // within the cooldown window — skip the round-trip (or, worse, a full
     // hang-and-timeout) entirely rather than pay for a call we already know
     // the answer to.
-    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(provider) ? "cooling down after a recent quota error"
-      : (await benchedReason(provider)) ?? (opts.background ? await backgroundBlocked(provider) : null);
+    const hp = healthName(provider);
+    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(hp) ? "cooling down after a recent quota error"
+      : (await benchedReason(hp)) ?? (opts.background ? await backgroundBlocked(hp) : null);
     if (benched) {
       attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
       continue;
@@ -572,63 +590,63 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
         const model = modelFor("openai");
         const res = await callOpenAI(key, model, opts);
         attempts.push(attempt("openai", model, res));
-        if (res.ok) { await noteSuccess("openai", model); return { text: res.text, provider: "openai", model, attempts }; }
+        if (res.ok) { await noteSuccess(healthName("openai"), model); return { text: res.text, provider: "openai", model, attempts }; }
         if (!res.quota) break; // non-quota error → try next provider, not next key
-        startCooldown("openai", res.retryAfterMs);
+        startCooldown(healthName("openai"), res.retryAfterMs);
       }
     } else if (provider === "anthropic" && keys.anthropic) {
       const model = modelFor("anthropic");
       const res = await callAnthropic(keys.anthropic, model, opts);
       attempts.push(attempt("anthropic", model, res));
-      if (res.ok) { await noteSuccess("anthropic", model); return { text: res.text, provider: "anthropic", model, attempts }; }
-      if (res.quota) startCooldown("anthropic", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("anthropic"), model); return { text: res.text, provider: "anthropic", model, attempts }; }
+      if (res.quota) startCooldown(healthName("anthropic"), res.retryAfterMs);
     } else if (provider === "gemini" && keys.gemini) {
       const model = modelFor("gemini");
       const res = await callGemini(keys.gemini, model, opts);
       attempts.push(attempt("gemini", model, res));
-      if (res.ok) { await noteSuccess("gemini", model); return { text: res.text, provider: "gemini", model, attempts }; }
-      if (res.quota) startCooldown("gemini", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("gemini"), model); return { text: res.text, provider: "gemini", model, attempts }; }
+      if (res.quota) startCooldown(healthName("gemini"), res.retryAfterMs);
     } else if (provider === "gemini-lite" && keys.gemini) {
       const { res, model } = await withLiveModel("gemini-lite", GEMINI_OPENAI_BASE, keys.gemini, GEMINI_LITE_MODEL, (m) => callGemini(keys.gemini, m, opts));
       attempts.push(attempt("gemini-lite", model, res));
-      if (res.ok) { await noteSuccess("gemini-lite", model); return { text: res.text, provider: "gemini-lite", model, attempts }; }
-      if (res.quota) startCooldown("gemini-lite", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("gemini-lite"), model); return { text: res.text, provider: "gemini-lite", model, attempts }; }
+      if (res.quota) startCooldown(healthName("gemini-lite"), res.retryAfterMs);
     } else if (provider === "grok" && keys.grok) {
       const { res, model } = await withLiveModel("grok", GROK_BASE, keys.grok, modelFor("grok"), (m) => callOpenAICompatible(GROK_BASE, keys.grok, m, opts));
       attempts.push(attempt("grok", model, res));
-      if (res.ok) { await noteSuccess("grok", model); return { text: res.text, provider: "grok", model, attempts }; }
-      if (res.quota) startCooldown("grok", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("grok"), model); return { text: res.text, provider: "grok", model, attempts }; }
+      if (res.quota) startCooldown(healthName("grok"), res.retryAfterMs);
     } else if (provider === "groq" && keys.groq) {
       const { res, model } = await withLiveModel("groq", GROQ_BASE, keys.groq, modelFor("groq"), (m) => callOpenAICompatible(GROQ_BASE, keys.groq, m, opts));
       attempts.push(attempt("groq", model, res));
-      if (res.ok) { await noteSuccess("groq", model); return { text: res.text, provider: "groq", model, attempts }; }
-      if (res.quota) startCooldown("groq", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("groq"), model); return { text: res.text, provider: "groq", model, attempts }; }
+      if (res.quota) startCooldown(healthName("groq"), res.retryAfterMs);
     } else if (provider === "cerebras" && keys.cerebras) {
       const { res, model } = await withLiveModel("cerebras", CEREBRAS_BASE, keys.cerebras, modelFor("cerebras"), (m) => callOpenAICompatible(CEREBRAS_BASE, keys.cerebras, m, opts));
       attempts.push(attempt("cerebras", model, res));
-      if (res.ok) { await noteSuccess("cerebras", model); return { text: res.text, provider: "cerebras", model, attempts }; }
-      if (res.quota) startCooldown("cerebras", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("cerebras"), model); return { text: res.text, provider: "cerebras", model, attempts }; }
+      if (res.quota) startCooldown(healthName("cerebras"), res.retryAfterMs);
     } else if (provider === "openrouter" && keys.openrouter) {
       const { res, model } = await withLiveModel("openrouter", OPENROUTER_BASE, keys.openrouter, modelFor("openrouter"), (m) => callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, m, opts));
       attempts.push(attempt("openrouter", model, res));
-      if (res.ok) { await noteSuccess("openrouter", model); return { text: res.text, provider: "openrouter", model, attempts }; }
-      if (res.quota) startCooldown("openrouter", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("openrouter"), model); return { text: res.text, provider: "openrouter", model, attempts }; }
+      if (res.quota) startCooldown(healthName("openrouter"), res.retryAfterMs);
     } else if (provider === "mistral" && keys.mistral) {
       const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
       attempts.push(attempt("mistral", model, res));
-      if (res.ok) { await noteSuccess("mistral", model); return { text: res.text, provider: "mistral", model, attempts }; }
-      if (res.quota) startCooldown("mistral", res.retryAfterMs);
+      if (res.ok) { await noteSuccess(healthName("mistral"), model); return { text: res.text, provider: "mistral", model, attempts }; }
+      if (res.quota) startCooldown(healthName("mistral"), res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
       const model = modelFor("ollama");
       const res = await callOllama(model, opts);
       attempts.push(attempt("ollama", model, res));
-      if (res.ok) { await noteSuccess("ollama", model); return { text: res.text, provider: "ollama", model, attempts }; }
+      if (res.ok) { await noteSuccess(healthName("ollama"), model); return { text: res.text, provider: "ollama", model, attempts }; }
     }
     for (const a of attempts.slice(before)) {
       if (a.ok || !a.status) continue;
       const limit = tooLargeLimit(a.status, a.reason ?? "");
       if (limit !== null) noteTooLarge(a.provider, tokens, limit);
-      else await noteFailure(a.provider, a.model, a.status, a.reason ?? "", a.retryAfterMs);
+      else await noteFailure(healthName(a.provider), a.model, a.status, a.reason ?? "", a.retryAfterMs);
     }
   }
 
@@ -794,18 +812,19 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
   const attempts: string[] = [];
   const tokens = estimateTokens([opts.messages, opts.tools]);
   for (const { provider, base, model, key } of toolCapableOrder()) {
-    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(provider) ? "cooling down" : await benchedReason(provider);
+    const hp = healthName(provider);
+    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : await benchedReason(hp);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
     const { res, model: used } = await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
     if (res.ok) {
-      await noteSuccess(provider, used);
+      await noteSuccess(hp, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
     }
     const limit = tooLargeLimit(res.status, res.err);
     if (limit !== null) { noteTooLarge(provider, tokens, limit); attempts.push(`${provider}:too large`); continue; }
-    await noteFailure(provider, used, res.status, res.err, res.retryAfterMs);
+    await noteFailure(hp, used, res.status, res.err, res.retryAfterMs);
     attempts.push(`${provider}:${res.status}`);
-    if (res.quota) startCooldown(provider, res.retryAfterMs);
+    if (res.quota) startCooldown(hp, res.retryAfterMs);
   }
   throw new Error(`All tool-capable fallback providers failed. Attempts: ${attempts.join(", ") || "no keys configured"}`);
 }

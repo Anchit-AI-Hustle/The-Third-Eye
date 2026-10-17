@@ -32,9 +32,10 @@ export async function revokeGithubAccess(userId: string): Promise<boolean> {
   return !error;
 }
 
-async function gh(token: string, path: string): Promise<any> {
+export async function gh(token: string, path: string, write?: { method: "POST" | "PUT"; body: unknown }): Promise<any> {
   const res = await fetch(`https://api.github.com${path}`, {
     cache: "no-store", redirect: "error", signal: AbortSignal.timeout(20_000),
+    ...(write ? { method: write.method, body: JSON.stringify(write.body) } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",

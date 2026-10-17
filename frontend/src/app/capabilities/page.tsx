@@ -1,6 +1,7 @@
 "use client";
 import { Check, X, Lock, Mic, Camera, MapPin, Bell, RotateCcw, Crown, Code, Search, Music, Shield, HeartPulse, Home, Lightbulb, FileText, Phone, Calendar, Brain } from "lucide-react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { Reveal } from "@/components/hud/Reveal";
 import { BRAND_LOGOS } from "@/components/BrandLogos";
 import { useAllConsents, useConsentBundle } from "@/hooks/useConsent";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
@@ -168,12 +169,13 @@ export default function CapabilitiesPage() {
           </div>
         </section>
 
+        <Reveal immediate stagger={0.03} className="space-y-6">
         {groups.map((g) => (
           <section key={g} className="space-y-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted">{g}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {CAPS.filter((c) => c.group === g).map((c) => (
-                <div key={c.name} className="rounded-xl border border-border-default bg-background-surface/30 p-4 space-y-2">
+                <div key={c.name} data-reveal className="rounded-xl border border-border-default bg-background-surface/30 p-4 space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-medium flex items-center gap-1.5">
@@ -214,6 +216,7 @@ export default function CapabilitiesPage() {
             </div>
           </section>
         ))}
+        </Reveal>
       </div>
     </MainLayout>
   );

@@ -1,4 +1,7 @@
-import { startAssistantMedia } from "@/lib/assistantMedia";
+import { startAssistantMedia, studioVideoLink } from "@/lib/assistantMedia";
+import { replicateConfigured } from "@/lib/replicate";
+import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
+import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart } from "@/lib/shopping";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
@@ -87,6 +90,8 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **communicate**: send WhatsApp/SMS/email, make calls, read emails - action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or call, EXECUTE DIRECTLY without asking repetitive confirmations. Recipient names are auto-resolved from synced device contacts.
 - **navigate**: directions, GPS location, nearby places - action='directions' for maps, 'location' for coords, 'nearby' for POIs
 - **generate**: images, music, video, QR codes, charts, invoices, resumes, screenshots, forms, data analysis, URLs, code, PDFs - type='image'/'music'/'video'/'qr'/'chart'/'invoice'/'resume'/'screenshot'/'form'/'analyze'/'shorten_url'/'code'/'pdf'
+- **shopping**: search real store listings, compare them, keep the user's cart, and at checkout give the store links - the user pays on the store, JARVIS never pays.
+- **build_app**: build a working web app from a description, create a public GitHub repo for it and publish it free on GitHub Pages (the user confirms first).
 - **github**: the user's connected GitHub account - repos, issues, pull requests, file contents, code search. action='connect' opens the GitHub connector.
 - **automate**: schedule recurring actions and run background checks - action='schedule' to set up, 'check' to scan for issues
 - **learn**: proactive suggestions, insights, habits, pattern learning - action='suggest'/'insights'/'habits'/'record'
@@ -882,7 +887,15 @@ async function runTool(
       switch (type) {
         case "image": return await startAssistantMedia(ctx.email, "image", input.prompt ?? "", { style: input.style, size: input.size });
         case "music": return await generateMusic(ctx.email, input.prompt ?? input.description ?? "");
-        case "video": return await startAssistantMedia(ctx.email, "video", input.prompt ?? input.description ?? "");
+        case "video": {
+          const prompt = input.prompt ?? input.description ?? "";
+          if (replicateConfigured()) return await startAssistantMedia(ctx.email, "video", prompt);
+          const url = studioVideoLink(prompt);
+          return {
+            result: `No video model is set up, so the video is made in code in the browser instead. Opening ${url.startsWith("/tools/reel") ? "Reel" : "Video"} Studio with the idea filled in: the user writes the script there and taps render to get the finished file. Nothing has been rendered yet.`,
+            sideEffect: { type: "open_url", data: { url, label: "Open the studio" } },
+          };
+        }
         case "qr": return { result: generateQR(input.data ?? "", input.label) };
         case "chart": return { result: createChart(input.title ?? "Chart", input.chart_type ?? "bar", input.data ?? "") };
         case "invoice": return { result: generateInvoice(String(input.client ?? ""), String(input.items ?? ""), input.tax_rate, input.notes) };
@@ -1078,6 +1091,10 @@ async function runTool(
 
     case "github":
       return githubTool(ctx, input);
+
+    case "shopping":
+      if (!ctx.email) return { result: "shopping failed: sign in first." };
+      return shoppingTool(ctx.email, input);
 
     default:
       return { result: `I don't have a handler for "${name}". Try rephrasing or use one of my available tools.` };
@@ -1637,7 +1654,6 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
   try {
     const { elevenLabsConfigured, composeElevenLabs } = await import("@/lib/music/elevenlabs");
     const { storeStudioAudio, audioPath } = await import("@/lib/music/studioAudio");
-    const { replicateConfigured } = await import("@/lib/replicate");
     const db = getDb();
     if (elevenLabsConfigured() && db && userId) {
       const song = await composeElevenLabs({
@@ -1670,6 +1686,42 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
     };
   }
   return startAssistantMedia(userId ?? undefined, "music", description);
+}
+
+async function shoppingTool(email: string, input: { action?: string; query?: string; stores?: string; title?: string; url?: string; price?: number; currency?: string; qty?: number; item?: string }): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
+  const action = input.action ?? "view";
+  if (action === "search") {
+    const query = input.query?.trim();
+    if (!query) return { result: "shopping failed: say what to search for." };
+    const stores = input.stores?.split(",").map((s) => s.trim().toLowerCase().replace(/^www\./, "")).filter(Boolean);
+    const found = await productSearch(query, stores?.length ? stores : undefined);
+    if (!found.length) return { result: `No store listings found for "${query}". Nothing was added to the cart.` };
+    return { result: found.map((l, i) => `${i + 1}. ${l.title} [${l.store}]${l.price ? ` - listed ${l.currency} ${l.price}` : " - no listed price"}\n   ${l.snippet}\n   ${l.url}`).join("\n") + "\nListed prices come from search; the store page has the current price." };
+  }
+  const cart = await loadCart(email);
+  if (action === "view") return { result: cartSummary(cart) };
+  let next = cart;
+  if (action === "add") {
+    let url: URL | null = null;
+    try { url = new URL(input.url ?? ""); } catch { /* checked below */ }
+    if (!url || url.protocol !== "https:" || !input.title?.trim()) return { result: "shopping failed: add needs the product title and its https link from a search result. Nothing was added." };
+    next = cartAdd(cart, { title: input.title.trim(), url: url.toString(), qty: Math.max(1, Math.round(input.qty ?? 1)), ...(input.price && input.price > 0 ? { price: input.price, currency: input.currency === "USD" ? "USD" : "INR" } : {}) });
+  } else if (action === "remove") {
+    next = cartRemove(cart, String(input.item ?? input.url ?? ""));
+    if (next.length === cart.length) return { result: "shopping failed: no cart item matched. Nothing was removed." };
+  } else if (action === "clear") {
+    next = [];
+  } else if (action === "checkout") {
+    if (!cart.length) return { result: "The cart is empty, so there is nothing to check out." };
+    return {
+      result: `${cartSummary(cart)}\n\nCheckout happens on each store: open each link, add it to the store's cart and pay there. JARVIS has not bought or paid for anything.`,
+      sideEffect: { type: "open_url", data: { url: cart[0].url, label: `Open ${cart[0].title.slice(0, 40)}` } },
+    };
+  } else {
+    return { result: `shopping failed: unknown action "${action}".` };
+  }
+  if (!(await saveCart(email, next))) return { result: "shopping failed: the cart couldn't be saved. Nothing changed." };
+  return { result: `Cart updated.\n${cartSummary(next)}` };
 }
 
 async function githubTool(ctx: RunContext, input: { action?: string; repo?: string; path?: string; query?: string }): Promise<{ result: string; sideEffect?: { type: string; data: any } }> {
@@ -1843,12 +1895,19 @@ function generatePdf(title: string, content: string, format: string): { result: 
   };
 }
 
+// The user's own provider keys (Settings → AI providers) apply to every model
+// call made while answering them.
 export async function POST(req: NextRequest) {
+  const identity = await identify(req.headers, "chat");
+  return identity.email ? withOwnKeys(identity.email, () => chat(req, identity)) : chat(req, identity);
+}
+
+async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identify>>) {
   // Gemini is the primary (it has native function-calling for tools). When its
   // key is absent, we DON'T hard-fail — we fall through to the multi-provider
   // cascade (Groq/OpenAI/etc.) for a plain-text answer, so the assistant stays
   // usable on free keys alone. The cascade path is in the stream's catch below.
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = currentOwnKeys()?.gemini || process.env.GEMINI_API_KEY;
 
   const body = (await req.json()) as ChatRequest;
   const {
@@ -1867,7 +1926,6 @@ export async function POST(req: NextRequest) {
   // the request body — so a caller can't read/write another user's Cortex
   // memory, reminders, or usage by supplying someone else's email
   // (service-role bypasses RLS).
-  const identity = await identify(req.headers, "chat");
   const email = identity.email;
   // Gmail and Calendar use the refresh token stored at Google sign-in, or by
   // Settings → Connections if those scopes were declined. The session token is
