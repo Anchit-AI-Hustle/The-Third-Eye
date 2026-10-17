@@ -159,7 +159,7 @@ function KycCard({ verified, onDone }: { verified: boolean; onDone: () => void }
       if (!res.ok || !body.ok) throw new Error(body.error || "KYC unavailable");
       if (action === "initiate") {
         setRef(body.data.reference_id);
-        setMsg("OTP sent to your Aadhaar-linked mobile (provider).");
+        setMsg("OTP sent to your Aadhaar-linked mobile.");
       } else {
         setMsg("Aadhaar verified.");
         onDone();
