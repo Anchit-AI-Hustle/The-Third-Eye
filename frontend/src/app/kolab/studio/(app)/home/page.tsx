@@ -33,7 +33,7 @@ export default async function HomePage() {
           {OFFERINGS.map((o) => (
             <Card key={o.t} className="p-[22px]">
               <div className="mb-3.5 grid h-11 w-11 place-items-center rounded-xl bg-kolab-surface2 text-[22px]">{o.i}</div>
-              <h3 className="mb-2 text-[18px]">{o.t}</h3>
+              <h3 className="mb-2 text-[18px]">{o.t}{"soon" in o && <span className="ml-2 align-middle text-[11px] font-medium text-kolab-muted">Coming soon</span>}</h3>
               <p className="text-[14px] text-kolab-muted">{o.d}</p>
             </Card>
           ))}
