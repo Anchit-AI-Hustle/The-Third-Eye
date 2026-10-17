@@ -11,7 +11,7 @@ What each feature uses when its key is missing, checked against the code on
 | Stocks | - | Yahoo Finance chart API | Keyless |
 | Nearby places | - | OpenStreetMap Nominatim | Keyless |
 | Weather | `OPENWEATHER_API_KEY` | wttr.in | Keyless |
-| Voice input / output | `GROQ_API_KEY` (Whisper) | Browser speech recognition and speech synthesis | Keyless in the browser |
+| Voice input / output | `GROQ_API_KEY` (Whisper) | Browser speech recognition; for output, the optional Natural voice (Kokoro, in the browser on WebGPU) or the system voice | Keyless in the browser |
 | Music | `ELEVENLABS_API_KEY`, `REPLICATE_API_TOKEN` | Composed in code (`lib/music/synth.ts`): instrumental WAV, no vocals | Keyless |
 | Video, reels, episodes | `REPLICATE_API_TOKEN` | Drawn scenes recorded in the browser (`lib/episodeVideo.ts`) | Keyless (in Studio) |
 | Images | `REPLICATE_API_TOKEN` | None wired | Needs a key |
