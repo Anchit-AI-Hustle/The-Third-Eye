@@ -276,6 +276,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     undoTimer.current = setTimeout(() => setUndoable([]), 12000);
   }, []);
 
+  // Device actions run after the reply was written; append what really happened.
+  useEffect(() => {
+    const onResult = (e: Event) => {
+      const r = (e as CustomEvent<{ ok: boolean; applied: string }>).detail;
+      if (!r?.applied) return;
+      setMessages((prev) => {
+        const i = prev.map((m) => m.role).lastIndexOf("assistant");
+        if (i < 0) return prev;
+        const next = [...prev];
+        next[i] = { ...next[i], content: `${next[i].content}\n\n_${r.ok ? "Done on this device" : "Didn't work on this device"}: ${r.applied}_` };
+        return next;
+      });
+    };
+    window.addEventListener("te:device-result", onResult);
+    return () => window.removeEventListener("te:device-result", onResult);
+  }, []);
+
   const runUndo = useCallback(() => {
     undoable.forEach((a) => a.undo());
     setUndoable([]);

@@ -36,30 +36,14 @@
 	<string>JARVIS accesses your photos and documents vault when you ask to inspect, analyze, or attach media.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>JARVIS saves generated visual reports, charts, and media directly to your Photos library.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>JARVIS accesses your contacts for instant phone dialing, WhatsApp messaging, and SMS outreach.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>JARVIS uses your location to answer questions about where you are and provide local weather and navigation.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>JARVIS uses continuous background location to provide ambient spatial context, commute alerts, and geofenced automations.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>JARVIS converts what you say into text so it can respond to spoken requests.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>JARVIS connects to local Bluetooth accessories, wearables, and smart home IoT hubs.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>JARVIS communicates with smart home hardware and Bluetooth peripherals.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>JARVIS detects physical movement and gestures like shake-to-activate and device orientation.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>JARVIS uses Face ID for biometric authentication to unlock private vaults and secure configurations.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>JARVIS discovers and interacts with local smart devices and media hubs on your network.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
