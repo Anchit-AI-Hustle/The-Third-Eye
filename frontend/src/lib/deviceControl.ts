@@ -38,6 +38,14 @@ function capPlugin(): { isNative: boolean; call: (method: string, args?: Record<
 }
 
 let torchTrack: MediaStreamTrack | null = null;
+// Known torch state on either path, so "toggle" can turn a native torch off.
+let torchOn = false;
+
+/** A number from the model's value; "0" is a real value, not a missing one. */
+function level(value: string | null | undefined, fallback: number): number {
+  const n = value == null || String(value).trim() === "" ? NaN : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 let cameraStream: MediaStream | null = null;
 let wakeLockSentinel: { release: () => Promise<void> } | null = null;
 
@@ -94,7 +102,7 @@ async function setTorch(on: boolean): Promise<DeviceExecResult> {
   const native = capPlugin();
   if (native.isNative) {
     const res = (await native.call("flashlight", { on })) as { ok?: boolean; error?: string } | null;
-    if (res?.ok) return { ok: true, action: on ? "flashlight_on" : "flashlight_off", via: "native", applied: on ? "LED torch on" : "LED torch off" };
+    if (res?.ok) { torchOn = on; return { ok: true, action: on ? "flashlight_on" : "flashlight_off", via: "native", applied: on ? "LED torch on" : "LED torch off" }; }
   }
   try {
     if (on) {
@@ -110,6 +118,7 @@ async function setTorch(on: boolean): Promise<DeviceExecResult> {
         // rather than a same-shape cast that it correctly rejects.
         await track.applyConstraints({ advanced: [{ torch: true }] } as unknown as MediaTrackConstraints);
         torchTrack = track;
+        torchOn = true;
         return { ok: true, action: "flashlight_on", via: "web", applied: "Camera torch on" };
       }
       stream.getTracks().forEach((t) => t.stop());
@@ -119,6 +128,7 @@ async function setTorch(on: boolean): Promise<DeviceExecResult> {
       } catch { /* ignore */ }
       torchTrack.stop();
       torchTrack = null;
+      torchOn = false;
       return { ok: true, action: "flashlight_off", via: "web", applied: "Camera torch off" };
     }
   } catch { /* permission / no torch */ }
@@ -150,30 +160,31 @@ async function vibrate(value?: string | null): Promise<DeviceExecResult> {
 }
 
 async function setVolume(value?: string | null): Promise<DeviceExecResult> {
-  const level = Math.max(0, Math.min(100, Number(value) || 50));
+  const pct = Math.max(0, Math.min(100, level(value, 50)));
   const native = capPlugin();
   if (native.isNative) {
-    const res = (await native.call("setVolume", { level })) as { ok?: boolean } | null;
-    if (res?.ok) return { ok: true, action: "volume", via: "native", applied: `Volume set to ${level}%`, data: { level } };
+    const res = (await native.call("setVolume", { level: pct })) as { ok?: boolean } | null;
+    if (res?.ok) return { ok: true, action: "volume", via: "native", applied: `Volume set to ${pct}%`, data: { level: pct } };
   }
-  if (typeof window !== "undefined") (window as any).__jarvisVolume = level / 100;
+  // The browser cannot change the device volume; JARVIS's own voice follows this.
+  if (typeof window !== "undefined") (window as any).__jarvisVolume = pct / 100;
   return {
     ok: true,
     action: "volume",
     via: "overlay",
-    applied: `JARVIS output volume set to ${level}% (OS media volume requires the native app)`,
-    data: { level },
+    applied: `JARVIS's voice set to ${pct}%. The phone's own volume can only be changed in the Android app.`,
+    data: { level: pct },
   };
 }
 
 async function setBrightness(value?: string | null): Promise<DeviceExecResult> {
-  const level = Math.max(5, Math.min(100, Number(value) || 70));
+  const pct = Math.max(5, Math.min(100, level(value, 70)));
   const native = capPlugin();
   if (native.isNative) {
-    const res = (await native.call("setBrightness", { level })) as { ok?: boolean } | null;
-    if (res?.ok) return { ok: true, action: "brightness", via: "native", applied: `Brightness ${level}%`, data: { level } };
+    const res = (await native.call("setBrightness", { level: pct })) as { ok?: boolean } | null;
+    if (res?.ok) return { ok: true, action: "brightness", via: "native", applied: `Brightness ${pct}%`, data: { level: pct } };
   }
-  const dim = 1 - level / 100;
+  const dim = 1 - pct / 100;
   ensureVeil("jarvis-brightness-veil", {
     background: `rgba(0,0,0,${Math.min(0.82, dim * 0.85)})`,
     opacity: "1",
@@ -327,18 +338,13 @@ async function setWakeLock(on: boolean): Promise<DeviceExecResult> {
   }
 }
 
-function openSettings(kind: "wifi" | "bluetooth" | "airplane"): DeviceExecResult {
+async function openSettings(kind: "wifi" | "bluetooth" | "airplane"): Promise<DeviceExecResult> {
   const cap = capPlugin();
   if (cap.isNative) {
-    void cap.call("openSettings", { pane: kind });
-    return { ok: true, action: kind, via: "settings", applied: `Opened ${kind} settings` };
+    const res = (await cap.call("openSettings", { pane: kind })) as { ok?: boolean } | null;
+    if (res?.ok) return { ok: true, action: kind, via: "settings", applied: `Opened ${kind} settings for you to switch it` };
   }
-  return {
-    ok: true,
-    action: kind,
-    via: "overlay",
-    applied: `Toggled ${kind} in JARVIS (OS ${kind} cannot be flipped from a web page — open system settings)`,
-  };
+  return { ok: false, action: kind, via: "none", applied: `${kind} can't be switched from here. Open your device's settings to change it.` };
 }
 
 async function readStatus(): Promise<DeviceExecResult> {
@@ -411,7 +417,7 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
   let result: DeviceExecResult;
 
   if (key.startsWith("flashlight") || key.startsWith("torch") || (device === "flashlight" && ["on", "off", "toggle"].includes(act))) {
-    const on = key.includes("toggle") ? !torchTrack : parseOnOff(key, true);
+    const on = key.includes("toggle") ? !torchOn : parseOnOff(key, true);
     result = await setTorch(on);
   } else if (key.startsWith("vibrate") || key === "haptic") {
     result = await vibrate(value);
@@ -422,7 +428,6 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
   } else if (key === "mute" || key === "mute_on" || key === "volume_mute") {
     result = await setVolume("0");
     result.action = "mute";
-    result.applied = "Muted JARVIS output";
   } else if (key === "unmute" || key === "mute_off") {
     result = await setVolume("60");
     result.action = "unmute";
@@ -433,7 +438,7 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
       ok: true,
       action: on ? "dnd_on" : "dnd_off",
       via: "overlay",
-      applied: on ? "Do Not Disturb on — JARVIS will stay quiet" : "Do Not Disturb off",
+      applied: on ? "JARVIS will stay quiet. Your phone's own Do Not Disturb is set in its settings." : "JARVIS will speak again",
       data: { dnd: on },
     };
   } else if (key.startsWith("notify") || key === "notification" || key === "alert") {
@@ -451,11 +456,11 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
   } else if (key.startsWith("wake_lock") || key === "wakelock") {
     result = await setWakeLock(parseOnOff(key, true));
   } else if (key.startsWith("wifi")) {
-    result = openSettings("wifi");
+    result = await openSettings("wifi");
   } else if (key.startsWith("bluetooth") || key === "bt") {
-    result = openSettings("bluetooth");
+    result = await openSettings("bluetooth");
   } else if (key.startsWith("airplane")) {
-    result = openSettings("airplane");
+    result = await openSettings("airplane");
   } else if (key === "status" || key === "battery" || key === "info") {
     result = await readStatus();
   } else if ((key === "speak" || key.startsWith("speak")) && value) {

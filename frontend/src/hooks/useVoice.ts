@@ -707,7 +707,10 @@ export function useTTS(voicePreference?: string) {
     const u = new SpeechSynthesisUtterance(clean);
     u.rate = isIOS ? 1.0 : 1.05;
     u.pitch = 0.9;
-    u.volume = 1;
+    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
+    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
+    if (w.__jarvisDnd && !force) { onEnd?.(); return; }
+    u.volume = typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1;
     const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
     const preferred =
       voices.find((v) => pattern.test(v.name)) ??
