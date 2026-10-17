@@ -31,6 +31,11 @@ so install it with Sideloadly or AltStore and your Apple ID (a free Apple ID's
 signature lasts 7 days). `/install` offers it under "Native iOS app", after
 Safari's Add to Home Screen, which needs no signing.
 
+The same workflow publishes `the-third-eye-simulator.zip`, a Simulator build.
+On a Mac with Xcode: open Simulator, unzip it and drag `App.app` onto the
+simulated iPhone, or run `xcrun simctl install booted App.app`. An `.ipa`
+cannot be opened on a Mac directly ("integrity could not be verified").
+
 ## Build & run
 
 ```bash
