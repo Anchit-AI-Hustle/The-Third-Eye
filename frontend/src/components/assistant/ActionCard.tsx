@@ -26,7 +26,7 @@ export function ActionCard({
           <p className="text-[11px] font-mono uppercase tracking-wider text-amber-300/80 mb-1">Confirm before I act</p>
           <p className="text-sm text-text-primary font-medium">{a.summary}</p>
           {/* The model calls the unified "communicate" tool (action:"email") for
-              a real send, not a "send_email" tool — that name only appears in
+              a real send, not a "send_email" tool - that name only appears in
               summarizeAction's copy. Match on the actual dispatched shape so the
               To/Subject/Body preview isn't silently skipped on every real send. */}
           {(a.tool === "send_email" || (a.tool === "communicate" && a.args?.action === "email")) && (
@@ -54,7 +54,7 @@ export function ActionCard({
           )}
           {a.status === "failed" && (
             <div className="mt-3 space-y-2">
-              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it — {a.result}</span></div>
+              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it - {a.result}</span></div>
               {/(connect|not connected|permission|scope|authoriz)/i.test(a.result ?? "") && (
                 <div className="flex items-center gap-2">
                   <a href="/api/connect/google"
@@ -76,7 +76,7 @@ export function ActionCard({
             </a>
           )}
           {a.status === "canceled" && (
-            <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled — nothing was done.</div>
+            <div className="flex items-center gap-2 mt-3 text-xs text-text-muted"><X size={13} /> Canceled - nothing was done.</div>
           )}
         </div>
       </div>

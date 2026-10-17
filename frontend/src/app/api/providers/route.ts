@@ -37,7 +37,7 @@ export async function GET() {
 export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "Not authenticated" }, { status: 401 });
-  if (Date.now() - lastProbe < PROBE_EVERY_MS) return Response.json({ error: "Checked less than a minute ago — try again shortly." }, { status: 429 });
+  if (Date.now() - lastProbe < PROBE_EVERY_MS) return Response.json({ error: "Checked less than a minute ago - try again shortly." }, { status: 429 });
   lastProbe = Date.now();
   await probeProviders();
   resetHealthCache();

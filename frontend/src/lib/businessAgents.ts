@@ -55,7 +55,7 @@ const RECIPES: Record<BusinessAgentKind, Recipe> = {
     searches: (i) => [`${i.subject} launch announcement`, `${i.subject} review customers reddit`],
     news: (i) => `${i.subject} launch`,
     pages: "results",
-    brief: "Analyse the latest launch in three sections: 1) Launch breakdown — positioning, pricing cues, channels, messaging; 2) Customer reaction — what people praise and complain about, with quotes where available; 3) Traction — any public numbers or signals. End with what a competitor should do in response.",
+    brief: "Analyse the latest launch in three sections: 1) Launch breakdown - positioning, pricing cues, channels, messaging; 2) Customer reaction - what people praise and complain about, with quotes where available; 3) Traction - any public numbers or signals. End with what a competitor should do in response.",
   },
   meeting_prep: {
     label: "Meeting preparation",
@@ -94,7 +94,7 @@ const RECIPES: Record<BusinessAgentKind, Recipe> = {
   contract_review: {
     label: "Contract review",
     needs: "document",
-    brief: "You are a legal review team (researcher, contract analyst, strategist). Do the requested review type (default: contract review + risk assessment). Cover: parties and term, key obligations on each side, payment, termination and renewal (with notice periods), liability and indemnity, IP and confidentiality, unusual or one-sided clauses, and missing protections. Quote or point to the clause for every finding and rate risk High/Medium/Low. This is a first pass, not legal advice — say so in one line at the end.",
+    brief: "You are a legal review team (researcher, contract analyst, strategist). Do the requested review type (default: contract review + risk assessment). Cover: parties and term, key obligations on each side, payment, termination and renewal (with notice periods), liability and indemnity, IP and confidentiality, unusual or one-sided clauses, and missing protections. Quote or point to the clause for every finding and rate risk High/Medium/Low. This is a first pass, not legal advice - say so in one line at the end.",
   },
   cv_screen: {
     label: "CV screening",
@@ -122,7 +122,7 @@ const RECIPES: Record<BusinessAgentKind, Recipe> = {
     label: "Money coach",
     needs: "subject_or_url",
     appData: true,
-    brief: "You are a personal budget and money coach. Using the user's recorded expenses and anything they told you, produce: where the money goes (by category, with totals), a realistic monthly budget, 3 specific savings moves with the rupee/dollar impact, and a short debt or savings plan if relevant. Not regulated financial advice — say so in one line.",
+    brief: "You are a personal budget and money coach. Using the user's recorded expenses and anything they told you, produce: where the money goes (by category, with totals), a realistic monthly budget, 3 specific savings moves with the rupee/dollar impact, and a short debt or savings plan if relevant. Not regulated financial advice - say so in one line.",
   },
   property_search: {
     label: "Property search",
@@ -245,7 +245,7 @@ function missing(r: Recipe, i: BusinessAgentInput): string | null {
   if (r.needs === "subject" && !i.subject) return "Tell me the company, topic or place to work on.";
   if (r.needs === "url" && !i.url) return "Give me the page's URL.";
   if (r.needs === "subject_or_url" && !i.subject && !i.url && !i.document) return "Tell me the company or topic, or give me a URL.";
-  if (r.needs === "document" && !i.document) return "Attach the file (or paste its text) and ask again — I read text, CSV and Markdown files here; for a PDF, ask about it directly in chat with the PDF attached.";
+  if (r.needs === "document" && !i.document) return "Attach the file (or paste its text) and ask again - I read text, CSV and Markdown files here; for a PDF, ask about it directly in chat with the PDF attached.";
   return null;
 }
 
@@ -269,7 +269,7 @@ export async function runBusinessAgent(input: BusinessAgentInput, deps: AgentDep
     for (const u of found) if (!urls.includes(u) && urls.length < MAX_RESULT_PAGES + (input.url ? 1 : 0)) urls.push(u);
   }
   const pages = (await Promise.all(urls.map(async (u) => ({ u, text: await readPage(u) })))).filter((p) => p.text);
-  if (recipe.pages === "url" && !pages.length && !input.document) return `I couldn't read ${input.url} — it may block automated readers. Paste the page text and I'll work from that.`;
+  if (recipe.pages === "url" && !pages.length && !input.document) return `I couldn't read ${input.url} - it may block automated readers. Paste the page text and I'll work from that.`;
 
   let document = input.document?.slice(0, 20_000) ?? "";
   if (input.kind === "data_analysis") {

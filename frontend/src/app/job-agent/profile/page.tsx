@@ -1,6 +1,6 @@
 import { ProfilePanel } from "@/components/jobAgent/ProfilePanel";
 
-export const metadata = { title: "Career Profile — Job Agent" };
+export const metadata = { title: "Career Profile - Job Agent" };
 
 export default function JobAgentProfilePage() {
   return (

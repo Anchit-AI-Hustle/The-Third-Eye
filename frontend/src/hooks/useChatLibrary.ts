@@ -20,7 +20,7 @@ function readLocal<T>(key: string): T[] {
   try { return JSON.parse(localStorage.getItem(key) ?? "[]") as T[]; } catch { return []; }
 }
 function writeLocal(key: string, rows: unknown[]) {
-  try { localStorage.setItem(key, JSON.stringify(rows)); } catch { /* quota — keep what's in memory */ }
+  try { localStorage.setItem(key, JSON.stringify(rows)); } catch { /* quota - keep what's in memory */ }
 }
 /** A chat saved while a reply was streaming reopens finished: no spinner, no empty bubble. */
 export function settleMessages<M extends { content: string; streaming?: boolean }>(messages: M[]): M[] {

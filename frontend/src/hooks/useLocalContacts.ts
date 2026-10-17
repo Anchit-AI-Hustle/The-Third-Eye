@@ -148,13 +148,13 @@ export function useLocalContacts() {
   const [syncing, setSyncing] = useState(false);
 
   // Sync to remote cloud API
-  const pushToCloud = useCallback(async (list: DeviceContact[]) => {
+  const pushToCloud = useCallback(async (list: DeviceContact[], removed: string[] = []) => {
     if (!userId) return;
     try {
       await fetch("/api/user/sync/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacts: list }),
+        body: JSON.stringify({ contacts: list, removed }),
       });
     } catch {}
   }, [userId]);
@@ -221,7 +221,7 @@ export function useLocalContacts() {
     setContacts((prev) => {
       const next = prev.filter((c) => c.id !== id);
       saveLocalContacts(next);
-      pushToCloud(next);
+      pushToCloud(next, [id]);
       return next;
     });
   }, [pushToCloud]);

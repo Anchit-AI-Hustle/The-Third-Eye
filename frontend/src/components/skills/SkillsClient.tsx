@@ -28,7 +28,7 @@ export function SkillsClient() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-secondary max-w-xl">
-          Save multi-step automations your assistant runs on command — it executes each step with its tools and pauses for approval on anything sensitive.
+          Save multi-step automations your assistant runs on command - it executes each step with its tools and pauses for approval on anything sensitive.
         </p>
         <button onClick={() => setEditing("new")}
           className="flex-none inline-flex items-center gap-1.5 px-3 py-2 rounded-input bg-[#4FC3F7]/15 border border-[#4FC3F7]/40 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/25 transition-colors">

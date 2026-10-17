@@ -10,7 +10,7 @@ waits for the user's tap (`lib/actions.ts isSensitive`).
 | plan_checklist, start_step, complete_step, fail_step | Verified checklist ledger | none | no | `lib/__tests__/checklist.test.ts`, `chat/__tests__/checklist.route.test.ts`, eval 2, 8, 12, 18 |
 | manage_tasks, manage_notes, manage_goals, manage_expenses | CRUD on the user's records; reads from the database, writes via side effects | `DATABASE_URL` for persistence (else browser storage) | no | `chat/__tests__/tools.route.test.ts`, eval 3, 5, 17 |
 | calculate | Built-in calculators and formulas | none | no | tools.route.test |
-| manage_reminders | Reminders; delivery by the reminders cron | database, cron (GitHub Actions, every 3 h) | no | reminders tests |
+| manage_reminders | Reminders; delivery by the reminders cron | database, cron (GitHub Actions, every 5 min) | no | reminders tests |
 | manage_calendar | Google Calendar read/create | Google connected with calendar scope | no | communicate.route.test |
 | manage_contacts | Synced device contacts | contacts synced from the device | no | contacts tests |
 | communicate | Email (send needs Confirm), WhatsApp/SMS/call deep links | Gmail send scope for direct email; else a Gmail draft link | email: yes | communicate.route.test, eval 13, 14, 16 |

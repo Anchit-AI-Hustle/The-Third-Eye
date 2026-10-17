@@ -100,7 +100,7 @@ export function CalculatorRunner({ calculator }: { calculator: Calculator }) {
 
   const outValue = (id: string, kind: (typeof calculator.outputs)[number]["kind"]) => {
     const raw = result.values[id];
-    return raw === undefined || raw === null ? "—" : formatOutput(raw, kind);
+    return raw === undefined || raw === null ? "-" : formatOutput(raw, kind);
   };
 
   return (

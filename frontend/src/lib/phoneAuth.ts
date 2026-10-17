@@ -153,7 +153,7 @@ export async function enter(input: {
     return {
       ok: false,
       reason: "rate_limited",
-      error: "Too many sign-in attempts from this device — please wait a few minutes.",
+      error: "Too many sign-in attempts from this device - please wait a few minutes.",
     };
   }
   // The per-NUMBER window is the real control: its key is the validated E.164
@@ -165,7 +165,7 @@ export async function enter(input: {
     return {
       ok: false,
       reason: "rate_limited",
-      error: "Too many attempts for that number — please wait a few minutes.",
+      error: "Too many attempts for that number - please wait a few minutes.",
     };
   }
 

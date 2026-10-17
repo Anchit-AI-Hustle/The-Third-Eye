@@ -52,7 +52,7 @@ describe("isDueSoon", () => {
     expect(isDueSoon("not a date", "todo")).toBe(false);
   });
 
-  it("is quiet for a task in review as much as one to do — review is still open work", () => {
+  it("is quiet for a task in review as much as one to do - review is still open work", () => {
     expect(isDueSoon(at(1), "review")).toBe(true);
     expect(isOverdue(at(-1), "review")).toBe(true);
   });

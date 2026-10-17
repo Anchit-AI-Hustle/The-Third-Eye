@@ -27,7 +27,7 @@ const kolabMono = JetBrains_Mono({
   display: "swap",
 });
 
-export const metadata = { title: "Kolab Studio — The Third Eye" };
+export const metadata = { title: "Kolab Studio - The Third Eye" };
 
 // The gate: the app's own NextAuth session (matches every other protected route — see
 // middleware.ts matcher). Kolab Studio has no sign-in of its own; `(app)/layout.tsx` and

@@ -283,8 +283,14 @@ export function PermissionsCard() {
     await refreshSystemStatuses();
   };
 
+  const pickedTest = (cap: PermissionCapability, files: FileList | null) => {
+    const n = files?.length ?? 0;
+    setTestResults((prev) => ({ ...prev, [cap]: n ? { status: "success", message: `Read ${files![0].name} (${Math.round(files![0].size / 1024)} KB).` } : { status: "error", message: "Nothing was picked." } }));
+  };
+
   // Test / prompt device access directly from settings
   const handleTestCapability = async (cap: PermissionCapability) => {
+    const native = (window as any).Capacitor?.isNativePlatform?.() ? (window as any).Capacitor : null;
     setTestResults((prev) => ({
       ...prev,
       [cap]: { status: "testing", message: "Connecting to hardware..." },
@@ -323,6 +329,14 @@ export function PermissionsCard() {
           { timeout: 8000 }
         );
       } else if (cap === "notifications") {
+        // Inside the Android or iPhone app the WebView has no Notification API;
+        // the native prompt (Android 13+ POST_NOTIFICATIONS) comes from the plugin.
+        const push = native?.Plugins?.PushNotifications;
+        if (push) {
+          const r = await push.requestPermissions();
+          setTestResults((prev) => ({ ...prev, [cap]: { status: r.receive === "granted" ? "success" : "error", message: `Notification permission: ${r.receive}.` } }));
+          return;
+        }
         if (typeof Notification === "undefined") throw new Error("Notifications not supported");
         const res = await Notification.requestPermission();
         setTestResults((prev) => ({
@@ -331,36 +345,39 @@ export function PermissionsCard() {
         }));
         refreshSystemStatuses();
       } else if (cap === "files") {
-        if (fileTestInputRef.current) {
-          fileTestInputRef.current.click();
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Document picker launched." } }));
-        }
+        // Passes only once a file is actually picked (see the input's onChange).
+        fileTestInputRef.current?.click();
+        setTestResults((prev) => ({ ...prev, [cap]: { status: "testing", message: "Pick a file to confirm access." } }));
       } else if (cap === "photos") {
-        if (photoTestInputRef.current) {
-          photoTestInputRef.current.click();
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Photos gallery picker launched." } }));
-        }
+        photoTestInputRef.current?.click();
+        setTestResults((prev) => ({ ...prev, [cap]: { status: "testing", message: "Pick a photo to confirm access." } }));
       } else if (cap === "contacts") {
         const nav = navigator as any;
-        if ("contacts" in nav && "ContactsManager" in window) {
+        const book = native?.Plugins?.Contacts;
+        if (book) {
+          const r = await book.requestPermissions();
+          const yes = r.contacts === "granted" || r.contacts === "limited";
+          setTestResults((prev) => ({ ...prev, [cap]: { status: yes ? "success" : "error", message: yes ? "Address book access allowed." : "Contacts access is off. Turn it on in the phone's Settings." } }));
+        } else if ("contacts" in nav && "ContactsManager" in window) {
           const c = await nav.contacts.select(["name"], { multiple: false });
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: `Contacts picker verified (${c?.length || 0} selected).` } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: c?.length ? "success" : "error", message: c?.length ? "Contacts picker works." : "No contact was picked." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Contacts address book ready (supported in device & browser)." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser can't read contacts. Use the JARVIS phone app, or import a .vcf file." } }));
         }
       } else if (cap === "bluetooth") {
         const nav = navigator as any;
         if (nav.bluetooth?.requestDevice) {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Web Bluetooth API ready for smart hub & peripherals." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Web Bluetooth is available in this browser." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Bluetooth hardware bridge declared in native manifest." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser has no Bluetooth access." } }));
         }
       } else if (cap === "motion") {
         if (typeof (DeviceOrientationEvent as any)?.requestPermission === "function") {
           const res = await (DeviceOrientationEvent as any).requestPermission();
           setTestResults((prev) => ({ ...prev, [cap]: { status: res === "granted" ? "success" : "error", message: `Motion permission: ${res}.` } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Motion & gyroscope sensors active for shake gestures." } }));
+          const has = typeof window !== "undefined" && "DeviceMotionEvent" in window;
+          setTestResults((prev) => ({ ...prev, [cap]: { status: has ? "success" : "error", message: has ? "Motion sensors are available." : "This device reports no motion sensors." } }));
         }
       } else if (cap === "wakeLock") {
         if ("wakeLock" in navigator) {
@@ -368,14 +385,14 @@ export function PermissionsCard() {
           await lock.release();
           setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Screen stay awake lock verified." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Wake Lock native capability active." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser can't keep the screen awake." } }));
         }
       } else if (cap === "vibration") {
         if (typeof navigator.vibrate === "function") {
           navigator.vibrate([40, 30, 40]);
           setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Haptic vibration pulse triggered." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Haptic alerts active on supported hardware." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser can't vibrate (iPhone browsers have no vibration API)." } }));
         }
       } else if (cap === "clipboard") {
         if (navigator.clipboard) {
@@ -392,7 +409,7 @@ export function PermissionsCard() {
             [cap]: { status: "success", message: `Battery diagnostic active (${Math.round(b.level * 100)}% remaining).` },
           }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Power diagnostics supported." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser doesn't report battery level." } }));
         }
       } else if (cap === "screen") {
         if (typeof navigator.mediaDevices?.getDisplayMedia === "function") {
@@ -414,8 +431,8 @@ export function PermissionsCard() {
   return (
     <div className="mt-6 rounded-card border border-border-default bg-background-surface/40 p-5 space-y-6">
       {/* Test inputs */}
-      <input ref={fileTestInputRef} type="file" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
-      <input ref={photoTestInputRef} type="file" accept="image/*" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
+      <input ref={fileTestInputRef} type="file" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={(e) => pickedTest("files", e.target.files)} />
+      <input ref={photoTestInputRef} type="file" accept="image/*" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={(e) => pickedTest("photos", e.target.files)} />
 
       {/* Header with App Settings & Cross-Platform Link */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border-default">

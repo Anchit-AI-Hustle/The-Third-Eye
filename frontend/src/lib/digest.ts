@@ -50,14 +50,14 @@ export function leadRecommendation(
       overdue.length > 1
         ? `, and ${overdue.length - 1} other${overdue.length > 2 ? "s are" : " is"} behind it`
         : "";
-    return phrase(`Start with `, t.title, ` — it's ${days} day${days === 1 ? "" : "s"} overdue${trailing}.`);
+    return phrase(`Start with `, t.title, ` - it's ${days} day${days === 1 ? "" : "s"} overdue${trailing}.`);
   }
 
   const dueToday = open.filter((t) => t.due_date === date).sort(byUrgency);
   if (dueToday.length) {
     const trailing =
       dueToday.length > 1 ? `, along with ${dueToday.length - 1} other${dueToday.length > 2 ? "s" : ""}` : "";
-    return phrase(`Start with `, dueToday[0].title, ` — due today${trailing}.`);
+    return phrase(`Start with `, dueToday[0].title, ` - due today${trailing}.`);
   }
 
   const upcoming = open.filter((t) => t.due_date && t.due_date > date).sort(byUrgency);
@@ -71,7 +71,7 @@ export function leadRecommendation(
     .sort((a, b) => a.pct - b.pct);
   if (behind.length && behind[0].pct < 0.5) {
     const { g, pct } = behind[0];
-    return phrase(`No deadlines today — a good day to move `, g.title, `, which is at ${Math.round(pct * 100)}% of target.`);
+    return phrase(`No deadlines today - a good day to move `, g.title, `, which is at ${Math.round(pct * 100)}% of target.`);
   }
 
   if (upcoming.length) {

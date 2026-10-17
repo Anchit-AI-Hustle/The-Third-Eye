@@ -8,7 +8,7 @@ import type { ContentIdea, PostDraft } from "./types";
 // calculators themselves.
 const TIPS: string[] = [
   "Clearing a 9% loan is a guaranteed, tax-free 9% return. No fund offers that with certainty.",
-  "A step-up SIP that rises 10% a year usually beats chasing a 2% higher return — and costs nothing today.",
+  "A step-up SIP that rises 10% a year usually beats chasing a 2% higher return - and costs nothing today.",
   "The minimum credit card payment is engineered to keep you in debt, not get you out of it.",
   "Your emergency fund isn't an investment. Its only job is being there, in full, on the worst day of your year.",
   "Inflation is the quiet tax: at 6% a year, your money's buying power roughly halves in 12 years.",
@@ -28,11 +28,11 @@ export function buildIdeas(): ContentIdea[] {
     calculatorSlug: c.slug,
     link: calculatorLink(c.slug),
     prompt:
-      `Write a punchy social post (max 240 characters, 1–2 short sentences) about the "${c.h1}". ` +
+      `Write a punchy social post (max 240 characters, 1-2 short sentences) about the "${c.h1}". ` +
       `Lead with one concrete, slightly surprising insight a person would learn from it, then invite them to try the free calculator. ` +
-      `Plain, confident, non-preachy. Do NOT include any link or hashtags — those are appended separately. ` +
+      `Plain, confident, non-preachy. Do NOT include any link or hashtags - those are appended separately. ` +
       `Context: ${c.metaDescription}`,
-    fallback: `${c.h1} — ${c.metaDescription} Try it free:`,
+    fallback: `${c.h1} - ${c.metaDescription} Try it free:`,
   }));
 
   const tips: ContentIdea[] = TIPS.map((t) => ({

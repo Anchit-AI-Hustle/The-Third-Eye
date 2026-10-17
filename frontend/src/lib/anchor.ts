@@ -118,7 +118,7 @@ export async function anchorStatus(user: string | null | undefined): Promise<str
   catch (e) { return `ANCHOR's status couldn't be read: ${e instanceof Error ? e.message : "unreachable"}.`; }
   const last = o.lastRun;
   return [
-    last ? `Last run: ${last.result}${last.title ? ` — "${last.title}"` : ""} at ${last.finishedAt ?? "?"}${last.error ? ` (failed at ${last.stage}: ${last.error})` : ""}.` : "No run recorded yet.",
+    last ? `Last run: ${last.result}${last.title ? ` - "${last.title}"` : ""} at ${last.finishedAt ?? "?"}${last.error ? ` (failed at ${last.stage}: ${last.error})` : ""}.` : "No run recorded yet.",
     `Next post: ${o.nextPostAt ?? "not scheduled"}. Streak: ${o.streak} days. Released: ${o.total} records.`,
     `Latest releases:\n${o.drops.slice(0, 5).map((d) => `- ${d.date} "${d.title}" (${d.lane}${d.bpm ? `, ${d.bpm} BPM` : ""})${d.youtubeUrl ? ` ${d.youtubeUrl}` : ""}`).join("\n")}`,
     o.canRun ? "You can start a drop, rehearsal, queue or mix for them (they confirm first)." : "Starting workflows from here isn't set up for this account (needs ANCHOR_GITHUB_TOKEN and ANCHOR_OPERATORS); say so if asked.",
@@ -184,7 +184,7 @@ export function anchorDispatch(r: AnchorRequest): { workflow: string; inputs: Re
 
 export async function runAnchor(user: string | null | undefined, r: AnchorRequest): Promise<{ ok: boolean; message: string }> {
   if (!isAnchorOperator(user)) return { ok: false, message: "Only ANCHOR's operators can start its workflows (ANCHOR_OPERATORS)." };
-  if (!process.env.ANCHOR_GITHUB_TOKEN) return { ok: false, message: "ANCHOR_GITHUB_TOKEN isn't set — add a token with Actions write access to the anchor-autopilot repo." };
+  if (!process.env.ANCHOR_GITHUB_TOKEN) return { ok: false, message: "ANCHOR_GITHUB_TOKEN isn't set - add a token with Actions write access to the anchor-autopilot repo." };
   const d = anchorDispatch(r);
   if ("error" in d) return { ok: false, message: d.error };
   const res = await fetch(`${API}/actions/workflows/${d.workflow}/dispatches`, {

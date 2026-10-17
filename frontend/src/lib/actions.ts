@@ -53,11 +53,11 @@ export function summarizeAction(tool: string, args: any): string {
     case "manage_contacts":
       return `Access device contacts (${args?.action ?? "search"})`;
     case "communicate":
-      return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
+      return `Send an email to ${args?.to ?? "?"} - subject "${args?.subject ?? ""}"`;
     case "send_email":
-      return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
+      return `Send an email to ${args?.to ?? "?"} - subject "${args?.subject ?? ""}"`;
     case "pay":
-      return `Pay ${args?.amount ?? "?"} to ${args?.name ?? args?.vpa ?? "?"}${args?.note ? ` — "${args.note}"` : ""}`;
+      return `Pay ${args?.amount ?? "?"} to ${args?.name ?? args?.vpa ?? "?"}${args?.note ? ` - "${args.note}"` : ""}`;
     case "send_whatsapp":
       return `WhatsApp ${args?.to ?? "a contact"}: "${args?.message ?? ""}"`;
     case "anchor":

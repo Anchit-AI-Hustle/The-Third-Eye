@@ -53,7 +53,7 @@ export function OnboardingClient({ canGoBack = false }: { canGoBack?: boolean })
       </div>
       <h1 className="mb-2 text-[clamp(26px,5vw,44px)]">What are you here to do?</h1>
       <p className="mb-6 max-w-[52ch] text-[15px] text-kolab-muted">
-        This sets up your workspace. You can create more later — each one has its own type.
+        This sets up your workspace. You can create more later - each one has its own type.
       </p>
 
       {err && (
@@ -93,7 +93,7 @@ export function OnboardingClient({ canGoBack = false }: { canGoBack?: boolean })
                 value={vertical}
                 onChange={(e) => setVertical(e.target.value)}
               >
-                <option value="">—</option>
+                <option value="">-</option>
                 {PACK_META[type].verticals.map((v) => (
                   <option key={v} value={v}>
                     {v}

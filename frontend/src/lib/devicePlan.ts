@@ -100,7 +100,7 @@ export function planDeviceControl(
       result:
         `Queued Home Hub ${actRaw} on “${targetRaw}”` +
         (payloadValue != null ? ` (${payloadValue})` : "") +
-        `. The hub executor applies this on the operator’s device — report only what the executor confirms.`,
+        `. The hub executor applies this on the operator’s device - report only what the executor confirms.`,
       sideEffect: {
         type: "home_action",
         data: { action: actRaw, device: targetRaw, value: payloadValue },
@@ -129,7 +129,7 @@ export function planDeviceControl(
     result:
       `Queued ${act} on the operator’s device` +
       (payload.value != null ? ` (${payload.value})` : "") +
-      `. The device executor will apply it and the next message will reflect the real outcome — do not claim OS-level success beyond what the executor reports.`,
+      `. The device executor will apply it and the next message will reflect the real outcome - do not claim OS-level success beyond what the executor reports.`,
     sideEffect: { type: "device_action", data: payload },
   };
 }
@@ -176,7 +176,7 @@ export function protocolActions(protocol: string): DeviceActionPayload[] {
       return [
         { action: "flashlight_on", device: "flashlight", value: null },
         { action: "vibrate", device: "phone", value: "1200" },
-        { action: "notify", device: "phone", value: "JARVIS SOS — emergency protocol" },
+        { action: "notify", device: "phone", value: "JARVIS SOS - emergency protocol" },
         { action: "location", device: "phone", value: null },
       ];
     default:

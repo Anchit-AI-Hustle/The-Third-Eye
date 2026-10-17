@@ -9,16 +9,16 @@ import { Reveal } from "@/components/hud/Reveal";
 import { HoloFrame } from "@/components/hud/HoloFrame";
 
 export const metadata = {
-  title: "The Third Eye — Your Personal AI Operating System",
+  title: "The Third Eye - Your Personal AI Operating System",
   description:
-    "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you — capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
+    "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you - capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
 };
 
 const FEATURES: Feature[] = [
   {
     tag: "// assistant",
     title: "AI Assistant",
-    body: "Chat with an assistant that can search the web, look things up in your own data, and take actions — creating tasks, notes, and reminders on your behalf.",
+    body: "Chat with an assistant that can search the web, look things up in your own data, and take actions - creating tasks, notes, and reminders on your behalf.",
   },
   {
     tag: "// tasks",
@@ -33,7 +33,7 @@ const FEATURES: Feature[] = [
   {
     tag: "// notes",
     title: "Notes",
-    body: "Quickly capture thoughts and meeting notes — organized, searchable, and always private to your account.",
+    body: "Quickly capture thoughts and meeting notes - organized, searchable, and always private to your account.",
   },
   {
     tag: "// reminders",
@@ -151,8 +151,8 @@ export default async function Home() {
                 <p className="text-sm leading-relaxed text-text-secondary">
                   The Third Eye uses your Google account solely to sign you in and identify your
                   private workspace. We request your basic profile, including your name and email
-                  address, for authentication only. Anything you create in the app — including
-                  tasks, notes, and documents — is stored so it remains available across your
+                  address, for authentication only. Anything you create in the app - including
+                  tasks, notes, and documents - is stored so it remains available across your
                   devices and is visible only to you. We never sell your data or share it with third
                   parties for advertising. Additional access for optional integrations is requested
                   explicitly and used only for features you enable. Full details are available in

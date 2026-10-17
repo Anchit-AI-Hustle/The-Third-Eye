@@ -67,7 +67,7 @@ describe("priceFor", () => {
     }
   });
 
-  it("applies charm pricing — never a round multiple of five", () => {
+  it("applies charm pricing - never a round multiple of five", () => {
     for (const tier of ["plus", "pro", "max"] as const) {
       for (const p of PERIODS) {
         expect(priceFor(tier, p.id) % 5).not.toBe(0);
@@ -102,7 +102,7 @@ describe("credit costs", () => {
 });
 
 describe("bundles", () => {
-  it("gets cheaper per credit as the pack grows — the loyalty curve", () => {
+  it("gets cheaper per credit as the pack grows - the loyalty curve", () => {
     const rates = BUNDLES.map(pricePer100);
     for (let i = 1; i < rates.length; i++) expect(rates[i]).toBeLessThan(rates[i - 1]);
   });

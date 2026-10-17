@@ -5,7 +5,7 @@ export const localCopy: CopyDict = {
   homeEyebrow: "Fill more tables, more often",
   homeTitle: "Turn first-time guests into regulars",
   homeSubtitle:
-    "WhatsApp-first guest journeys, reputation across Google/Zomato/Swiggy, and local creator collabs — per outlet.",
+    "WhatsApp-first guest journeys, reputation across Google/Zomato/Swiggy, and local creator collabs - per outlet.",
   audienceWord: "guest",
   audienceWordPlural: "guests",
   contactWord: "guest",

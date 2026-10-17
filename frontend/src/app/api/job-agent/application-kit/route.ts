@@ -36,6 +36,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ kit });
   } catch (e) {
     console.error("job-agent kit:", e instanceof Error ? e.message : e);
-    return Response.json({ error: "Application kit generation failed — please try again." }, { status: 502 });
+    return Response.json({ error: "Application kit generation failed - please try again." }, { status: 502 });
   }
 }

@@ -21,13 +21,13 @@ describe("structures", () => {
   it("offers the genre's own structures first", () => {
     const opts = structuresFor(["Psytrance"], "Goa Trance");
     expect(opts[0]).toMatch(/Drop/);
-    expect(opts.indexOf("Verse–Chorus–Verse–Chorus–Bridge–Chorus")).toBeGreaterThan(3);
+    expect(opts.indexOf("Verse - Chorus - Verse - Chorus - Bridge - Chorus")).toBeGreaterThan(3);
     expect(new Set(opts).size).toBe(opts.length);
   });
 
   it("turns a structure into lyric section tags", () => {
-    expect(sectionsOf("Intro–Kick & Bass (16 bars)–Mantra Breakdown → Drop - Outro")).toEqual(["intro", "kick and bass", "mantra breakdown", "drop", "outro"]);
-    expect(sectionsOf("Intro–Verse–Pre-chorus–Chorus")).toEqual(["intro", "verse", "pre-chorus", "chorus"]);
+    expect(sectionsOf("Intro - Kick & Bass (16 bars) - Mantra Breakdown → Drop - Outro")).toEqual(["intro", "kick and bass", "mantra breakdown", "drop", "outro"]);
+    expect(sectionsOf("Intro - Verse - Pre-chorus - Chorus")).toEqual(["intro", "verse", "pre-chorus", "chorus"]);
     expect(sectionsOf("AABA")).toEqual([]);
   });
 });
@@ -62,7 +62,7 @@ describe("lyrics", () => {
   it("asks for the chosen structure's sections, sparse club vocals, and romanized Sanskrit", async () => {
     reply("[intro]\n[drop]\nom namah\n[mantra breakdown]\nfeel it\n[outro]");
     const out = await lyricist(
-      { structure: "Intro–Drop–Mantra Breakdown–Outro", vocalLanguage: "Sanskrit, English", genre: "Psytrance" },
+      { structure: "Intro - Drop - Mantra Breakdown - Outro", vocalLanguage: "Sanskrit, English", genre: "Psytrance" },
       brief,
     );
     const system = cascade.mock.calls[0][0].system as string;

@@ -13,7 +13,7 @@ export const maxDuration = 30;
 
 const SYSTEM = `You are an expert music producer. From the song description, fill in a COMPLETE set of production parameters.
 CRITICAL RULES:
-- Anything the description states explicitly (a BPM, genre, instrument, language, artist) is used EXACTLY as stated — never "corrected" toward a genre average. "200+ BPM" means a tempo of 200 or more.
+- Anything the description states explicitly (a BPM, genre, instrument, language, artist) is used EXACTLY as stated - never "corrected" toward a genre average. "200+ BPM" means a tempo of 200 or more.
 - EVERY field must have a concrete, specific, non-empty value. Never return "", null, "unknown", or "N/A".
 - If the description doesn't state something, choose the most fitting value from the genre knowledge provided (a real song title, 4-6 specific instruments, 1-3 real reference artists of that exact scene, a specific sub-genre, etc.).
 - The title is an evocative 2-5 word name. It is never the description, and never a phrase copied from it.
@@ -23,13 +23,13 @@ CRITICAL RULES:
 Return ONLY a raw JSON object (no prose, no code fences) with EXACTLY these keys:
 {
  "title": string,
- "genre": string (1-2 genres, comma-separated — if the request blends genres, e.g. "hard techno rap", name both),
+ "genre": string (1-2 genres, comma-separated - if the request blends genres, e.g. "hard techno rap", name both),
  "subgenre": string (a specific sub-genre),
  "mood": string (1-2 moods, comma-separated),
- "tempo": number (40-400; the genre's real range — e.g. full-on psytrance 142-148, hi-tech 175-200, psycore 200-260, speedcore 250-400),
+ "tempo": number (40-400; the genre's real range - e.g. full-on psytrance 142-148, hi-tech 175-200, psycore 200-260, speedcore 250-400),
  "energy": number (1-10),
  "duration": number (15-120 seconds),
- "structure": string (pick the best fit from STRUCTURE OPTIONS below, or adapt one; sections joined with "–"),
+ "structure": string (pick the best fit from STRUCTURE OPTIONS below, or adapt one; sections joined with " - "),
  "instruments": string (comma-separated, 4-6 specific instruments),
  "artistInspiration": string (1-3 real reference artists from this exact scene, comma-separated),
  "vocals": boolean,

@@ -8,7 +8,7 @@ export function OfferBlock({ offers }: { offers: Offer[] }) {
   return (
     <section className="mt-12" aria-label="Partner offers">
       <p className="mb-3 text-xs text-text-muted">
-        Some links below are partner offers — if you sign up we may earn a commission, at no extra cost to you. We only
+        Some links below are partner offers - if you sign up we may earn a commission, at no extra cost to you. We only
         list things worth recommending.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">

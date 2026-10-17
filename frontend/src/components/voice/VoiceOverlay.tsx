@@ -491,12 +491,12 @@ export function VoiceOverlay() {
             <div className="flex items-center gap-0.5">
               {/* Green means it is genuinely listening. Amber means the wake
                   word is on but the mic is not granted, or this browser has no
-                  speech recognition — tap to fix rather than sit on a lie. */}
+                  speech recognition - tap to fix rather than sit on a lie. */}
               <button onClick={toggleWake}
                 title={
-                  wake.listening ? `Listening — say "${agent.name}"`
+                  wake.listening ? `Listening - say "${agent.name}"`
                   : wakeEnabled && !wake.supported ? "This browser can't do wake words"
-                  : wakeEnabled ? "Wake word needs the microphone — tap to allow"
+                  : wakeEnabled ? "Wake word needs the microphone - tap to allow"
                   : "Wake word off"
                 }
                 className={cn("p-1.5 rounded-input transition-colors",
@@ -610,13 +610,13 @@ export function VoiceOverlay() {
                 )}
                 <p className="hud-label text-[#4FC3F7]/60 text-[9px]">
                   {stt.permissionDenied
-                    ? "Microphone blocked — allow it in your browser's address bar, then tap the mic again"
+                    ? "Microphone blocked - allow it in your browser's address bar, then tap the mic again"
                     : micOn && stt.recognitionIssue === "network"
-                    ? "Speech recognition can't reach its service — check your connection or try typing"
+                    ? "Speech recognition can't reach its service - check your connection or try typing"
                     : micOn && stt.recognitionIssue === "audio-capture"
-                    ? "No microphone detected — check your input device"
+                    ? "No microphone detected - check your input device"
                     : micOn
-                    ? "Listening — speak or type"
+                    ? "Listening - speak or type"
                     : "Tap mic to start"}
                 </p>
               </div>

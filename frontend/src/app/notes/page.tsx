@@ -1,6 +1,6 @@
 import { NotesClient } from "@/components/notes/NotesClient";
 
-export const metadata = { title: "Intel Notes — The Third Eye" };
+export const metadata = { title: "Intel Notes - The Third Eye" };
 
 export default function NotesPage() {
   return (

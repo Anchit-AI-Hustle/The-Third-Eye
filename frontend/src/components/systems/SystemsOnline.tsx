@@ -41,7 +41,7 @@ export function SystemsOnline() {
 
     if (isAgentKilled()) {
       setPhases(Object.fromEntries(list.map((s) => [s.id, "halted" as Phase])));
-      try { logAgentAction({ type: "systems.status", label: "Status check blocked — kill switch engaged", outcome: "blocked" }); } catch { /* noop */ }
+      try { logAgentAction({ type: "systems.status", label: "Status check blocked - kill switch engaged", outcome: "blocked" }); } catch { /* noop */ }
       running.current = false;
       closeTimer.current = setTimeout(() => setOpen(false), 2600);
       return;
@@ -92,7 +92,7 @@ export function SystemsOnline() {
           <h2 className="font-display text-lg font-semibold text-text-primary mb-4">
             {halted
               ? "Kill switch engaged"
-              : `${total === 1 ? systems[0].name : "All Systems"} — ${done}/${total} online`}
+              : `${total === 1 ? systems[0].name : "All Systems"} - ${done}/${total} online`}
           </h2>
 
           <div className="space-y-2">

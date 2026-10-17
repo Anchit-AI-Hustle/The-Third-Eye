@@ -13,7 +13,7 @@ interface Connector { id: string; name: string; host: string; enabled: boolean; 
 // Remote MCP servers that work with a URL (and optionally a key) — no
 // per-app OAuth needed, so they can be added straight from this page.
 const DIRECTORY = [
-  { name: "Zapier", blurb: "8,000+ apps — Slack, Notion, Sheets, HubSpot… Copy your personal MCP URL.", href: "https://mcp.zapier.com" },
+  { name: "Zapier", blurb: "8,000+ apps - Slack, Notion, Sheets, HubSpot… Copy your personal MCP URL.", href: "https://mcp.zapier.com" },
   { name: "Composio", blurb: "250+ apps with managed auth. Copy a server URL from your dashboard.", href: "https://composio.dev" },
   { name: "Pipedream", blurb: "2,500+ APIs. Create an MCP server and copy its URL.", href: "https://mcp.pipedream.com" },
   { name: "Your own server", blurb: "Any MCP server reachable over https (Streamable HTTP).", href: "https://modelcontextprotocol.io" },
@@ -43,7 +43,7 @@ export function ConnectorsClient() {
     setBusy(false);
     if (!r?.ok) { setError(j?.error ?? "Couldn't add the connector."); return; }
     setList((cur) => [...(cur ?? []), j.connector]);
-    setAdded(`${j.connector.name} connected — ${j.connector.tool_count} tool${j.connector.tool_count === 1 ? "" : "s"} available to JARVIS.`);
+    setAdded(`${j.connector.name} connected - ${j.connector.tool_count} tool${j.connector.tool_count === 1 ? "" : "s"} available to JARVIS.`);
     setForm({ name: "", url: "", token: "" });
   }
 

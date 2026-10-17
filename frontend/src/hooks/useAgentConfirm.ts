@@ -95,7 +95,7 @@ export function useAgentConfirm() {
       setPendingActions((prev) =>
         prev.map((a) =>
           a.id === action.id
-            ? { ...a, status: "done", result: `Opened ${action.tool === "pay" ? "your payment app" : "the app"} — complete it there.` }
+            ? { ...a, status: "done", result: `Opened ${action.tool === "pay" ? "your payment app" : "the app"} - complete it there.` }
             : a,
         ),
       );

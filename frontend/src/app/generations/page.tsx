@@ -1,6 +1,6 @@
 import { GenerationsClient } from "@/components/generations/GenerationsClient";
 
-export const metadata = { title: "Generations — The Third Eye" };
+export const metadata = { title: "Generations - The Third Eye" };
 
 export default function GenerationsPage() {
   return (
@@ -9,7 +9,7 @@ export default function GenerationsPage() {
         <span className="hud-label text-accent-primary">// Output log</span>
         <h1 className="font-display text-2xl font-semibold text-text-primary">Generations</h1>
         <p className="text-text-muted text-xs font-mono mt-1 tracking-wider">
-          Every output across your apps — open any one for the full input &amp; output
+          Every output across your apps - open any one for the full input &amp; output
         </p>
       </div>
       <GenerationsClient />

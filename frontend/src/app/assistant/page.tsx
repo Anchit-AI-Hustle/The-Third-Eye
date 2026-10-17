@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { AssistantClient } from "@/components/assistant/AssistantClient";
 
-export const metadata = { title: "Assistant — The Third Eye" };
+export const metadata = { title: "Assistant - The Third Eye" };
 
 export default async function AssistantPage() {
   const session = await getServerSession(authOptions);

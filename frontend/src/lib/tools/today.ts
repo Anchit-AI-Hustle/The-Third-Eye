@@ -34,8 +34,8 @@ function validZone(tz?: string): boolean {
 export function todayBlock(timezone?: string, now = new Date()): string {
   const { date, weekday, zone } = todayIn(timezone, now);
   return `## Today
-Today is ${weekday}, ${date} (${zone}). Every relative date the user gives — "today",
-"tomorrow", "Friday", "next week", "in 3 days" — is relative to this. Resolve it
+Today is ${weekday}, ${date} (${zone}). Every relative date the user gives - "today",
+"tomorrow", "Friday", "next week", "in 3 days" - is relative to this. Resolve it
 yourself from this date when setting a due date, deadline or reminder; never
 guess a year and never write a date in the past for something upcoming.`;
 }

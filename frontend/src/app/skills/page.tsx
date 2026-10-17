@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { SkillsClient } from "@/components/skills/SkillsClient";
 
-export const metadata = { title: "Skills — The Third Eye" };
+export const metadata = { title: "Skills - The Third Eye" };
 
 export default async function SkillsPage() {
   const session = await getServerSession(authOptions);

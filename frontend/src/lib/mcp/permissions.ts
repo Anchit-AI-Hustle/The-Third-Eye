@@ -130,5 +130,5 @@ export function summarizeMcpAction(qualified: string, args: unknown): string {
   if (!ref) return `Run ${qualified}`;
   const action = segments(ref.tool).join(" ");
   const detail = describeArgs(args);
-  return detail ? `${ref.server}: ${action} — ${detail}` : `${ref.server}: ${action}`;
+  return detail ? `${ref.server}: ${action} - ${detail}` : `${ref.server}: ${action}`;
 }

@@ -1,6 +1,6 @@
 import { JobSearch } from "@/components/jobAgent/JobSearch";
 
-export const metadata = { title: "Job Search — Job Agent" };
+export const metadata = { title: "Job Search - Job Agent" };
 
 export default function JobSearchPage() {
   return (

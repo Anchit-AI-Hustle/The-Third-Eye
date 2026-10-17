@@ -59,7 +59,7 @@ export async function runReminders(sb: Db, userId?: string) {
     if (!claimed?.length) continue;
 
     const subject = `⏰ Reminder: ${r.title}`;
-    const html = `<div style="font-family:system-ui,sans-serif"><h2>${escapeHtml(r.title)}</h2>${r.body ? `<p>${escapeHtml(r.body)}</p>` : ""}<p style="color:#888;font-size:12px">— JARVIS</p></div>`;
+    const html = `<div style="font-family:system-ui,sans-serif"><h2>${escapeHtml(r.title)}</h2>${r.body ? `<p>${escapeHtml(r.body)}</p>` : ""}<p style="color:#888;font-size:12px">- JARVIS</p></div>`;
 
     const { token, to } = await mailboxFor(sb, cache, r.user_id);
     const emailed = token && to ? await sendGmail(token, to, subject, html) : false;

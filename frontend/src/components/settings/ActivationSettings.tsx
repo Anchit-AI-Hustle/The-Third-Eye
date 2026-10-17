@@ -71,7 +71,7 @@ export function ActivationSettings() {
             Assistant activation
           </h2>
           <p className="text-xs text-text-muted mt-0.5">
-            Wake word, phone gestures, and a desktop hotkey — from any screen.
+            Wake word, phone gestures, and a desktop hotkey - from any screen.
           </p>
         </div>
         {saved && (
@@ -220,7 +220,7 @@ export function ActivationSettings() {
           </div>
           <div>
             <h3 className="text-sm font-medium text-text-primary">Keyboard shortcut</h3>
-            <p className="text-xs text-text-muted">Quick launch on desktop — Cmd+K is the command palette</p>
+            <p className="text-xs text-text-muted">Quick launch on desktop - Cmd+K is the command palette</p>
           </div>
         </div>
         <div className="flex items-center justify-between pt-1">

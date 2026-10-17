@@ -41,11 +41,11 @@ export async function scheduleAutomation(
 
   if (!name || !action) return "I need a name and an action to set up an automation.";
   if (!RECURRENCES.has(schedule)) {
-    return `I can run automations daily, weekly or monthly — not "${schedule}". Event triggers aren't wired to anything that would fire them, so I'd be promising something that never runs. Pick one of those three and I'll schedule it.`;
+    return `I can run automations daily, weekly or monthly - not "${schedule}". Event triggers aren't wired to anything that would fire them, so I'd be promising something that never runs. Pick one of those three and I'll schedule it.`;
   }
 
   const sb = getDb();
-  if (!sb || !ctx.email) return "Automations need cloud sync — ask the user to set up the database (DATABASE_URL).";
+  if (!sb || !ctx.email) return "Automations need cloud sync - ask the user to set up the database (DATABASE_URL).";
 
   const limits = limitsFor(ctx.tier);
   if (!limits.recurringReminders) {

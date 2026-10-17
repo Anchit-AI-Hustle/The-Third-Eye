@@ -90,7 +90,7 @@ export function TrackerWorkspace() {
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Network size={15} className="text-[#A78BFA]" />
-            <span className="hud-label text-text-muted">Team OS — projects · metrics · OKRs · roadmap</span>
+            <span className="hud-label text-text-muted">Team OS - projects · metrics · OKRs · roadmap</span>
           </div>
           <TeamOS />
         </section>

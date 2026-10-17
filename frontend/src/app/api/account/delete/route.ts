@@ -137,7 +137,7 @@ export async function POST(_req: NextRequest) {
     return Response.json(
       {
         error:
-          "Some of your data could not be deleted, so your sign-in has been left intact — " +
+          "Some of your data could not be deleted, so your sign-in has been left intact - " +
           "you are still signed in and can try again.",
         remote: true,
         deleted,
@@ -171,7 +171,7 @@ export async function POST(_req: NextRequest) {
     return Response.json(
       {
         error:
-          "Some of your data could not be deleted, so your sign-in has been left intact — " +
+          "Some of your data could not be deleted, so your sign-in has been left intact - " +
           "you are still signed in and can try again.",
         remote: true,
         deleted,

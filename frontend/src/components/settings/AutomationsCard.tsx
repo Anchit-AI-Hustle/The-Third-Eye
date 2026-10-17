@@ -25,7 +25,7 @@ export function AutomationsCard() {
       const r = await fetch("/api/automations");
       if (r.status === 401 || r.status === 501) {
         setRows([]);
-        setError("Automations need cloud sync — set up the database to see and manage them here.");
+        setError("Automations need cloud sync - set up the database to see and manage them here.");
         return;
       }
       const d = (await r.json()) as { automations?: Automation[]; error?: string };
@@ -78,7 +78,7 @@ export function AutomationsCard() {
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Scheduled automations</h2>
       <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
-        Recurring actions the assistant runs on your behalf. Ask it to set one up — e.g. &quot;send me a morning brief every day at 8am&quot;.
+        Recurring actions the assistant runs on your behalf. Ask it to set one up - e.g. &quot;send me a morning brief every day at 8am&quot;.
       </p>
 
       {error && (

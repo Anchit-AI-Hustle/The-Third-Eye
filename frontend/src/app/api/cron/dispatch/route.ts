@@ -71,7 +71,7 @@ async function runDigest(sb: Db) {
     const html = digestHtml(tasks ?? [], goals ?? [], today);
     const { token, to } = await mailboxFor(sb, cache, email);
     const ok = token && to
-      ? await sendGmail(token, to, `🗓️ Your JARVIS daily briefing — ${today}`, html)
+      ? await sendGmail(token, to, `🗓️ Your JARVIS daily briefing - ${today}`, html)
       : false;
     // The push is what actually reaches them, so lead with the recommendation
     // rather than a count they'd have to open the app to act on.
@@ -83,7 +83,7 @@ async function runDigest(sb: Db) {
       "/dashboard",
     );
     const top = (tasks ?? []).slice(0, 5).map((t) => `• ${t.title}${t.due_date ? ` (due ${t.due_date})` : ""}`).join("\n");
-    const whatsapped = await notifyWhatsApp(email, `🗓️ Daily briefing — ${today}\n${lead ? `${lead.text}\n` : ""}${top || "No open tasks — clear runway."}`);
+    const whatsapped = await notifyWhatsApp(email, `🗓️ Daily briefing - ${today}\n${lead ? `${lead.text}\n` : ""}${top || "No open tasks - clear runway."}`);
     await logNotification(sb, email, "daily_digest", today, "email", ok ? "sent" : "failed");
     if (whatsapped) await logNotification(sb, email, "daily_digest", today, "whatsapp", "sent");
     if (ok || whatsapped) sent++;
@@ -96,7 +96,7 @@ function digestHtml(tasks: any[], goals: any[], date: string): string {
   const lead = leadRecommendation(tasks, goals, date);
   const taskRows = tasks.length
     ? tasks.map((t) => `<li><b>[${t.priority}]</b> ${escapeHtml(t.title)}${t.due_date ? ` · due ${t.due_date}` : ""} · ${t.status}</li>`).join("")
-    : "<li>No open tasks — clear runway.</li>";
+    : "<li>No open tasks - clear runway.</li>";
   const goalRows = goals.length
     ? `<h3>Goals</h3><ul>${goals.map((g) => `<li>${escapeHtml(g.title)}: ${g.current}/${g.target} ${g.unit ?? ""}</li>`).join("")}</ul>`
     : "";
@@ -108,7 +108,7 @@ function digestHtml(tasks: any[], goals: any[], date: string): string {
     <p style="color:#666">${overdue.length ? `<b>${overdue.length} overdue</b> · ` : ""}${tasks.length} open task(s)</p>
     ${leadBlock}
     <h3>Tasks</h3><ul>${taskRows}</ul>${goalRows}
-    <p style="color:#888;font-size:12px">— JARVIS · reply in the app to act on any of these</p>
+    <p style="color:#888;font-size:12px">- JARVIS · reply in the app to act on any of these</p>
   </div>`;
 }
 

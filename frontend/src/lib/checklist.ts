@@ -53,8 +53,8 @@ function parseSteps(raw: unknown): Step[] {
 export function resumeNote(raw: unknown): string {
   const steps = parseSteps(raw);
   if (!steps.some((s) => s.status !== "done")) return "";
-  const lines = steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title} — verify: ${s.verify}`);
-  return `\n\n**Checklist carried over from your last reply** (already loaded — don't re-plan unless the user changed the request; start_step the first open one):\n${lines.join("\n")}`;
+  const lines = steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title} - verify: ${s.verify}`);
+  return `\n\n**Checklist carried over from your last reply** (already loaded - don't re-plan unless the user changed the request; start_step the first open one):\n${lines.join("\n")}`;
 }
 
 export class Checklist {
@@ -146,7 +146,7 @@ export class Checklist {
     if (!step) return `There is no step ${id}.`;
     if (step.status === "done") return `Step ${id} is already verified done.`;
     if (evidence.trim().length < 8) {
-      return `Not ticked: step ${id} needs evidence — quote what the tool returned that proves "${step.verify}".`;
+      return `Not ticked: step ${id} needs evidence - quote what the tool returned that proves "${step.verify}".`;
     }
     if (step.needsTool) {
       const seen = this.outcomes.get(id) ?? [];
@@ -157,7 +157,7 @@ export class Checklist {
         return `Not ticked: step ${id} is waiting for the user's Confirm. Tell them it is ready to confirm; it is not done until they do.`;
       }
       if (last === "failed") {
-        return `Not ticked: the last tool call for step ${id} failed. Fix the cause, retry, verify, then complete it — or fail_step with the reason if it cannot be done.`;
+        return `Not ticked: the last tool call for step ${id} failed. Fix the cause, retry, verify, then complete it - or fail_step with the reason if it cannot be done.`;
       }
       if (!seen.includes("ok")) return `Not ticked: no successful tool result for step ${id}.`;
     }
@@ -191,7 +191,7 @@ export class Checklist {
     if (!open.length) return null;
     const done = this.steps.length - open.length;
     const lines = open.map((s) => {
-      const why = s.status === "awaiting" ? "waiting for your Confirm" : s.status === "failed" ? `failed — ${s.note}` : "not verified yet";
+      const why = s.status === "awaiting" ? "waiting for your Confirm" : s.status === "failed" ? `failed - ${s.note}` : "not verified yet";
       return `- ${s.id}. ${s.title} (${why})`;
     });
     return `\n\n**Checklist: ${done}/${this.steps.length} verified.** Still open:\n${lines.join("\n")}`;

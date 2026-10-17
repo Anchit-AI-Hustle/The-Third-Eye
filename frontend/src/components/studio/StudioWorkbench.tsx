@@ -54,7 +54,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
         });
       }
     } catch {
-      setError("Network error — please try again.");
+      setError("Network error - please try again.");
     } finally { setLoading(false); }
   }
 

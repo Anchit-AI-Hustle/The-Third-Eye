@@ -23,14 +23,14 @@ export function PlansClient() {
   const doSubscribe = (tier: Tier) => {
     if (tier === "basic") return;
     b.subscribe(tier, period);
-    flash(`Subscribed to ${TIERS[tier].label} (${PERIODS.find((p) => p.id === period)!.label}) — +${TIERS[tier].monthlyCredits.toLocaleString()} credits`);
+    flash(`Subscribed to ${TIERS[tier].label} (${PERIODS.find((p) => p.id === period)!.label}) - +${TIERS[tier].monthlyCredits.toLocaleString()} credits`);
   };
   const doBuy = (id: string) => {
     const r = b.purchaseBundle(id);
     if (r.ok) flash(`Added ${r.added?.toLocaleString()} credits`);
   };
   const submitCode = () => {
-    if (b.tryUnlock(code)) { setCodeMsg("Unlocked — all paid features open (test mode)."); setCode(""); }
+    if (b.tryUnlock(code)) { setCodeMsg("Unlocked - all paid features open (test mode)."); setCode(""); }
     else setCodeMsg("Incorrect code.");
     setTimeout(() => setCodeMsg(null), 2500);
   };
@@ -138,7 +138,7 @@ export function PlansClient() {
       <section>
         <span className="hud-label text-accent-primary">// Pay as you go</span>
         <h2 className="font-display text-xl font-semibold text-text-primary">Credit packs</h2>
-        <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups — no subscription required. Bigger packs = cheaper per credit.</p>
+        <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups - no subscription required. Bigger packs = cheaper per credit.</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {BUNDLES.map((bundle) => (
             <div key={bundle.id} className={`holo-card p-4 flex flex-col ${bundle.best ? "ring-1 ring-accent-primary/60" : ""}`}>

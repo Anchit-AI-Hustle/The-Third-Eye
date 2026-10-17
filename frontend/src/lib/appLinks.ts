@@ -275,7 +275,7 @@ export function resolveAppLink(targetRaw: string, query?: string): ResolvedLink 
     }
   }
   if (best) {
-    if (q && best.search) return { url: best.search(q), label: `${best.label} — ${q}` };
+    if (q && best.search) return { url: best.search(q), label: `${best.label} - ${q}` };
     return { url: best.home, label: best.label };
   }
 

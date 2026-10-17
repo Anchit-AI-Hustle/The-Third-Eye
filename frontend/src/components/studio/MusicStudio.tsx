@@ -203,7 +203,7 @@ function TagPicker({ id, values, onChange, options, placeholder, max = 6 }: {
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(q); } }}
-          placeholder={values.length >= max ? `Up to ${max} — remove one to add another` : placeholder}
+          placeholder={values.length >= max ? `Up to ${max} - remove one to add another` : placeholder}
           disabled={values.length >= max}
           className={`${field} disabled:opacity-50`}
         />
@@ -495,7 +495,7 @@ export function MusicStudio() {
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       const notes: string[] = [];
       if (d.elevenLabsError) notes.push(`ElevenLabs couldn't make this one (${String(d.elevenLabsError).slice(0, 160)}), so a backup model is used.`);
-      if (d.fellBackToInstrumental) notes.push(`Couldn't generate sung vocals${d.vocalError ? ` — ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
+      if (d.fellBackToInstrumental) notes.push(`Couldn't generate sung vocals${d.vocalError ? ` - ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
       if (d.provider === "code" && d.note) notes.push(d.note);
       if (d.loop) notes.push(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
       if (notes.length) setNote(notes.join(" "));
@@ -503,7 +503,7 @@ export function MusicStudio() {
       if (d.done && d.audioUrl) { onAudioReady(d.audioUrl); return; }
       setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
       poll(d.jobId);
-    } catch { setPhase("error"); setError("Network error — please try again."); }
+    } catch { setPhase("error"); setError("Network error - please try again."); }
   }
   // Audio is ready: play, save, and — if the user asked for a video up-front —
   // kick off the visualizer render automatically (spanning the full session).
@@ -516,7 +516,10 @@ export function MusicStudio() {
   }
   function poll(jobId: string) {
     stopPoll();
+    // A job a provider never finishes would otherwise be polled for as long as the page is open.
+    const giveUp = Date.now() + 10 * 60_000;
     pollRef.current = setInterval(async () => {
+      if (Date.now() > giveUp) { stopPoll(); setPhase("error"); setError("Still not finished after 10 minutes. The provider may be stuck; try again."); return; }
       try {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();
@@ -656,8 +659,8 @@ export function MusicStudio() {
 
         <div>
           <Label name="structure">Song structure</Label>
-          <ChipInput id="music-structure" value={f.structure} onChange={(v) => set("structure", v)} options={structuresFor(f.genres, f.subgenre).slice(0, 9)} placeholder="e.g. Intro–Build–Drop–Breakdown–Drop–Outro" />
-          <p className="text-[10px] text-text-muted mt-1">Sections become the lyric's section tags, in order — options follow the genres above.</p>
+          <ChipInput id="music-structure" value={f.structure} onChange={(v) => set("structure", v)} options={structuresFor(f.genres, f.subgenre).slice(0, 9)} placeholder="e.g. Intro-Build-Drop-Breakdown-Drop-Outro" />
+          <p className="text-[10px] text-text-muted mt-1">Sections become the lyric's section tags, in order - options follow the genres above.</p>
         </div>
 
         <div>
@@ -672,7 +675,7 @@ export function MusicStudio() {
             ))}
           </div>
           {f.duration > 120 && (
-            <p className="text-[11px] text-text-muted mt-1.5">Long sessions are built by seamlessly looping a generated clip — perfect for focus / ambient / party sets.</p>
+            <p className="text-[11px] text-text-muted mt-1.5">Long sessions are built by seamlessly looping a generated clip - perfect for focus / ambient / party sets.</p>
           )}
         </div>
 
@@ -696,7 +699,7 @@ export function MusicStudio() {
               <Label name="vocalIntensity">Vocal intensity: {f.vocalIntensity}/10</Label>
               <input id="music-vocalIntensity" type="range" min={1} max={10} value={f.vocalIntensity} onChange={(e) => set("vocalIntensity", Number(e.target.value))} className="w-full accent-[#34D399]" />
               <div className="flex justify-between text-[10px] text-text-muted mt-1">
-                <span>1 — Soft whisper</span><span>10 — Powerful performance</span>
+                <span>1 - Soft whisper</span><span>10 - Powerful performance</span>
               </div>
             </div>
             <div>

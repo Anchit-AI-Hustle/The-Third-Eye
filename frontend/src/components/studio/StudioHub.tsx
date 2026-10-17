@@ -46,7 +46,7 @@ export function StudioHub({ showAnchor }: { showAnchor: boolean }) {
               key={m}
               onClick={() => setMode(m)}
               aria-pressed={active}
-              title={`${s.name} — ${s.tagline}`}
+              title={`${s.name} - ${s.tagline}`}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-input border text-sm transition-colors ${
                 active
                   ? "font-semibold"

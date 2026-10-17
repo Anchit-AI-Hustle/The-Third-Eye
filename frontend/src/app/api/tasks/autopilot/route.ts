@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const q = sb.from("tasks").update({ autopilot_status: "running", autopilot_at: now }).eq("user_id", email).eq("id", taskId);
     const { data } = await (task.autopilot_status == null ? q.is("autopilot_status", null) : q.eq("autopilot_status", task.autopilot_status)).select("id");
     const claimed = Array.isArray(data) && data.length > 0;
-    return Response.json({ claimed, task: claimed ? { id: task.id, title: task.title, description: task.description, due_date: task.due_date, priority: task.priority } : undefined });
+    return Response.json({ claimed, task: claimed ? { id: task.id, title: task.title, description: task.description, due_date: task.due_date, priority: task.priority, retry: task.autopilot_status === "running" } : undefined });
   }
 
   if (body!.action === "finish" && body!.run) {

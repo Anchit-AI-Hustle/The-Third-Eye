@@ -48,7 +48,7 @@ export function ActivityClient() {
               </div>
               <div className="text-xs text-text-muted">
                 {killed
-                  ? "The kill switch is engaged — the assistant will apply no actions. Requests are logged as blocked."
+                  ? "The kill switch is engaged - the assistant will apply no actions. Requests are logged as blocked."
                   : "The assistant can apply actions (create/update/delete tasks, notes, goals) with your approval."}
               </div>
             </div>
@@ -84,7 +84,7 @@ export function ActivityClient() {
         </div>
         {log.length === 0 ? (
           <p className="text-sm text-text-muted py-6 text-center">
-            No activity yet. Assistant actions, generations (Studio / Music / Kolab), voice captures and system events all appear here — and anything blocked by the kill switch.
+            No activity yet. Assistant actions, generations (Studio / Music / Kolab), voice captures and system events all appear here - and anything blocked by the kill switch.
           </p>
         ) : (
           <div className="divide-y divide-border-default">

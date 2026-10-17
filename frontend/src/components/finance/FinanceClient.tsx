@@ -167,7 +167,7 @@ export function FinanceClient() {
               value={nl}
               onChange={(e) => setNl(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") parseNL(); }}
-              placeholder='Type it plainly — e.g. "250 coffee" or "1200 groceries yesterday"'
+              placeholder='Type it plainly - e.g. "250 coffee" or "1200 groceries yesterday"'
               className="w-full bg-background-base border border-border-default rounded-input pl-3 pr-10 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#4FC3F7]/50"
             />
             <button

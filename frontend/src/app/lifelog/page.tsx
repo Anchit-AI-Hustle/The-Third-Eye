@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { LifeLog } from "@/components/lifelog/LifeLog";
 
-export const metadata = { title: "Life Log — The Third Eye" };
+export const metadata = { title: "Life Log - The Third Eye" };
 
 export default async function LifeLogPage() {
   const session = await getServerSession(authOptions);

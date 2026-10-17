@@ -44,7 +44,7 @@ export function JobSearch() {
       const d = await res.json();
       if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
       setResult(d);
-    } catch { setError("Search failed — check your connection."); }
+    } catch { setError("Search failed - check your connection."); }
     finally { setLoading(false); }
   }
 
@@ -185,7 +185,7 @@ function JobCard({ job, match, savedState, onSave, onDismiss, onApply }: {
             {job.locationText && <span>{job.locationText}</span>}
             {job.remoteType && <span className="text-[#34D399]">{job.remoteType}</span>}
             {job.employmentType && <span>{job.employmentType}</span>}
-            {(job.salaryMin || job.salaryMax) && <span className="text-[#34D399]">{job.salaryCurrency || ""} {job.salaryMin ?? ""}{job.salaryMax ? `–${job.salaryMax}` : ""}</span>}
+            {(job.salaryMin || job.salaryMax) && <span className="text-[#34D399]">{job.salaryCurrency || ""} {job.salaryMin ?? ""}{job.salaryMax ? `-${job.salaryMax}` : ""}</span>}
             <span className="px-1.5 py-0.5 rounded-full border" style={{ borderColor: `${elig.color}55`, color: elig.color }}>{elig.label}</span>
             <span>· {job.sourceAttribution}</span>
           </div>

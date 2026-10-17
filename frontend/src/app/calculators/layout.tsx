@@ -24,7 +24,7 @@ export default function CalculatorsLayout({ children }: { children: ReactNode })
 
       <footer className="border-t border-border-default">
         <div className="mx-auto max-w-5xl px-6 py-8 text-xs text-text-muted flex flex-wrap gap-x-6 gap-y-2 justify-between">
-          <span>Free financial calculators — no sign-up, instant, private.</span>
+          <span>Free financial calculators - no sign-up, instant, private.</span>
           <span className="flex gap-4">
             <Link href="/privacy_policy" className="hover:text-text-secondary transition-colors">
               Privacy

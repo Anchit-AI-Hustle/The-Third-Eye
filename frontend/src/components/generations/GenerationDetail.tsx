@@ -111,7 +111,7 @@ export function GenerationDetail({ id }: { id: string }) {
             {mediaBroken ? (
               <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">
                 <AlertTriangle size={14} className="text-warning flex-none mt-0.5" />
-                <span>This audio can no longer be played — it was generated in a browser session that has since ended, and audio isn&apos;t re-fetchable across sessions. Generate a new track to hear it again.</span>
+                <span>This audio can no longer be played - it was generated in a browser session that has since ended, and audio isn&apos;t re-fetchable across sessions. Generate a new track to hear it again.</span>
               </div>
             ) : (
               <audio controls src={rec.output} className="w-full" onError={() => setMediaBroken(true)} />
@@ -124,7 +124,7 @@ export function GenerationDetail({ id }: { id: string }) {
           mediaBroken ? (
             <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">
               <AlertTriangle size={14} className="text-warning flex-none mt-0.5" />
-              <span>This clip has expired — rendered videos are hosted by the generation provider for about an hour, so old links stop resolving. Download a clip when you render it to keep it.</span>
+              <span>This clip has expired - rendered videos are hosted by the generation provider for about an hour, so old links stop resolving. Download a clip when you render it to keep it.</span>
             </div>
           ) : (
             <video controls src={rec.output} className="w-full rounded-input border border-border-default bg-black" onError={() => setMediaBroken(true)} />

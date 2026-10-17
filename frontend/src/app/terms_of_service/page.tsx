@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Terms of Service — The Third Eye" };
+export const metadata = { title: "Terms of Service - The Third Eye" };
 
 export default function TermsOfServicePage() {
   return (

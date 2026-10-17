@@ -38,7 +38,7 @@ export const MODES: ModeDef[] = [
     tagline: "Focused solo execution & output",
     accentColor: "#4FC3F7",
     systemContext:
-      "The operator is in PROFESSIONAL mode — an individual contributor focused " +
+      "The operator is in PROFESSIONAL mode - an individual contributor focused " +
       "on execution. Optimise for deep work: drafting, analysis, writing, " +
       "planning, email, calendar, and shipping tangible output fast. Be crisp " +
       "and results-oriented. Bias toward creating tasks with clear owners and " +
@@ -47,10 +47,10 @@ export const MODES: ModeDef[] = [
   {
     id: "enterprise",
     label: "Team",
-    tagline: "Run the whole business — strategy, metrics & people",
+    tagline: "Run the whole business - strategy, metrics & people",
     accentColor: "#A78BFA",
     systemContext:
-      "The operator is in ENTERPRISE mode — thinking at org and strategy scale. " +
+      "The operator is in ENTERPRISE mode - thinking at org and strategy scale. " +
       "Optimise for cross-functional coordination, roadmaps, stakeholder " +
       "management, risk, metrics, and lifecycle operations. When a decision is " +
       "non-trivial, reason across angles (financial, technical, competitive, " +

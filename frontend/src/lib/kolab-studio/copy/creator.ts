@@ -5,7 +5,7 @@ export const creatorCopy: CopyDict = {
   homeEyebrow: "Everything Kolab does",
   homeTitle: "Your whole creator business, in one place",
   homeSubtitle:
-    "Plan content, link every channel, launch a coupon storefront, and get paid — brands find and partner with you once you're verified.",
+    "Plan content, link every channel, launch a coupon storefront, and get paid - brands find and partner with you once you're verified.",
   audienceWord: "follower",
   audienceWordPlural: "followers",
   contactWord: "follower",

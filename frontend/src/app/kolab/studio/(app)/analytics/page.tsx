@@ -45,7 +45,7 @@ export default async function AnalyticsPage() {
         <h2 className="mb-2 text-[clamp(24px,4vw,36px)]">Analytics</h2>
         <p className="text-[15px] text-kolab-muted">
           Content, deals and identity metrics from your own data. Audience &amp; engagement figures
-          pull from your linked channels once connected (Phase 3–4) — nothing here is sampled or faked.
+          pull from your linked channels once connected (Phase 3-4) - nothing here is sampled or faked.
         </p>
       </div>
       <GateBanner ctx={ctx} />
@@ -94,7 +94,7 @@ export default async function AnalyticsPage() {
           </div>
           <p className="mt-4 rounded-lg border border-dashed border-kolab-line bg-kolab-surface2 px-3.5 py-3 font-kolab-mono text-[11px] leading-relaxed text-kolab-faint">
             Follower, reach and engagement metrics require channel OAuth (Meta/Google/TikTok) + your
-            affiliate network. Those land in Phase 3–4; until connected they are intentionally blank
+            affiliate network. Those land in Phase 3-4; until connected they are intentionally blank
             rather than estimated.
           </p>
         </>

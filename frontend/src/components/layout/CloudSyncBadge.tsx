@@ -30,7 +30,7 @@ export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
   const tip = remote
     ? "Your data syncs to the cloud database and is available across devices."
     : sync?.reason === "unconfigured"
-      ? "Cloud storage isn't configured (service key missing) — data is saved only in this browser."
+      ? "Cloud storage isn't configured (service key missing) - data is saved only in this browser."
       : sync?.reason === "signed-out"
         ? "Sign in to sync your data to the cloud."
         : "Data is saved only in this browser right now.";
@@ -40,7 +40,7 @@ export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
 
   if (collapsed) {
     return (
-      <div className="flex justify-center py-1" title={`${label} — ${tip}`}>
+      <div className="flex justify-center py-1" title={`${label} - ${tip}`}>
         <Icon size={14} className={`${color} ${loading ? "animate-spin" : ""}`} />
       </div>
     );

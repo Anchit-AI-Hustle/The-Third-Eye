@@ -47,4 +47,9 @@ describe("task autopilot outcome", () => {
     expect(p).toMatch(/plan_checklist/);
     expect(p).toMatch(/Do not create, update or complete this task/);
   });
+
+  it("tells a retried run to check what it already made before making it again", () => {
+    expect(autopilotPrompt({ id: "t", title: "Book dentist" })).not.toMatch(/started before/);
+    expect(autopilotPrompt({ id: "t", title: "Book dentist", retry: true })).toMatch(/started before and stopped part-way[\s\S]*do not make it twice/);
+  });
 });

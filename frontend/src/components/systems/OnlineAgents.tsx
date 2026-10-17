@@ -47,7 +47,7 @@ export function OnlineAgents() {
         {killed ? (
           <div className="flex items-center gap-2 text-[#EF4444]">
             <ShieldAlert size={16} />
-            <span className="text-sm font-mono">Kill switch engaged — {SYSTEMS.length} systems halted</span>
+            <span className="text-sm font-mono">Kill switch engaged - {SYSTEMS.length} systems halted</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-[#34D399]">
@@ -59,7 +59,7 @@ export function OnlineAgents() {
           </div>
         )}
         <button onClick={runCheck} disabled={running || killed}
-          title={killed ? "Kill switch is engaged — resume the agent on /activity to run a status check" : undefined}
+          title={killed ? "Kill switch is engaged - resume the agent on /activity to run a status check" : undefined}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/15 border border-[#4FC3F7]/40 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/25 transition-colors disabled:opacity-50">
           <Volume2 size={15} /> {running ? "Running…" : "Run status check"}
         </button>
@@ -71,7 +71,7 @@ export function OnlineAgents() {
       <Section title="Subsystems" items={subsystems} killed={killed} />
 
       <p className="text-xs text-text-muted font-mono">
-        Ask any time — say or type <span className="text-text-secondary">“all systems online”</span>, <span className="text-text-secondary">“agent status”</span>, or name one (<span className="text-text-secondary">“Zeus online”</span>) — and each reports in its own voice.
+        Ask any time - say or type <span className="text-text-secondary">“all systems online”</span>, <span className="text-text-secondary">“agent status”</span>, or name one (<span className="text-text-secondary">“Zeus online”</span>) - and each reports in its own voice.
       </p>
     </div>
   );
@@ -106,7 +106,7 @@ function PersonaStage({ killed }: { killed: boolean }) {
         <div className="space-y-3">
           <p className="text-sm text-text-secondary min-h-[2.5rem]">{sel.purpose}</p>
           <button onClick={hear} disabled={speaking || !canHear}
-            title={!canHear ? "Kill switch is engaged — resume the agent on /activity to hear this persona" : undefined}
+            title={!canHear ? "Kill switch is engaged - resume the agent on /activity to hear this persona" : undefined}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-input text-sm font-medium border transition-colors disabled:opacity-50"
             style={{ color: sel.color, borderColor: `${sel.color}55` }}>
             <Volume2 size={14} /> {speaking ? "Speaking…" : !canHear ? "Halted" : sel.id === OPERATOR_PERSONA.id ? "Preview persona" : `Hear ${sel.name.replace(/\./g, "")}`}

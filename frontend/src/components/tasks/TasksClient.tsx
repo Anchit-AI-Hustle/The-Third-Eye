@@ -60,7 +60,7 @@ const STATUS_STYLE: Record<TaskStatus, string> = {
 };
 
 function fmtDate(iso?: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -389,7 +389,7 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                       <AgentChip id={t.agent} profiles={profiles} />
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "—"}</td>
+                  <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "-"}</td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.start_date)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {t.due_date ? (
@@ -398,7 +398,7 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                         {overdue && <span className="block text-[10px]">(overdue)</span>}
                         {dueSoon && <span className="block text-[10px]">(due soon)</span>}
                       </span>
-                    ) : <span className="text-text-muted">—</span>}
+                    ) : <span className="text-text-muted">-</span>}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.completed_at)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -582,7 +582,7 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
           <div className="grid grid-cols-2 gap-3">
             <Field label="Assignee">
               <select value={form.assignee} onChange={f("assignee")} className={inputCls}>
-                <option value="">— Unassigned —</option>
+                <option value="">- Unassigned -</option>
                 {team.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
               </select>
             </Field>
@@ -595,7 +595,7 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
 
           <Field label="AI Agent">
             <select value={form.agent} onChange={f("agent")} className={inputCls}>
-              <option value="">— No agent appointed —</option>
+              <option value="">- No agent appointed -</option>
               {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>

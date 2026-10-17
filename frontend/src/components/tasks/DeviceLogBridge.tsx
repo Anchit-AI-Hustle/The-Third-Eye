@@ -67,7 +67,7 @@ export async function flushDeviceLogs(email: string | null | undefined): Promise
       body: JSON.stringify(events),
     });
     if (res.ok) writeBuf(key, readBuf(key).slice(events.length));
-  } catch { /* transient — next tick retries */ }
+  } catch { /* transient - next tick retries */ }
   flushing = false;
 }
 

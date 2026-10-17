@@ -84,6 +84,6 @@ ${untrustedBlock("resume_text", text)}`;
     return Response.json({ profile: parsed.profile || {}, facts, provider: out.provider });
   } catch (e) {
     console.error("job-agent import:", e instanceof Error ? e.message : e);
-    return Response.json({ error: "Import failed — AI provider unavailable. You can fill your profile manually." }, { status: 503 });
+    return Response.json({ error: "Import failed - AI provider unavailable. You can fill your profile manually." }, { status: 503 });
   }
 }

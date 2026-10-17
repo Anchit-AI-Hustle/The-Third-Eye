@@ -1,6 +1,6 @@
 import { PlansClient } from "@/components/billing/PlansClient";
 
-export const metadata = { title: "Plans & Credits — The Third Eye" };
+export const metadata = { title: "Plans & Credits - The Third Eye" };
 
 export default function PlansPage() {
   return (

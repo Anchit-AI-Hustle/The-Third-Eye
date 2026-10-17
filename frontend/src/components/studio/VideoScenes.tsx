@@ -8,6 +8,8 @@ import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
 
+const POLL_LIMIT_MS = 10 * 60_000;
+
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
 type JobState = { status: "idle" | "rendering" | "done" | "error"; url?: string; msg?: string };
 type Episode = { status: "idle" | "building" | "done" | "error"; progress?: number; url?: string; ext?: string; msg?: string };
@@ -53,7 +55,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
       setScenes(d.scenes ?? []);
       if (d.configured === false) setError("Shot list ready. AI clips need REPLICATE_API_TOKEN; without it, Build episode file draws every shot in code (animated scenes with the narration as subtitles) and adds your soundtrack, for free.");
     } catch {
-      setError("Network error — please try again.");
+      setError("Network error - please try again.");
     } finally { setPlanning(false); }
   }
 
@@ -76,7 +78,9 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
       const d = await res.json();
       if (!res.ok || !d.jobId) return fail(d.error ?? `HTTP ${res.status}`);
       stopPoll(key);
+      const giveUp = Date.now() + POLL_LIMIT_MS;
       polls.current[key] = setInterval(async () => {
+        if (Date.now() > giveUp) { stopPoll(key); return fail("Still not finished after 10 minutes. The provider may be stuck; try again."); }
         try {
           const r = await fetch(`/api/tools/video?id=${encodeURIComponent(d.jobId)}`);
           const s = await r.json();
@@ -99,7 +103,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
     submit("clip", scene, setClips, (url, jobId) =>
       recordGeneration({
         app: "video", appLabel: tool === "reel" ? "Reel Studio · Clip" : "Video Studio · Clip", tool,
-        title: `${title} — ${scene.n}. ${scene.title}`,
+        title: `${title} - ${scene.n}. ${scene.title}`,
         kind: "video",
         inputs: [{ label: "Shot prompt", value: scene.prompt }, { label: "Length", value: `${scene.seconds}s` }],
         output: url,
@@ -173,7 +177,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
 
       {!scenes && !planning && (
         <p className="text-xs text-text-muted">
-          Break the script into shots, render them ({aspect === "9:16" ? "upright, for reels" : "widescreen"}), add voice-over and a soundtrack, then assemble one {aspect === "9:16" ? "reel" : "episode"} file. Each clip and each voice-over is a separate paid render — nothing renders until you press it.
+          Break the script into shots, render them ({aspect === "9:16" ? "upright, for reels" : "widescreen"}), add voice-over and a soundtrack, then assemble one {aspect === "9:16" ? "reel" : "episode"} file. Each clip and each voice-over is a separate paid render - nothing renders until you press it.
         </p>
       )}
 
@@ -240,7 +244,7 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
                 <video controls src={c.url} className="w-full rounded-input bg-black" />
                 <button type="button" onClick={() => saveMedia(c.url!, `${title} ${s.n}`).catch(() => setError("Could not download this clip."))}
                   className="inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary">
-                  <Download size={11} /> Save clip — the provider link expires in about an hour
+                  <Download size={11} /> Save clip - the provider link expires in about an hour
                 </button>
               </div>
             )}

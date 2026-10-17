@@ -217,7 +217,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
             const idx = modes.findIndex((m) => m.id === mode.id);
             setMode(modes[(idx + 1) % modes.length].id);
           }}
-          title={`Mode: ${mode.label} — click to cycle`}
+          title={`Mode: ${mode.label} - click to cycle`}
           className="mx-auto mt-3 w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-mono font-semibold text-background-base"
           style={{ background: mode.accentColor }}>
           {mode.label.slice(0, 1)}

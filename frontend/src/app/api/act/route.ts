@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     const connected = await getGoogleAccessToken(email);
     if (connected?.accessToken) accessToken = connected.accessToken;
-  } catch { /* not connected — reported below */ }
+  } catch { /* not connected - reported below */ }
 
   const { tool, args } = (await req.json().catch(() => ({}))) as { tool?: string; args?: any };
   if (!tool || !isSensitive(tool, args)) return json({ error: "Unknown or non-confirmable action" }, 400);

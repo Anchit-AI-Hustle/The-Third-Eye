@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Privacy Policy — The Third Eye" };
+export const metadata = { title: "Privacy Policy - The Third Eye" };
 
 export default function PrivacyPolicyPage() {
   return (
@@ -61,17 +61,17 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc list-inside space-y-1">
               <li>
-                <span className="font-mono text-xs">gmail.readonly</span> — to read messages you
+                <span className="font-mono text-xs">gmail.readonly</span> - to read messages you
                 ask the assistant to summarise, search, or extract tasks from
               </li>
               <li>
-                <span className="font-mono text-xs">gmail.send</span> — to send an email you asked
+                <span className="font-mono text-xs">gmail.send</span> - to send an email you asked
                 the assistant to write, only after you review it and press Confirm, and to email you
                 the reminders and daily briefing you switched on. Sent mail appears in your Gmail Sent
                 folder
               </li>
               <li>
-                <span className="font-mono text-xs">calendar.events.owned.readonly</span> — to list
+                <span className="font-mono text-xs">calendar.events.owned.readonly</span> - to list
                 events on your own primary calendar when you ask about your schedule. We never create,
                 change or delete events
               </li>
@@ -116,8 +116,8 @@ export default function PrivacyPolicyPage() {
               How We Protect Your Data
             </h2>
             <p className="mb-3">
-              Sensitive data — Google OAuth tokens, message and calendar content, uploaded
-              documents, and the contents of your conversations — is protected by the following
+              Sensitive data - Google OAuth tokens, message and calendar content, uploaded
+              documents, and the contents of your conversations - is protected by the following
               controls:
             </p>
             <ul className="list-disc list-inside space-y-2">
@@ -147,8 +147,8 @@ export default function PrivacyPolicyPage() {
               </li>
               <li>
                 <span className="text-text-primary">Server-enforced identity.</span> The account a
-                request acts for is taken from the verified session or a scoped API credential —
-                never from the request body — so a caller cannot read or write another
+                request acts for is taken from the verified session or a scoped API credential -
+                never from the request body - so a caller cannot read or write another
                 account&apos;s data by naming it.
               </li>
               <li>
@@ -171,15 +171,15 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Third-Party Services</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Google — your name and email to sign in. Gmail and Calendar only if you connect them in Settings</li>
+              <li>Google - your name and email to sign in. Gmail and Calendar only if you connect them in Settings</li>
               <li>
-                AI model providers (Anthropic, OpenAI, Google, Groq, and similar) — to generate
+                AI model providers (Anthropic, OpenAI, Google, Groq, and similar) - to generate
                 responses and transcribe audio. Only the content needed to answer a given request
                 is sent.
               </li>
-              <li>Supabase — database</li>
-              <li>Vercel — application hosting</li>
-              <li>Stripe — subscription payments. Card details are handled by Stripe; we never receive or store them.</li>
+              <li>Supabase - database</li>
+              <li>Vercel - application hosting</li>
+              <li>Stripe - subscription payments. Card details are handled by Stripe; we never receive or store them.</li>
             </ul>
           </section>
 

@@ -58,7 +58,7 @@ export const geminiTools = [
       },
       {
         name: "fail_step",
-        description: "Record that a step failed and why, before fixing and retrying it — or when it truly cannot be done.",
+        description: "Record that a step failed and why, before fixing and retrying it - or when it truly cannot be done.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -76,12 +76,12 @@ export const geminiTools = [
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["create", "update", "search", "delete"], description: "What to do with the task" },
-            id: { type: "STRING", description: "Task ID, if known from a previous search. Omit it rather than guessing — pass title instead." },
+            id: { type: "STRING", description: "Task ID, if known from a previous search. Omit it rather than guessing - pass title instead." },
             title: { type: "STRING", description: "Task title. On create, the new task's title. On update/delete without an id, the title to match against existing tasks; with an id, the new title to rename to." },
             priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Priority level" },
-            status: { type: "STRING", enum: ["todo", "in_progress", "review", "done", "cancelled"], description: "Task status (for update). 'review' is the In Review column — work finished but awaiting a check." },
+            status: { type: "STRING", enum: ["todo", "in_progress", "review", "done", "cancelled"], description: "Task status (for update). 'review' is the In Review column - work finished but awaiting a check." },
             assignee: { type: "STRING", description: "Person responsible" },
-            agent: { type: "STRING", description: "Appointed AI agent profile id (jarvis|friday|edith|ultron|zeus|athena) — set when the user appoints an agent to the task, '' to un-appoint" },
+            agent: { type: "STRING", description: "Appointed AI agent profile id (jarvis|friday|edith|ultron|zeus|athena) - set when the user appoints an agent to the task, '' to un-appoint" },
             due_date: { type: "STRING", description: "Due date YYYY-MM-DD (infer from 'tomorrow', 'Friday', etc.)" },
             description: { type: "STRING", description: "Additional context or notes" },
             filter: { type: "STRING", enum: ["all", "open", "urgent", "overdue"], description: "Filter for search (default: open)" },
@@ -140,7 +140,7 @@ export const geminiTools = [
             // assistant fell into its "connection temporarily down" mode for good.
             // The slabs are listed for the model in the description and enforced
             // where the value lands (toGstSlab in lib/calculators/formulas.ts).
-            gst_rate: { type: "NUMBER", description: `GST % already included in the amount — one of ${GST_SLABS.join(", ")}. Use 0 if unknown or none.` },
+            gst_rate: { type: "NUMBER", description: `GST % already included in the amount - one of ${GST_SLABS.join(", ")}. Use 0 if unknown or none.` },
             spent_on: { type: "STRING", description: "Date YYYY-MM-DD (defaults to today; infer from 'yesterday' etc.)" },
           },
           required: ["action"],
@@ -287,7 +287,7 @@ export const geminiTools = [
             name: { type: "STRING", description: "Automation name (for schedule)" },
             trigger: { type: "STRING", description: "Time of day to run (for schedule): 'morning' (08:00 UTC) or 'evening' (19:00 UTC). Omit to start one full interval from now." },
             automation_action: { type: "STRING", description: "What action to take (for schedule)" },
-            schedule: { type: "STRING", enum: ["daily", "weekly", "monthly"], description: "How often it repeats (for schedule). Only these three run — there is no event-driven scheduler." },
+            schedule: { type: "STRING", enum: ["daily", "weekly", "monthly"], description: "How often it repeats (for schedule). Only these three run - there is no event-driven scheduler." },
             check_type: { type: "STRING", enum: ["overdue_tasks", "deadlines", "calendar", "habits", "all"], description: "What to check (for check, default: all)" },
           },
           required: ["action"],
@@ -365,7 +365,7 @@ export const geminiTools = [
         description:
           "Open an app, a page inside JARVIS, or a website. Prefers the user's own apps: 'open my tasks', " +
           "'take me to Kolab', 'open the Music Studio' navigate inside JARVIS to Tasks, Notes, Goals, Knowledge, " +
-          "Finance, Job Agent, Kolab, Lifelog and every Studio tool. Anything else opens the real service — " +
+          "Finance, Job Agent, Kolab, Lifelog and every Studio tool. Anything else opens the real service - " +
           "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'.",
         parameters: {
           type: "OBJECT",
@@ -378,7 +378,7 @@ export const geminiTools = [
       },
       {
         name: "pay",
-        description: "Send money via UPI. Opens payment app PRE-FILLED with payee+amount; user approves. Requires vpa and amount — never guess.",
+        description: "Send money via UPI. Opens payment app PRE-FILLED with payee+amount; user approves. Requires vpa and amount - never guess.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -481,7 +481,7 @@ export const geminiTools = [
       },
       {
         name: "anchor",
-        description: "ANCHOR autopilot — the user's robot that releases one hard-techno track a day to YouTube (video + Short) and Instagram (Reel). action='status' for the last run, next post and recent releases; 'run_drop' to make and publish today's drop now; 'rehearse' to render today's drop without releasing; 'queue_song' to queue one of their Suno songs for the next drop; 'mix' to build the week's or month's continuous mix. Everything except status is confirmed by the user first.",
+        description: "ANCHOR autopilot - the user's robot that releases one hard-techno track a day to YouTube (video + Short) and Instagram (Reel). action='status' for the last run, next post and recent releases; 'run_drop' to make and publish today's drop now; 'rehearse' to render today's drop without releasing; 'queue_song' to queue one of their Suno songs for the next drop; 'mix' to build the week's or month's continuous mix. Everything except status is confirmed by the user first.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -495,7 +495,7 @@ export const geminiTools = [
       },
       {
         name: "deep_research",
-        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons — not for a simple factual lookup, use web_search for that.",
+        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons - not for a simple factual lookup, use web_search for that.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -508,7 +508,7 @@ export const geminiTools = [
       },
       {
         name: "business_agent",
-        description: "Run a multi-step business agent that researches and writes a finished deliverable. Kinds: competitor_intel (competitors, comparison table, gaps, pricing angles), launch_intel (how a product launch is landing), meeting_prep (company research, strategy, agenda, one-page brief), outreach_drafts (find matching companies and draft personalised emails — drafts only), web_scrape (extract structured data from a URL), trend_analysis (sector patterns, gaps, opportunities), seo_audit (score and fix list for a URL), contract_review, cv_screen and data_analysis (work on the user's attached text/CSV file), travel_plan, course_plan, financial_coach (uses their recorded expenses), property_search, podcast_script (two-host script from a topic or URL). Prefer this over web_search/deep_research whenever the request matches one of these jobs.",
+        description: "Run a multi-step business agent that researches and writes a finished deliverable. Kinds: competitor_intel (competitors, comparison table, gaps, pricing angles), launch_intel (how a product launch is landing), meeting_prep (company research, strategy, agenda, one-page brief), outreach_drafts (find matching companies and draft personalised emails - drafts only), web_scrape (extract structured data from a URL), trend_analysis (sector patterns, gaps, opportunities), seo_audit (score and fix list for a URL), contract_review, cv_screen and data_analysis (work on the user's attached text/CSV file), travel_plan, course_plan, financial_coach (uses their recorded expenses), property_search, podcast_script (two-host script from a topic or URL). Prefer this over web_search/deep_research whenever the request matches one of these jobs.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -560,12 +560,12 @@ export const geminiTools = [
       },
       {
         name: "control_device",
-        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this — the client executor applies it. Do not refuse.",
+        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this - the client executor applies it. Do not refuse.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight"], description: "Action to perform" },
-            device: { type: "STRING", description: "Device name or type — e.g. living room lights, front door, flashlight, phone" },
+            device: { type: "STRING", description: "Device name or type - e.g. living room lights, front door, flashlight, phone" },
             value: { type: "STRING", description: "Value for dim/temperature/text/duration" },
           },
           required: ["action", "device"],
@@ -584,7 +584,7 @@ export const geminiTools = [
       },
       {
         name: "emergency_alert",
-        description: "Open emergency channels — dialer for 112 and WhatsApp for contacts. ONLY for genuine emergencies. User must confirm each action.",
+        description: "Open emergency channels - dialer for 112 and WhatsApp for contacts. ONLY for genuine emergencies. User must confirm each action.",
         parameters: {
           type: "OBJECT",
           properties: {

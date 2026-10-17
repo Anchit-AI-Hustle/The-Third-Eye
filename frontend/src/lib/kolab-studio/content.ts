@@ -4,13 +4,13 @@
 
 export const OFFERINGS = [
   { i: "🎬", t: "Content Studio", d: "Plan a rolling content calendar and never stare at a blank page again." },
-  { i: "📅", t: "Multi-channel Scheduler", d: "Queue posts once; publish to Instagram, YouTube, Facebook, TikTok & Google." },
+  { i: "📅", t: "Multi-channel Scheduler", d: "Queue posts once for Instagram, YouTube, Facebook, TikTok & Google. Automatic publishing is coming; for now the queue is your posting plan." },
   { i: "🏷️", t: "Coupon Storefront", d: "Turn your affiliate codes into a shoppable page followers can buy from." },
   { i: "🌐", t: "Marketing Website", d: "A ready-made site for awareness and to drive your commission sales." },
-  { i: "📈", t: "Ad Managers & SEO", d: "Google, Meta, TikTok, print campaigns + SEO, all connected." },
-  { i: "🤝", t: "Brand Marketplace", d: "Get discovered by brands and land commission deals with verified reach." },
-  { i: "💰", t: "Commissions & Payouts", d: "Track affiliate earnings from your codes in one dashboard." },
-  { i: "🔒", t: "Verified Identity", d: "Aadhaar-verified creators earn brand trust and higher-value deals." },
+  { i: "📈", t: "Ad Managers & SEO", d: "Google, Meta, TikTok, print campaigns + SEO in one place.", soon: true },
+  { i: "🤝", t: "Brand Marketplace", d: "Get discovered by brands and land commission deals with verified reach.", soon: true },
+  { i: "💰", t: "Commissions & Payouts", d: "Track affiliate earnings from your codes in one dashboard.", soon: true },
+  { i: "🔒", t: "Verified Identity", d: "Aadhaar verification to earn brand trust and higher-value deals.", soon: true },
   { i: "📊", t: "Analytics", d: "See what's working across every channel and double down." },
 ] as const;
 
@@ -35,8 +35,8 @@ export const TIERS = {
       "Everything in Basic",
       "Unlimited channels",
       "Your own marketing website",
-      "Google / Meta / TikTok ad connectors",
-      "Brand marketplace access",
+      "Google / Meta / TikTok ad connectors (coming soon)",
+      "Brand marketplace access (coming soon)",
       "Priority support",
     ],
   },

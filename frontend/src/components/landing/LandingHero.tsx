@@ -42,9 +42,9 @@ export function LandingHero() {
           </h1>
 
           <p data-reveal className="mt-6 text-base leading-relaxed text-text-secondary md:text-lg">
-            No typing, no re-entry — your Gmail gets scanned automatically and turned into a
+            No typing, no re-entry - your Gmail gets scanned automatically and turned into a
             tracked list. Notes you'll never lose, answers pulled straight from your own documents,
-            all in one private workspace that remembers and acts for you — not just another list to
+            all in one private workspace that remembers and acts for you - not just another list to
             maintain.
           </p>
 
@@ -59,7 +59,7 @@ export function LandingHero() {
           </div>
 
           <p data-reveal className="mt-4 text-xs text-text-muted">
-            Private by design — your data stays in your own workspace and is visible only to you.
+            Private by design - your data stays in your own workspace and is visible only to you.
           </p>
 
           {/* Instrument readout: gives the hero a floor and states live status

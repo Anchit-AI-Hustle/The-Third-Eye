@@ -1,6 +1,6 @@
 import { ApplicationsPanel } from "@/components/jobAgent/ApplicationsPanel";
 
-export const metadata = { title: "Applications — Job Agent" };
+export const metadata = { title: "Applications - Job Agent" };
 
 export default function ApplicationsPage() {
   return (

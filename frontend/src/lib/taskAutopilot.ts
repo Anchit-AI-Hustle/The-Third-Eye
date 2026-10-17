@@ -16,6 +16,8 @@ export interface AutopilotTask {
   description?: string | null;
   due_date?: string | null;
   priority?: string | null;
+  /** A run of this task stopped part-way before (a tab closed mid-task). */
+  retry?: boolean;
 }
 
 export interface AutopilotRun {
@@ -34,6 +36,7 @@ export function autopilotPrompt(t: AutopilotTask): string {
     t.description ? `Details: ${t.description}` : "",
     t.due_date ? `Due: ${t.due_date}` : "",
     t.priority ? `Priority: ${t.priority}` : "",
+    t.retry ? `This task was started before and stopped part-way. Before creating any reminder, note, event or file, check what already exists (list reminders, search notes and knowledge) and do not make it twice.` : "",
     ``,
     `How to work:`,
     `- Plan concrete steps with plan_checklist, then do each one with your tools, check the result, and tick it with complete_step quoting the evidence.`,

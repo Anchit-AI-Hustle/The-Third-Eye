@@ -42,7 +42,7 @@ function ProjectEditor({ project, onSave, onCancel, onDelete }: {
     let files = draft.files;
     let total = used;
     for (const f of Array.from(list)) {
-      if (total + f.size > MAX_ATTACHMENT_BYTES) { setNote(`"${f.name}" doesn't fit — project files can total 3 MB.`); continue; }
+      if (total + f.size > MAX_ATTACHMENT_BYTES) { setNote(`"${f.name}" doesn't fit - project files can total 3 MB.`); continue; }
       files = [...files, await readFile(f)];
       total += f.size;
     }
@@ -54,7 +54,7 @@ function ProjectEditor({ project, onSave, onCancel, onDelete }: {
       <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Project name"
         className="w-full bg-background-base border border-border-default rounded-input px-2.5 py-1.5 text-sm text-text-primary outline-none focus:border-border-hover" />
       <textarea value={draft.instructions} onChange={(e) => setDraft({ ...draft, instructions: e.target.value })} rows={4}
-        placeholder="Instructions JARVIS follows in every chat of this project — goals, tone, context."
+        placeholder="Instructions JARVIS follows in every chat of this project - goals, tone, context."
         className="w-full bg-background-base border border-border-default rounded-input px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-border-hover resize-none" />
       <div className="flex flex-wrap gap-1.5">
         {draft.files.map((f, i) => (
@@ -166,7 +166,7 @@ export function ChatsPanel(p: Props) {
         </section>
       </div>
       <Link href="/connectors" className="flex items-center gap-2 px-4 py-3 border-t border-border-default text-xs text-text-secondary hover:text-text-primary">
-        <Plug size={13} /> Connectors — Gmail, Calendar, GitHub and more
+        <Plug size={13} /> Connectors - Gmail, Calendar, GitHub and more
       </Link>
     </aside>
   );

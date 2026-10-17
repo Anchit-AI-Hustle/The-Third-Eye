@@ -86,7 +86,6 @@ choices were not tested here.
 - **Classifier is text-based.** Tool results are plain strings; a handler that
   words a failure in a new way can still read as success. A structured
   `{ ok, result }` from every handler would remove this class of bug.
-- **Reminders can be up to 3 hours late** (GitHub Actions cron every 3 hours).
 - **Not supported:** app store uploads, completing payments, end-to-end booking.
 - Remaining audit items from the earlier review (timezone dates, media pages
   without keys, PDF text extraction) are tracked for the next PRs.

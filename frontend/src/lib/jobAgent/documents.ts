@@ -10,7 +10,7 @@ function esc(s: string | undefined): string {
 
 function dateRange(start?: string, end?: string): string {
   if (!start && !end) return "";
-  return `${start || ""}${start && (end || "Present") ? " – " : ""}${end || "Present"}`;
+  return `${start || ""}${start && (end || "Present") ? " - " : ""}${end || "Present"}`;
 }
 
 function sectionToHtml(s: ResumeSection): string {
@@ -22,7 +22,7 @@ function sectionToHtml(s: ResumeSection): string {
   }
   const entries = (s.entries || [])
     .map((e) => {
-      const line1 = [esc(e.title), esc(e.org)].filter(Boolean).join(" — ");
+      const line1 = [esc(e.title), esc(e.org)].filter(Boolean).join(" - ");
       const meta = [esc(e.location), dateRange(e.startDate, e.endDate)].filter(Boolean).join(" | ");
       const bullets = (e.bullets || []).filter((b) => b.text).map((b) => `<li>${esc(b.text)}</li>`).join("");
       return `<div class="entry"><div class="entry-head"><span class="entry-title">${line1}</span>${meta ? `<span class="entry-meta">${meta}</span>` : ""}</div>${e.summary ? `<p>${esc(e.summary)}</p>` : ""}${bullets ? `<ul>${bullets}</ul>` : ""}</div>`;
@@ -59,7 +59,7 @@ export function resumeToHtml(doc: ResumeDocument, opts: { forPrint?: boolean } =
     ${doc.sections.map(sectionToHtml).join("")}
   `;
   if (!opts.forPrint) return body;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(c.fullName)} — Resume</title><style>${PRINT_CSS}</style></head><body>${body}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(c.fullName)} - Resume</title><style>${PRINT_CSS}</style></head><body>${body}</body></html>`;
 }
 
 export function resumeToMarkdown(doc: ResumeDocument): string {
@@ -75,7 +75,7 @@ export function resumeToMarkdown(doc: ResumeDocument): string {
     if (s.entries?.length) {
       lines.push(`\n## ${s.label}`);
       for (const e of s.entries) {
-        lines.push(`\n**${[e.title, e.org].filter(Boolean).join(" — ")}** ${dateRange(e.startDate, e.endDate)}`.trim());
+        lines.push(`\n**${[e.title, e.org].filter(Boolean).join(" - ")}** ${dateRange(e.startDate, e.endDate)}`.trim());
         if (e.location) lines.push(`_${e.location}_`);
         if (e.summary) lines.push(e.summary);
         (e.bullets || []).filter((b) => b.text).forEach((b) => lines.push(`- ${b.text}`));

@@ -92,7 +92,7 @@ export async function generateVisualizerVideo(
   if (!ctx) throw new Error("This browser can't record video.");
   await ctx.resume();
   if (ctx.state !== "running") {
-    throw new Error("The browser blocked recording. Press Generate video — that click unlocks it.");
+    throw new Error("The browser blocked recording. Press Generate video - that click unlocks it.");
   }
 
   opts.onProgress?.(0);

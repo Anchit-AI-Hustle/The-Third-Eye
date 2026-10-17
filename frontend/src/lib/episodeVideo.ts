@@ -126,7 +126,7 @@ const local = (url: string) => (/^https?:/.test(url) ? proxied(url) : url);
 
 async function loadClip(url: string, n: number): Promise<HTMLVideoElement> {
   const res = await fetch(proxied(url));
-  if (!res.ok) throw new Error(`Shot ${n}'s clip could not be loaded — its link may have expired. Re-render it and try again.`);
+  if (!res.ok) throw new Error(`Shot ${n}'s clip could not be loaded - its link may have expired. Re-render it and try again.`);
   const v = document.createElement("video");
   v.src = URL.createObjectURL(await res.blob());
   v.muted = true;
@@ -151,13 +151,13 @@ async function loadClip(url: string, n: number): Promise<HTMLVideoElement> {
 
 async function loadVoice(ctx: AudioContext, url: string, n: number): Promise<AudioBuffer> {
   const res = await fetch(proxied(url));
-  if (!res.ok) throw new Error(`Shot ${n}'s voice-over could not be loaded — voice it again and retry.`);
+  if (!res.ok) throw new Error(`Shot ${n}'s voice-over could not be loaded - voice it again and retry.`);
   return ctx.decodeAudioData(await res.arrayBuffer());
 }
 
 async function loadSoundtrack(ctx: AudioContext, url: string): Promise<AudioBuffer> {
   const res = await fetch(local(url));
-  if (!res.ok) throw new Error("The soundtrack could not be loaded — pick it again and retry.");
+  if (!res.ok) throw new Error("The soundtrack could not be loaded - pick it again and retry.");
   try { return await ctx.decodeAudioData(await res.arrayBuffer()); }
   catch { throw new Error("The soundtrack isn't an audio file this browser can play."); }
 }

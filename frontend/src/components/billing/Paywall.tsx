@@ -64,7 +64,7 @@ export function Paywall({
 
           {unlocked ? (
             <div className="flex items-center gap-2 rounded-input border border-[#34D399]/40 bg-[#34D399]/10 px-4 py-3 text-[#34D399] text-sm">
-              <Check size={16} /> Test mode unlocked — all paid features are open.
+              <Check size={16} /> Test mode unlocked - all paid features are open.
             </div>
           ) : (
             <>

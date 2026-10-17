@@ -28,7 +28,7 @@ export function loadDay(date: string): DayLog {
 
 export function saveDay(day: DayLog): void {
   day.updatedAt = Date.now();
-  try { localStorage.setItem(KEY(day.date), JSON.stringify(day)); } catch { /* quota — noop */ }
+  try { localStorage.setItem(KEY(day.date), JSON.stringify(day)); } catch { /* quota - noop */ }
   const idx = readIndex();
   if (!idx.includes(day.date)) writeIndex([day.date, ...idx]);
   // Cloud best-effort: one row per day (id = date). Transcript-only, small.

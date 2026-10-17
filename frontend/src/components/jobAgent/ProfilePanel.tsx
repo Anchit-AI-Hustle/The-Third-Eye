@@ -32,9 +32,9 @@ export function ProfilePanel() {
       if (!res.ok) { setMsg(d.error || "Import failed."); return; }
       if (d.profile) { const merged = { ...draft, ...Object.fromEntries(Object.entries(d.profile).filter(([, v]) => v)) }; setDraft(merged); await saveProfile(merged); }
       if (d.facts?.length) await addFacts(d.facts as CandidateFact[]);
-      setMsg(`Imported ${d.facts?.length ?? 0} facts. Review and verify them below — nothing is auto-verified.`);
+      setMsg(`Imported ${d.facts?.length ?? 0} facts. Review and verify them below - nothing is auto-verified.`);
       setImportText(""); setImportUrl("");
-    } catch { setMsg("Import failed — please try again."); }
+    } catch { setMsg("Import failed - please try again."); }
     finally { setImporting(false); }
   }
 
@@ -47,7 +47,7 @@ export function ProfilePanel() {
       {/* Import */}
       <section className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
         <div className="hud-label text-text-muted mb-3">Import resume</div>
-        <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={5} placeholder="Paste your resume text here… (PDF/DOCX parsing is a staged follow-up — paste text or use a portfolio URL for now)" className={field + " resize-y"} />
+        <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={5} placeholder="Paste your resume text here… (PDF/DOCX parsing is a staged follow-up - paste text or use a portfolio URL for now)" className={field + " resize-y"} />
         <div className="mt-2 flex flex-col sm:flex-row gap-2">
           <div className="flex-1 flex items-center gap-2 bg-background-base border border-border-default rounded-input px-3 py-2">
             <Link2 size={14} className="text-text-muted" />
@@ -110,7 +110,7 @@ function FactRow({ fact, onVerify, onReject, onDelete }: { fact: CandidateFact; 
       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background-base border border-border-default text-text-muted flex-none mt-0.5">{fact.factType}</span>
       <div className="flex-1 min-w-0">
         <div className="text-sm text-text-primary break-words">{val.slice(0, 240)}</div>
-        {fact.sensitivity !== "normal" && <span className="text-[10px] text-[#F0C94E] flex items-center gap-1 mt-0.5"><ShieldAlert size={10} /> {fact.sensitivity} — never used for ranking</span>}
+        {fact.sensitivity !== "normal" && <span className="text-[10px] text-[#F0C94E] flex items-center gap-1 mt-0.5"><ShieldAlert size={10} /> {fact.sensitivity} - never used for ranking</span>}
       </div>
       <span className="text-[10px] font-mono flex-none mt-1" style={{ color: vColor }}>{fact.verified}</span>
       <div className="flex items-center gap-1 flex-none">

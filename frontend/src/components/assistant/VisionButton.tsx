@@ -69,12 +69,12 @@ export function VisionButton({
         body: JSON.stringify({ image, prompt: q }),
       });
       const data = await res.json().catch(() => ({}));
-      const answer = res.ok ? (data.text || "(no description)") : `Couldn't analyze it — ${data.error || res.status}`;
+      const answer = res.ok ? (data.text || "(no description)") : `Couldn't analyze it - ${data.error || res.status}`;
       onResult(q, image, answer);
     } catch (e) {
       // User cancelled the share prompt, or capture failed — surface it softly.
       const msg = e instanceof Error ? e.message : String(e);
-      if (!/Permission|denied|cancel|Abort/i.test(msg)) onResult(question, "", `Vision failed — ${msg}`);
+      if (!/Permission|denied|cancel|Abort/i.test(msg)) onResult(question, "", `Vision failed - ${msg}`);
     } finally {
       setBusy(null);
     }
@@ -89,7 +89,7 @@ export function VisionButton({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={disabled || !!busy}
-        title="Vision — show the assistant your screen or camera"
+        title="Vision - show the assistant your screen or camera"
         className="flex-none p-1.5 rounded-input text-text-muted hover:text-accent-blue transition-colors disabled:opacity-40"
       >
         {busy ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />}
