@@ -67,6 +67,17 @@ describe("chat tools", () => {
     expect(r.text).toContain("₹11,800.00");
   });
 
+  it("will not save an untitled task or an empty note", async () => {
+    calls = [
+      { name: "manage_tasks", args: { action: "create", title: "  " } },
+      { name: "manage_notes", args: { action: "create" } },
+    ];
+    const r = await run();
+    expect(r.results[0]).toMatch(/^Need a title/);
+    expect(r.results[1]).toMatch(/^Need a title or content/);
+    expect(r.done.sideEffects).toEqual([]);
+  });
+
   it("finds a task it created earlier in the same reply", async () => {
     calls = [
       { name: "manage_tasks", args: { action: "create", title: "Review Q2 deck" } },

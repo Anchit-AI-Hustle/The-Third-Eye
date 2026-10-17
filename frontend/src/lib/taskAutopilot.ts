@@ -5,6 +5,9 @@ import type { Step } from "@/lib/checklist";
 // evidence and nothing is waiting for the user's approval; anything less is
 // reported as "needs you", with what was done and what is left.
 
+// A run older than this is from a tab that closed mid-task, so it may be retried.
+export const STALE_MS = 10 * 60_000;
+
 export type AutopilotStatus = "running" | "done" | "needs_you" | "failed";
 
 export interface AutopilotTask {

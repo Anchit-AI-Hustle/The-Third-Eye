@@ -2,14 +2,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { applySideEffects } from "@/lib/whatsapp";
-import { judgeRun, type AutopilotRun } from "@/lib/taskAutopilot";
+import { judgeRun, STALE_MS, type AutopilotRun } from "@/lib/taskAutopilot";
 
 export const runtime = "nodejs";
 
 // The browser runs each task through /api/chat (it has the session); this route
 // claims a task so only one tab works it, and records the outcome.
 
-const STALE_MS = 10 * 60_000;
 const SOURCE = "Autopilot";
 
 type Effect = { type: string; data?: Record<string, unknown> };

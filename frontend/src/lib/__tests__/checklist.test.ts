@@ -21,6 +21,24 @@ describe("classifyResult", () => {
     expect(classifyResult("Task created: Fix the error page (id t1)")).toBe("ok");
     expect(classifyResult("3 results: How to fix error 404 …")).toBe("ok");
   });
+
+  it("reads the failures handlers word as a refusal or a missing input", () => {
+    for (const r of [
+      'No goal matching "Run" was found, so nothing was updated. Tell the user; do not claim progress was saved.',
+      "No file content was given, so nothing was saved.",
+      "I need a positive amount to log an expense.",
+      "Please provide a contact name or query to search.",
+      "GST Calculator needs amount. It got: nothing. Ask the user for the missing values; do not guess them.",
+      'EMI Calculator could not work that out from {"p":0}. Check the numbers with the user.',
+      "ANCHOR is a private release robot that is not available on this account. Tell the user so.",
+      'manage_tasks failed: invalid arguments: missing required argument "action".',
+    ]) expect(classifyResult(r), r).toBe("failed");
+    expect(classifyResult("No expenses logged for 2026-10 yet.")).toBe("ok");
+    expect(classifyResult('No notes found matching "visa".')).toBe("ok");
+    expect(classifyResult("No emails found matching: from:bank")).toBe("ok");
+    expect(classifyResult("Queued flashlight_on on the operator's device. The device executor will apply it and the next message will reflect the real outcome - do not claim OS-level success.")).toBe("ok");
+    expect(classifyResult("Note saved: Please provide feedback by Friday")).toBe("ok");
+  });
 });
 
 describe("Checklist", () => {

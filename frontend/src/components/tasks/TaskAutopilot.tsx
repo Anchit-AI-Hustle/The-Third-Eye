@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { dataList } from "@/lib/dataClient";
-import { runThroughChat, type AutopilotTask } from "@/lib/taskAutopilot";
+import { runThroughChat, STALE_MS, type AutopilotTask } from "@/lib/taskAutopilot";
 import type { LocalTask } from "@/hooks/useLocalTasks";
 
 // Headless: works each new task with JARVIS, one at a time, in whichever tab
@@ -51,7 +51,8 @@ export function TaskAutopilot() {
         if (!id) {
           const r = await dataList<LocalTask>("tasks");
           if (!r.remote) return;
-          id = r.rows.find((t) => t.status === "todo" && !t.autopilot_status && t.source_type !== "Autopilot" && t.created_at >= from)?.id;
+          const stale = (t: LocalTask) => t.autopilot_status === "running" && Date.now() - new Date(t.autopilot_at ?? 0).getTime() > STALE_MS;
+          id = r.rows.find((t) => t.status === "todo" && (!t.autopilot_status || stale(t)) && t.source_type !== "Autopilot" && t.created_at >= from)?.id;
         }
         if (!id) return;
         if (asked) await post({ taskId: id, action: "reset" });
