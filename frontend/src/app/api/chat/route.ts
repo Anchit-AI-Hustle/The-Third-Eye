@@ -1,4 +1,5 @@
 import { startAssistantMedia } from "@/lib/assistantMedia";
+import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
@@ -1843,12 +1844,19 @@ function generatePdf(title: string, content: string, format: string): { result: 
   };
 }
 
+// The user's own provider keys (Settings → AI providers) apply to every model
+// call made while answering them.
 export async function POST(req: NextRequest) {
+  const identity = await identify(req.headers, "chat");
+  return identity.email ? withOwnKeys(identity.email, () => chat(req, identity)) : chat(req, identity);
+}
+
+async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identify>>) {
   // Gemini is the primary (it has native function-calling for tools). When its
   // key is absent, we DON'T hard-fail — we fall through to the multi-provider
   // cascade (Groq/OpenAI/etc.) for a plain-text answer, so the assistant stays
   // usable on free keys alone. The cascade path is in the stream's catch below.
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = currentOwnKeys()?.gemini || process.env.GEMINI_API_KEY;
 
   const body = (await req.json()) as ChatRequest;
   const {
@@ -1867,7 +1875,6 @@ export async function POST(req: NextRequest) {
   // the request body — so a caller can't read/write another user's Cortex
   // memory, reminders, or usage by supplying someone else's email
   // (service-role bypasses RLS).
-  const identity = await identify(req.headers, "chat");
   const email = identity.email;
   // Gmail and Calendar use the refresh token stored at Google sign-in, or by
   // Settings → Connections if those scopes were declined. The session token is
