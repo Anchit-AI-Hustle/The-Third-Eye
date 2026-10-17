@@ -1388,7 +1388,10 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking, childre
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
-        <div className="w-36 h-36 mx-auto mb-3"><Persona3D color={persona.color} speaking={speaking} className="w-full h-full" /></div>
+        <div className="hud-core w-36 h-36 mx-auto mb-6" style={{ color: persona.color }}>
+          <span /><span /><span />
+          <Persona3D color={persona.color} speaking={speaking} className="relative w-full h-full" />
+        </div>
         <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
         <p className="text-text-primary font-semibold text-base mb-1">
           {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
