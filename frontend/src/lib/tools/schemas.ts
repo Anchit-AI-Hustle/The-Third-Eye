@@ -622,6 +622,18 @@ export const geminiTools = [
         },
       },
       {
+        name: "build_app",
+        description: "Build a complete static web app (HTML, CSS, JavaScript, data in the browser) from the user's description, put it in a new public repo on their GitHub, and publish it free on GitHub Pages. The user confirms before anything is created. Needs GitHub connected; if github status says it isn't, call github with action='connect' first.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "Short app name, used for the repo" },
+            description: { type: "STRING", description: "Everything the app must do: screens, features, data it keeps, look and feel" },
+          },
+          required: ["name", "description"],
+        },
+      },
+      {
         name: "smart_summary",
         description: "Intelligent summary of text or URL. Choose depth: tl;dr, brief, or detailed.",
         parameters: {
