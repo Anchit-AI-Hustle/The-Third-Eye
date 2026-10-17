@@ -12,9 +12,23 @@ export interface LocalNotificationsPlugin {
   addListener(event: "localNotificationActionPerformed", cb: (a: { notification: { extra?: { url?: string } } }) => void): Promise<{ remove(): void }>;
 }
 
-export interface ReminderRow { id: string; title: string; body: string | null; fire_at: string; status: string }
+export interface ReminderRow { id: string; title: string; body: string | null; fire_at: string; status: string; recurrence: string | null }
+
+// A repeating reminder repeats on the phone too, at its local time
+// (weekday 1 is Sunday), so it keeps coming without a refresh.
+function when(r: ReminderRow): Record<string, unknown> {
+  const d = new Date(r.fire_at);
+  const time = { hour: d.getHours(), minute: d.getMinutes() };
+  if (r.recurrence === "daily") return { on: time, allowWhileIdle: true };
+  if (r.recurrence === "weekly") return { on: { weekday: d.getDay() + 1, ...time }, allowWhileIdle: true };
+  if (r.recurrence === "monthly") return { on: { day: d.getDate(), ...time }, allowWhileIdle: true };
+  return { at: d, allowWhileIdle: true };
+}
+const repeats = (r: ReminderRow) => ["daily", "weekly", "monthly"].includes(r.recurrence ?? "");
 
 export const BRIEFING_ID = 1;
+/** Window event the chat sends after it creates, changes or cancels a reminder. */
+export const REMINDERS_CHANGED = "jarvis:reminders";
 // iOS keeps at most 64 pending notifications per app; one is the briefing.
 const MAX_REMINDERS = 60;
 
@@ -35,14 +49,14 @@ export async function scheduleOnPhone(p: LocalNotificationsPlugin, reminders: Re
   if (old.length) await p.cancel({ notifications: old.map(({ id }) => ({ id })) });
 
   const upcoming = reminders
-    .filter((r) => r.status === "pending" && Date.parse(r.fire_at) > now)
+    .filter((r) => r.status === "pending" && (repeats(r) || Date.parse(r.fire_at) > now))
     .sort((a, b) => Date.parse(a.fire_at) - Date.parse(b.fire_at))
     .slice(0, MAX_REMINDERS)
     .map((r): Scheduled => ({
       id: notificationId(r.id),
       title: r.title,
       body: r.body || "Reminder",
-      schedule: { at: new Date(r.fire_at), allowWhileIdle: true },
+      schedule: when(r),
       extra: { url: "/assistant" },
     }));
   await p.schedule({

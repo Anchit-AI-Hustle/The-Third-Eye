@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const syncDeviceContacts = vi.fn(async () => ({ count: 2, supported: true }));
 const upload = vi.fn(async (f: File[]) => f);
 const dataSave = vi.fn(async () => "saved");
-const dataList = vi.fn(async () => ({ remote: true, rows: [{ id: "r1", title: "Call mom", body: null, fire_at: "2999-01-01T09:00:00.000Z", status: "pending" }] }));
+const dataRead = vi.fn(async (): Promise<unknown[] | null> => [{ id: "r1", title: "Call mom", body: null, fire_at: "2999-01-01T09:00:00.000Z", status: "pending", recurrence: null }]);
 vi.mock("@/hooks/useLocalContacts", () => ({ useLocalContacts: () => ({ syncDeviceContacts }) }));
 vi.mock("@/hooks/useLocalKnowledge", () => ({ useLocalKnowledge: () => ({ upload }) }));
-vi.mock("@/lib/dataClient", () => ({ dataSave: (...a: unknown[]) => dataSave(...(a as [])), dataList: (...a: unknown[]) => dataList(...(a as [])) }));
+vi.mock("@/lib/dataClient", () => ({ dataSave: (...a: unknown[]) => dataSave(...(a as [])), dataRead: (...a: unknown[]) => dataRead(...(a as [])) }));
 
 import { NativeAutoSync } from "@/components/layout/NativeAutoSync";
 
@@ -50,11 +50,32 @@ describe("the iPhone app syncs on its own when opened", () => {
     render(<NativeAutoSync />);
 
     await waitFor(() => expect(LocalNotifications.schedule).toHaveBeenCalled());
-    expect(dataList).toHaveBeenCalledWith("reminders");
+    expect(dataRead).toHaveBeenCalledWith("reminders");
     const [{ notifications }] = LocalNotifications.schedule.mock.calls[0] as unknown as [{ notifications: { title: string }[] }];
     expect(notifications.map((n) => n.title)).toEqual(["Call mom", "Good morning"]);
     tapped!({ notification: { extra: { url: "/assistant?ask=hi" } } });
     expect(assign).toHaveBeenCalledWith("/assistant?ask=hi");
+  });
+
+  it("keeps what is already scheduled when the reminder list can't be read, and refreshes when the chat changes a reminder", async () => {
+    const LocalNotifications = {
+      requestPermissions: async () => ({ display: "granted" }),
+      getPending: async () => ({ notifications: [{ id: 99 }] }),
+      cancel: vi.fn(),
+      schedule: vi.fn(async () => ({})),
+      addListener: vi.fn(async () => ({ remove() {} })),
+    };
+    (window as { Capacitor?: unknown }).Capacitor = { getPlatform: () => "ios", isNativePlatform: () => true, Plugins: { LocalNotifications } };
+    dataRead.mockResolvedValueOnce(null);
+
+    render(<NativeAutoSync />);
+    await waitFor(() => expect(dataRead).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+    expect(LocalNotifications.schedule).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event("jarvis:reminders"));
+    await waitFor(() => expect(LocalNotifications.schedule).toHaveBeenCalled());
   });
 
   it("does nothing in a browser", async () => {

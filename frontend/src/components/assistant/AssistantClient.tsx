@@ -18,6 +18,7 @@ import { matchSystemsCommand } from "@/lib/systems";
 import { triggerSystemsOnline } from "@/components/systems/SystemsOnline";
 import { NotifyPrompt } from "./NotifyPrompt";
 import { takeUrlParam } from "@/lib/urlParam";
+import { REMINDERS_CHANGED } from "@/lib/localReminders";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
@@ -658,6 +659,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
       let buffer = "";
       let fullText = "";
       const toolsUsed: string[] = [];
+      let remindersChanged = false;
       let eventType = "";
 
       while (true) {
@@ -679,6 +681,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   m.id === assistantId ? { ...m, content: fullText, toolsUsed } : m
                 ));
               } else if (eventType === "tool" && parsed.name && !CHECKLIST_TOOLS.has(parsed.name)) {
+                if (parsed.name === "manage_reminders") remindersChanged = true;
                 toolsUsed.push(toolLabel(parsed.name, parsed.input));
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
@@ -751,6 +754,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "assistant", content: effectiveContent },
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
+                // The phone app reschedules its reminder notifications.
+                if (remindersChanged) window.dispatchEvent(new Event(REMINDERS_CHANGED));
                 openLinks(parsed.sideEffects);
                 const media = (parsed.sideEffects ?? [])
                   .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)

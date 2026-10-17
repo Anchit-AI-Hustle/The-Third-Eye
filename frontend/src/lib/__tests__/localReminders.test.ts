@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BRIEFING_ID, notificationId, scheduleOnPhone, type LocalNotificationsPlugin } from "@/lib/localReminders";
 
 const now = Date.parse("2026-10-17T12:00:00Z");
-const rem = (id: string, fire_at: string, status = "pending") => ({ id, title: `Call ${id}`, body: null, fire_at, status });
+const rem = (id: string, fire_at: string, status = "pending", recurrence: string | null = null) => ({ id, title: `Call ${id}`, body: null, fire_at, status, recurrence });
 
 function plugin(pending: number[] = [], display = "granted") {
   return {
@@ -36,6 +36,21 @@ describe("reminders and the morning briefing on the phone itself", () => {
     expect(notificationId("abc")).not.toBe(notificationId("abd"));
     expect(notificationId("abc")).toBeGreaterThan(BRIEFING_ID);
     expect(notificationId("abc")).toBeLessThan(2 ** 31);
+  });
+
+  it("repeats daily, weekly and monthly reminders on the phone at their local time", async () => {
+    const p = plugin();
+    const at = new Date(2026, 9, 20, 7, 30); // a Tuesday, 07:30 local
+    await scheduleOnPhone(p, [
+      rem("d", at.toISOString(), "pending", "daily"),
+      rem("w", at.toISOString(), "pending", "weekly"),
+      rem("m", at.toISOString(), "pending", "monthly"),
+    ], now);
+    const [{ notifications }] = p.schedule.mock.calls[0] as unknown as [{ notifications: { id: number; schedule: unknown }[] }];
+    const byId = Object.fromEntries(notifications.map((n) => [n.id, n.schedule]));
+    expect(byId[notificationId("d")]).toEqual({ on: { hour: 7, minute: 30 }, allowWhileIdle: true });
+    expect(byId[notificationId("w")]).toEqual({ on: { weekday: 3, hour: 7, minute: 30 }, allowWhileIdle: true });
+    expect(byId[notificationId("m")]).toEqual({ on: { day: 20, hour: 7, minute: 30 }, allowWhileIdle: true });
   });
 
   it("schedules nothing when notifications are off", async () => {

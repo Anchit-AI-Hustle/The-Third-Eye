@@ -3,9 +3,9 @@
 import { useEffect, useRef } from "react";
 import { useLocalContacts } from "@/hooks/useLocalContacts";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
-import { dataList, dataSave } from "@/lib/dataClient";
+import { dataRead, dataSave } from "@/lib/dataClient";
 import { autoSyncDue, deviceSyncPlugin, localStore, syncFolder, syncPhotos } from "@/lib/deviceSync";
-import { localNotificationsPlugin, scheduleOnPhone, type ReminderRow } from "@/lib/localReminders";
+import { REMINDERS_CHANGED, localNotificationsPlugin, scheduleOnPhone, type ReminderRow } from "@/lib/localReminders";
 
 // In the phone app: contacts, new photos and the granted folder sync on open
 // and whenever the app comes back to the front (at most every ten minutes),
@@ -24,27 +24,37 @@ export function NativeAutoSync() {
       const url = a.notification.extra?.url;
       if (url) window.location.assign(url);
     });
+    // Reminders refresh on every return to the app and whenever the chat
+    // changes one; the schedule is only replaced after a successful read, so
+    // opening the app offline keeps what the phone already has.
+    const refreshReminders = async () => {
+      if (!notes) return;
+      const rows = await dataRead<ReminderRow>("reminders");
+      if (rows) await scheduleOnPhone(notes, rows);
+    };
     let running = false;
     const run = async () => {
-      if (running || document.visibilityState !== "visible" || !autoSyncDue(localStore)) return;
+      if (document.visibilityState !== "visible") return;
+      void refreshReminders().catch((err) => console.warn("Reminder scheduling stopped:", err));
+      if (!plugin || running || !autoSyncDue(localStore)) return;
       running = true;
       try {
-        if (plugin) {
-          await latest.current.syncDeviceContacts();
-          await syncPhotos(plugin, async (rows) => (await dataSave("device_photos", rows)) === "saved", localStore);
-          await syncFolder(plugin, async (files) => (await latest.current.upload(files)).length, localStore);
-        }
-        if (notes) await scheduleOnPhone(notes, (await dataList<ReminderRow>("reminders")).rows);
+        await latest.current.syncDeviceContacts();
+        await syncPhotos(plugin, async (rows) => (await dataSave("device_photos", rows)) === "saved", localStore);
+        await syncFolder(plugin, async (files) => (await latest.current.upload(files)).length, localStore);
       } catch (err) {
         console.warn("Device sync stopped:", err);
       } finally {
         running = false;
       }
     };
+    const onReminders = () => void refreshReminders().catch(() => {});
     void run();
     document.addEventListener("visibilitychange", run);
+    window.addEventListener(REMINDERS_CHANGED, onReminders);
     return () => {
       document.removeEventListener("visibilitychange", run);
+      window.removeEventListener(REMINDERS_CHANGED, onReminders);
       void tap?.then((l) => l.remove());
     };
   }, []);
