@@ -7,10 +7,10 @@ const nextConfig = require("../../../next.config.js") as {
 };
 
 describe("CSP", () => {
-  it("lets the Google sign-in form follow the OAuth redirect", async () => {
+  it("lets forms post only to this origin, now that sign-in has no Google step", async () => {
     const headers = await nextConfig.headers();
     const csp = headers[0]?.headers.find((h) => h.key === "Content-Security-Policy-Report-Only")?.value ?? "";
-    expect(csp).toContain("form-action 'self' https://accounts.google.com");
-    expect(csp.includes("form-action 'self';")).toBe(false);
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).not.toContain("accounts.google.com");
   });
 });

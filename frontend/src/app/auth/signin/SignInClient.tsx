@@ -1,15 +1,21 @@
 "use client";
 
-import { getCsrfToken } from "next-auth/react";
-import { useEffect, useState, type FormEvent } from "react";
+import { signIn } from "next-auth/react";
+import { useState, type FormEvent } from "react";
+import { PHONE_CC, PIN_LEN, normPhone, phoneError, pinError } from "@/lib/phone";
 
 const ERROR_TEXT: Record<string, string> = {
-  AccessDenied: "Google didn't allow that sign-in. It only needs your name and email.",
-  OAuthCallback: "Google didn't finish. Continue once more.",
-  Callback: "Google didn't finish. Continue once more.",
-  OAuthSignin: "Couldn't start Google sign-in.",
   Configuration: "Sign-in isn't configured on the server.",
+  CredentialsSignin: "That did not work. Check your number and PIN and try again.",
+  SessionRequired: "Please sign in to see that page.",
 };
+
+type Step = "phone" | "pin" | "new";
+
+const digits = (v: string, max: number) => v.replace(/\D/g, "").slice(0, max);
+
+const inputClass =
+  "w-full bg-background-base border border-border-default rounded-input px-3 h-12 text-text-primary text-sm focus:outline-none focus:border-accent-blue";
 
 export function SignInClient({
   callbackUrl,
@@ -18,43 +24,91 @@ export function SignInClient({
   callbackUrl: string;
   initialError: string | null;
 }) {
-  const [csrfToken, setCsrfToken] = useState("");
-  const [csrfError, setCsrfError] = useState(false);
+  const [step, setStep] = useState<Step>("phone");
+  const [cc, setCc] = useState("+91");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(
+    initialError ? (ERROR_TEXT[initialError] ?? "Sign-in didn't finish. Please try again.") : null,
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    getCsrfToken()
-      .then((token) => {
-        if (cancelled) return;
-        if (!token) {
-          setCsrfError(true);
-          return;
-        }
-        setCsrfToken(token);
-      })
-      .catch(() => {
-        if (!cancelled) setCsrfError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function startGoogle(event: FormEvent<HTMLFormElement>) {
-    if (!csrfToken) {
-      event.preventDefault();
-      setCsrfError(true);
+  async function checkNumber(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!normPhone(phone, cc)) {
+      setError(phoneError(cc));
       return;
     }
     setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/phone", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone, cc }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { ok?: boolean; exists?: boolean; error?: string };
+      if (!body.ok) {
+        setError(body.error ?? "Could not check that number. Please try again.");
+        return;
+      }
+      setPin("");
+      setStep(body.exists ? "pin" : "new");
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const message = csrfError
-    ? "Couldn't start Google sign-in."
-    : initialError
-      ? (ERROR_TEXT[initialError] ?? "Sign-in didn't finish. Continue once more.")
-      : null;
+  async function submitPin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const problem =
+      step === "new"
+        ? !name.trim()
+          ? "Please type your name."
+          : pinError(pin)
+        : pin.length === PIN_LEN
+          ? null
+          : `Your PIN is ${PIN_LEN} numbers.`;
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await signIn("phone", {
+        redirect: false,
+        phone,
+        cc,
+        pin,
+        ...(step === "new" ? { name: name.trim() } : {}),
+        callbackUrl,
+      });
+      if (res?.ok && !res.error) {
+        window.location.assign(callbackUrl);
+        return;
+      }
+      setPin("");
+      setError(
+        res?.error && res.error !== "CredentialsSignin"
+          ? res.error
+          : "That did not work. Check your number and PIN and try again.",
+      );
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function changeNumber() {
+    setStep("phone");
+    setPin("");
+    setError(null);
+  }
 
   return (
     <div className="min-h-screen bg-background-base flex flex-col items-center justify-center px-4 relative overflow-hidden">
@@ -87,42 +141,117 @@ export function SignInClient({
 
         <div className="bg-background-surface border border-border-default rounded-card p-8 shadow-elevated">
           <h2 className="text-text-primary font-semibold text-base mb-1 text-center">
-            Sign in to continue
+            {step === "new" ? "Create your account" : "Sign in to continue"}
           </h2>
           <p className="text-text-muted text-xs text-center mb-6">
-            One Google step. It asks for your name and email, then opens your workspace.
+            {step === "phone"
+              ? "Type your mobile number."
+              : step === "pin"
+                ? `Type your ${PIN_LEN}-digit PIN.`
+                : `New number. Type your name and choose a ${PIN_LEN}-digit PIN.`}
           </p>
 
-          {message && (
+          {error && (
             <div
               role="alert"
               className="mb-5 p-3 bg-accent-red/10 border border-accent-red/20 rounded-input text-accent-red text-sm text-center"
             >
-              {message}
-              {initialError && !csrfError && (
-                <p className="mt-1 text-xs text-text-muted">{initialError}</p>
-              )}
+              {error}
             </div>
           )}
 
-          {/* Native POST. fetch(signIn) set the state cookie on a background
-              response that Chrome dropped on the way back from Google. */}
-          <form
-            method="post"
-            action="/api/auth/signin/google"
-            className="w-full"
-            onSubmit={startGoogle}
-          >
-            <input type="hidden" name="csrfToken" value={csrfToken} />
-            <input type="hidden" name="callbackUrl" value={callbackUrl} />
-            <button
-              type="submit"
-              disabled={busy || !csrfToken}
-              className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
-            >
-              {busy ? "Opening Google…" : "Continue with Google"}
-            </button>
-          </form>
+          {step === "phone" ? (
+            <form className="w-full space-y-3" onSubmit={checkNumber} noValidate>
+              <div className="flex gap-2">
+                <label className="sr-only" htmlFor="signin-cc">
+                  Country code
+                </label>
+                <select
+                  id="signin-cc"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  className={`${inputClass} w-28 shrink-0`}
+                >
+                  {Object.entries(PHONE_CC).map(([code, r]) => (
+                    <option key={code} value={code}>
+                      {code} {r.name}
+                    </option>
+                  ))}
+                </select>
+                <label className="sr-only" htmlFor="signin-phone">
+                  Mobile number
+                </label>
+                <input
+                  id="signin-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  placeholder="Mobile number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={inputClass}
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={busy || !phone.trim()}
+                className="w-full flex items-center justify-center bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {busy ? "Checking…" : "Continue"}
+              </button>
+            </form>
+          ) : (
+            <form className="w-full space-y-3" onSubmit={submitPin} noValidate>
+              <p className="text-text-secondary text-sm text-center">
+                {cc} {phone}{" "}
+                <button type="button" onClick={changeNumber} className="text-accent-blue underline">
+                  Change
+                </button>
+              </p>
+              {step === "new" && (
+                <>
+                  <label className="sr-only" htmlFor="signin-name">
+                    Your name
+                  </label>
+                  <input
+                    id="signin-name"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    maxLength={60}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={inputClass}
+                    autoFocus
+                  />
+                </>
+              )}
+              <label className="sr-only" htmlFor="signin-pin">
+                {PIN_LEN}-digit PIN
+              </label>
+              <input
+                id="signin-pin"
+                type="password"
+                inputMode="numeric"
+                pattern={`\\d{${PIN_LEN}}`}
+                maxLength={PIN_LEN}
+                autoComplete={step === "new" ? "new-password" : "current-password"}
+                placeholder={`${PIN_LEN}-digit PIN`}
+                value={pin}
+                onChange={(e) => setPin(digits(e.target.value, PIN_LEN))}
+                className={`${inputClass} text-center tracking-[0.5em]`}
+                autoFocus={step === "pin"}
+              />
+              <button
+                type="submit"
+                disabled={busy || pin.length !== PIN_LEN}
+                className="w-full flex items-center justify-center bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-white text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+              >
+                {busy ? "Signing in…" : step === "new" ? "Create account" : "Sign in"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

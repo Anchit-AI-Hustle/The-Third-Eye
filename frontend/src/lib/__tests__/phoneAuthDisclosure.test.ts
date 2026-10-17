@@ -324,9 +324,7 @@ describe("spending a try", () => {
     expect(rpc).toHaveBeenCalledWith("phone_pin_ok", { p_id: expect.any(String) });
   });
 
-  it("clears the count, the lock AND the escalation ladder on the right PIN", async () => {
-    // Without the ladder reset, one bad afternoon would leave a real person on
-    // 24-hour locks for ever.
+  it("clears the count and the lock on the right PIN", async () => {
     const { enter } = await import("@/lib/phoneAuth");
     const res = await enter({ phone: PHONE, pin: PIN, ip: "203.0.113.9" });
     expect(res.ok).toBe(true);
