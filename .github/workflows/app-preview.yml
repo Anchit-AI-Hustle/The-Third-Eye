@@ -2,16 +2,20 @@ name: App preview
 # Launches both native apps on real emulators and saves what they show:
 # the Android app on an emulator (Linux runner, KVM) and the iOS app on the
 # iOS Simulator (macOS runner). Screenshots and a screen recording of the
-# first seconds are uploaded as the "android-preview" and "ios-preview" artifacts.
+# first seconds are uploaded as the "android-preview" and "ios-preview" artifacts,
+# and the screenshots are also pushed to the app-previews branch for quick viewing.
 on:
   workflow_dispatch: {}
   pull_request:
     paths: [".github/workflows/app-preview.yml"]
 permissions:
   contents: read
+concurrency: app-previews
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -42,6 +46,17 @@ jobs:
             adb exec-out screencap -p > preview/android-home.png
             adb shell input swipe 540 1600 540 600 400; sleep 4
             adb exec-out screencap -p > preview/android-scrolled.png
+      - name: Push screenshots to the app-previews branch
+        env:
+          PLATFORM: android
+        run: |
+          git fetch origin app-previews || true
+          git worktree add -B app-previews ../shots origin/app-previews 2>/dev/null || { git worktree add --detach ../shots && git -C ../shots checkout --orphan app-previews && git -C ../shots rm -rfq . ; }
+          mkdir -p ../shots/$PLATFORM && cp preview/*.png ../shots/$PLATFORM/
+          cd ../shots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $PLATFORM && git commit -qm "$PLATFORM preview from ${{ github.sha }}" && git push origin app-previews
       - uses: actions/upload-artifact@v7
         with:
           name: android-preview
@@ -49,7 +64,10 @@ jobs:
           if-no-files-found: error
 
   ios:
+    needs: android
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -73,6 +91,17 @@ jobs:
           sleep 40
           kill -INT $REC; sleep 3
           xcrun simctl io "$UDID" screenshot preview/ios-home.png
+      - name: Push screenshots to the app-previews branch
+        env:
+          PLATFORM: ios
+        run: |
+          git fetch origin app-previews || true
+          git worktree add -B app-previews ../shots origin/app-previews 2>/dev/null || { git worktree add --detach ../shots && git -C ../shots checkout --orphan app-previews && git -C ../shots rm -rfq . ; }
+          mkdir -p ../shots/$PLATFORM && cp preview/*.png ../shots/$PLATFORM/
+          cd ../shots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $PLATFORM && git commit -qm "$PLATFORM preview from ${{ github.sha }}" && git push origin app-previews
       - uses: actions/upload-artifact@v7
         with:
           name: ios-preview
