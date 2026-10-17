@@ -71,16 +71,29 @@ export function judgeRun(run: AutopilotRun): { status: AutopilotStatus; report: 
 
 type Effect = { type: string; data?: Record<string, any> };
 
+const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+/** Urgent first, then high; within a priority the earliest (most overdue) due date first. */
+export function workOrder<T extends { priority?: string | null; due_date?: string | null }>(tasks: T[]): T[] {
+  return [...tasks].sort((a, b) =>
+    (PRIORITY_RANK[a.priority ?? ""] ?? 4) - (PRIORITY_RANK[b.priority ?? ""] ?? 4)
+    || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+}
+
+/** Where to reach /api/chat: the browser's own session, or a server run with a scoped bearer token. */
+export interface ChatTarget { url: string; headers?: Record<string, string>; timezone: string; signal?: AbortSignal }
+
 /** One autopilot turn through /api/chat as the given agent, read off its event stream. Each call is its own conversation. */
-export async function runThroughChat(task: AutopilotTask, agent?: { id: string; name: string; personality: string }): Promise<{ run: AutopilotRun; effects: Effect[] }> {
+export async function runThroughChat(task: AutopilotTask, agent?: { id: string; name: string; personality: string }, target?: ChatTarget): Promise<{ run: AutopilotRun; effects: Effect[] }> {
   const run: AutopilotRun = { text: "", checklist: [], confirms: [], links: [] };
   let effects: Effect[] = [];
   try {
-    const res = await fetch("/api/chat", {
+    const res = await fetch(target?.url ?? "/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...target?.headers },
+      signal: target?.signal,
       body: JSON.stringify({
-        message: autopilotPrompt(task), history: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        message: autopilotPrompt(task), history: [], timezone: target?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(agent ? { agentId: agent.id, agentName: agent.name, agentPersona: agent.personality } : {}),
       }),
     });
