@@ -765,7 +765,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 if (media.length) {
                   setMessages((prev) => prev.map((m) => {
                     if (m.id !== assistantId) return m;
-                    const missing = media.map((x: { url: string }) => x.url).filter((u: string) => !m.content.includes(u));
+                    // Photos from the person's library show only as thumbnails, not as links in the text.
+                    const missing = media.map((x: { url: string }) => x.url).filter((u: string) => !m.content.includes(u) && !u.startsWith("/api/photos/"));
                     return { ...m, media, content: missing.length ? `${m.content}\n\n${missing.join("\n")}` : m.content };
                   }));
                 }
@@ -1490,21 +1491,25 @@ function MessageBubble({
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
               {message.saved?.map((f, i) => <FileCard key={i} file={f} claimAuto={() => freshFiles.delete(`${message.id}:${i}`)} />)}
-              {message.media?.map((item) => (
-                <div key={item.url} className="mt-2">
-                  {item.kind === "audio" ? (
-                    <audio src={item.url} controls className="w-full" />
-                  ) : item.kind === "video" ? (
-                    <video src={item.url} controls className="w-full rounded-input" />
-                  ) : (
-                    <img src={item.url} alt={item.alt || ""} className="max-w-full rounded-input" />
-                  )}
-                  <button type="button" onClick={() => { void saveMedia(item.url, item.alt || item.kind); }}
-                    className="mt-1 text-[11px] text-text-muted hover:text-text-primary">
-                    Download
-                  </button>
+              {message.media && (
+                <div className={cn(message.media.length > 1 && message.media.every((m) => m.kind === "image") && "grid grid-cols-3 gap-1.5")}>
+                  {message.media.map((item) => (
+                    <div key={item.url} className="mt-2">
+                      {item.kind === "audio" ? (
+                        <audio src={item.url} controls className="w-full" />
+                      ) : item.kind === "video" ? (
+                        <video src={item.url} controls className="w-full rounded-input" />
+                      ) : (
+                        <img src={item.url} alt={item.alt || ""} className="max-w-full rounded-input" />
+                      )}
+                      <button type="button" onClick={() => { void saveMedia(item.url, item.alt || item.kind); }}
+                        className="mt-1 text-[11px] text-text-muted hover:text-text-primary">
+                        Download
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
               {message.links && message.links.length > 0 && (
                 <div className="flex flex-col gap-2.5 mt-3 pt-2.5 border-t border-border-default/60">
                   <div className="flex flex-wrap gap-2">

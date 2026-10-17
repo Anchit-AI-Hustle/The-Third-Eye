@@ -414,6 +414,20 @@ export const geminiTools = [
         },
       },
       {
+        name: "search_photos",
+        description: "Find the user's own photos synced from their iPhone, by date, place or favourites, and show them.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            from: { type: "STRING", description: "Earliest date taken, YYYY-MM-DD" },
+            to: { type: "STRING", description: "Latest date taken, YYYY-MM-DD" },
+            place: { type: "STRING", description: "Place the photos were taken near, e.g. a city" },
+            favorite: { type: "BOOLEAN", description: "Only favourites" },
+            limit: { type: "NUMBER", description: "How many to show, up to 24 (default 12)" },
+          },
+        },
+      },
+      {
         name: "get_news",
         description: "Latest news headlines. Pass a topic or omit for top news.",
         parameters: {
