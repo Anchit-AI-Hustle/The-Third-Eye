@@ -8,6 +8,7 @@ import type { StudioTool } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags } from "@/hooks/useModeTags";
 import { dataSave } from "@/lib/dataClient";
+import { openFileTab } from "@/lib/fileSave";
 import { recordGeneration, fieldsFrom } from "@/lib/generations";
 import { VideoScenes } from "@/components/studio/VideoScenes";
 import { BookWriter } from "@/components/studio/BookWriter";
@@ -144,7 +145,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
                 {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />} {copied ? "Copied" : "Copy"}
               </button>
               {tool.format === "html" && (
-                <button onClick={() => { const blob = new Blob([output], { type: "text/html" }); window.open(URL.createObjectURL(blob), "_blank"); }} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
+                <button onClick={() => openFileTab({ filename: `${tool.label}.html`, mime: "text/html", content: output })} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
                   <Eye size={11} /> Open
                 </button>
               )}

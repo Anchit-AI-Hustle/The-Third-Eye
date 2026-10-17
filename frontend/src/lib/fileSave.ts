@@ -41,8 +41,18 @@ export function viewerHtml(f: SavedFile): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(f.filename)}</title><style>body{margin:0;background:#fff}pre{margin:0;padding:16px;font:13px/1.5 ui-monospace,monospace;white-space:pre-wrap}</style></head><body>${body}</body></html>`;
 }
 
+/** Opens the file in a new tab, model-written HTML inside the sandbox. */
+export function openFileTab(f: SavedFile, tab: Window | null = window.open("", "_blank")): boolean {
+  if (!tab) return false;
+  tab.opener = null;
+  tab.document.write(viewerHtml(f));
+  tab.document.close();
+  return true;
+}
+
 /** Saves the file through the browser's download, and opens it in a new tab if asked. */
 export function deliverFile(f: SavedFile, { open }: { open: boolean }): { downloaded: boolean; opened: boolean } {
+  // Opened before the download so the pop-up still counts as the user's click.
   const tab = open ? window.open("", "_blank") : null;
   const url = URL.createObjectURL(new Blob([f.content], { type: f.mime || "text/plain" }));
   const a = document.createElement("a");
@@ -52,10 +62,5 @@ export function deliverFile(f: SavedFile, { open }: { open: boolean }): { downlo
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  if (tab) {
-    tab.opener = null;
-    tab.document.write(viewerHtml(f));
-    tab.document.close();
-  }
-  return { downloaded: true, opened: !!tab };
+  return { downloaded: true, opened: open && openFileTab(f, tab) };
 }

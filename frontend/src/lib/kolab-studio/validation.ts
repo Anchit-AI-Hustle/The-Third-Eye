@@ -4,6 +4,16 @@
 
 import { z } from "zod";
 
+
+// Links shown on public pages must be web links: "javascript:" passes .url()
+// and would run in a follower's browser when they click Shop.
+const httpUrl = z.string().trim().url("Invalid URL").max(2048).refine((v) => /^https?:\/\//i.test(v), "Use a link that starts with https://");
+
+/** A stored link that is safe to render as href, or undefined. */
+export function safeHref(v: string | null | undefined): string | undefined {
+  return v && /^https?:\/\//i.test(v.trim()) ? v.trim() : undefined;
+}
+
 export const otpSchema = z
   .string()
   .trim()
@@ -37,7 +47,7 @@ export const profileUpdateSchema = z.object({
     .optional(),
   pincode: pincodeSchema.optional(),
   address: z.string().trim().max(240).optional(),
-  website_url: z.string().trim().url("Invalid URL").max(2048).optional(),
+  website_url: httpUrl.optional(),
 });
 
 export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;
@@ -93,7 +103,7 @@ export const dealCreateSchema = z
     code: z.string().trim().max(40).optional().default(""),
     discount: z.string().trim().max(40).optional().default(""),
     price: z.string().trim().max(40).optional().default(""),
-    affiliate_url: z.string().trim().url("Invalid URL").max(2048).optional().or(z.literal("")),
+    affiliate_url: httpUrl.optional().or(z.literal("")),
   })
   .refine((d) => d.brand || d.product, { message: "Add a brand or product" });
 

@@ -62,6 +62,8 @@ Design a retention, CRM & loyalty program as Markdown:
   }
 }
 
+const MODES: KolabMode[] = ["lifecycle", "creator", "brandplan", "retention"];
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -69,8 +71,11 @@ export async function POST(req: NextRequest) {
   let body: { mode?: KolabMode; brand?: BrandProfile; brief?: string };
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   const mode = body.mode ?? "lifecycle";
+  if (!MODES.includes(mode)) return Response.json({ error: `Unknown mode. Use one of: ${MODES.join(", ")}.` }, { status: 400 });
   const brand = body.brand;
   if (!brand?.name?.trim()) return Response.json({ error: "A brand name is required" }, { status: 400 });
+  // Every free provider would be sent this, so keep it to a brand profile's size.
+  if (JSON.stringify(brand).length > 6000) return Response.json({ error: "The brand profile is too long. Shorten it and try again." }, { status: 400 });
 
   try {
     const out = await llmCascade({

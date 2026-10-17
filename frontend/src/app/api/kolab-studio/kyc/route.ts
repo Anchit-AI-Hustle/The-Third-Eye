@@ -22,6 +22,10 @@ export async function POST(req: Request) {
     const provider = getKycProvider();
     const admin = kolabDb();
 
+    // Without a licensed provider no OTP can be sent; say so instead of storing
+    // a consent and a pending check for a code that will never arrive.
+    if (!provider.configured) return fail("Aadhaar verification isn't available yet. Nothing was sent or stored.", 501);
+
     if (raw.action === "initiate") {
       const { aadhaar } = kycInitiateSchema.parse(raw); // consent:true enforced by schema
       const { referenceId } = await provider.initiate({ aadhaar, consent: true });

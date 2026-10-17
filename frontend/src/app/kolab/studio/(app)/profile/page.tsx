@@ -1,5 +1,6 @@
 // web/app/(app)/profile/page.tsx — the public-facing profile as brands/followers see it.
 import { Card, Eyebrow, Pill } from "@/components/kolab-studio/ui";
+import { safeHref } from "@/lib/kolab-studio/validation";
 import { getMyProfile, getEntitlementContext } from "@/lib/kolab-studio/db";
 import { getChannels } from "@/lib/kolab-studio/studio";
 import { CHANNELS } from "@/lib/kolab-studio/content";
@@ -32,11 +33,11 @@ export default async function ProfilePage() {
           <h2 className="text-[26px]">{name}</h2>
           <div className="my-2.5 font-kolab-mono text-[12px] text-kolab-muted">
             {p?.handle || "@—"}
-            {p?.website_url && (
+            {safeHref(p?.website_url) && (
               <>
                 {" · "}
-                <a href={p.website_url} target="_blank" rel="noopener" className="text-kolab-lime">
-                  {p.website_url}
+                <a href={safeHref(p?.website_url)} target="_blank" rel="noopener" className="text-kolab-lime">
+                  {p?.website_url}
                 </a>
               </>
             )}

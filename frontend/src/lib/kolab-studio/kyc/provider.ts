@@ -22,6 +22,8 @@ export interface KycVerifyResult {
 
 export interface KycProvider {
   readonly name: string;
+  /** False until a licensed provider is wired: no OTP can be sent. */
+  readonly configured: boolean;
   /** Trigger the UIDAI OTP via the provider. Returns a reference; the Aadhaar number is not retained. */
   initiate(input: { aadhaar: string; consent: true }): Promise<KycInitiateResult>;
   /** Exchange reference + OTP for the verified eKYC result. */
@@ -32,6 +34,7 @@ export interface KycProvider {
  *  unless KOLAB_DEV_MODE is on (for local demos). Real provider wiring lands in Phase 2. */
 class StubKycProvider implements KycProvider {
   readonly name = "stub";
+  readonly configured = (process.env.KOLAB_DEV_MODE ?? "false").toLowerCase() === "true";
   async initiate(): Promise<KycInitiateResult> {
     return { referenceId: `stub_${crypto.randomUUID()}` };
   }

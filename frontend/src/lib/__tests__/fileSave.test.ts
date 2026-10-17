@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeFilename, viewerHtml, MAX_FILE_CHARS, forHistory, KEEP_FILE_CHARS } from "@/lib/fileSave";
+import { safeFilename, viewerHtml, MAX_FILE_CHARS, forHistory, KEEP_FILE_CHARS, openFileTab } from "@/lib/fileSave";
 
 describe("files JARVIS saves for the user", () => {
   it("keeps a plain name and its extension, and strips any path", () => {
@@ -32,5 +32,15 @@ describe("files JARVIS saves for the user", () => {
     const small = { filename: "a.csv", mime: "text/csv", content: "a,b" };
     const big = { filename: "b.html", mime: "text/html", content: "x".repeat(KEEP_FILE_CHARS + 1) };
     expect(forHistory([small, big])).toEqual([small, { ...big, content: "" }]);
+  });
+
+  it("opens model-written HTML only inside the sandbox, cut off from the app", () => {
+    let html = "";
+    const tab = { opener: {}, document: { write: (h: string) => { html = h; }, close: () => {} } } as unknown as Window;
+    expect(openFileTab({ filename: "page.html", mime: "text/html", content: "<script>steal()</script>" }, tab)).toBe(true);
+    expect(tab.opener).toBeNull();
+    expect(html).toMatch(/<iframe sandbox="allow-scripts[^"]*"/);
+    expect(html).not.toContain("allow-same-origin");
+    expect(html).not.toContain("<script>steal()");
   });
 });
