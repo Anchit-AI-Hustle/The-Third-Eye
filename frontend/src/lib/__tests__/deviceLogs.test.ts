@@ -31,6 +31,7 @@ describe("AI Log Sync with malformed model output", () => {
     cascade.mockResolvedValue({ text: '{"summary":"s","task_updates":[],"new_tasks":[]}' });
     await summarizeDeviceLogs("u@x.com");
     expect(cascade.mock.calls[0][0]).toMatchObject({ jsonMode: true });
+    expect(cascade.mock.calls[0][0].system).not.toMatch(/Vahdam|Anchit/);
     expect(cascade.mock.calls[0][0].maxTokens).toBeGreaterThanOrEqual(3000);
   });
 

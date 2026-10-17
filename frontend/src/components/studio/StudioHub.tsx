@@ -24,13 +24,13 @@ const ICONS: Record<string, LucideIcon> = {
 // only (Personal → Hobby Studio, Professional → Startup Studio, Enterprise →
 // Office Studio). A tab row lets you switch studios, which switches the app mode.
 const ORDER: ModeId[] = ["professional", "enterprise", "personal"];
-const ALL = [...STUDIO_TOOLS, ...STUDIO_LINKS];
 
-export function StudioHub() {
+export function StudioHub({ showAnchor }: { showAnchor: boolean }) {
   const { modeId, setMode } = useMode();
   const studio = STUDIOS[modeId];
   const StudioIcon = ICONS[studio.icon] ?? Rocket;
-  const tools = ALL.filter((t) => t.mode === modeId);
+  const all = [...STUDIO_TOOLS, ...(showAnchor ? STUDIO_LINKS : [])];
+  const tools = all.filter((t) => t.mode === modeId);
 
   return (
     <div className="space-y-6">
@@ -40,7 +40,7 @@ export function StudioHub() {
           const s = STUDIOS[m];
           const Icon = ICONS[s.icon] ?? Rocket;
           const active = modeId === m;
-          const count = ALL.filter((t) => t.mode === m).length;
+          const count = all.filter((t) => t.mode === m).length;
           return (
             <button
               key={m}

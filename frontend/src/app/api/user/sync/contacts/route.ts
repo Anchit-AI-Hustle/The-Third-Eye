@@ -18,14 +18,6 @@ export interface DeviceContactRecord {
 
 const MEMORY_KEY = "device_contacts";
 
-export const ESSENTIAL_CONTACT_RECORDS: DeviceContactRecord[] = [
-  { id: "c_mom", name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_dad", name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_rohit", name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_aviral", name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_emergency", name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-];
-
 export async function GET() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
@@ -35,7 +27,7 @@ export async function GET() {
 
   const db = getDb();
   if (!db) {
-    return NextResponse.json({ ok: false, error: "Database not configured", contacts: ESSENTIAL_CONTACT_RECORDS }, { status: 501 });
+    return NextResponse.json({ ok: false, error: "Database not configured", contacts: [] }, { status: 501 });
   }
 
   const { data, error } = await db

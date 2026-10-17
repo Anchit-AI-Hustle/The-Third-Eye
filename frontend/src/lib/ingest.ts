@@ -73,6 +73,7 @@ export async function scrapeGmailForUser(sb: Sb, email: string) {
     const msg = await fetchMessage(tok.accessToken, id);
     if (msg) {
       const ex = await extractEmailTasks({
+        email,
         sender: msg.from,
         subject: msg.subject,
         receivedAt: msg.receivedAt,

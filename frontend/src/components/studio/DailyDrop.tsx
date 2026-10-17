@@ -90,7 +90,7 @@ export function DailyDrop({ preset, context = {} }: { preset: () => Record<strin
           value={refs} context={context} onChange={setRefs} />
       </div>
       <input value={refs} onChange={(e) => setRefs(e.target.value)} maxLength={300}
-        placeholder="Your tracks it should sound like — e.g. Project Mayhem, Underground Fever Dream"
+        placeholder="Artists or tracks it should sound like"
         className="w-full bg-background-base border border-border-default rounded-input px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted outline-none focus:border-[#34D399]" />
       <div className="flex flex-wrap gap-2">
         <button onClick={() => act("save")} disabled={!!busy}

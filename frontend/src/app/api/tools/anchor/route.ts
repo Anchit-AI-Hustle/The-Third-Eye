@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { anchorOverview, runAnchor, type AnchorRequest } from "@/lib/anchor";
+import { anchorOverview, isAnchorOperator, runAnchor, type AnchorRequest } from "@/lib/anchor";
 
 export const runtime = "nodejs";
 
@@ -15,6 +15,8 @@ async function user() {
 export async function GET() {
   const u = await user();
   if (!u) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  // ANCHOR is one operator's own release robot, not a feature of every account.
+  if (!isAnchorOperator(u)) return Response.json({ error: "ANCHOR is not available on this account." }, { status: 403 });
   try {
     return Response.json(await anchorOverview(u));
   } catch (e) {

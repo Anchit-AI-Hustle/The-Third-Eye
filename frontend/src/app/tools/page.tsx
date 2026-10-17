@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { StudioHub } from "@/components/studio/StudioHub";
+import { isAnchorOperator } from "@/lib/anchor";
 
 export const metadata = { title: "Studio — The Third Eye" };
 
@@ -20,7 +21,7 @@ export default async function ToolsPage() {
           Tools for your current mode — switch modes to see the Startup, Office or Hobby studio
         </p>
       </div>
-      <StudioHub />
+      <StudioHub showAnchor={isAnchorOperator(session.user?.email)} />
     </div>
   );
 }

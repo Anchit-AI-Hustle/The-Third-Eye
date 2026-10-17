@@ -50,7 +50,7 @@ describe("DeviceSyncCard", () => {
     const addBtn = screen.getByRole("button", { name: /Add Contact/i });
     fireEvent.click(addBtn);
 
-    const nameInput = screen.getByPlaceholderText(/Name \(e\.g\. Rohit Sharma/i);
+    const nameInput = screen.getByPlaceholderText(/Name \(e\.g\. Priya Sharma/i);
     const phoneInput = screen.getByPlaceholderText(/Phone \(e\.g\. \+91/i);
 
     fireEvent.change(nameInput, { target: { value: "Rohit Sharma" } });
@@ -70,7 +70,7 @@ describe("DeviceSyncCard", () => {
     const pasteBtn = screen.getByRole("button", { name: /Paste/i });
     fireEvent.click(pasteBtn);
 
-    const textarea = screen.getByPlaceholderText(/Aviral Vahdam/i);
+    const textarea = screen.getByPlaceholderText(/Priya Sharma, \+91/i);
     fireEvent.change(textarea, {
       target: {
         value: "Aviral Vahdam, +91 9811122334\nMom, +1 555 123 4567",

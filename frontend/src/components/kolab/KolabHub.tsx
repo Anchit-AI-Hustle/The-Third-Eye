@@ -76,7 +76,7 @@ export function KolabHub() {
           <div className="mt-3 space-y-2.5">
             <p className="text-[11px] text-text-muted">Adapts everything to <em>your</em> brand — enter any company, saved on your device.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <F label="Brand name *"><input value={brand.name} onChange={(e) => set("name")(e.target.value)} className={inp} placeholder="e.g. Vahdam India (or any brand)" /></F>
+              <F label="Brand name *"><input value={brand.name} onChange={(e) => set("name")(e.target.value)} className={inp} placeholder="e.g. Your brand name" /></F>
               <F label="Industry"><input value={brand.industry ?? ""} onChange={(e) => set("industry")(e.target.value)} className={inp} placeholder="e.g. D2C wellness tea" /></F>
               <F label="Product / what you sell"><input value={brand.product ?? ""} onChange={(e) => set("product")(e.target.value)} className={inp} /></F>
               <F label="Target audience"><input value={brand.audience ?? ""} onChange={(e) => set("audience")(e.target.value)} className={inp} /></F>

@@ -106,7 +106,6 @@ const SUGGESTIONS = [
   "Help me plan my week",
   "Search my knowledge base",
   "Draft a follow-up email",
-  "Write a mail to anchit.tandon@gmail.com and anchit.tandon@vahdam.com that test-mail by Jarvis",
 ];
 
 const LANGUAGES = [
