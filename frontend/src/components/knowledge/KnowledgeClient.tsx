@@ -7,6 +7,7 @@ import { useLocalKnowledge, searchDocs, type SearchResult } from "@/hooks/useLoc
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { localDay } from "@/lib/localDay";
 
 export function KnowledgeClient() {
   const { docs, ready, uploading, upload, remove } = useLocalKnowledge();
@@ -86,7 +87,7 @@ export function KnowledgeClient() {
     const combined = docs.map((d) => `=== ${d.title} ===\n\n${d.content}`).join("\n\n" + "=".repeat(60) + "\n\n");
     const blob = new Blob([combined], { type: "text/plain" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `thirdeye-knowledge-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `thirdeye-knowledge-${localDay()}.txt`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 

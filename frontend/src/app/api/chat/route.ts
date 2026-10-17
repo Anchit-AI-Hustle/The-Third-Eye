@@ -20,6 +20,7 @@ import { attachedText, attachmentsAsText, cleanAttachments, geminiParts, isTextA
 import { runBusinessAgent } from "@/lib/businessAgents";
 import { geminiTools } from "@/lib/tools/schemas";
 import { checkArgs, parseToolArgs } from "@/lib/tools/args";
+import { localDay, validZone } from "@/lib/localDay";
 import { appInventory } from "@/lib/tools/inventory";
 import { resolveTask } from "@/lib/tools/taskMatch";
 import { todayBlock } from "@/lib/tools/today";
@@ -366,17 +367,8 @@ async function sendEmail(accessToken: string | undefined, to: string, subject: s
 
 // ─── Request context ─────────────────────────────────────────────────────────
 
-function validZone(tz?: string): string {
-  try { if (tz) { new Intl.DateTimeFormat("en-IN", { timeZone: tz }); return tz; } } catch {}
-  return "UTC";
-}
-
 function formatWhen(iso: string, tz?: string): string {
-  return new Date(iso).toLocaleString("en-IN", { timeZone: validZone(tz), day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
-}
-
-function localDate(tz?: string): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: validZone(tz) });
+  return new Date(iso).toLocaleString("en-IN", { timeZone: validZone(tz) ?? "UTC", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" });
 }
 
 // The user's own rows, read from the database by the session identity. The
@@ -563,7 +555,7 @@ async function runTool(
           category: input.category ?? "Other",
           note: input.note,
           gst_rate: rate > 0 ? rate : undefined,
-          spent_on: input.spent_on ?? localDate(ctx.timezone),
+          spent_on: input.spent_on ?? localDay(new Date(), ctx.timezone),
         };
         ctx.expenses.unshift(expense);
         const gstNote = rate > 0 ? ` (incl. ${rate}% GST ≈ ₹${Math.round(gstBreakup(amount, rate, "remove").gst)})` : "";
@@ -573,7 +565,7 @@ async function runTool(
         };
       }
       // summary — this calendar month
-      const month = localDate(ctx.timezone).slice(0, 7);
+      const month = localDay(new Date(), ctx.timezone).slice(0, 7);
       const rows = (ctx.expenses ?? []).filter((e) => (e.spent_on ?? "").startsWith(month));
       if (rows.length === 0) return { result: `No expenses logged for ${month} yet.` };
       const total = rows.reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -1986,7 +1978,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (expenses.length > 0) {
-    const m = new Date().toISOString().slice(0, 7);
+    const m = localDay(new Date(), timezone || req.headers.get("x-vercel-ip-timezone") || undefined).slice(0, 7);
     const mrows = expenses.filter((e) => (e.spent_on ?? "").startsWith(m));
     if (mrows.length > 0) {
       const spent = mrows.reduce((s, e) => s + Number(e.amount || 0), 0);

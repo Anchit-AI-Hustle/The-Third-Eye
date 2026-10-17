@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
+import { localDay } from "@/lib/localDay";
 
 // `review` sits between in_progress and done, matching the board at
 // /board on the Personal AI OS. tasks.status is a free-text column with no
@@ -61,7 +62,7 @@ function lsSet(key: string, v: unknown) { localStorage.setItem(key, JSON.stringi
  */
 export function withCompletionStamp(patch: Partial<LocalTask>): Partial<LocalTask> {
   if (!patch.status || patch.completed_at !== undefined) return patch;
-  if (patch.status === "done") return { ...patch, completed_at: new Date().toISOString().slice(0, 10) };
+  if (patch.status === "done") return { ...patch, completed_at: localDay() };
   return { ...patch, completed_at: "" };
 }
 

@@ -10,6 +10,7 @@ import { gstBreakup } from "@/lib/calculators/formulas";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { localDay } from "@/lib/localDay";
 
 const CATEGORIES = [
   "Food", "Groceries", "Transport", "Shopping", "Bills",
@@ -31,7 +32,7 @@ const META: Record<Category, { color: string; icon: typeof Utensils }> = {
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 const money = (n: number) => `₹${inr.format(Math.round(n))}`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => localDay();
 
 const GST_RATES = [0, 5, 12, 18, 28, 40] as const;
 // GST already sits inside the logged (tax-inclusive) amount, so back it out.
@@ -95,7 +96,7 @@ export function FinanceClient() {
     try {
       const res = await fetch("/api/finance/parse", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       if (res.ok) {
         const p = await res.json();

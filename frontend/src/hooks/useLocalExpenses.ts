@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
+import { localDay } from "@/lib/localDay";
 
 export interface Expense {
   id: string;
@@ -69,7 +70,7 @@ export function useLocalExpenses() {
       category: data.category || "Other",
       note: data.note?.trim() || undefined,
       gst_rate: data.gst_rate && data.gst_rate > 0 ? data.gst_rate : undefined,
-      spent_on: data.spent_on || new Date().toISOString().slice(0, 10),
+      spent_on: data.spent_on || localDay(),
       created_at: new Date().toISOString(),
     };
     setExpenses((prev) => {

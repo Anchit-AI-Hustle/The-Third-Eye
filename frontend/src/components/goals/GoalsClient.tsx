@@ -7,6 +7,7 @@ import { useLocalGoals, Goal } from "@/hooks/useLocalGoals";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { localDay } from "@/lib/localDay";
 
 const CATEGORIES = ["Career", "Health", "Finance", "Learning", "Personal", "Business"];
 
@@ -42,7 +43,7 @@ export function GoalsClient() {
     );
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `thirdeye-goals-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `thirdeye-goals-${localDay()}.csv`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 

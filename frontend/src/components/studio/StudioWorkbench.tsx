@@ -13,6 +13,7 @@ import { recordGeneration, fieldsFrom } from "@/lib/generations";
 import { VideoScenes } from "@/components/studio/VideoScenes";
 import { BookWriter } from "@/components/studio/BookWriter";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
+import { localDay } from "@/lib/localDay";
 
 export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const { modeId } = useMode();
@@ -66,7 +67,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
     const blob = new Blob([output], { type: mime });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${tool.id}-${new Date().toISOString().slice(0, 10)}.${tool.downloadExt}`;
+    a.download = `${tool.id}-${localDay()}.${tool.downloadExt}`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 

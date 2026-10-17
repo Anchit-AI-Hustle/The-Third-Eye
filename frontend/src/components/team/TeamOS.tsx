@@ -14,6 +14,7 @@ import {
 import { useBilling } from "@/lib/billing/useBilling";
 import { TIER_ORDER, type Tier } from "@/lib/billing/plans";
 import { Paywall } from "@/components/billing/Paywall";
+import { localDay } from "@/lib/localDay";
 
 // The Enterprise-mode Team OS. Gated: the module needs Pro (core team tracking);
 // OKRs + the long-range roadmap (3y/5y/10y) need Max (full depth). PIN unlock
@@ -51,7 +52,7 @@ export function TeamOS() {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `teamos-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `teamos-${localDay()}.json`;
     a.click(); URL.revokeObjectURL(url);
   }
 

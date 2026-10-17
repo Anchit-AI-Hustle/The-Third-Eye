@@ -10,6 +10,7 @@ import { vaultGet, vaultSet } from "@/lib/deviceVault";
 import { recordSignal, personalizationContext, topValue } from "@/lib/personalization";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
 import { fieldsFrom, recordGeneration } from "@/lib/generations";
+import { localDay } from "@/lib/localDay";
 
 const APP = "health";
 
@@ -92,7 +93,7 @@ export function HealthEngine() {
     if (!plan) return;
     const blob = new Blob([plan], { type: "text/markdown" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `health-plan-${new Date().toISOString().slice(0, 10)}.md`; a.click(); URL.revokeObjectURL(a.href);
+    a.download = `health-plan-${localDay()}.md`; a.click(); URL.revokeObjectURL(a.href);
   }
 
   return (

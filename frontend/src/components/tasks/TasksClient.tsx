@@ -16,6 +16,7 @@ import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 import { AUTOPILOT_RUN, autopilotOff, setAutopilotOff } from "@/components/tasks/TaskAutopilot";
+import { localDay } from "@/lib/localDay";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -146,7 +147,7 @@ export function TasksClient() {
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `thirdeye-tasks-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `thirdeye-tasks-${localDay()}.csv`;
     a.click(); URL.revokeObjectURL(url);
   }
 
