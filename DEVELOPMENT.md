@@ -281,7 +281,7 @@ the self-built ones so they don't get buried in the third-party directory.
 
 `lib/ingest.ts` + `lib/tasks.ts` + `/api/cron/scrape-gmail` + `/api/ingest/run`:
 
-- Cron (GitHub Actions every 3 h, plus a daily Vercel cron), `IngestBridge` on app
+- Cron (GitHub Actions: reminders every 5 min, Gmail every 3 h; plus a daily Vercel cron), `IngestBridge` on app
   open/focus, and an on-demand "Scan now" pull unread Gmail from the last 2 days, run
   it through the LLM extractor, and dual-key **dedup/merge** into the `tasks` table
   (`dedupe_hash` + `normalize_heading` + owner match; owner-less tasks match on

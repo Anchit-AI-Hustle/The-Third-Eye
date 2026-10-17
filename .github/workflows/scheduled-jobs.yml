@@ -9,19 +9,12 @@ name: Scheduled jobs
 # fires even if this workflow is disabled), and this workflow drives the same
 # endpoints more often, for free, from GitHub Actions.
 #
-# The cadence is deliberately modest: private repositories draw on the
-# account's 2,000 free Actions minutes a month and every run is billed as a
-# whole minute, so */5 here would cost roughly 8,600 minutes. Every three
-# hours costs roughly 240.
-#
-# It was every two hours (360) until the account exhausted its allowance and
-# GitHub began refusing to start jobs at all — every check on main failing in
-# seconds with no runner assigned. Three hours is the compromise: the curl
-# below takes about five seconds, so this is billing twelve whole minutes a
-# day for under a minute of work, and the cost is entirely in how often it
-# fires. Reminders are the user-visible casualty — a reminder can now be up to
-# three hours late rather than two. Tighten it again if the allowance is
-# raised; the daily crons in frontend/vercel.json remain the floor either way.
+# Reminders every five minutes, GitHub's shortest schedule. Standard runners are free
+# for public repositories, and this one is public; the three-hourly cadence it
+# had was for the private repository's 2,000-minute allowance and made
+# reminders up to three hours late. If the repository goes private again, set
+# it back to "5 */3 * * *" or the allowance runs out within days. GitHub may
+# delay scheduled runs by a few minutes when it is busy.
 #
 # Setup - one repo secret (Settings -> Secrets and variables -> Actions):
 #   CRON_SECRET - the same value as the CRON_SECRET environment variable on
@@ -32,7 +25,11 @@ name: Scheduled jobs
 
 on:
   schedule:
-    - cron: "5 */3 * * *" # every three hours, off the hour
+    # Reminders every five minutes. The Gmail scan stays every three hours: that
+    # cadence is what the Google OAuth verification text declares
+    # (frontend/src/lib/oauthJustifications.ts), and it spends Gmail and AI quota.
+    - cron: "*/5 * * * *"
+    - cron: "2 */3 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -61,9 +58,9 @@ jobs:
           fi
 
           failed=0
-          for path in \
-            "/api/cron/dispatch?job=reminders" \
-            "/api/cron/scrape-gmail"
+          paths="/api/cron/dispatch?job=reminders"
+          [ "${{ github.event.schedule }}" = "*/5 * * * *" ] || paths="$paths /api/cron/scrape-gmail"
+          for path in $paths
           do
             echo "--- GET $path"
             code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 60 \
