@@ -62,7 +62,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       <div key={pathname} className="route-scan" aria-hidden="true" />
       <MotionNotice />
       {nativeApp && <NativeAutoSync />}
-      <BottomNav />
+      <BottomNav onMore={() => setMobileMenuOpen(true)} />
       <VoiceOverlay />
     </div>
   );

@@ -8,6 +8,7 @@ import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, Plug, PanelLeftClose, PanelLeftOpen,
   FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -28,24 +29,23 @@ interface NavItem {
 }
 interface NavGroup { title: string; items: NavItem[] }
 
-const NAV_GROUPS: NavGroup[] = [
+// The everyday screens stay in view; everything else sits under "More".
+const MAIN_ITEMS: NavItem[] = [
+  { label: "Today", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Assistant", href: "/assistant", icon: MessageSquare },
+  { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "Notes", href: "/notes", icon: FileText },
+  { label: "Knowledge", href: "/knowledge", icon: BookOpen },
+];
+
+const MORE_GROUPS: NavGroup[] = [
   {
-    title: "Overview",
+    title: "Personal",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Assistant", href: "/assistant", icon: MessageSquare },
+      { label: "Goals", href: "/goals", icon: Target },
+      { label: "Life Log", href: "/lifelog", icon: Radio },
       { label: "Online Agents", href: "/agents", icon: Bot },
       { label: "Generations", href: "/generations", icon: History },
-    ],
-  },
-  {
-    title: "Workspace",
-    items: [
-      { label: "Task Tracker", href: "/tasks", icon: CheckSquare },
-      { label: "Life Log", href: "/lifelog", icon: Radio },
-      { label: "Notes", href: "/notes", icon: FileText },
-      { label: "Goals", href: "/goals", icon: Target },
-      { label: "Knowledge", href: "/knowledge", icon: BookOpen },
     ],
   },
   {
@@ -113,12 +113,39 @@ function visibleItems(items: NavItem[], modeId: ModeId): NavItem[] {
   return items.filter((it) => !it.modes || it.modes.includes(modeId));
 }
 
+function NavLink({ item, active, collapsed, onNavigate }: { item: NavItem; active: boolean; collapsed: boolean; onNavigate?: () => void }) {
+  const { label, href, icon: Icon } = item;
+  return (
+    <Link href={href} title={collapsed ? label : undefined} aria-label={label}
+      onClick={() => onNavigate?.()}
+      className={cn(
+        "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
+        collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
+        active
+          ? "bg-[#4FC3F7]/10 text-[#4FC3F7] shadow-[inset_0_0_0_1px_rgba(79,195,247,0.25),0_0_18px_rgba(79,195,247,0.12)]"
+          : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
+      )}
+    >
+      {active && (
+        <>
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-accent-amber rounded-r shadow-[0_0_10px_rgba(255,181,71,0.7)]" />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shadow-[0_0_8px_#4FC3F7] animate-pulse" />
+        </>
+      )}
+      <Icon size={16} className="flex-none" />
+      {!collapsed && <span className="flex-1 text-sm">{label}</span>}
+    </Link>
+  );
+}
+
 export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void } = {}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const { active: agent } = useAgentProfile();
   const { mode, modes, setMode } = useMode();
+  const inMore = MORE_GROUPS.some((g) => g.items.some((it) => pathname.startsWith(it.href)));
+  const [moreOpen, setMoreOpen] = useState(inMore);
 
   // Auto-close mobile drawer on route change (only when pathname actually changes)
   const prevPathnameRef = useRef(pathname);
@@ -224,41 +251,34 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
         </button>
       )}
 
-      {/* Nav — grouped by category, filtered to the active mode */}
+      {/* Nav — everyday screens, then the rest under More, filtered to the active mode */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto">
-        {NAV_GROUPS.map((group, gi) => {
+        <div className="space-y-0.5">
+          {MAIN_ITEMS.map((item) => (
+            <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} onNavigate={onMobileClose} />
+          ))}
+        </div>
+        <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
+          className={cn(
+            "mt-3 flex items-center gap-2 w-full rounded-input text-text-muted hover:text-text-primary transition-colors",
+            collapsed ? "justify-center px-2 py-2" : "px-3 py-1.5"
+          )}>
+          {!collapsed && <span className="hud-label text-[10px] flex-1 text-left">More</span>}
+          <ChevronDown size={14} className={cn("flex-none transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
+          {collapsed && <span className="sr-only">More</span>}
+        </button>
+        {moreOpen && MORE_GROUPS.map((group) => {
           const items = visibleItems(group.items, mode.id);
           if (items.length === 0) return null;
           return (
-            <div key={group.title} className={cn(gi > 0 && (collapsed ? "mt-2 pt-2 border-t border-border-default/50" : "mt-3"))}>
+            <div key={group.title} className={cn(collapsed ? "mt-2 pt-2 border-t border-border-default/50" : "mt-2")}>
               {!collapsed && (
                 <div className="hud-label text-text-muted px-3 mb-1 text-[10px]">{group.title}</div>
               )}
               <div className="space-y-0.5">
-                {items.map(({ label, href, icon: Icon }) => {
-                  const isActive = pathname.startsWith(href);
-                  return (
-                    <Link key={href} href={href} title={collapsed ? label : undefined}
-                      onClick={() => { if (onMobileClose) onMobileClose(); }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
-                        collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
-                        isActive
-                          ? "bg-[#4FC3F7]/10 text-[#4FC3F7] shadow-[inset_0_0_0_1px_rgba(79,195,247,0.25),0_0_18px_rgba(79,195,247,0.12)]"
-                          : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
-                      )}
-                    >
-                      {isActive && (
-                        <>
-                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-accent-amber rounded-r shadow-[0_0_10px_rgba(255,181,71,0.7)]" />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shadow-[0_0_8px_#4FC3F7] animate-pulse" />
-                        </>
-                      )}
-                      <Icon size={16} className="flex-none" />
-                      {!collapsed && <span className="flex-1 text-sm">{label}</span>}
-                    </Link>
-                  );
-                })}
+                {items.map((item) => (
+                  <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} onNavigate={onMobileClose} />
+                ))}
               </div>
             </div>
           );

@@ -4,8 +4,9 @@ import { Sidebar } from "../Sidebar";
 
 const signOutAndClear = vi.fn();
 
+let pathname = "/activity";
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/activity",
+  usePathname: () => pathname,
 }));
 
 vi.mock("next-auth/react", () => ({
@@ -45,5 +46,24 @@ describe("Sidebar sign out", () => {
   it("lists Settings under Account & System", () => {
     render(<Sidebar mobileOpen onMobileClose={() => {}} />);
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+});
+
+describe("Sidebar sections", () => {
+  it("keeps the everyday screens in view and the rest under More", () => {
+    pathname = "/dashboard";
+    render(<Sidebar mobileOpen onMobileClose={() => {}} />);
+    for (const name of ["Today", "Assistant", "Tasks", "Notes", "Knowledge"]) {
+      expect(screen.getByRole("link", { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("link", { name: "Studio" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/tools");
+  });
+
+  it("opens More when the current page is in it", () => {
+    pathname = "/activity";
+    render(<Sidebar mobileOpen onMobileClose={() => {}} />);
+    expect(screen.getByRole("link", { name: "Agent Activity" })).toBeInTheDocument();
   });
 });
