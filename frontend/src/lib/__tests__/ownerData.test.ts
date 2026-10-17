@@ -22,10 +22,12 @@ describe("the owner's own data stays with the owner", () => {
     expect(system).toMatch(/actions the user personally has to take/);
   });
 
-  it("keeps the Vahdam-only inbox rules for the accounts in OWNER_EMAILS", async () => {
+  it("never assumes an employer, even for the deployment owner's accounts", async () => {
     vi.stubEnv("OWNER_EMAILS", "Owner@x.com");
     await extractEmailTasks({ email: "owner@x.com", ...mail });
-    expect(cascade.mock.calls[0][0].system).toMatch(/Only extract Vahdam work/);
+    const system = cascade.mock.calls[0][0].system;
+    expect(system).not.toMatch(/Vahdam|Anchit|\btea\b/i);
+    expect(system).toMatch(/actions the user personally has to take/);
   });
 
   it("writes Studio assets for the brand in the brief, not the owner's", () => {

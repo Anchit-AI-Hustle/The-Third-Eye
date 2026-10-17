@@ -149,6 +149,14 @@ function loadActiveId(): string {
   return localStorage.getItem(LS_ACTIVE) ?? "jarvis";
 }
 
+/** The agent selected right now, read fresh, for work that runs outside a page (task autopilot). */
+export function activeAgent(): AgentProfile {
+  try {
+    const all = loadProfiles();
+    return all.find((p) => p.id === loadActiveId()) ?? all[0];
+  } catch { return PRESETS[0]; }
+}
+
 export function useAgentProfile() {
   // Loaded after mount so the first render matches the server; saving waits
   // for the load so the defaults never overwrite what's stored.

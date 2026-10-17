@@ -299,6 +299,21 @@ describe("Jarvis reliability evaluation", () => {
     expect(r.done.failed).toEqual(["manage_goals (update)"]);
   });
 
+  it("19 image with no image model: drawn in code and shown, labelled as an illustration", async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0B1020"/><circle cx="512" cy="512" r="300" fill="#4FC3F7"/></svg>';
+    script = [
+      { calls: [{ name: "generate", args: { type: "image", prompt: "a glowing blue planet" } }] },
+      { text: svg },
+      { text: "Here's your planet." },
+    ];
+    const r = await chat("draw me a glowing blue planet");
+    const media = (r.done.sideEffects as { type: string; data: { url: string; kind: string } }[]).filter((e) => e.type === "media");
+    expect(media).toHaveLength(1);
+    expect(media[0].data.kind).toBe("image");
+    expect(Buffer.from(media[0].data.url.split(",")[1], "base64").toString()).toBe(svg);
+    expect(r.results()[0]).toMatch(/illustration, not a photo/);
+  });
+
   it("18 partial success: done, failed and open steps are each named", async () => {
     script = [
       { calls: [{ name: "plan_checklist", args: { steps: [

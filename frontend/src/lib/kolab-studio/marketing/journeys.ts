@@ -1,6 +1,6 @@
 // web/lib/marketing/journeys.ts
 // Lifecycle journey templates for Commerce (spec §5) and Local (spec §6), adapted from the
-// vahdam-lifecycle-os retention-trigger set — generalised, brand-agnostic, and India-first.
+// lifecycle-os retention-trigger set — generalised, brand-agnostic, and India-first.
 // These are DEFAULT TEMPLATES a brand switches on and edits; the real journey engine (trigger →
 // wait → branch → action) executes them in a later phase.
 import type { RfmSegment, LifecycleStage } from "./rfm";

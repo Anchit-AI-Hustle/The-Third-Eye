@@ -60,6 +60,12 @@ describe("/api/tasks/autopilot", () => {
     expect(String(task().all_updates)).toMatch(/Done by JARVIS/);
   });
 
+  it("names the agent that did the work", async () => {
+    await call({ taskId: "t1", action: "claim" });
+    await call({ taskId: "t1", action: "finish", agentName: "ATHENA", run: { text: "Done.", checklist: [{ id: 1, title: "Research", verify: "", needsTool: true, status: "done", evidence: "notes saved" }], confirms: [], stopReason: "end_turn" }, effects: [] });
+    expect(String(task().all_updates)).toMatch(/Done by ATHENA/);
+  });
+
   it("keeps a task open, marked needs you, when something waits for approval", async () => {
     await call({ taskId: "t1", action: "claim" });
     await call({ taskId: "t1", action: "finish", run: { text: "", checklist: [], confirms: [{ summary: "Send email" }] }, effects: [] });

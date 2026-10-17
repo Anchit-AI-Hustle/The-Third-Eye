@@ -71,15 +71,18 @@ export function judgeRun(run: AutopilotRun): { status: AutopilotStatus; report: 
 
 type Effect = { type: string; data?: Record<string, any> };
 
-/** One autopilot turn through /api/chat, read off its event stream. */
-export async function runThroughChat(task: AutopilotTask): Promise<{ run: AutopilotRun; effects: Effect[] }> {
+/** One autopilot turn through /api/chat as the given agent, read off its event stream. Each call is its own conversation. */
+export async function runThroughChat(task: AutopilotTask, agent?: { id: string; name: string; personality: string }): Promise<{ run: AutopilotRun; effects: Effect[] }> {
   const run: AutopilotRun = { text: "", checklist: [], confirms: [], links: [] };
   let effects: Effect[] = [];
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: autopilotPrompt(task), history: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      body: JSON.stringify({
+        message: autopilotPrompt(task), history: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...(agent ? { agentId: agent.id, agentName: agent.name, agentPersona: agent.personality } : {}),
+      }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));

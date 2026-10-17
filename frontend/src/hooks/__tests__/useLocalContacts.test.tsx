@@ -68,32 +68,32 @@ describe("useLocalContacts", () => {
   it("parses vCard 3.0 / 4.0 data accurately", () => {
     const vcfSample = `BEGIN:VCARD
 VERSION:3.0
-FN:Aviral Vahdam
-N:Vahdam;Aviral;;;
+FN:Aviral Mehta
+N:Mehta;Aviral;;;
 TEL;TYPE=CELL,VOICE:+91 98111 22334
-EMAIL;TYPE=WORK:aviral@vahdam.com
+EMAIL;TYPE=WORK:aviral@acme.com
 NOTE:Co-founder
 END:VCARD`;
 
     const parsed = parseVCard(vcfSample);
     expect(parsed.length).toBe(1);
-    expect(parsed[0].name).toBe("Aviral Vahdam");
+    expect(parsed[0].name).toBe("Aviral Mehta");
     expect(parsed[0].phone).toBe("+91 98111 22334");
-    expect(parsed[0].email).toBe("aviral@vahdam.com");
+    expect(parsed[0].email).toBe("aviral@acme.com");
     expect(parsed[0].notes).toBe("Co-founder");
     expect(parsed[0].source).toBe("vcf");
   });
 
   it("parses CSV contacts format accurately", () => {
     const csvSample = `Name,Phone,Email,Notes
-Aviral Vahdam,+919811122334,aviral@vahdam.com,Tea Partner
+Aviral Mehta,+919811122334,aviral@acme.com,Tea Partner
 Rohit Sharma,9876543210,,Teammate`;
 
     const parsed = parseCSVContacts(csvSample);
     expect(parsed.length).toBe(2);
-    expect(parsed[0].name).toBe("Aviral Vahdam");
+    expect(parsed[0].name).toBe("Aviral Mehta");
     expect(parsed[0].phone).toBe("+919811122334");
-    expect(parsed[0].email).toBe("aviral@vahdam.com");
+    expect(parsed[0].email).toBe("aviral@acme.com");
     expect(parsed[1].name).toBe("Rohit Sharma");
     expect(parsed[1].phone).toBe("9876543210");
   });

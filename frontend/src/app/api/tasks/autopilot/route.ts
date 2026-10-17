@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const sb = getDb();
   if (!sb) return Response.json({ error: "Task autopilot needs the database." }, { status: 501 });
 
-  const body = (await req.json().catch(() => null)) as { taskId?: string; action?: string; run?: AutopilotRun; effects?: Effect[] } | null;
+  const body = (await req.json().catch(() => null)) as { taskId?: string; action?: string; run?: AutopilotRun; effects?: Effect[]; agentName?: string } | null;
   const taskId = typeof body?.taskId === "string" ? body.taskId : "";
   if (!taskId) return Response.json({ error: "taskId required" }, { status: 400 });
 
@@ -58,7 +58,8 @@ export async function POST(req: Request) {
         processing_status: "ready", created_at: now,
       });
     }
-    const label = status === "done" ? "Done by JARVIS" : status === "needs_you" ? "JARVIS worked on it; needs you" : "JARVIS couldn't work on it";
+    const agent = typeof body!.agentName === "string" && body!.agentName.trim() ? body!.agentName.trim().slice(0, 40) : "JARVIS";
+    const label = status === "done" ? `Done by ${agent}` : status === "needs_you" ? `${agent} worked on it; needs you` : `${agent} couldn't work on it`;
     const line = `[${now.slice(0, 16).replace("T", " ")} · ${SOURCE}] ${label}: ${report.split("\n")[0].slice(0, 200)}`;
     const patch: Record<string, unknown> = {
       autopilot_status: status, autopilot_report: report, autopilot_at: now, updated_at: now,

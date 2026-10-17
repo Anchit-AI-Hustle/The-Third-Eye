@@ -14,7 +14,7 @@ What each feature uses when its key is missing, checked against the code on
 | Voice input / output | `GROQ_API_KEY` (Whisper) | Browser speech recognition; for output, the optional Natural voice (Kokoro, in the browser on WebGPU) or the system voice | Keyless in the browser |
 | Music | `ELEVENLABS_API_KEY`, `REPLICATE_API_TOKEN` | Composed in code (`lib/music/synth.ts`): instrumental WAV, no vocals | Keyless |
 | Video, reels, episodes | `REPLICATE_API_TOKEN` | Drawn scenes recorded in the browser (`lib/episodeVideo.ts`) | Keyless (in Studio) |
-| Images | `REPLICATE_API_TOKEN` | None wired | Needs a key |
+| Images | `REPLICATE_API_TOKEN` | Drawn as SVG code by the free-tier AI (`lib/svgArt.ts`): illustrations, icons, logos, posters, not photos | Free (no image key) |
 | Documents (PDF, DOCX) | - | Parsed in code (`lib/docText.ts`) | Keyless |
 | Gmail, Calendar | Google OAuth | - | Free (OAuth, no billing) |
 | WhatsApp chat | `WHATSAPP_TOKEN` | `wa.me` links the user sends | Keyless for sending; replies need the Cloud API |
@@ -23,12 +23,14 @@ What each feature uses when its key is missing, checked against the code on
 
 ## Not wired, and why
 
-- **Images without a key.** Pollinations offers keyless image generation,
-  but its keyless rate limits and terms could not be verified from here, so
-  it is not used. Gemini image models have no confirmed free quota.
+- **Photo-realistic images without a key.** Pollinations offers keyless
+  image generation, but its keyless limits and terms could not be verified
+  from here, so it is not used. Images are drawn as SVG code instead, which
+  suits illustrations rather than photos.
 - **Open-Meteo for weather.** Its free tier is for non-commercial use only;
   wttr.in already covers weather with no key.
 - **Text-to-music APIs.** None is both free and keyless; music is composed
   in code instead.
-- **Video in chat.** The chat's video tool still needs Replicate; the
-  keyless drawn-scene renderer runs in the browser, so it lives in Studio.
+- **Video in chat.** Without Replicate the chat opens Video or Reel Studio
+  with the idea filled in, where the video is drawn and recorded in the
+  browser.

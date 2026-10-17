@@ -100,12 +100,12 @@ describe("communicate tool in /api/chat", () => {
 
   it("does not resolve a name nobody saved to a built-in number", async () => {
     script = [
-      { calls: [{ name: "communicate", args: { action: "whatsapp", to: "Aviral Vahdam", message: "Project update ready" } }] },
-      { text: "WhatsApp link prepared for Aviral Vahdam." },
+      { calls: [{ name: "communicate", args: { action: "whatsapp", to: "Aviral Mehta", message: "Project update ready" } }] },
+      { text: "WhatsApp link prepared for Aviral Mehta." },
     ];
 
     const res = await chat({
-      message: "send whatsapp to Aviral Vahdam saying Project update ready",
+      message: "send whatsapp to Aviral Mehta saying Project update ready",
       contacts: [],
     });
 
@@ -116,16 +116,16 @@ describe("communicate tool in /api/chat", () => {
 
   it("manage_contacts searches and retrieves synced phone contacts", async () => {
     script = [
-      { calls: [{ name: "manage_contacts", args: { action: "search", query: "Aviral Vahdam" } }] },
-      { text: "Found contact details for Aviral Vahdam." },
+      { calls: [{ name: "manage_contacts", args: { action: "search", query: "Aviral Mehta" } }] },
+      { text: "Found contact details for Aviral Mehta." },
     ];
 
     const res = await chat({
-      message: "look up Aviral Vahdam's number",
+      message: "look up Aviral Mehta's number",
       contacts: [],
     });
 
-    expect(res.text).toContain("Found contact details for Aviral Vahdam");
+    expect(res.text).toContain("Found contact details for Aviral Mehta");
   });
 
   it("manage_contacts lists all synced contacts", async () => {

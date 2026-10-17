@@ -25,8 +25,8 @@ type SortKey = "title" | "assignee" | "start_date" | "due_date" | "priority" | "
 
 const STATUS_OPTIONS = TASK_STATUSES;
 
-// Tab split: Office = Vahdam work, Personal = everything else. Tasks without a
-// workspace (legacy rows, Vahdam-gated email/chat extraction) land on Office.
+// Tab split: Office = work, Personal = everything else. Tasks without a
+// workspace (legacy rows from email/chat extraction) land on Office.
 const WORKSPACES: { value: TaskWorkspace; label: string; icon: typeof Briefcase }[] = [
   { value: "office", label: "Office", icon: Briefcase },
   { value: "personal", label: "Personal", icon: Heart },
@@ -739,10 +739,10 @@ function PillarBadge({ pillar }: { pillar?: string }) {
 }
 
 const AUTOPILOT_META: Record<string, { label: string; color: string }> = {
-  running: { label: "JARVIS working", color: "#4FC3F7" },
-  done: { label: "Done by JARVIS", color: "#34D399" },
+  running: { label: "Agent working", color: "#4FC3F7" },
+  done: { label: "Done by agent", color: "#34D399" },
   needs_you: { label: "Needs you", color: "#F0C94E" },
-  failed: { label: "JARVIS failed", color: "#F87171" },
+  failed: { label: "Agent failed", color: "#F87171" },
 };
 
 function AutopilotBadge({ status }: { status?: string | null }) {
@@ -756,13 +756,13 @@ function AutopilotBadge({ status }: { status?: string | null }) {
   );
 }
 
-// Autopilot works every new task unless switched off on this device.
+// Autopilot works every open task, as the selected agent, unless switched off on this device.
 function AutopilotToggle({ className }: { className: string }) {
   const [off, setOff] = useState(false);
   useEffect(() => setOff(autopilotOff()), []);
   return (
     <button type="button" className={className} aria-pressed={!off}
-      title="When on, JARVIS works on every new task as soon as it is added"
+      title="When on, your selected agent works every open task, each in its own run, a few at a time"
       onClick={() => { setAutopilotOff(!off); setOff(!off); }}>
       <Bot size={13} /> Autopilot {off ? "off" : "on"}
     </button>

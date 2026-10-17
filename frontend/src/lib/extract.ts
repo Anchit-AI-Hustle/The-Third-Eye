@@ -1,37 +1,26 @@
 import { llmCascade } from "@/lib/llmCascade";
 import { parseLlmJson } from "@/lib/llmJson";
 import { GROWTH_PILLARS, type ExtractedTask } from "@/lib/tasks";
-import { isOwner, workContext } from "@/lib/owner";
 
-// Ported from Personal-AI-OS ai/prompts.py + ai/extractor.py. The owner's
-// account keeps the original Vahdam-only gate (lib/owner.ts); everyone else
-// gets the same rules about their own work. The anti-fake-identifier rule is
-// load-bearing for both.
+// Ported from Personal-AI-OS ai/prompts.py + ai/extractor.py, with no assumed
+// employer: every account gets rules about its own work and life. The
+// anti-fake-identifier rule is load-bearing.
 
-function userContext(email: string): string {
-  const scope = isOwner(email)
-    ? `- Only extract Vahdam work. Personal matters (banking, family, food delivery,
-  receipts, newsletters, promotions, auto-generated mail) → return empty tasks.
-- Weight growth levers: acquisition/CAC, repeat/LTV/subscription, CRO, AOV,
-  marketplace ranking + ads, promotions/gifting, retention (email/SMS/WhatsApp/
-  Klaviyo), influencer/PR, ops issues blocking sales, margin.`
-    : `- Extract actions the user personally has to take, for work or personal life.
-  Receipts, newsletters, promotions and auto-generated mail → return empty tasks.`;
-  return `You are the user's chief-of-staff AI.
-${workContext(email)}
+const USER_CONTEXT = `You are the user's chief-of-staff AI.
+Office work means the user's job: their employer, clients, colleagues and professional projects.
 
 HARD RULES:
-${scope}
+- Extract actions the user personally has to take, for work or personal life.
+  Receipts, newsletters, promotions and auto-generated mail → return empty tasks.
 - Never invent people. Never emit opaque identifiers (users/12345, UUIDs,
   "(unknown)") as an owner; set owner to null instead.`;
-}
 
 const TASK_SHAPE_HINT = `
 Each task is an object:
 {
   "task_heading": "specific imperative, <= 70 chars",
   "task_description": "full context - SKU/customer/campaign/geo/amount, <= 180 chars",
-  "rationale": "why this matters (tie to a revenue lever)",
+  "rationale": "why this matters",
   "growth_pillar": one of ${JSON.stringify(GROWTH_PILLARS)},
   "deadline": "ISO date, natural-language phrase, or null",
   "urgency": "Low" | "Medium" | "High" | "Critical",
@@ -41,7 +30,7 @@ Each task is an object:
 Reject vague headings like "Follow up" or "Reply to email".
 `.trim();
 
-const emailSystemPrompt = (email: string) => `${userContext(email)}
+const EMAIL_SYSTEM_PROMPT = `${USER_CONTEXT}
 
 You are analysing a single email. Return STRICT JSON:
 {"is_actionable": bool, "summary": string, "tasks": [ ... ]}
@@ -112,7 +101,7 @@ export async function extractEmailTasks(input: {
   email: string; sender: string; subject: string; receivedAt: string; body: string;
 }): Promise<ExtractionResult | null> {
   const user = `From: ${input.sender}\nSubject: ${input.subject}\nReceived: ${input.receivedAt}\n\n${input.body.slice(0, 6000)}`;
-  const parsed = await runExtraction(emailSystemPrompt(input.email), user, 1000);
+  const parsed = await runExtraction(EMAIL_SYSTEM_PROMPT, user, 1000);
   // null = the model couldn't be reached, which is not the same as "nothing actionable".
   if (!parsed) return null;
   const rawTasks = Array.isArray(parsed.tasks) ? (parsed.tasks as Record<string, unknown>[]) : [];

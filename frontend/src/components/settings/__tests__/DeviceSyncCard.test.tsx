@@ -75,7 +75,7 @@ describe("DeviceSyncCard", () => {
     const textarea = screen.getByPlaceholderText(/Priya Sharma, \+91/i);
     fireEvent.change(textarea, {
       target: {
-        value: "Aviral Vahdam, +91 9811122334\nMom, +1 555 123 4567",
+        value: "Aviral Mehta, +91 9811122334\nMom, +1 555 123 4567",
       },
     });
 
