@@ -65,8 +65,10 @@ stays out of the way so the accent and the content carry the screen.
 - **Amber is a rare marker.** Amber (`accent.amber #FFB547`) marks a single
   telemetry detail at most (a reactor ring tick). It is never a button, link,
   state or label colour.
-- **Restraint over ornament.** Cards are plain surfaces with hairline borders
-  that rise in as the page assembles (`globals.css`, "Panels"); no corner
+- **Restraint over ornament.** Cards (`.holo-card`) are glass panels: a
+  blurred dark surface, a hairline edge lit cyan at the top left fading to
+  violet at the bottom right, a lit top rim and a soft floor shadow. They rise
+  in as the page assembles (`globals.css`, "Panels"); no corner
   brackets, scanlines or tickers. Motion lives in the backdrop and in live
   readouts, in cyan line work only: an instrument ring with a radar sweep, a
   perspective grid floor drifting toward the viewer, a slow scan line and a

@@ -204,7 +204,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
                   style={on ? { background: `${m.accentColor}1A`, borderColor: m.accentColor } : undefined}>
                   <span className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: m.accentColor }} />
                   <span className={cn("text-xs font-medium flex-1", on ? "text-text-primary" : "text-text-secondary")}>{m.label}</span>
-                  {on && <span className="text-[9px] font-mono uppercase tracking-wider" style={{ color: m.accentColor }}>active</span>}
+                  {on && <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: m.accentColor }}>active</span>}
                 </button>
               );
             })}

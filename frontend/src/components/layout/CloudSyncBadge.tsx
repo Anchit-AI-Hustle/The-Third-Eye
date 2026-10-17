@@ -47,7 +47,7 @@ export function CloudSyncBadge({ collapsed }: { collapsed?: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono" title={tip}>
+    <div className="flex items-center gap-2 px-3 py-1.5 text-xs" title={tip}>
       <Icon size={12} className={`${color} flex-none ${loading ? "animate-spin" : ""}`} />
       <span className={color}>{label}</span>
     </div>
