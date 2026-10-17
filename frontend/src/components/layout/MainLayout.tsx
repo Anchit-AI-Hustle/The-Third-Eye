@@ -10,7 +10,6 @@ import { AiStatusBanner } from "./AiStatusBanner";
 import { AmbientScene } from "../hud/AmbientScene";
 import { MotionNotice } from "../hud/MotionNotice";
 import { NativeAutoSync } from "./NativeAutoSync";
-import { deviceSyncPlugin } from "@/lib/deviceSync";
 import { useJarvisTriggers } from "@/hooks/useJarvisTriggers";
 import { activateAssistant } from "@/lib/activation";
 import { cn } from "@/lib/utils";
@@ -24,7 +23,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const [nativeApp, setNativeApp] = useState(false);
-  useEffect(() => setNativeApp(!!deviceSyncPlugin()), []);
+  useEffect(() => setNativeApp(!!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()), []);
   useJarvisTriggers(activateAssistant);
 
   return (
