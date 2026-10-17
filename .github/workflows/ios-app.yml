@@ -3,7 +3,9 @@ name: iOS app
 # runner (free on a public repo). iOS installs only signed apps, so the .ipa is
 # installed with a signing sideloader (Sideloadly or AltStore) and the user's
 # own Apple ID; a free Apple ID's signature lasts 7 days. Builds from main
-# replace the asset on the public "ios-latest" release, linked from /install.
+# replace the assets on the public "ios-latest" release, linked from /install.
+# the-third-eye-simulator.zip is the same app built for the iOS Simulator: unzip
+# it and drag App.app onto a running Simulator (or `xcrun simctl install booted`).
 # App Store or TestFlight distribution needs an Apple Developer account (NATIVE_BUILD.md).
 on:
   workflow_dispatch: {}
@@ -35,10 +37,18 @@ jobs:
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qry the-third-eye.ipa Payload
+      - name: Build for the iOS Simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build-sim \
+            CODE_SIGNING_ALLOWED=NO build
+          ditto -c -k --keepParent build-sim/Build/Products/Release-iphonesimulator/App.app the-third-eye-simulator.zip
       - uses: actions/upload-artifact@v7
         with:
           name: jarvis-ios-ipa
-          path: the-third-eye.ipa
+          path: |
+            the-third-eye.ipa
+            the-third-eye-simulator.zip
           if-no-files-found: error
       - name: Publish to the ios-latest release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -46,4 +56,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view ios-latest >/dev/null 2>&1 || gh release create ios-latest --title "iOS app" --notes "Unsigned .ipa. Install with Sideloadly or AltStore using your Apple ID; a free Apple ID's signature lasts 7 days. The app loads the live site, so it stays current."
-          gh release upload ios-latest the-third-eye.ipa --clobber
+          gh release upload ios-latest the-third-eye.ipa the-third-eye-simulator.zip --clobber
