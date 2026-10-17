@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { naturalVoiceOn, speakNatural, stopNatural } from "@/lib/naturalVoice";
+import { speechRecognizer } from "@/lib/speechRecognizer";
 
 import { useWakeLock } from "./useWakeLock";
 
@@ -295,9 +296,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   }, []);
 
   useEffect(() => {
-    const SR = typeof window !== "undefined"
-      ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
-      : null;
+    const SR = speechRecognizer();
     const mic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
     setSupported(!!SR || mic);
 
@@ -311,8 +310,8 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const resumeCtxRef = useRef<(() => void) | null>(null);
   const srDelayRef = useRef(150);
 
-  const startMeter = useCallback(async () => {
-    if (streamRef.current) return;
+  const startMeter = useCallback(async (opened?: AudioContext) => {
+    if (streamRef.current) { void opened?.close().catch(() => {}); return; }
     const synthetic = () => {
       const tick = () => {
         if (!activeRef.current) return;
@@ -328,10 +327,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       });
       if (!activeRef.current) {
         stream.getTracks().forEach((t) => t.stop());
+        void opened?.close().catch(() => {});
         return;
       }
       streamRef.current = stream;
-      const ctx = new AudioContext();
+      const ctx = opened ?? new AudioContext();
       // Chrome/Safari can hand back a context in "suspended" state — the await
       // above breaks the direct user-gesture chain autoplay policy checks for.
       // Suspended means getByteFrequencyData reads all zeros forever, so the
@@ -385,6 +385,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       };
       rafRef.current = requestAnimationFrame(tick);
     } catch {
+      void opened?.close().catch(() => {});
       synthetic();
     }
   }, [emitTranscript]);
@@ -407,7 +408,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
   const enable = useCallback(async () => {
     if (activeRef.current) return;
-    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    const SRClass = speechRecognizer();
     const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
     if (!SRClass && !canMic) return;
     activeRef.current = true;
@@ -417,11 +418,16 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     srDelayRef.current = 150;
     // Mid-conversation the screen must not sleep, or the mic is suspended.
     wakeLock.acquire();
+    // Opened and resumed here, still inside the tap: Safari only runs an
+    // AudioContext started from a gesture. One made after the await below stays
+    // suspended, the level meter reads silence, and no phrase is ever recorded.
+    let ctx: AudioContext | undefined;
+    try { ctx = new AudioContext(); void ctx.resume(); } catch { /* no Web Audio */ }
 
     // Open the capture stream before the browser recognizer. Starting
     // SpeechRecognition first, then getUserMedia, leaves Chrome's recognizer
     // with a dead mic: it stays on "listening" and never returns words.
-    await startMeter();
+    await startMeter(ctx);
     if (!activeRef.current || !SRClass) return;
 
     const startRec = () => {
@@ -545,7 +551,14 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     if (!supported) return;
 
     const onVisible = () => {
-      if (document.visibilityState === "visible") forceRestart();
+      if (document.visibilityState !== "visible") return;
+      // iOS ends the microphone track while an installed app is in the
+      // background; reopen it, or the recorder hears nothing when the user returns.
+      if (activeRef.current && streamRef.current?.getAudioTracks().some((t) => t.readyState === "ended")) {
+        stopMeter();
+        void startMeter();
+      }
+      forceRestart();
     };
     document.addEventListener("visibilitychange", onVisible);
 
@@ -559,7 +572,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(watchdog);
     };
-  }, [supported, forceRestart]);
+  }, [supported, forceRestart, startMeter, stopMeter]);
 
   return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, enable, disable };
 }
