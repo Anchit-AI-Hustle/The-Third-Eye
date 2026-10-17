@@ -1,6 +1,7 @@
 import { startAssistantMedia, studioVideoLink } from "@/lib/assistantMedia";
 import { replicateConfigured } from "@/lib/replicate";
 import { explicitlyRequested } from "@/lib/explicitRequest";
+import { drawSvg } from "@/lib/svgArt";
 import { runConfirmedAction } from "@/lib/confirmedActions";
 import { AUTOPILOT_PREFIX } from "@/lib/taskAutopilot";
 import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
@@ -888,7 +889,16 @@ async function runTool(
     case "generate": {
       const type = input.type ?? "image";
       switch (type) {
-        case "image": return await startAssistantMedia(ctx.email, "image", input.prompt ?? "", { style: input.style, size: input.size });
+        case "image": {
+          if (replicateConfigured()) return await startAssistantMedia(ctx.email, "image", input.prompt ?? "", { style: input.style, size: input.size });
+          // No image model: draw it as a vector illustration in code.
+          const url = await drawSvg(input.prompt ?? "", input.style).catch(() => null);
+          if (!url) return { result: "image failed: no image model is set up and the drawing could not be made. Nothing was generated." };
+          return {
+            result: "Drew the image as a vector illustration in code (no image model is set up, so it is an illustration, not a photo). It is shown above with a Download button.",
+            sideEffect: { type: "media", data: { url, kind: "image", alt: (input.prompt ?? "image").slice(0, 80) } },
+          };
+        }
         case "music": return await generateMusic(ctx.email, input.prompt ?? input.description ?? "");
         case "video": {
           const prompt = input.prompt ?? input.description ?? "";
