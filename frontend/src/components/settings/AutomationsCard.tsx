@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Workflow, Pause, Play, Trash2, AlertCircle, Loader2, Clock } from "lucide-react";
 import { dataUpdate, dataDelete } from "@/lib/dataClient";
 import { formatRelativeTime } from "@/lib/utils";
+import { REMINDERS_CHANGED } from "@/lib/localReminders";
+
+// The phone app reschedules its reminder notifications on this.
+const rescheduleOnPhone = () => window.dispatchEvent(new Event(REMINDERS_CHANGED));
 
 interface Automation {
   id: string;
@@ -51,7 +55,9 @@ export function AutomationsCard() {
     setBusy(a.id);
     setRows((prev) => (prev ?? []).map((r) => (r.id === a.id ? { ...r, status: next } : r)));
     const ok = await dataUpdate("reminders", a.id, { status: next });
-    if (!ok) {
+    if (ok) {
+      rescheduleOnPhone();
+    } else {
       setRows((prev) => (prev ?? []).map((r) => (r.id === a.id ? { ...r, status: a.status } : r)));
       setError("Couldn't save that change.");
     }
@@ -64,6 +70,7 @@ export function AutomationsCard() {
     const ok = await dataDelete("reminders", a.id);
     if (ok) {
       setRows((prev) => (prev ?? []).filter((r) => r.id !== a.id));
+      rescheduleOnPhone();
     } else {
       setError("Couldn't delete that automation.");
       setBusy(null);
