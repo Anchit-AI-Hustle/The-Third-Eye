@@ -66,23 +66,31 @@ class BridgeViewController: CAPBridgeViewController {
     }
 
     @objc func openPendingAsk() {
-        guard let message = AssistantLink.pending, let base = bridge?.config.serverURL else { return }
+        guard let pending = AssistantLink.pending, let base = bridge?.config.serverURL else { return }
         AssistantLink.pending = nil
-        var link = URLComponents(url: base.appendingPathComponent("assistant"), resolvingAgainstBaseURL: false)
-        link?.queryItems = [URLQueryItem(name: "ask", value: message)]
+        var link = URLComponents(url: base.appendingPathComponent(pending.path), resolvingAgainstBaseURL: false)
+        link?.queryItems = pending.query
         guard let url = link?.url else { return }
         DispatchQueue.main.async { _ = self.webView?.load(URLRequest(url: url)) }
     }
 }
 
 // Siri and Shortcuts open the assistant at /assistant?ask=<message>, which
-// sends the message (frontend AssistantClient).
+// sends the message (frontend AssistantClient); shared text goes to /share.
 enum AssistantLink {
     static let opened = Notification.Name("ThirdEyeOpenAssistant")
-    static var pending: String?
+    static var pending: (path: String, query: [URLQueryItem])?
 
     static func open(_ message: String) {
-        pending = message
+        go("assistant", [URLQueryItem(name: "ask", value: message)])
+    }
+
+    static func share(_ text: String) {
+        go("share", [URLQueryItem(name: "text", value: text)])
+    }
+
+    private static func go(_ path: String, _ query: [URLQueryItem]) {
+        pending = (path: path, query: query)
         NotificationCenter.default.post(name: opened, object: nil)
     }
 }
@@ -116,6 +124,24 @@ struct MorningBriefingIntent: AppIntent {
     }
 }
 
+// In a share-sheet Shortcut ("Save to The Third Eye" with Shortcut Input),
+// anything shared from another app is saved as a note.
+@available(iOS 16.0, *)
+struct SaveToThirdEyeIntent: AppIntent {
+    static var title: LocalizedStringResource = "Save to The Third Eye"
+    static var description = IntentDescription("Saves text or a link to The Third Eye as a note.")
+    static var openAppWhenRun = true
+
+    @Parameter(title: "Content", requestValueDialog: "What should I save?")
+    var content: String
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.share(content)
+        return .result()
+    }
+}
+
 // "Hey Siri, ask The Third Eye" (Siri then asks for the question) and
 // "Hey Siri, morning briefing in The Third Eye"; both also appear in Shortcuts.
 @available(iOS 16.0, *)
@@ -123,6 +149,7 @@ struct ThirdEyeShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AskThirdEyeIntent(), phrases: ["Ask \(.applicationName)", "Talk to \(.applicationName)"])
         AppShortcut(intent: MorningBriefingIntent(), phrases: ["Morning briefing in \(.applicationName)", "Brief me with \(.applicationName)"])
+        AppShortcut(intent: SaveToThirdEyeIntent(), phrases: ["Save to \(.applicationName)", "Note this in \(.applicationName)"])
     }
 }
 
