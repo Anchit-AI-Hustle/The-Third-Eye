@@ -110,4 +110,26 @@ describe("/api/cron/autopilot", () => {
     expect(urgent.autopilot_status).toBe("failed");
     expect(urgent.all_updates).toMatch(/waiting for a free AI provider/);
   });
+
+  it("works one task at a time, so a free tier's per-minute limit is not hit by parallel runs", async () => {
+    let inFlight = 0, peak = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return new Response(sse([["done", { sideEffects: [], checklist: [{ id: "1", title: "Do", status: "done", evidence: "ok" }] }]]));
+    }));
+    const body = await (await call()).json();
+    expect(body.worked).toHaveLength(2);
+    expect(peak).toBe(1);
+  });
+
+  it("stops at the first task that has to wait for a provider and leaves the rest untouched", async () => {
+    const fetchMock = vi.fn(async () => new Response(sse([["error", { message: "busy", code: "no_provider" }]])));
+    vi.stubGlobal("fetch", fetchMock);
+    const body = await (await call()).json();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body.worked).toEqual([{ id: "t-urgent", status: "waiting" }]);
+    expect(tables.tasks.find((t) => t.id === "t-low")!.autopilot_status).toBeNull();
+  });
 });
