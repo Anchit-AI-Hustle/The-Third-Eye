@@ -20,12 +20,12 @@ export function GenerationDetail({ id }: { id: string }) {
 
   useEffect(() => { setRec(getGeneration(id)); setMediaBroken(false); }, [id]);
 
-  if (rec === undefined) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-primary/20 border-t-accent-primary rounded-full animate-spin" /></div>;
+  if (rec === undefined) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
   if (rec === null) {
     return (
       <div className="rounded-card border border-border-default bg-background-surface p-8 text-center">
         <p className="text-text-secondary text-sm">This generation was not found (it may have been deleted, or lives on another device).</p>
-        <Link href="/generations" className="inline-flex items-center gap-1.5 mt-3 text-accent-primary text-sm hover:underline"><ArrowLeft size={14} /> Back to generations</Link>
+        <Link href="/generations" className="inline-flex items-center gap-1.5 mt-3 text-accent-blue text-sm hover:underline"><ArrowLeft size={14} /> Back to generations</Link>
       </div>
     );
   }
@@ -100,8 +100,8 @@ export function GenerationDetail({ id }: { id: string }) {
           <div className="hud-label text-text-muted">Output</div>
           {rec.kind === "html" && (
             <div className="flex rounded-card border border-border-default overflow-hidden">
-              <button onClick={() => setHtmlView("preview")} className={`px-2.5 py-1 text-[11px] flex items-center gap-1 ${htmlView === "preview" ? "bg-accent-primary text-black" : "text-text-secondary"}`}><Eye size={12} /> Preview</button>
-              <button onClick={() => setHtmlView("code")} className={`px-2.5 py-1 text-[11px] flex items-center gap-1 border-l border-border-default ${htmlView === "code" ? "bg-accent-primary text-black" : "text-text-secondary"}`}><Code2 size={12} /> Code</button>
+              <button onClick={() => setHtmlView("preview")} className={`px-2.5 py-1 text-[11px] flex items-center gap-1 ${htmlView === "preview" ? "bg-accent-blue text-black" : "text-text-secondary"}`}><Eye size={12} /> Preview</button>
+              <button onClick={() => setHtmlView("code")} className={`px-2.5 py-1 text-[11px] flex items-center gap-1 border-l border-border-default ${htmlView === "code" ? "bg-accent-blue text-black" : "text-text-secondary"}`}><Code2 size={12} /> Code</button>
             </div>
           )}
         </div>

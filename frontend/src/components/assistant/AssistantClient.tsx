@@ -1345,7 +1345,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   <X size={15} /><span className="text-[11px] font-mono">Esc</span>
                 </button>
               ) : (
-                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming}
+                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming} aria-label="Send message"
                   className={cn("flex-none p-1.5 rounded-input transition-colors shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center",
                     input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
                   <Send size={15} />
@@ -1388,7 +1388,10 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking, childre
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
-        <div className="w-36 h-36 mx-auto mb-3"><Persona3D color={persona.color} speaking={speaking} className="w-full h-full" /></div>
+        <div className="hud-core w-36 h-36 mx-auto mb-6" style={{ color: persona.color }}>
+          <span /><span /><span />
+          <Persona3D color={persona.color} speaking={speaking} className="relative w-full h-full" />
+        </div>
         <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
         <p className="text-text-primary font-semibold text-base mb-1">
           {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}

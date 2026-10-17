@@ -404,7 +404,7 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
               {styleDef.icon}
             </div>
             <p className="text-sm text-text-muted">Enter a script and click "Generate avatar"</p>
-            <p className="text-[11px] text-text-muted/60">Video preview - voice plays live via browser speech synthesis.</p>
+            <p className="text-[11px] text-text-muted">Video preview - voice plays live via browser speech synthesis.</p>
           </div>
         )}
 

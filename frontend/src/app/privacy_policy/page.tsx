@@ -88,6 +88,19 @@ export default function PrivacyPolicyPage() {
             </p>
           </section>
 
+          <section id="cookies">
+            <h2 className="text-text-primary font-semibold mb-2">Cookies and Local Storage</h2>
+            <p>
+              We set only the cookies the service needs to work: your sign-in session and its
+              security tokens, a short-lived state value while you connect Google or GitHub, and
+              which Kolab organisation you have open. We use no advertising or tracking cookies.
+              Visitor statistics come from Vercel Web Analytics, which uses no cookies and counts
+              visits from an anonymous hash that resets daily. Settings such as voice, motion and
+              this notice&apos;s acknowledgement are kept in your browser&apos;s local storage and
+              never leave your device.
+            </p>
+          </section>
+
           <section>
             <h2 className="text-text-primary font-semibold mb-2">
               Limited Use of Google User Data

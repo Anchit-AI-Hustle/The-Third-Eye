@@ -224,7 +224,7 @@ export function TasksClient() {
             )}
           </button>
           <button onClick={openNew}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-accent-blue text-background-base text-sm font-medium hover:bg-accent-blue/90 transition-colors">
             <Plus size={14} /> New Task
           </button>
         </div>
@@ -283,11 +283,11 @@ export function TasksClient() {
 
         <div className="flex rounded-card border border-border-default overflow-hidden">
           <button onClick={() => setView("table")} className={cn("px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
-            view === "table" ? "bg-accent-blue text-white" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
+            view === "table" ? "bg-accent-blue text-background-base" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
             <List size={13} /> Table
           </button>
           <button onClick={() => setView("kanban")} className={cn("px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-border-default",
-            view === "kanban" ? "bg-accent-blue text-white" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
+            view === "kanban" ? "bg-accent-blue text-background-base" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
             <LayoutGrid size={13} /> Kanban
           </button>
         </div>
@@ -656,7 +656,7 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
               Cancel
             </button>
             <button type="submit"
-              className="px-4 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors flex items-center gap-2">
+              className="px-4 py-2 rounded-input bg-accent-blue text-background-base text-sm font-medium hover:bg-accent-blue/90 transition-colors flex items-center gap-2">
               <Check size={14} /> Save
             </button>
           </div>
@@ -689,7 +689,7 @@ function TeamModal({ team, newName, onNameChange, onAdd, onRemove, onClose }: {
             <input value={newName} onChange={(e) => onNameChange(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onAdd()}
               placeholder="Member name…" className={cn(inputCls, "flex-1")} />              <button onClick={onAdd} disabled={!newName.trim()} aria-label="Add team member"
-              className="px-3 py-2 rounded-input bg-accent-blue text-white text-sm disabled:opacity-40 transition-colors">
+              className="px-3 py-2 rounded-input bg-accent-blue text-background-base text-sm disabled:opacity-40 transition-colors">
               <Plus size={14} aria-hidden="true" />
             </button>
           </div>
@@ -771,7 +771,7 @@ function AutopilotToggle({ className }: { className: string }) {
 
 function SourceBadge({ type, link, detail }: { type?: string; link?: string; detail?: string }) {
   if (!type) return null;
-  const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#7878A8" };
+  const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#8E8EBC" };
   const Icon = meta.icon;
   const inner = (
     <span
@@ -795,7 +795,7 @@ function AgentChip({ id, profiles }: { id?: string; profiles: AgentProfile[] }) 
   const p = profiles.find((x) => x.id === id);
   // Custom profiles live in this browser's localStorage; on another device the
   // id won't resolve — keep the appointment visible instead of dropping it.
-  const color = p?.accentColor ?? "#7878A8";
+  const color = p?.accentColor ?? "#8E8EBC";
   const label = p ? p.name.replace(/\./g, "") : "Custom agent";
   return (
     <span

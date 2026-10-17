@@ -77,7 +77,7 @@ alembic revision --autogenerate -m "msg"
   `mcp/client.ts` (external MCP tool integration), `agentControl.ts`
   (kill switch + audit log), `dataClient.ts` (database-or-localStorage
   fallback), `apps/registry.ts` (App Hub entries).
-- **Design tokens: `frontend/DESIGN.md`** is the source of truth for colours, type, spacing, radius, and motion. Follow it for all UI styling. `tailwind.config.ts` and `globals.css :root` define the same 13 colour values — keep them in step when changing either.
+- **Design tokens: `frontend/DESIGN.md`** is the source of truth for colours, type, spacing, radius, and motion. Follow it for all UI styling. `tailwind.config.ts` and `globals.css :root` define the same 14 colour values — keep them in step when changing either.
 - Full architecture, request flow, and "where to make common changes" table: **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 ### Backend layout (`backend/app/`) — not deployed, see Stack above

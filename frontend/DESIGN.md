@@ -16,10 +16,11 @@ colors:
   text:
     primary:   "#FFFFFF"
     secondary: "#B0B8C8"
-    muted:     "#6B7394"
+    muted:     "#7F87A8"
   accent:
     blue:   "#4FC3F7"      # Arc Blue — PRIMARY brand, all primary CTAs/focus/active
     violet: "#7B5CF0"      # secondary accent, gradients only
+    amber:  "#FFB547"      # HUD readouts only: section labels, ticks, telemetry; never a button
     red:    "#EF4444"      # destructive
   status:
     success: "#10B981"
@@ -61,6 +62,14 @@ stays out of the way so the accent and the content carry the screen.
   that signals "interactive/active/primary." Primary buttons, focused inputs,
   active nav, live indicators. Violet is for gradients and secondary flourish
   only — never a second primary button colour. Red is destructive only.
+- **HUD readouts in amber.** Amber (`accent.amber #FFB547`) is the telemetry
+  colour of the HUD: section labels (`.hud-label`), dial ticks, the corner
+  marker on panels. It is never a button, link or state colour.
+- **Every panel is a HUD panel.** Cards inside a page get cyan corner brackets,
+  a faint scanline and an amber corner tick, and their brackets draw in as the
+  page assembles (`globals.css`, "HUD panels"). The backdrop behind every page
+  is the HUD itself: rotating dials with tick marks, a radar sweep, a hex
+  field and a scan beam (`components/hud/AmbientScene.tsx`).
 - **Depth by surface, not by shadow.** Stack `background.base` → `surface` →
   `elevated` to show layering; borders are hairline (`border.default`, 1px).
   Use `shadow.card`/`elevated` sparingly; reach for `shadow.glowCyan` only on

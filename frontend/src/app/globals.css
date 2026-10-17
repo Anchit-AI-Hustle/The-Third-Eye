@@ -13,9 +13,10 @@
   --color-border-hover: #1A3A5C;
   --color-text-primary: #FFFFFF;
   --color-text-secondary: #B0B8C8;
-  --color-text-muted: #6B7394;
+  --color-text-muted: #7F87A8;
   --color-accent-blue: #4FC3F7;
   --color-accent-violet: #7B5CF0;
+  --color-accent-amber: #FFB547;
   --color-accent-red: #EF4444;
   --color-success: #10B981;
   --color-warning: #F59E0B;
@@ -271,57 +272,97 @@ body {
 /* Tap feedback everywhere: the `scale` property composes with any transform. */
 :where(button, a, [role="button"], .holo-card, .card-3d):active:not(:disabled) { scale: 0.96; }
 
-/* ── Ambient scene behind every page ─────────────────────── */
-.ambient-scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; perspective: 700px; }
-.ambient-orb {
-  position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%;
-  filter: blur(70px); opacity: 0.32; will-change: transform;
-  animation: orbDrift 16s ease-in-out infinite alternate;
+/* ── Ambient HUD behind every page ───────────────────────── */
+.ambient-scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; color: #4FC3F7; }
+.ambient-glow {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(40% 35% at 78% 18%, rgba(79,195,247,0.16), transparent 70%),
+    radial-gradient(35% 30% at 12% 88%, rgba(255,181,71,0.08), transparent 70%),
+    radial-gradient(50% 40% at 50% 50%, rgba(123,92,240,0.06), transparent 70%);
+  animation: glowBreathe 9s ease-in-out infinite alternate;
 }
-.ambient-orb-a { background: radial-gradient(circle, #4FC3F7, transparent 65%); top: -25vmax; left: -20vmax; }
-.ambient-orb-b { background: radial-gradient(circle, #7B5CF0, transparent 65%); bottom: -30vmax; right: -25vmax; animation-duration: 21s; animation-delay: -6s; }
-.ambient-orb-c { background: radial-gradient(circle, #10B981, transparent 65%); top: 30%; left: 40%; width: 40vmax; height: 40vmax; opacity: 0.16; animation-duration: 26s; animation-delay: -12s; }
-@keyframes orbDrift {
-  0%   { transform: translate3d(0, 0, 0) scale(1); }
-  50%  { transform: translate3d(12vw, 8vh, 0) scale(1.15); }
-  100% { transform: translate3d(-8vw, 14vh, 0) scale(0.9); }
-}
-.ambient-floor {
-  position: absolute; left: -60%; right: -60%; bottom: -8%; height: 62%;
-  transform: rotateX(74deg); transform-origin: 50% 100%; overflow: hidden;
-  -webkit-mask-image: linear-gradient(to top, #000 25%, transparent 95%);
-  mask-image: linear-gradient(to top, #000 25%, transparent 95%);
-}
-.ambient-grid {
-  position: absolute; left: 0; right: 0; top: -56px; bottom: 0; will-change: transform;
+@keyframes glowBreathe { to { opacity: 0.6; transform: scale(1.05); } }
+/* Hex field: two offset dot lattices read as a honeycomb at this size. */
+.ambient-hex {
+  position: absolute; inset: 0; opacity: 0.35;
   background-image:
-    linear-gradient(rgba(79, 195, 247, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(79, 195, 247, 0.35) 1px, transparent 1px);
-  background-size: 56px 56px;
-  animation: gridRun 2.6s linear infinite;
+    radial-gradient(circle, rgba(79,195,247,0.35) 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(79,195,247,0.35) 1px, transparent 1.5px);
+  background-size: 28px 48px; background-position: 0 0, 14px 24px;
+  -webkit-mask-image: radial-gradient(ellipse at 70% 30%, #000 10%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 70% 30%, #000 10%, transparent 70%);
 }
-@keyframes gridRun { to { transform: translateY(56px); } }
-.ambient-gyro {
-  position: absolute; top: 9vh; right: 6vw; width: 26vmin; height: 26vmin;
-  transform-style: preserve-3d; animation: gyroSpin 18s linear infinite; opacity: 0.4;
+.hud-dial { position: absolute; filter: drop-shadow(0 0 6px rgba(79,195,247,0.45)); }
+.hud-dial-a { width: min(62vmin, 520px); height: min(62vmin, 520px); top: -8vmin; right: -10vmin; opacity: 0.55; }
+.hud-dial-b { width: min(40vmin, 340px); height: min(40vmin, 340px); bottom: 6vh; left: -12vmin; opacity: 0.4; }
+@media (max-width: 640px) {
+  .hud-dial-a { width: 78vw; height: 78vw; top: -26vw; right: -34vw; opacity: 0.35; }
+  .hud-dial-b { width: 56vw; height: 56vw; bottom: 14vh; left: -30vw; opacity: 0.3; }
 }
-.ambient-gyro > span {
-  position: absolute; inset: 0; border-radius: 50%;
-  border: 1.5px solid rgba(79, 195, 247, 0.7); box-shadow: 0 0 16px rgba(79, 195, 247, 0.35);
+.hud-dial g { transform-origin: 100px 100px; transform-box: view-box; }
+.hud-dial-outer { animation: dialSpin 60s linear infinite; }
+.hud-dial-inner { animation: dialSpin 34s linear infinite reverse; }
+.hud-dial-sweep { animation: dialSpin 6s linear infinite; }
+.hud-dial-b .hud-dial-outer { animation-duration: 44s; animation-direction: reverse; }
+@keyframes dialSpin { to { transform: rotate(360deg); } }
+.ambient-beam {
+  position: absolute; left: 0; right: 0; top: 0; height: 120px;
+  background: linear-gradient(180deg, transparent, rgba(79,195,247,0.07) 70%, rgba(79,195,247,0.35) 99%, transparent);
+  animation: beamSweep 7s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
-.ambient-gyro > span:nth-child(2) { transform: rotateX(70deg); border-color: rgba(123, 92, 240, 0.75); }
-.ambient-gyro > span:nth-child(3) { transform: rotateY(70deg); border-color: rgba(16, 185, 129, 0.6); }
-@keyframes gyroSpin { to { transform: rotateX(360deg) rotateY(720deg); } }
+@keyframes beamSweep {
+  0%   { transform: translateY(-130px); opacity: 0; }
+  10%  { opacity: 1; }
+  60%  { transform: translateY(110vh); opacity: 0.7; }
+  61%, 100% { transform: translateY(110vh); opacity: 0; }
+}
 .ambient-spark {
-  position: absolute; bottom: -10px; border-radius: 50%;
-  background: #8FE3FF; box-shadow: 0 0 8px #4FC3F7;
+  position: absolute; bottom: -10px; width: 2px; height: 10px; border-radius: 1px;
+  background: linear-gradient(#FFB547, transparent); opacity: 0;
   animation: sparkRise 12s linear infinite;
 }
 @keyframes sparkRise {
   0%   { transform: translate3d(0, 0, 0); opacity: 0; }
-  10%  { opacity: 0.9; }
-  100% { transform: translate3d(4vw, -110vh, 0); opacity: 0; }
+  10%  { opacity: 0.8; }
+  100% { transform: translate3d(0, -110vh, 0); opacity: 0; }
 }
+
+/* ── JARVIS core: tick rings turning around the persona ───── */
+.hud-core { position: relative; }
+.hud-core > span {
+  position: absolute; inset: -18%; border-radius: 50%; pointer-events: none;
+  border: 1.5px solid currentColor; opacity: 0.55;
+  border-top-color: transparent; border-bottom-color: #FFB547;
+  animation: dialSpin 9s linear infinite;
+}
+.hud-core > span:nth-child(2) { inset: -32%; opacity: 0.35; border-style: dashed; border-bottom-color: transparent; animation-duration: 16s; animation-direction: reverse; }
+.hud-core > span:nth-child(3) { inset: -6%; opacity: 0.8; border-width: 2px; border-left-color: transparent; border-right-color: transparent; border-bottom-color: currentColor; animation-duration: 4s; filter: drop-shadow(0 0 6px currentColor); }
+
+/* ── HUD panels: every card on a page is an instrument panel ─────────
+   Corner brackets, a faint scanline and an amber corner tick are drawn as
+   background layers (no pseudo-elements, which cards already use), and the
+   brackets draw in as the page assembles. */
+.page-enter :is(div, section, article, li):is(.holo-card, .border.rounded-card, .border.rounded-xl, .border.rounded-2xl):not([class*="bg-gradient"]):not([class*="from-"]) {
+  --hud-c: rgba(79, 195, 247, 0.75);
+  background-image:
+    linear-gradient(var(--hud-c), var(--hud-c)), linear-gradient(var(--hud-c), var(--hud-c)),
+    linear-gradient(var(--hud-c), var(--hud-c)), linear-gradient(var(--hud-c), var(--hud-c)),
+    linear-gradient(var(--hud-c), var(--hud-c)), linear-gradient(var(--hud-c), var(--hud-c)),
+    linear-gradient(var(--hud-c), var(--hud-c)), linear-gradient(var(--hud-c), var(--hud-c)),
+    linear-gradient(#FFB547, #FFB547),
+    repeating-linear-gradient(0deg, rgba(79,195,247,0.035) 0 1px, transparent 1px 3px);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  background-position: 0 0, 0 0, 100% 0, 100% 0, 0 100%, 0 100%, 100% 100%, 100% 100%, calc(100% - 22px) 0, 0 0;
+  background-size: 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px, 18px 2px, auto;
+  box-shadow: inset 0 0 28px rgba(79, 195, 247, 0.05), 0 0 0 1px rgba(79, 195, 247, 0.06);
+  animation: cardRise 560ms var(--ease-depth) backwards, hudBrackets 900ms var(--ease-depth) backwards;
+}
+@keyframes hudBrackets {
+  from { background-size: 0 2px, 2px 0, 0 2px, 2px 0, 0 2px, 2px 0, 0 2px, 2px 0, 0 2px, auto; }
+}
+.page-enter h1 { text-shadow: 0 0 22px rgba(79, 195, 247, 0.35); }
+
 @keyframes routeScan {
   from { transform: translateY(0); opacity: 0.9; }
   to   { transform: translateY(100vh); opacity: 0; }
@@ -447,7 +488,7 @@ body {
   font-size: 10px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: rgba(79,195,247,0.5);
+  color: rgba(255,181,71,0.9);
 }
 
 /* ── Markdown prose ───────────────────────────────────── */
@@ -645,3 +686,5 @@ body {
      variant to the md value, which shrank the lg frame. */
   html:not([data-motion-full]) .holo-frame:hover > .holo-frame-corner, html:not([data-motion-full]) .holo-frame:focus-within > .holo-frame-corner { --frame-extend: 0px; }
 }
+/* .holo-card's own gradient is a background-image the HUD layers replace; keep its tint. */
+.page-enter .holo-card { background-color: rgba(9, 16, 32, 0.82); }

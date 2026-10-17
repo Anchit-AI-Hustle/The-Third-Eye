@@ -120,7 +120,7 @@ export function NotesClient() {
             placeholder="New note title…"
             className="flex-1 bg-background-surface border border-border-default rounded-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-accent-blue/50 transition-colors"
           />
-          <button onClick={handleNew}
+          <button onClick={handleNew} aria-label="Add note"
             className="px-3 py-2 rounded-input bg-accent-blue/10 border border-accent-blue/30 text-accent-blue hover:bg-accent-blue/20 transition-colors">
             <Plus size={14} />
           </button>

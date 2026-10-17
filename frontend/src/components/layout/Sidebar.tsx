@@ -244,12 +244,15 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
                         "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
                         collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
                         isActive
-                          ? "bg-[#4FC3F7]/8 text-[#4FC3F7]"
+                          ? "bg-[#4FC3F7]/10 text-[#4FC3F7] shadow-[inset_0_0_0_1px_rgba(79,195,247,0.25),0_0_18px_rgba(79,195,247,0.12)]"
                           : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
                       )}
                     >
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#4FC3F7] rounded-r shadow-[0_0_8px_rgba(79,195,247,0.5)]" />
+                        <>
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-accent-amber rounded-r shadow-[0_0_10px_rgba(255,181,71,0.7)]" />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shadow-[0_0_8px_#4FC3F7] animate-pulse" />
+                        </>
                       )}
                       <Icon size={16} className="flex-none" />
                       {!collapsed && <span className="flex-1 font-mono text-xs tracking-wide">{label}</span>}

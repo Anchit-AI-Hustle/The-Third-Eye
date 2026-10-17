@@ -3,7 +3,7 @@
 export const CHART = {
   blue: "#00D4FF",
   violet: "#7C5CEF",
-  muted: "#6B7394",
+  muted: "#7F87A8",
   secondary: "#B0B8C8",
   border: "#0F2235",
   surface: "#0D1B30",

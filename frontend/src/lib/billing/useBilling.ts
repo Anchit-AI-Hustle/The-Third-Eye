@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getSubscription, isSubscribed, currentTier, cancelSubscription as cancelWallet,
+  getSubscription, isSubscribed, currentTier, cancelSubscription as cancelWallet, setSubscription,
   isTestUnlocked, unlockTest, clearTestUnlock, userLevel,
   type Subscription,
 } from "./wallet";
-import { costOf, type Tier } from "./plans";
+import { costOf, type BillingPeriod, type Tier } from "./plans";
 
 // Credits live on the server, one wallet per account (/api/billing/credits).
 // The plan shown and the test unlock are kept on the device.
@@ -71,11 +71,22 @@ export function useBilling() {
 
   const cancelSubscription = useCallback(() => { cancelWallet(); refresh(); }, [refresh]);
 
+  // Owner accounts only (the server refuses everyone else): buys a pack or plan with no payment.
+  const testPurchase = useCallback(async (what: { bundle: string } | { tier: Tier; period: BillingPeriod }) => {
+    const r = await fetch("/api/billing/test-purchase", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(what),
+    }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (r?.ok && "tier" in what) setSubscription(what.tier, what.period);
+    await load();
+    return r?.ok ? { ok: true as const, added: Number(d.added) } : { ok: false as const, error: String(d.error ?? "The purchase failed.") };
+  }, [load]);
+
   const canAfford = useCallback((action: string) =>
     serverRef.current.unlimited || serverRef.current.balance >= costOf(action), []);
 
-  const tryUnlock = useCallback((code: string) => {
-    const ok = unlockTest(code); if (ok) refresh(); return ok;
+  const tryUnlock = useCallback(async (code: string) => {
+    const ok = await unlockTest(code); if (ok) refresh(); return ok;
   }, [refresh]);
 
   const lock = useCallback(() => { clearTestUnlock(); refresh(); }, [refresh]);
@@ -85,6 +96,7 @@ export function useBilling() {
     refresh,
     reload: load,
     cancelSubscription,
+    testPurchase,
     canAfford,
     costOf,
     tryUnlock,

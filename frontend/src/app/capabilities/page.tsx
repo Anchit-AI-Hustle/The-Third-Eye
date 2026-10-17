@@ -195,7 +195,7 @@ export default function CapabilitiesPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-text-muted">
-                    <span className="opacity-70">{c.inspiration}</span>
+                    <span className="opacity-90">{c.inspiration}</span>
                     <div className="flex gap-1.5 ml-auto">
                       {c.required.map((r) => {
                         const I = REQ_ICON[r];
