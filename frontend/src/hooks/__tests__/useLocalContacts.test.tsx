@@ -97,4 +97,42 @@ Rohit Sharma,9876543210,,Teammate`;
     expect(parsed[1].name).toBe("Rohit Sharma");
     expect(parsed[1].phone).toBe("9876543210");
   });
+
+  describe("in the native app", () => {
+    const plugin = { requestPermissions: vi.fn(), getContacts: vi.fn() };
+    beforeEach(() => {
+      plugin.requestPermissions.mockReset();
+      plugin.getContacts.mockReset();
+      (window as any).Capacitor = { isNativePlatform: () => true, Plugins: { Contacts: plugin } };
+    });
+    afterEach(() => { delete (window as any).Capacitor; });
+
+    it("imports the whole address book once allowed", async () => {
+      plugin.requestPermissions.mockResolvedValue({ contacts: "granted" });
+      plugin.getContacts.mockResolvedValue({ contacts: [
+        { contactId: "1", name: { display: "Priya Sharma" }, phones: [{ number: "+91 98100 00001" }], emails: [{ address: "priya@example.com" }] },
+        { contactId: "2", name: { display: "Ravi" }, phones: [{ number: "+91 98100 00002" }] },
+        { contactId: "3", name: { display: null }, phones: [] },
+      ] });
+      const { result } = renderHook(() => useLocalContacts());
+      let r: { count: number; supported: boolean; error?: string } | undefined;
+      await act(async () => { r = await result.current.syncDeviceContacts(); });
+      expect(plugin.getContacts).toHaveBeenCalledWith({ projection: { name: true, phones: true, emails: true } });
+      expect(r).toEqual({ count: 2, supported: true });
+      expect(result.current.contacts.map((c) => [c.name, c.phone, c.email])).toEqual(expect.arrayContaining([
+        ["Priya Sharma", "+91 98100 00001", "priya@example.com"],
+        ["Ravi", "+91 98100 00002", undefined],
+      ]));
+    });
+
+    it("says so when access is refused, and reads nothing", async () => {
+      plugin.requestPermissions.mockResolvedValue({ contacts: "denied" });
+      const { result } = renderHook(() => useLocalContacts());
+      let r: { count: number; supported: boolean; error?: string } | undefined;
+      await act(async () => { r = await result.current.syncDeviceContacts(); });
+      expect(plugin.getContacts).not.toHaveBeenCalled();
+      expect(r?.count).toBe(0);
+      expect(r?.error).toMatch(/Contacts access is off/);
+    });
+  });
 });

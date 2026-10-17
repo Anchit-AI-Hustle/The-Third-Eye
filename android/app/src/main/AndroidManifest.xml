@@ -62,10 +62,15 @@
     <uses-permission android:name="android.permission.FLASHLIGHT" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Contacts sync reads the whole address book once the user allows it.
+         The plugin asks for read and write under one grant, so both are declared. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+
     <!-- Only what the app actually uses. Files and photos come in through the
-         system picker, which needs no permission; contacts, calls, SMS,
-         Bluetooth, sensors, background location and biometrics are not used,
-         and Play rejects SMS/call/background-location grants without a core use. -->
+         system picker, which needs no permission; calls, SMS, Bluetooth,
+         sensors, background location and biometrics are not used, and Play
+         rejects SMS/call/background-location grants without a core use. -->
 
     <!-- Hardware features (all optional for wide device compatibility) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
