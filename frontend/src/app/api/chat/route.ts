@@ -2046,7 +2046,9 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const storedMemory = await loadMemory(email);
   const memory = { ...storedMemory, ...clientMemory };
 
-  const memoryEntries = Object.entries(memory);
+  // The synced contact book has its own capped section below; listing it here
+  // too pasted thousands of contacts into every request.
+  const memoryEntries = Object.entries(memory).filter(([k]) => k !== "device_contacts");
   if (memoryEntries.length > 0) {
     systemInstruction += `\n\n**Persistent memory about this user:**\n${memoryEntries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}`;
   }
