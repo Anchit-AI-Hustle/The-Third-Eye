@@ -81,12 +81,26 @@ echo "▶ Preparing the native project…"
 npm ci --silent
 npx cap sync ios
 
-echo "▶ Building and signing for your iPhone (team $TEAM_ID, $BUNDLE_ID)…"
+echo "▶ Fetching the app's Swift packages (the first time takes a few minutes)…"
+xcodebuild -project ios/App/App.xcodeproj -scheme App -derivedDataPath ios/App/build -resolvePackageDependencies \
+  | grep -E --line-buffered "Fetching|Resolved|Cloning|error" || true
+
+echo "▶ Building and signing for your iPhone (team $TEAM_ID, $BUNDLE_ID); a first build takes 3 to 10 minutes…"
+LOG=ios/App/build/xcodebuild.log
+mkdir -p ios/App/build
+# The full log goes to a file; the screen shows one line per step so a long build never looks stuck.
 xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
   -destination "platform=iOS,id=$UDID" -derivedDataPath ios/App/build \
   -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
   CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$TEAM_ID" PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
-  build | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
+  build 2>&1 | tee "$LOG" | grep -E --line-buffered "^(CompileSwift|Ld |CodeSign|ProcessInfoPlistFile)|error:|BUILD (SUCCEEDED|FAILED)" \
+  | awk '/^(CompileSwift|Ld |CodeSign|ProcessInfoPlistFile)/ { n = split($0, w, " "); f = ""; for (i = 2; i <= n; i++) if (w[i] ~ /\//) { f = w[i]; break } sub(/.*\//, "", f); print "  " w[1] " " f; fflush(); next } { print; fflush() }' || true
+if ! grep -q "BUILD SUCCEEDED" "$LOG"; then
+  echo "Build failed. The errors:"
+  grep -E "error:|requires a provisioning profile|No signing certificate|No Account" "$LOG" | sort -u | head -20
+  echo "Full log: $LOG"
+  exit 1
+fi
 
 echo "▶ Installing…"
 xcrun devicectl device install app --device "$DEVICE" ios/App/build/Build/Products/Release-iphoneos/App.app
