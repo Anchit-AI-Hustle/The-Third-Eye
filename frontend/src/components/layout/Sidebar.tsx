@@ -17,6 +17,7 @@ import { useMode, type ModeId } from "@/hooks/useMode";
 import { CloudSyncBadge } from "./CloudSyncBadge";
 import { PWAInstall } from "@/components/PWAInstall";
 import { WalletWidget } from "@/components/billing/WalletWidget";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 // Mode-aware, grouped navigation. Each item can be scoped to a subset of modes;
 // an item with no `modes` shows in every mode. Groups with no visible items in
@@ -177,14 +178,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
           collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
         )}
       >
-      {/* Logo — Arc Reactor */}
+      {/* Logo */}
       <div className={cn(
         "flex items-center gap-3 border-b border-border-default h-16 flex-none",
         collapsed ? "justify-center px-0" : "px-5"
       )}>
-        <div className="arc-reactor flex-none" style={{ width: 32, height: 32 }}>
-          <div className="arc-reactor-core" style={{ width: 8, height: 8 }} />
-        </div>
+        <LogoMark size={32} className="flex-none" />
 
         {!collapsed && (
           <div className="flex-1 min-w-0">

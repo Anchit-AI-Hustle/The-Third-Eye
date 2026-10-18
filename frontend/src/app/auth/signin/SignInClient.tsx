@@ -3,6 +3,7 @@
 import { getCsrfToken } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Welcome, WELCOME_SEEN } from "@/components/onboarding/Welcome";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 // A home-screen app keeps its own cookies, apart from Safari where Google
 // sign-in finishes, and Google refuses sign-in inside the native app's web
@@ -106,18 +107,7 @@ export function SignInClient({
 
       <div className="relative z-10 w-full max-w-sm">
         <div className="flex flex-col items-center mb-10">
-          <div className="w-20 h-20 rounded-2xl bg-accent-blue/10 border border-accent-blue/20 overflow-hidden mb-5 shadow-elevated">
-            <img
-              src="/logo.png"
-              alt="The Third Eye"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const el = e.target as HTMLImageElement;
-                el.style.display = "none";
-                el.parentElement!.innerHTML = `<div class="w-full h-full flex items-center justify-center text-accent-blue font-bold text-2xl font-display">👁</div>`;
-              }}
-            />
-          </div>
+          <LogoMark size={88} className="mb-5" />
           <h1 className="font-display text-3xl md:text-4xl font-bold text-text-primary tracking-tight">
             The Third Eye
           </h1>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Brain, Zap, ShieldCheck } from "lucide-react";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 export const WELCOME_SEEN = "te_welcome_seen";
 
@@ -23,7 +24,7 @@ const SCREENS = [
   },
 ];
 
-// Shown once, the first time the installed app opens, before sign-in.
+// Shown once, on the first visit to sign-in, in the app or on the website.
 export function Welcome({ onDone }: { onDone: () => void }) {
   const [i, setI] = useState(0);
   const finish = () => {
@@ -35,7 +36,11 @@ export function Welcome({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="min-h-screen bg-background-base flex flex-col px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 font-display text-xs font-bold tracking-[0.2em] text-text-primary">
+          <LogoMark size={28} />
+          <span>THE <span className="text-accent-violet">THIRD</span> EYE</span>
+        </span>
         {!last && <button type="button" onClick={finish} className="text-sm text-text-muted hover:text-text-secondary">Skip</button>}
       </div>
       <div className="flex-1 flex flex-col items-center justify-center text-center max-w-sm mx-auto">

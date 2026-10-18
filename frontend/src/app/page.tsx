@@ -7,6 +7,7 @@ import { LandingHero } from "@/components/landing/LandingHero";
 import { FeatureGrid, type Feature } from "@/components/landing/FeatureGrid";
 import { Reveal } from "@/components/hud/Reveal";
 import { HoloFrame } from "@/components/hud/HoloFrame";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 export const metadata = {
   title: "The Third Eye - Your Personal AI Operating System",
@@ -83,12 +84,7 @@ export default async function Home() {
       <div className="relative z-10 mx-auto w-full max-w-5xl px-5">
         <header className="flex items-center justify-between py-5">
           <Link href="/" className="flex items-center gap-3" aria-label="The Third Eye home">
-            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-accent-blue/20 bg-accent-blue/10">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a 36px
-                  mark; next/image would add a request and a wrapper for no
-                  measurable gain at this size. */}
-              <img src="/logo.png" alt="" className="h-full w-full object-cover" />
-            </div>
+            <LogoMark size={36} />
 
             <span className="font-display font-bold tracking-tight">The Third Eye</span>
           </Link>

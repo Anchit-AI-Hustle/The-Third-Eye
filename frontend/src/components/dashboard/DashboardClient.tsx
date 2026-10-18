@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
-import { ReactorCanvas } from "./ReactorCanvas";
 import { SignalTrace } from "@/components/hud/SignalTrace";
 import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
@@ -17,6 +16,7 @@ import {
 import Link from "next/link";
 import { FirstRunGuide } from "@/components/onboarding/FirstRunGuide";
 import { useSystemHealth } from "@/hooks/useSystemHealth";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 const PRIORITY_DOT: Record<string, string> = {
   low: "bg-text-muted", medium: "bg-[#4FC3F7]", high: "bg-warning", urgent: "bg-accent-red",
@@ -130,7 +130,7 @@ export function DashboardClient() {
 
       <FirstRunGuide />
 
-      {/* ── Row 1: HUD Hero + Arc Reactor ────────────────────── */}
+      {/* ── Row 1: HUD Hero + logo ────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Clock + HUD */}
@@ -179,10 +179,9 @@ export function DashboardClient() {
           </div>
         </div>
 
-        {/* Arc Reactor + System Status */}
+        {/* Logo + System Status */}
         <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center">
-          {/* Arc reactor — live 3D */}
-          <div className="hidden sm:flex flex-col items-center"><ReactorCanvas size={112} /></div>
+          <div className="hidden sm:flex flex-col items-center drop-shadow-[0_0_24px_rgba(123,92,240,0.35)]"><LogoMark size={112} /></div>
           <span className="hud-label self-start sm:self-center sm:mt-2 mb-4">Core systems</span>
 
           {/* System lines */}
@@ -221,9 +220,7 @@ export function DashboardClient() {
 
           {!ready ? (
             <div className="flex justify-center py-10">
-              <div className="arc-reactor" style={{ width: 32, height: 32 }}>
-                <div className="arc-reactor-core" style={{ width: 8, height: 8 }} />
-              </div>
+              <LogoMark size={32} className="animate-pulse" />
             </div>
           ) : open.length === 0 ? (
             <div className="px-5 py-10 text-center">

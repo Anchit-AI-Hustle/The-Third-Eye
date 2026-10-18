@@ -1,40 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 120 120" fill="none">
   <defs>
-    <radialGradient id="bg" cx="38%" cy="34%" r="75%">
-      <stop offset="0%" stop-color="#0D1B30"/>
-      <stop offset="55%" stop-color="#07111F"/>
-      <stop offset="100%" stop-color="#050505"/>
-    </radialGradient>
-    <radialGradient id="pupilGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#4FC3F7" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#4FC3F7" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="violetArc" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7B5CF0"/>
-      <stop offset="100%" stop-color="#4FC3F7"/>
+    <linearGradient id="g" x1="10" y1="30" x2="110" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4FC3F7"/>
+      <stop offset="1" stop-color="#7B5CF0"/>
     </linearGradient>
+    <radialGradient id="glow" cx="60" cy="60" r="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B5CF0" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#050505" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-
-  <!-- ground -->
-  <rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>
-
-  <!-- arc-reactor rings, centered instrument-panel geometry -->
-  <circle cx="256" cy="256" r="192" fill="none" stroke="#4FC3F7" stroke-opacity="0.14" stroke-width="1.5"/>
-  <circle cx="256" cy="256" r="164" fill="none" stroke="#4FC3F7" stroke-opacity="0.28" stroke-width="1.5"/>
-
-  <!-- secondary violet accent arc — flourish only, never the primary signal -->
-  <path d="M 256 92 A 164 164 0 0 1 366 138" fill="none" stroke="url(#violetArc)" stroke-width="3" stroke-linecap="round"/>
-
-  <!-- pupil glow -->
-  <circle cx="256" cy="256" r="96" fill="url(#pupilGlow)"/>
-
-  <!-- the eye: a precise lens, not a soft blob -->
-  <path d="M 118 256 Q 256 168 394 256 Q 256 344 118 256 Z"
-        fill="#07111F" stroke="#4FC3F7" stroke-width="11" stroke-linejoin="round"/>
-
-  <!-- iris -->
-  <circle cx="256" cy="256" r="46" fill="none" stroke="#4FC3F7" stroke-width="7" stroke-opacity="0.55"/>
-
-  <!-- pupil -->
-  <circle cx="256" cy="256" r="30" fill="#4FC3F7"/>
+  <rect width="120" height="120" rx="26" fill="#050505"/>
+  <rect width="120" height="120" rx="26" fill="url(#glow)"/>
+  <g transform="translate(9 9) scale(0.85)">
+    <g stroke="url(#g)">
+      <path d="M8 60Q60 8 112 60" stroke-width="6" stroke-dasharray="16 5"/>
+      <path d="M8 60Q60 112 112 60" stroke-width="6" stroke-dasharray="16 5"/>
+      <path d="M24 60Q60 28 96 60M24 60Q60 92 96 60" stroke-width="2" stroke-dasharray="4 4" opacity="0.6"/>
+      <circle cx="60" cy="60" r="21" stroke-width="4.5" fill="#050505"/>
+      <circle cx="60" cy="60" r="14.5" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+    </g>
+    <path d="M50 51h20v4.5h-7.75V71h-4.5V55.5H50z" fill="url(#g)"/>
+    <circle cx="68.5" cy="50" r="1.8" fill="#FFFFFF" opacity="0.85"/>
+  </g>
 </svg>
