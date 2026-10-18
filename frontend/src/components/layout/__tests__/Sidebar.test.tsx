@@ -50,20 +50,13 @@ describe("Sidebar sign out", () => {
 });
 
 describe("Sidebar sections", () => {
-  it("keeps the everyday screens in view and the rest under More", () => {
+  it("shows every screen at once, grouped, with no More toggle", () => {
     pathname = "/dashboard";
     render(<Sidebar mobileOpen onMobileClose={() => {}} />);
-    for (const name of ["Today", "Assistant", "Tasks", "Notes", "Knowledge"]) {
+    for (const name of ["Today", "Assistant", "Tasks", "Notes", "Knowledge", "Goals", "Studio", "Apps", "Agent Activity", "Connectors"]) {
       expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
-    expect(screen.queryByRole("link", { name: "Studio" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /More/ }));
     expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/tools");
-  });
-
-  it("opens More when the current page is in it", () => {
-    pathname = "/activity";
-    render(<Sidebar mobileOpen onMobileClose={() => {}} />);
-    expect(screen.getByRole("link", { name: "Agent Activity" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /More/ })).toBeNull();
   });
 });

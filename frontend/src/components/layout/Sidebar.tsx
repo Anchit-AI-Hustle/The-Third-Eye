@@ -8,7 +8,6 @@ import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, Plug, PanelLeftClose, PanelLeftOpen,
   FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
-  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -30,7 +29,7 @@ interface NavItem {
 }
 interface NavGroup { title: string; items: NavItem[] }
 
-// The everyday screens stay in view; everything else sits under "More".
+// The everyday screens first, then every other screen in its group.
 const MAIN_ITEMS: NavItem[] = [
   { label: "Today", href: "/dashboard", icon: LayoutDashboard },
   { label: "Assistant", href: "/assistant", icon: MessageSquare },
@@ -145,8 +144,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
   const [collapsed, setCollapsed] = useState(false);
   const { active: agent } = useAgentProfile();
   const { mode, modes, setMode } = useMode();
-  const inMore = MORE_GROUPS.some((g) => g.items.some((it) => pathname.startsWith(it.href)));
-  const [moreOpen, setMoreOpen] = useState(inMore);
 
   // Auto-close mobile drawer on route change (only when pathname actually changes)
   const prevPathnameRef = useRef(pathname);
@@ -250,27 +247,18 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
         </button>
       )}
 
-      {/* Nav — everyday screens, then the rest under More, filtered to the active mode */}
+      {/* Nav: everyday screens, then every other screen in its group, filtered to the active mode */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto">
         <div className="space-y-0.5">
           {MAIN_ITEMS.map((item) => (
             <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} onNavigate={onMobileClose} />
           ))}
         </div>
-        <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}
-          className={cn(
-            "mt-3 flex items-center gap-2 w-full rounded-input text-text-muted hover:text-text-primary transition-colors",
-            collapsed ? "justify-center px-2 py-2" : "px-3 py-1.5"
-          )}>
-          {!collapsed && <span className="hud-label text-[10px] flex-1 text-left">More</span>}
-          <ChevronDown size={14} className={cn("flex-none transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
-          {collapsed && <span className="sr-only">More</span>}
-        </button>
-        {moreOpen && MORE_GROUPS.map((group) => {
+        {MORE_GROUPS.map((group) => {
           const items = visibleItems(group.items, mode.id);
           if (items.length === 0) return null;
           return (
-            <div key={group.title} className={cn(collapsed ? "mt-2 pt-2 border-t border-border-default/50" : "mt-2")}>
+            <div key={group.title} className={cn(collapsed ? "mt-2 pt-2 border-t border-border-default/50" : "mt-4")}>
               {!collapsed && (
                 <div className="hud-label text-text-muted px-3 mb-1 text-[10px]">{group.title}</div>
               )}
