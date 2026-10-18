@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SignInClient } from "./SignInClient";
 
@@ -52,6 +52,7 @@ describe("SignInClient", () => {
 
   it("in the iPhone home-screen app, signs in through Safari and picks the session up when approved", async () => {
     Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+    localStorage.setItem("te_welcome_seen", "1");
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const assign = vi.fn();
     Object.defineProperty(window, "location", { value: { ...window.location, assign }, configurable: true });
@@ -84,6 +85,7 @@ describe("SignInClient", () => {
 
   it("in the native iPhone app, also signs in through Safari, since Google refuses sign-in inside an app's web view", async () => {
     (window as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
+    localStorage.setItem("te_welcome_seen", "1");
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
 
@@ -96,5 +98,34 @@ describe("SignInClient", () => {
     vi.unstubAllGlobals();
     open.mockRestore();
     delete (window as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it("in the installed app, welcomes a first-time person in three screens before sign-in, once", async () => {
+    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+    localStorage.clear();
+    const { unmount } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+
+    expect(screen.getByRole("heading", { name: /Your assistant, always on call/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: /It acts, not just answers/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: /Private by design/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+
+    unmount();
+    render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    delete (window.navigator as { standalone?: boolean }).standalone;
+  });
+
+  it("lets a person skip the welcome", () => {
+    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+    localStorage.clear();
+    render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    delete (window.navigator as { standalone?: boolean }).standalone;
   });
 });
