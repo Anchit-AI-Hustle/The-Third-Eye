@@ -1,1 +1,1 @@
-    topResumedActivity=ActivityRecord{e68cd32 u0 com.jarvis.app/.MainActivity t8}
+    topResumedActivity=ActivityRecord{d8e089 u0 com.jarvis.app/.MainActivity t8}
