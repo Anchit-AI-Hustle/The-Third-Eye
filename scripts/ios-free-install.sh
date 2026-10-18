@@ -7,6 +7,8 @@
 # Settings > Privacy & Security > Developer Mode.
 #
 # Usage, from the repo root on a Mac:  scripts/ios-free-install.sh [TEAM_ID]
+# To sign with one particular Apple ID when Xcode holds several:
+#   APPLE_ID=you@example.com scripts/ios-free-install.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,8 +16,9 @@ command -v xcodebuild >/dev/null || { echo "Install Xcode from the App Store fir
 
 TEAM_ID="${1:-${TEAM_ID:-}}"
 if [ -z "$TEAM_ID" ]; then
-  # The team ID is the OU of the Apple Development certificate Xcode made for your Apple ID.
-  TEAM_ID=$(security find-certificate -c "Apple Development" -p 2>/dev/null \
+  # The team ID is the OU of the Apple Development certificate Xcode made for
+  # your Apple ID; a free account's certificate is named after its email.
+  TEAM_ID=$(security find-certificate -c "Apple Development${APPLE_ID:+: $APPLE_ID}" -p 2>/dev/null \
     | openssl x509 -noout -subject 2>/dev/null | sed -n 's/.*OU *= *\([A-Z0-9]\{10\}\).*/\1/p' | head -1)
 fi
 if [ -z "$TEAM_ID" ]; then
@@ -26,6 +29,7 @@ No signing team found. Once:
      tick "Automatically manage signing", Team: "<your name> (Personal Team)".
 Then run this script again (or pass the 10-character team ID shown there).
 EOF
+  [ -n "${APPLE_ID:-}" ] && echo "(Looked for the Apple Development certificate of $APPLE_ID.)"
   exit 1
 fi
 # A free team can't use a bundle ID another team has registered, so make one of its own.
