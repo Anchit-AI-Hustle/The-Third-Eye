@@ -4,6 +4,8 @@ import { getCsrfToken } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Welcome, WELCOME_SEEN } from "@/components/onboarding/Welcome";
 import { LogoMark } from "@/components/layout/LogoMark";
+import { SceneBackdrop } from "@/components/hud/SceneBackdrop";
+import { HoloFrame } from "@/components/hud/HoloFrame";
 
 // A home-screen app keeps its own cookies, apart from Safari where Google
 // sign-in finishes, and Google refuses sign-in inside the native app's web
@@ -100,23 +102,24 @@ export function SignInClient({
 
   return (
     <div className="min-h-screen bg-background-base flex flex-col items-center justify-center px-4 relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-accent-blue/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-accent-violet/5 rounded-full blur-3xl" />
-      </div>
+      <SceneBackdrop />
 
       <div className="relative z-10 w-full max-w-sm">
-        <div className="flex flex-col items-center mb-10">
-          <LogoMark size={88} className="mb-5" />
-          <h1 className="font-display text-3xl md:text-4xl font-bold text-text-primary tracking-tight">
-            The Third Eye
+        <div className="flex flex-col items-center mb-10 text-center">
+          <LogoMark size={88} className="mb-5 drop-shadow-[0_0_24px_rgba(123,92,240,0.45)]" />
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-accent-blue/30 bg-accent-blue/10 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-accent-blue">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-blue" />
+            Personal AI OS
+          </div>
+          <h1 className="font-display text-4xl font-bold text-text-primary tracking-tight">
+            The <span className="gradient-text">Third Eye</span>
           </h1>
           <p className="text-text-secondary text-sm mt-2">
             Your Personal Intelligence Operating System
           </p>
         </div>
 
-        <div className="bg-background-surface border border-border-default rounded-card p-8 shadow-elevated">
+        <HoloFrame rule label="// secure sign-in" size="sm" className="rounded-card border border-border-default/60 bg-background-surface/50 p-8 backdrop-blur-md shadow-elevated">
           <h2 className="text-text-primary font-semibold text-base mb-1 text-center">
             Sign in to continue
           </h2>
@@ -147,7 +150,7 @@ export function SignInClient({
               <button
                 type="button"
                 onClick={startHandoff}
-                className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-background-base text-sm font-medium transition-all duration-150 active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-background-base text-sm font-semibold shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-150 active:scale-[0.98]"
               >
                 Continue with Google
               </button>
@@ -167,14 +170,14 @@ export function SignInClient({
             <button
               type="submit"
               disabled={busy || !csrfToken}
-              className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-background-base text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-2 bg-accent-blue hover:brightness-110 rounded-input px-4 h-12 text-background-base text-sm font-semibold shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
             >
               {busy ? "Opening Google…" : "Continue with Google"}
             </button>
           </form>
           </>
           )}
-        </div>
+        </HoloFrame>
       </div>
     </div>
   );

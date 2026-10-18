@@ -13,6 +13,8 @@ describe("SignInClient", () => {
     getCsrfToken.mockReset();
     getCsrfToken.mockResolvedValue("csrf-test");
     localStorage.setItem("te_welcome_seen", "1");
+    // jsdom has no matchMedia; the welcome and sign-in backdrop reads reduced motion.
+    window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
   });
 
   it("posts straight to Google sign-in with a fresh csrf token", async () => {
