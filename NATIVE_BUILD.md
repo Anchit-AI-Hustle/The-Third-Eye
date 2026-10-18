@@ -23,8 +23,12 @@ public `android-latest` release, which the site's `/install` page links for a
 one-tap download. The same key on every build is what lets a new APK install
 over the old one, so keep it.
 
-Make the key once, on any machine with a JDK, and keep the file and passwords
-somewhere safe (losing them means everyone reinstalls):
+Quickest: on a Mac with a JDK and the GitHub CLI (`gh auth login`), run
+`scripts/android-signing-setup.sh`. It makes the key in
+`~/.the-third-eye-android/` (back that folder up) and sets all four secrets.
+
+Or by hand: make the key once, on any machine with a JDK, and keep the file
+and passwords somewhere safe (losing them means everyone reinstalls):
 
 ```bash
 keytool -genkeypair -v -keystore the-third-eye.keystore -alias the-third-eye \
