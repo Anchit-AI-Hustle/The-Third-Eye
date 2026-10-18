@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 
 const MIN_GAP_MS = 60_000;
-const POLL_MS = 3 * 60_000;
+const POLL_MS = 10 * 60_000;
 
 // Headless: as soon as a signed-in user opens the app (and whenever the tab
 // regains focus, plus a slow background poll), pull new Gmail messages,

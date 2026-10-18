@@ -60,7 +60,8 @@ export function NativeAutoSync() {
     return () => {
       document.removeEventListener("visibilitychange", run);
       window.removeEventListener(REMINDERS_CHANGED, onReminders);
-      void tap?.then((l) => l.remove());
+      // Native iOS hands back the handle itself, the web layer a promise of it.
+      void Promise.resolve(tap).then((l) => l?.remove());
     };
   }, []);
 

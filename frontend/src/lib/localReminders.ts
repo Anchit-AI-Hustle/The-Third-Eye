@@ -9,7 +9,7 @@ export interface LocalNotificationsPlugin {
   getPending(): Promise<{ notifications: { id: number }[] }>;
   cancel(o: { notifications: { id: number }[] }): Promise<void>;
   schedule(o: { notifications: Scheduled[] }): Promise<unknown>;
-  addListener(event: "localNotificationActionPerformed", cb: (a: { notification: { extra?: { url?: string } } }) => void): Promise<{ remove(): void }>;
+  addListener(event: "localNotificationActionPerformed", cb: (a: { notification: { extra?: { url?: string } } }) => void): Promise<{ remove(): void }> | { remove(): void };
 }
 
 export interface ReminderRow { id: string; title: string; body: string | null; fire_at: string; status: string; recurrence: string | null }

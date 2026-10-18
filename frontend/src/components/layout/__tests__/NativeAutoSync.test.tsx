@@ -57,6 +57,23 @@ describe("the iPhone app syncs on its own when opened", () => {
     expect(assign).toHaveBeenCalledWith("/assistant?ask=hi");
   });
 
+  it("leaves a page without crashing when iOS hands back the tap listener directly instead of a promise", async () => {
+    const remove = vi.fn();
+    const LocalNotifications = {
+      requestPermissions: async () => ({ display: "granted" }),
+      getPending: async () => ({ notifications: [] }),
+      cancel: vi.fn(),
+      schedule: vi.fn(async () => ({})),
+      addListener: vi.fn(() => ({ remove })),
+    };
+    (window as { Capacitor?: unknown }).Capacitor = { getPlatform: () => "ios", isNativePlatform: () => true, Plugins: { LocalNotifications } };
+
+    const { unmount } = render(<NativeAutoSync />);
+    await waitFor(() => expect(LocalNotifications.schedule).toHaveBeenCalled());
+    expect(() => unmount()).not.toThrow();
+    await waitFor(() => expect(remove).toHaveBeenCalled());
+  });
+
   it("keeps what is already scheduled when the reminder list can't be read, and refreshes when the chat changes a reminder", async () => {
     const LocalNotifications = {
       requestPermissions: async () => ({ display: "granted" }),
