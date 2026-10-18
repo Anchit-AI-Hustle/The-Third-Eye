@@ -55,6 +55,12 @@ jobs:
             xcrun simctl launch "$UDID" com.thethirdeye.app
             sleep 12
             xcrun simctl io "$UDID" screenshot "preview/$SIZE-$NAME.png"
+            for TAB in today assistant tasks notes more; do
+              xcrun simctl terminate "$UDID" com.thethirdeye.app || true
+              xcrun simctl launch "$UDID" com.thethirdeye.app -preview-tab "$TAB"
+              sleep 6
+              xcrun simctl io "$UDID" screenshot "preview/$SIZE-$TAB.png"
+            done
             xcrun simctl shutdown "$UDID"
           done < devices.txt
       - name: Push screenshots to the app-previews branch

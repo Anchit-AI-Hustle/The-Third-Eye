@@ -80,6 +80,7 @@ final class Chat: ObservableObject {
 }
 
 struct AssistantView: View {
+    @EnvironmentObject private var app: AppState
     @StateObject private var chat = Chat()
     @StateObject private var voice = Voice()
     @State private var draft = ""
@@ -104,6 +105,8 @@ struct AssistantView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { composer }
+            .onAppear(perform: takePendingAsk)
+            .onChange(of: app.pendingAsk) { _, _ in takePendingAsk() }
             .navigationTitle("Assistant")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -179,6 +182,12 @@ struct AssistantView: View {
                 .overlay(Circle().stroke(Theme.border))
         }
         .accessibilityLabel(label)
+    }
+
+    private func takePendingAsk() {
+        guard let ask = app.pendingAsk else { return }
+        app.pendingAsk = nil
+        chat.send(ask, onReply: replyHandler)
     }
 
     private func sendDraft() {

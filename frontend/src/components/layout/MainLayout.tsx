@@ -23,12 +23,19 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const [nativeApp, setNativeApp] = useState(false);
-  useEffect(() => setNativeApp(!!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()), []);
+  // A page opened inside the native SwiftUI app: the app has its own tab bar,
+  // menu and voice, so only the page itself shows.
+  const [embedded, setEmbedded] = useState(false);
+  useEffect(() => {
+    setNativeApp(!!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    setEmbedded(/TheThirdEyeApp\//.test(navigator.userAgent));
+  }, []);
   useJarvisTriggers(activateAssistant);
 
   return (
     <div className="relative flex h-screen bg-background-base overflow-hidden">
       <AmbientScene />
+      {!embedded && <>
       {/* Mobile hamburger button — visible below lg breakpoint.
           Insets are on the button itself: the scroll container below applies
           the top inset as padding, but this is `fixed`, so it never inherited
@@ -43,12 +50,13 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       </button>
 
       <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
+      </>}
       <main
         id="main-content"
         tabIndex={-1}
         className={cn(
-          mainClassName ??
-          "flex-1 overflow-y-auto pt-[calc(3.5rem_+_env(safe-area-inset-top))] sm:pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 sm:pl-14 sm:pr-16 lg:pl-0 lg:pr-40",
+          mainClassName ?? (embedded ? "flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]" :
+          "flex-1 overflow-y-auto pt-[calc(3.5rem_+_env(safe-area-inset-top))] sm:pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 sm:pl-14 sm:pr-16 lg:pl-0 lg:pr-40"),
           "relative z-[1]",
         )}
       >
@@ -62,8 +70,10 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       <div key={pathname} className="route-scan" aria-hidden="true" />
       <MotionNotice />
       {nativeApp && <NativeAutoSync />}
-      <BottomNav onMore={() => setMobileMenuOpen(true)} />
-      <VoiceOverlay />
+      {!embedded && <>
+        <BottomNav onMore={() => setMobileMenuOpen(true)} />
+        <VoiceOverlay />
+      </>}
     </div>
   );
 }
