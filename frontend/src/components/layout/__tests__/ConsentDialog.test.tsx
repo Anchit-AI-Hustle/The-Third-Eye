@@ -42,6 +42,15 @@ describe("ConsentDialog", () => {
     expect(screen.queryByText("Activate Assistant")).toBeNull();
   });
 
+  it("stays closed on the public landing page, before anyone has signed in", async () => {
+    pathname = "/";
+    render(<ConsentDialog />);
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(screen.queryByText("Activate Assistant")).toBeNull();
+  });
+
   it("sets the always policy for every capability granted on Grant access", async () => {
     const setPolicySpy = vi.spyOn(consent, "setPolicy");
     render(<ConsentDialog />);

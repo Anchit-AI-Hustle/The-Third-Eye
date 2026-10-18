@@ -8,6 +8,7 @@ import { FeatureGrid, type Feature } from "@/components/landing/FeatureGrid";
 import { Reveal } from "@/components/hud/Reveal";
 import { HoloFrame } from "@/components/hud/HoloFrame";
 import { LogoMark } from "@/components/layout/LogoMark";
+import { AppStartRedirect } from "@/components/landing/AppStartRedirect";
 
 export const metadata = {
   title: "The Third Eye - Your Personal AI Operating System",
@@ -75,6 +76,7 @@ export default async function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background-base text-text-primary">
+      <AppStartRedirect />
       {/* Ambient background glow */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
         <div className="absolute left-1/2 top-0 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-accent-blue/5 blur-3xl" />

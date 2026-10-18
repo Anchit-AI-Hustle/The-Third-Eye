@@ -4,16 +4,9 @@ import { getCsrfToken } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Welcome, WELCOME_SEEN } from "@/components/onboarding/Welcome";
 import { LogoMark } from "@/components/layout/LogoMark";
+import { inInstalledApp } from "@/lib/installedApp";
 import { SceneBackdrop } from "@/components/hud/SceneBackdrop";
 import { HoloFrame } from "@/components/hud/HoloFrame";
-
-// A home-screen app keeps its own cookies, apart from Safari where Google
-// sign-in finishes, and Google refuses sign-in inside the native app's web
-// view, so both sign in through /auth/handoff instead.
-function inHomeScreenApp(): boolean {
-  if ((window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) return true;
-  return (navigator as { standalone?: boolean }).standalone === true || window.matchMedia?.("(display-mode: standalone)").matches === true;
-}
 
 const ERROR_TEXT: Record<string, string> = {
   AccessDenied: "Google didn't allow that sign-in. It only needs your name and email.",
@@ -38,7 +31,7 @@ export function SignInClient({
 
   const [welcome, setWelcome] = useState(false);
   useEffect(() => {
-    setStandalone(inHomeScreenApp());
+    setStandalone(inInstalledApp());
     let seen = false;
     try { seen = localStorage.getItem(WELCOME_SEEN) === "1"; } catch { /* treat as unseen */ }
     setWelcome(!seen);
