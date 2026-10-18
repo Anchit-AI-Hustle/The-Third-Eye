@@ -20,8 +20,7 @@
   --color-accent-red: #EF4444;
   --color-success: #10B981;
   --color-warning: #F59E0B;
-  /* Kept as an alias of the primary accent: `--color-arc` is consumed by the
-     arc-reactor motif, which is the same brand blue by definition. */
+  /* Alias of the primary accent, the same brand blue by definition. */
   --color-arc: var(--color-accent-blue);
   --accent-rgb: 79, 195, 247;
   --violet-rgb: 123, 92, 240;
@@ -89,8 +88,6 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  html:not([data-motion-full]) .arc-reactor::before, html:not([data-motion-full]) .arc-reactor::after { animation: none !important; }
-  html:not([data-motion-full]) .arc-reactor-core { animation: none !important; }
   html:not([data-motion-full]) .holo-card::before { transition: none !important; }
 }
 
@@ -121,74 +118,6 @@ body {
 .gradient-text-arc {
   background: linear-gradient(135deg, var(--color-accent-blue), #4F8EF7, var(--color-accent-violet));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-}
-
-/* ── Arc reactor ─────────────────────────────────────── */
-.arc-reactor {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(79,195,247,0.15) 0%, transparent 70%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.arc-reactor::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  border: 2px solid rgba(79,195,247,0.5);
-  animation: arcSpin 8s linear infinite;
-  box-shadow: 0 0 10px rgba(79,195,247,0.3), inset 0 0 10px rgba(79,195,247,0.1);
-}
-.arc-reactor::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(79,195,247,0.3);
-  border-top-color: transparent;
-  border-bottom-color: transparent;
-  animation: arcSpin 4s linear infinite reverse;
-}
-.arc-reactor-core {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #4FC3F7 0%, rgba(79,195,247,0.5) 60%, transparent 100%);
-  box-shadow: 0 0 8px rgba(79,195,247,0.6), 0 0 20px rgba(79,195,247,0.3);
-  animation: arcPulse 2s ease-in-out infinite;
-  z-index: 1;
-}
-
-.arc-reactor-lg {
-  width: 120px;
-  height: 120px;
-}
-.arc-reactor-lg::before {
-  border-width: 3px;
-}
-.arc-reactor-lg::after {
-  inset: 20px;
-  border-width: 2px;
-}
-.arc-reactor-lg .arc-reactor-core {
-  width: 30px;
-  height: 30px;
-  box-shadow: 0 0 15px rgba(79,195,247,0.6), 0 0 40px rgba(79,195,247,0.3), 0 0 80px rgba(79,195,247,0.1);
-}
-
-/* Third ring for large reactor */
-.arc-reactor-lg .arc-reactor-ring3 {
-  position: absolute;
-  inset: 10px;
-  border-radius: 50%;
-  border: 1px solid rgba(79,195,247,0.2);
-  border-left-color: transparent;
-  border-right-color: transparent;
-  animation: arcSpin 6s linear infinite;
 }
 
 /* ── Animations ───────────────────────────────────────── */
@@ -327,11 +256,6 @@ body {
 @keyframes pulseGlow {
   0%,100% { box-shadow: 0 0 4px rgba(16,185,129,0.4); }
   50%      { box-shadow: 0 0 12px rgba(16,185,129,0.8), 0 0 24px rgba(16,185,129,0.3); }
-}
-@keyframes arcSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes arcPulse {
-  0%,100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
 }
 @keyframes hologramFlicker {
   0%,97%,100% { opacity: 1; }

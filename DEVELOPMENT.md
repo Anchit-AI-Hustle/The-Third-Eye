@@ -331,8 +331,11 @@ the self-built ones so they don't get buried in the third-party directory.
 
 ## 11. Front-end & dashboard
 
-- **Cinematic layer:** Three.js arc-reactor hero (`components/landing/HeroCanvas`,
-  `components/dashboard/ReactorCanvas`) and GSAP scroll-reveals — lazy-imported,
+- **Logo:** `components/layout/LogoMark` (segmented-arc eye with a "T" iris) is
+  the one app mark; `public/logo.svg` is it on the icon tile, and every web,
+  iOS and Android icon and splash PNG is rendered from that.
+- **Cinematic layer:** Three.js landing hero (`components/landing/HeroCanvas`)
+  and GSAP scroll-reveals — lazy-imported,
   DPR-capped, disposed on unmount, `prefers-reduced-motion`-aware, paused on hidden
   tabs.
 - **Command Center:** the dashboard surfaces every feature as a live widget

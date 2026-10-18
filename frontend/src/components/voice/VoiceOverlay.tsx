@@ -26,6 +26,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { saveWithConsent } from "@/components/assistant/FileCard";
 import type { SavedFile } from "@/lib/fileSave";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 interface LiveBubble {
   phase: "recording" | "transcribing" | "interim";
@@ -469,9 +470,7 @@ export function VoiceOverlay() {
               {micOn ? status : agent.name}
             </span>
           )}
-          <div className="arc-reactor flex-none" style={{ width: 28, height: 28 }}>
-            <div className="arc-reactor-core" style={{ width: 7, height: 7 }} />
-          </div>
+          <LogoMark size={28} className="flex-none" />
         </button>
       )}
 
@@ -483,9 +482,7 @@ export function VoiceOverlay() {
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-[rgba(79,195,247,0.1)] flex-none">
             <div className="flex items-center gap-2">
-              <div className="arc-reactor flex-none" style={{ width: 22, height: 22 }}>
-                <div className="arc-reactor-core" style={{ width: 5, height: 5 }} />
-              </div>
+              <LogoMark size={22} className="flex-none" />
               <div>
                 <span className="hud-label text-[#4FC3F7] text-[9px]">{status}</span>
               </div>
@@ -606,9 +603,7 @@ export function VoiceOverlay() {
                 {stt.permissionDenied || (micOn && stt.recognitionIssue) ? (
                   <AlertTriangle size={20} className="text-warning mb-2" />
                 ) : (
-                  <div className="arc-reactor mb-3" style={{ width: 36, height: 36 }}>
-                    <div className="arc-reactor-core" style={{ width: 10, height: 10 }} />
-                  </div>
+                  <LogoMark size={36} className="mb-3" />
                 )}
                 <p className="hud-label text-[#4FC3F7]/60 text-[9px]">
                   {stt.permissionDenied

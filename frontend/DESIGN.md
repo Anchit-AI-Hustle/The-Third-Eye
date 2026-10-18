@@ -53,7 +53,8 @@ motion:
 JARVIS is a heads-up-display assistant, not a generic SaaS dashboard. The look
 is **dark, precise, and quiet** with one loud thing: arc blue. Think Iron
 Man's UI — near-black glass, hairline borders, faint blue glow on what matters,
-and thin animated "arc reactor" rings as the signature motif. Everything else
+and the eye mark (`components/layout/LogoMark`, blue-to-violet segmented arcs)
+as the signature motif. Everything else
 stays out of the way so the accent and the content carry the screen.
 
 ## How to use the tokens
