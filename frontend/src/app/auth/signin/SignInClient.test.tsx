@@ -103,6 +103,31 @@ describe("SignInClient", () => {
     delete (window as { Capacitor?: unknown }).Capacitor;
   });
 
+  it("in the Android app, opens Google in the phone's browser and signs in when the browser hands the code back", async () => {
+    let onUrl: ((e: { url: string }) => void) | undefined;
+    const addListener = vi.fn(async (_e: string, cb: (e: { url: string }) => void) => { onUrl = cb; return { remove: vi.fn() }; });
+    (window as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true, getPlatform: () => "android", Plugins: { App: { addListener } } };
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", { value: { ...window.location, assign }, configurable: true });
+    const fetchMock = vi.fn(async () => Response.json({ signedIn: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const code = "b".repeat(64);
+
+    render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    await act(async () => { screen.getByRole("button", { name: "Continue with Google" }).click(); });
+
+    expect(open).toHaveBeenCalledWith("/api/app-signin", "_blank");
+    expect(addListener).toHaveBeenCalledWith("appUrlOpen", expect.any(Function));
+    await act(async () => { onUrl!({ url: `thethirdeye://auth?code=${code}` }); });
+    expect(fetchMock).toHaveBeenCalledWith(`/api/auth/handoff?code=${code}`);
+    expect(assign).toHaveBeenCalledWith("/dashboard");
+
+    vi.unstubAllGlobals();
+    open.mockRestore();
+    delete (window as { Capacitor?: unknown }).Capacitor;
+  });
+
   it("welcomes a first-time person in three screens before sign-in, once", async () => {
     localStorage.clear();
     const { unmount } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);

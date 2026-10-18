@@ -18,7 +18,6 @@ struct TheThirdEyeApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var session: Session
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -35,10 +34,6 @@ struct RootView: View {
             }
         }
         .task { await session.refresh() }
-        .onChange(of: scenePhase) { _, phase in
-            // Back from Safari after approving sign-in: check straight away.
-            if phase == .active, session.pendingCode != nil { Task { await session.pollOnce() } }
-        }
     }
 }
 

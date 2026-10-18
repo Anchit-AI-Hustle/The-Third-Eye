@@ -15,6 +15,11 @@ describe("safeCallbackPath", () => {
     expect(safeCallbackPath("https://the-third-eye.anchit-tandon.com/auth/signin")).toBe("/dashboard");
   });
 
+  it("lets Google come back to the app hand-offs", () => {
+    expect(safeCallbackPath(`/auth/handoff?code=${"a".repeat(64)}`)).toBe(`/auth/handoff?code=${"a".repeat(64)}`);
+    expect(safeCallbackPath("/api/app-signin")).toBe("/api/app-signin");
+  });
+
   it("rejects off-site and empty targets", () => {
     expect(safeCallbackPath("")).toBe("/dashboard");
     expect(safeCallbackPath("https://evil.example/steal")).toBe("/dashboard");

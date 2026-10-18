@@ -16,6 +16,13 @@ const ERROR_TEXT: Record<string, string> = {
   Configuration: "Sign-in isn't configured on the server.",
 };
 
+type CapacitorApp = { addListener(e: "appUrlOpen", cb: (e: { url: string }) => void): Promise<{ remove(): void }> };
+
+function androidApp(): CapacitorApp | undefined {
+  const cap = (window as { Capacitor?: { getPlatform?: () => string; Plugins?: { App?: CapacitorApp } } }).Capacitor;
+  return cap?.getPlatform?.() === "android" ? cap.Plugins?.App : undefined;
+}
+
 export function SignInClient({
   callbackUrl,
   initialError,
@@ -48,7 +55,21 @@ export function SignInClient({
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", poll); };
   }, [handoff, callbackUrl]);
 
+  // Android app: Google in the phone's browser, which hands a ready code back
+  // through thethirdeye:// (api/app-signin) for this web view to claim.
+  function startAppSignIn(app: CapacitorApp) {
+    void app.addListener("appUrlOpen", async ({ url }) => {
+      const code = new URL(url).searchParams.get("code");
+      if (!code) return;
+      const r = await fetch(`/api/auth/handoff?code=${code}`).then((res) => res.json()).catch(() => null);
+      if (r?.signedIn) window.location.assign(callbackUrl);
+    });
+    window.open("/api/app-signin", "_blank");
+  }
+
   async function startHandoff() {
+    const app = androidApp();
+    if (app) return startAppSignIn(app);
     const code = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
     // Open first, still inside the tap: iOS drops a window opened after an await.
     // The code is registered long before the person reaches Approve.

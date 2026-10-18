@@ -203,6 +203,13 @@ describe("userFacingOutage", () => {
     expect(userFacingOutage(raw)).not.toMatch(/couple of minutes/);
   });
 
+  it("when every free limit is used up, says when the first one resets, in the person's time", () => {
+    const raw = "groq  skipped: cooling down after a recent quota error gemini-lite  skipped: quota until 04:27 UTC gemini  skipped: quota until 23:59 UTC";
+    const now = new Date("2026-10-18T03:54:00Z");
+    expect(userFacingOutage(raw, "Asia/Kolkata", now)).toBe("My free AI limits are used up for now. The first one resets at about 9:57 AM. Please try again then.");
+    expect(userFacingOutage(raw, "UTC", new Date("2026-10-18T05:00:00Z"))).toMatch(/at about 11:59 PM/);
+  });
+
   it("treats a plain rate limit as a short wait", () => {
     expect(userFacingOutage("RESOURCE_EXHAUSTED 429")).toMatch(/about a minute/);
   });
