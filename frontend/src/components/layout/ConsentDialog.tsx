@@ -10,7 +10,7 @@ import { useConsentBundle } from "@/hooks/useConsent";
 // sign-in flow. Asking for the microphone over a privacy policy is both a poor
 // first impression and an obstacle to anyone reviewing the document, including
 // Google's OAuth reviewers, who open these URLs directly.
-const NO_PROMPT_PATHS = ["/privacy_policy", "/terms_of_service", "/auth", "/install"];
+const NO_PROMPT_PATHS = ["/privacy_policy", "/terms_of_service", "/auth", "/install", "/get"];
 
 interface ConsentItem {
   key: ConsentKey;
