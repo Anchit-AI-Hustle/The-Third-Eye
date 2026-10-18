@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SignInClient } from "./SignInClient";
 
@@ -12,6 +12,7 @@ describe("SignInClient", () => {
   beforeEach(() => {
     getCsrfToken.mockReset();
     getCsrfToken.mockResolvedValue("csrf-test");
+    localStorage.setItem("te_welcome_seen", "1");
   });
 
   it("posts straight to Google sign-in with a fresh csrf token", async () => {
@@ -70,6 +71,8 @@ describe("SignInClient", () => {
     const code = JSON.parse(String(start!.body)).code as string;
     expect(code).toMatch(/^[0-9a-f]{64}$/);
     expect(open).toHaveBeenCalledWith(`/auth/handoff?code=${code}`, "_blank");
+    // Opened before any network wait: iOS blocks a window opened after the tap's moment has passed.
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]);
     expect(screen.getByText(code.slice(0, 4).toUpperCase())).toBeTruthy();
 
     approved = true;
@@ -96,5 +99,30 @@ describe("SignInClient", () => {
     vi.unstubAllGlobals();
     open.mockRestore();
     delete (window as { Capacitor?: unknown }).Capacitor;
+  });
+
+  it("welcomes a first-time person in three screens before sign-in, once", async () => {
+    localStorage.clear();
+    const { unmount } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+
+    expect(screen.getByRole("heading", { name: /Your assistant, always on call/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: /It acts, not just answers/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: /Private by design/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+
+    unmount();
+    render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+  });
+
+  it("lets a person skip the welcome", () => {
+    localStorage.clear();
+    render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
   });
 });

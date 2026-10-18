@@ -2,6 +2,7 @@
 
 import { getCsrfToken } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
+import { Welcome, WELCOME_SEEN } from "@/components/onboarding/Welcome";
 
 // A home-screen app keeps its own cookies, apart from Safari where Google
 // sign-in finishes, and Google refuses sign-in inside the native app's web
@@ -32,7 +33,13 @@ export function SignInClient({
   const [standalone, setStandalone] = useState(false);
   const [handoff, setHandoff] = useState<string | null>(null);
 
-  useEffect(() => setStandalone(inHomeScreenApp()), []);
+  const [welcome, setWelcome] = useState(false);
+  useEffect(() => {
+    setStandalone(inHomeScreenApp());
+    let seen = false;
+    try { seen = localStorage.getItem(WELCOME_SEEN) === "1"; } catch { /* treat as unseen */ }
+    setWelcome(!seen);
+  }, []);
 
   useEffect(() => {
     if (!handoff) return;
@@ -47,9 +54,11 @@ export function SignInClient({
 
   async function startHandoff() {
     const code = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
+    // Open first, still inside the tap: iOS drops a window opened after an await.
+    // The code is registered long before the person reaches Approve.
+    window.open(`/auth/handoff?code=${code}`, "_blank");
     await fetch("/api/auth/handoff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     setHandoff(code);
-    window.open(`/auth/handoff?code=${code}`, "_blank");
   }
 
   useEffect(() => {
@@ -85,6 +94,8 @@ export function SignInClient({
     : initialError
       ? (ERROR_TEXT[initialError] ?? "Sign-in didn't finish. Continue once more.")
       : null;
+
+  if (welcome) return <Welcome onDone={() => setWelcome(false)} />;
 
   return (
     <div className="min-h-screen bg-background-base flex flex-col items-center justify-center px-4 relative overflow-hidden">
