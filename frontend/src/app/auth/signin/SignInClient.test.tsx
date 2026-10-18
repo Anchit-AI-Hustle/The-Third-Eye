@@ -12,6 +12,7 @@ describe("SignInClient", () => {
   beforeEach(() => {
     getCsrfToken.mockReset();
     getCsrfToken.mockResolvedValue("csrf-test");
+    localStorage.setItem("te_welcome_seen", "1");
   });
 
   it("posts straight to Google sign-in with a fresh csrf token", async () => {
@@ -52,7 +53,6 @@ describe("SignInClient", () => {
 
   it("in the iPhone home-screen app, signs in through Safari and picks the session up when approved", async () => {
     Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
-    localStorage.setItem("te_welcome_seen", "1");
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const assign = vi.fn();
     Object.defineProperty(window, "location", { value: { ...window.location, assign }, configurable: true });
@@ -71,6 +71,8 @@ describe("SignInClient", () => {
     const code = JSON.parse(String(start!.body)).code as string;
     expect(code).toMatch(/^[0-9a-f]{64}$/);
     expect(open).toHaveBeenCalledWith(`/auth/handoff?code=${code}`, "_blank");
+    // Opened before any network wait: iOS blocks a window opened after the tap's moment has passed.
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]);
     expect(screen.getByText(code.slice(0, 4).toUpperCase())).toBeTruthy();
 
     approved = true;
@@ -85,7 +87,6 @@ describe("SignInClient", () => {
 
   it("in the native iPhone app, also signs in through Safari, since Google refuses sign-in inside an app's web view", async () => {
     (window as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
-    localStorage.setItem("te_welcome_seen", "1");
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
 
@@ -100,8 +101,7 @@ describe("SignInClient", () => {
     delete (window as { Capacitor?: unknown }).Capacitor;
   });
 
-  it("in the installed app, welcomes a first-time person in three screens before sign-in, once", async () => {
-    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+  it("welcomes a first-time person in three screens before sign-in, once", async () => {
     localStorage.clear();
     const { unmount } = render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
 
@@ -117,15 +117,12 @@ describe("SignInClient", () => {
     unmount();
     render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
-    delete (window.navigator as { standalone?: boolean }).standalone;
   });
 
   it("lets a person skip the welcome", () => {
-    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
     localStorage.clear();
     render(<SignInClient callbackUrl="/dashboard" initialError={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
-    delete (window.navigator as { standalone?: boolean }).standalone;
   });
 });

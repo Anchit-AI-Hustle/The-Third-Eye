@@ -35,11 +35,10 @@ export function SignInClient({
 
   const [welcome, setWelcome] = useState(false);
   useEffect(() => {
-    const app = inHomeScreenApp();
-    setStandalone(app);
+    setStandalone(inHomeScreenApp());
     let seen = false;
     try { seen = localStorage.getItem(WELCOME_SEEN) === "1"; } catch { /* treat as unseen */ }
-    setWelcome(app && !seen);
+    setWelcome(!seen);
   }, []);
 
   useEffect(() => {
@@ -55,9 +54,11 @@ export function SignInClient({
 
   async function startHandoff() {
     const code = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
+    // Open first, still inside the tap: iOS drops a window opened after an await.
+    // The code is registered long before the person reaches Approve.
+    window.open(`/auth/handoff?code=${code}`, "_blank");
     await fetch("/api/auth/handoff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     setHandoff(code);
-    window.open(`/auth/handoff?code=${code}`, "_blank");
   }
 
   useEffect(() => {

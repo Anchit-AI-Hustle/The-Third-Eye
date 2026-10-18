@@ -16,11 +16,26 @@ npm run cap:sync
 
 ## Android without a local SDK
 
-The **Android APK** workflow (`.github/workflows/android-apk.yml`) builds a
-debug APK on GitHub's runner for free. Run it from the Actions tab (or it runs
-on any change to `android/`). Builds from `main` also publish the APK to the
+The **Android APK** workflow (`.github/workflows/android-apk.yml`) builds the
+APK on GitHub's runner for free. Pull requests build a debug APK. Builds from
+`main` make a release APK signed with one fixed key and publish it to the
 public `android-latest` release, which the site's `/install` page links for a
-one-tap download. A store release still needs the signed bundle below.
+one-tap download. The same key on every build is what lets a new APK install
+over the old one, so keep it.
+
+Make the key once, on any machine with a JDK, and keep the file and passwords
+somewhere safe (losing them means everyone reinstalls):
+
+```bash
+keytool -genkeypair -v -keystore the-third-eye.keystore -alias the-third-eye \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 the-third-eye.keystore   # macOS: base64 -i the-third-eye.keystore
+```
+
+Then in GitHub > Settings > Secrets and variables > Actions add
+`ANDROID_KEYSTORE_BASE64` (the base64 output), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` (`the-third-eye`) and `ANDROID_KEY_PASSWORD`. A phone that
+has the older debug APK uninstalls it once before installing the signed one.
 
 ## iOS on your own iPhone, free
 
