@@ -29,7 +29,7 @@ const ITEMS: ConsentItem[] = [
 export function ConsentDialog() {
   const { bundleAsked, requestAll } = useConsentBundle();
   const pathname = usePathname();
-  const suppressed = NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p));
+  const suppressed = pathname === "/" || NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p));
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<Partial<Record<ConsentKey, ConsentState>>>({});
   const [busy, setBusy] = useState(false);
