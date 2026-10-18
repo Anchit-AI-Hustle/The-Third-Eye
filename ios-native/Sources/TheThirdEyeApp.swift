@@ -3,11 +3,13 @@ import SwiftUI
 @main
 struct TheThirdEyeApp: App {
     @StateObject private var session = Session()
+    @StateObject private var app = AppState()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(session)
+                .environmentObject(app)
                 .preferredColorScheme(.dark)
                 .tint(Theme.blue)
         }
@@ -40,17 +42,27 @@ struct RootView: View {
     }
 }
 
+// The same five tabs as the website's phone layout.
 struct MainTabs: View {
+    @EnvironmentObject private var app: AppState
+
     var body: some View {
-        TabView {
+        TabView(selection: $app.tab) {
+            TodayView()
+                .tabItem { Label("Today", systemImage: "square.grid.2x2") }
+                .tag(AppState.Tab.today)
             AssistantView()
-                .tabItem { Label("Assistant", systemImage: "bubble.left.and.text.bubble.right") }
+                .tabItem { Label("Assistant", systemImage: "bubble.left") }
+                .tag(AppState.Tab.assistant)
             TasksView()
-                .tabItem { Label("Tasks", systemImage: "checklist") }
+                .tabItem { Label("Tasks", systemImage: "checkmark.square") }
+                .tag(AppState.Tab.tasks)
             NotesView()
-                .tabItem { Label("Notes", systemImage: "note.text") }
+                .tabItem { Label("Notes", systemImage: "doc.text") }
+                .tag(AppState.Tab.notes)
             MoreView()
-                .tabItem { Label("More", systemImage: "square.grid.2x2") }
+                .tabItem { Label("More", systemImage: "line.3.horizontal") }
+                .tag(AppState.Tab.more)
         }
     }
 }
