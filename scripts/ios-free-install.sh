@@ -35,6 +35,14 @@ fi
 # A free team can't use a bundle ID another team has registered, so make one of its own.
 BUNDLE_ID="${BUNDLE_ID:-com.thethirdeye.app.$(echo "$TEAM_ID" | tr '[:upper:]' '[:lower:]')}"
 
+# The native SwiftUI app (ios-native/) by default; LEGACY=1 builds the older
+# web-view app in ios/App. Both use the same bundle ID, so one replaces the other.
+if [ -n "${LEGACY:-}" ]; then
+  PROJECT=ios/App/App.xcodeproj SCHEME=App BUILD=ios/App/build PRODUCT=App.app
+else
+  PROJECT=ios-native/TheThirdEye.xcodeproj SCHEME=TheThirdEye BUILD=ios-native/build PRODUCT=TheThirdEye.app
+fi
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 xcrun devicectl list devices --json-output "$tmp/devices.json" >/dev/null
@@ -63,7 +71,18 @@ Then run this script again.
 EOF
   exit 1
 fi
-if ! xcodebuild -project ios/App/App.xcodeproj -scheme App -showdestinations 2>/dev/null | grep -q "id:$UDID"; then
+prepare() {
+  if [ -n "${LEGACY:-}" ]; then
+    npm ci --silent
+    npx cap sync ios
+  else
+    command -v xcodegen >/dev/null || brew install xcodegen
+    (cd ios-native && xcodegen generate --quiet)
+  fi
+}
+echo "▶ Preparing the app project…"
+prepare
+if ! xcodebuild -project "$PROJECT" -scheme "$SCHEME" -showdestinations 2>/dev/null | grep -q "id:$UDID"; then
   open -a Xcode
   cat <<'EOF'
 Xcode sees the iPhone but hasn't prepared it for development yet (it offers only "Any iOS Device"). Once:
@@ -77,20 +96,16 @@ EOF
   exit 1
 fi
 
-echo "▶ Preparing the native project…"
-npm ci --silent
-npx cap sync ios
-
 echo "▶ Fetching the app's Swift packages (the first time takes a few minutes)…"
-xcodebuild -project ios/App/App.xcodeproj -scheme App -derivedDataPath ios/App/build -resolvePackageDependencies \
+xcodebuild -project "$PROJECT" -scheme "$SCHEME" -derivedDataPath "$BUILD" -resolvePackageDependencies \
   | grep -E --line-buffered "Fetching|Resolved|Cloning|error" || true
 
 echo "▶ Building and signing for your iPhone (team $TEAM_ID, $BUNDLE_ID); a first build takes 3 to 10 minutes…"
-LOG=ios/App/build/xcodebuild.log
-mkdir -p ios/App/build
+LOG="$BUILD/xcodebuild.log"
+mkdir -p "$BUILD"
 # The full log goes to a file; the screen shows one line per step so a long build never looks stuck.
-xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
-  -destination "platform=iOS,id=$UDID" -derivedDataPath ios/App/build \
+xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+  -destination "platform=iOS,id=$UDID" -derivedDataPath "$BUILD" \
   -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
   CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$TEAM_ID" PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
   build 2>&1 | tee "$LOG" | grep -E --line-buffered "^(CompileSwift|Ld |CodeSign|ProcessInfoPlistFile)|error:|BUILD (SUCCEEDED|FAILED)" \
@@ -103,7 +118,7 @@ if ! grep -q "BUILD SUCCEEDED" "$LOG"; then
 fi
 
 echo "▶ Installing…"
-xcrun devicectl device install app --device "$DEVICE" ios/App/build/Build/Products/Release-iphoneos/App.app
+xcrun devicectl device install app --device "$DEVICE" "$BUILD/Build/Products/Release-iphoneos/$PRODUCT"
 
 if ! xcrun devicectl device process launch --device "$DEVICE" "$BUNDLE_ID" >/dev/null 2>&1; then
   echo "Installed. First time only: on the iPhone open Settings > General > VPN & Device Management,"
