@@ -2532,7 +2532,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             err instanceof Error ? err.message : String(err),
             cascadeErr instanceof LlmCascadeError ? cascadeErr.attempts.map((a) => `${a.provider} ${a.status ?? ""} ${a.reason ?? ""}`).join(" ") : String(cascadeErr),
           ].join(" | ");
-          const message = userFacingOutage(raw);
+          const message = userFacingOutage(raw, timezone || req.headers.get("x-vercel-ip-timezone") || "UTC");
           // A streaming response has already sent its 200 headers by now, so
           // this failure is invisible to anything watching status codes. Log it
           // so it reaches the runtime logs and gets grouped as an error there —

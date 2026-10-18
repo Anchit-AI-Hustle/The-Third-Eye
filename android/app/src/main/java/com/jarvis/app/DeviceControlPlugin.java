@@ -182,12 +182,13 @@ public class DeviceControlPlugin extends Plugin {
         }
     }
 
-    // Google refuses sign-in inside a WebView, so the sign-in handoff page
-    // (SignInClient opens it) goes to the phone's browser; this app then
-    // claims the approved code for its own session.
+    // Google refuses sign-in inside a WebView, so sign-in (SignInClient opens
+    // /api/app-signin) goes to the phone's browser, which hands a code back
+    // through thethirdeye://auth for this app to claim.
     @Override
     public Boolean shouldOverrideLoad(Uri url) {
-        if (!"/auth/handoff".equals(url.getPath())) return null;
+        String path = url.getPath();
+        if (!"/api/app-signin".equals(path) && !"/auth/handoff".equals(path)) return null;
         Intent intent = new Intent(Intent.ACTION_VIEW, url);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);

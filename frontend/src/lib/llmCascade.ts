@@ -307,7 +307,12 @@ function failureKind(a: LlmCascadeResult["attempts"][number]): string {
  * matches both shapes, so credit exhaustion wins and is never described as a
  * short wait.
  */
-export function userFacingOutage(raw: string): string {
+export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()): string {
+  const reset = firstReset(raw, now);
+  if (reset) {
+    const at = reset.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+    return `My free AI limits are used up for now. The first one resets at about ${at}. Please try again then.`;
+  }
   const outOfCredit = /credit balance|insufficient_quota|\bbilling\b|payment required/i.test(raw);
   const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
   const overloaded = /\b503\b|UNAVAILABLE|overloaded/i.test(raw);
@@ -315,6 +320,17 @@ export function userFacingOutage(raw: string): string {
   if (rateLimited) return "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute.";
   if (overloaded) return "I'm at capacity right now. This should clear on its own within a minute or two, so please try again shortly.";
   return "Something went wrong on my end. Please try again in a moment.";
+}
+
+// Earliest "quota until HH:MM UTC" (from a cooldown skip) still ahead of now.
+function firstReset(raw: string, now: Date): Date | undefined {
+  const times = [...raw.matchAll(/until (\d{2}):(\d{2}) UTC/g)].map(([, h, m]) => {
+    const t = new Date(now);
+    t.setUTCHours(Number(h), Number(m), 0, 0);
+    if (t <= now) t.setUTCDate(t.getUTCDate() + 1);
+    return t;
+  });
+  return times.sort((a, b) => a.getTime() - b.getTime())[0];
 }
 
 /** The user-facing reason a generation failed: which provider said what, not "all unavailable". */

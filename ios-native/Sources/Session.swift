@@ -1,19 +1,19 @@
+import AuthenticationServices
 import SwiftUI
 
-// Sign-in: Google refuses sign-in inside an app, so the app registers a random
-// code, opens /auth/handoff in Safari where the person signs in and approves
-// it, then claims the code for its own session cookie (frontend
-// app/api/auth/handoff).
+// Sign-in: Google refuses sign-in inside an app's own web view, so it runs in
+// the system sign-in sheet (shared with Safari, so a Google account already
+// signed in there is one tap). frontend api/app-signin then hands back a
+// one-time code through thethirdeye://auth, which the app claims for its own
+// session cookie at /api/auth/handoff.
 @MainActor
 final class Session: ObservableObject {
     enum State { case checking, signedOut, signedIn }
 
     @Published var state: State = .checking
-    @Published var pendingCode: String?
+    @Published var busy = false
     @Published var error: String?
     @Published var name: String?
-
-    private var poller: Task<Void, Never>?
 
     func refresh() async {
         // CI's layout screenshots open the tabs without an account.
@@ -29,39 +29,27 @@ final class Session: ObservableObject {
         }
     }
 
-    func signIn() async {
+    func signIn(with web: WebAuthenticationSession) async {
         error = nil
-        var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        let code = bytes.map { String(format: "%02x", $0) }.joined()
+        busy = true
+        defer { busy = false }
         do {
-            try await API.send("POST", "/api/auth/handoff", json: ["code": code])
+            let back = try await web.authenticate(using: API.url("/api/app-signin"), callbackURLScheme: "thethirdeye")
+            guard let code = URLComponents(url: back, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value else {
+                error = "Sign-in didn't finish. Try again."
+                return
+            }
+            let data = try await API.send("GET", "/api/auth/handoff?code=\(code)")
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard json?["signedIn"] as? Bool == true else {
+                error = "Sign-in expired. Try again."
+                return
+            }
+            await refresh()
+        } catch ASWebAuthenticationSessionError.canceledLogin {
         } catch {
             self.error = error.localizedDescription
-            return
         }
-        pendingCode = code
-        _ = await UIApplication.shared.open(API.url("/auth/handoff?code=\(code)"))
-        poller?.cancel()
-        poller = Task {
-            // The code lives ten minutes on the server.
-            for _ in 0..<300 where !Task.isCancelled {
-                if await pollOnce() { return }
-                try? await Task.sleep(for: .seconds(2))
-            }
-        }
-    }
-
-    @discardableResult
-    func pollOnce() async -> Bool {
-        guard let code = pendingCode else { return false }
-        guard let data = try? await API.send("GET", "/api/auth/handoff?code=\(code)"),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              json["signedIn"] as? Bool == true else { return false }
-        pendingCode = nil
-        poller?.cancel()
-        await refresh()
-        return true
     }
 
     func signOut() {
@@ -72,6 +60,7 @@ final class Session: ObservableObject {
 
 struct SignInView: View {
     @EnvironmentObject private var session: Session
+    @Environment(\.webAuthenticationSession) private var webAuth
 
     var body: some View {
         ZStack {
@@ -95,22 +84,9 @@ struct SignInView: View {
                             .multilineTextAlignment(.center)
                     }
                     VStack(spacing: 14) {
-                        if let code = session.pendingCode {
-                            Text("Finish signing in with Google in Safari, approve code")
-                                .font(.system(size: 14))
-                                .multilineTextAlignment(.center)
-                            Text(code.prefix(4).uppercased())
-                                .font(.system(size: 26, weight: .semibold, design: .monospaced))
-                                .tracking(6)
-                                .foregroundStyle(Theme.blue)
-                            Text("then come back here. This screen opens your workspace by itself.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.muted)
-                                .multilineTextAlignment(.center)
-                        } else {
-                            Button("Continue with Google") { Task { await session.signIn() } }
-                                .buttonStyle(GlowButtonStyle())
-                        }
+                        Button(session.busy ? "Signing in…" : "Continue with Google") { Task { await session.signIn(with: webAuth) } }
+                            .buttonStyle(GlowButtonStyle())
+                            .disabled(session.busy)
                         if let error = session.error {
                             Text(error).font(.system(size: 13)).foregroundStyle(Theme.red)
                         }

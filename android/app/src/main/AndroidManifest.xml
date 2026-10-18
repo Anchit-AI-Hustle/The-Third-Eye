@@ -23,6 +23,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Sign-in comes back from the browser (frontend api/app-signin). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="thethirdeye" android:host="auth" />
+            </intent-filter>
+
             <!-- "Share to The Third Eye" for text and links (MainActivity.openShared). -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
