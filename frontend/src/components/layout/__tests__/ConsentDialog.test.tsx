@@ -33,13 +33,16 @@ describe("ConsentDialog", () => {
     vi.useRealTimers();
   });
 
-  it("stays closed on the public install page", async () => {
-    pathname = "/install";
-    render(<ConsentDialog />);
-    await act(async () => {
-      vi.advanceTimersByTime(700);
-    });
-    expect(screen.queryByText("Activate Assistant")).toBeNull();
+  it("stays closed on the public install and download pages", async () => {
+    for (const path of ["/install", "/get"]) {
+      pathname = path;
+      const { unmount } = render(<ConsentDialog />);
+      await act(async () => {
+        vi.advanceTimersByTime(700);
+      });
+      expect(screen.queryByText("Activate Assistant")).toBeNull();
+      unmount();
+    }
   });
 
   it("stays closed on the public landing page, before anyone has signed in", async () => {
