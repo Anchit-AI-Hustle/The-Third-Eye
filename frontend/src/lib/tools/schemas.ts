@@ -366,7 +366,9 @@ export const geminiTools = [
           "Open an app, a page inside JARVIS, or a website. Prefers the user's own apps: 'open my tasks', " +
           "'take me to Kolab', 'open the Music Studio' navigate inside JARVIS to Tasks, Notes, Goals, Knowledge, " +
           "Finance, Job Agent, Kolab, Lifelog and every Studio tool. Anything else opens the real service - " +
-          "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'.",
+          "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'. For orders and bookings ('biryani on Swiggy', " +
+          "'milk on Zepto', 'Dolo on 1mg', 'flights Delhi to Goa') pass the item as query: the app opens on that search " +
+          "and the user orders and pays there, so never say an order is placed.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -374,6 +376,22 @@ export const geminiTools = [
             query: { type: "STRING", description: "Optional: what to search within the app" },
           },
           required: ["target"],
+        },
+      },
+      {
+        name: "book_ride",
+        description:
+          "Book a cab or bike taxi on Uber, Ola or Rapido: 'get me an Uber to the airport', 'book a cab to Cyber Hub'. " +
+          "Opens the rider's own app with the trip filled in where the service allows it; the rider picks the ride type " +
+          "and confirms the fare there, so never say a ride is booked or quote a fare. Omit service to offer all three.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            destination: { type: "STRING", description: "Where to go: a place name, landmark or address" },
+            pickup: { type: "STRING", description: "Optional pickup place; omit to start from the rider's current location" },
+            service: { type: "STRING", enum: ["uber", "ola", "rapido"], description: "Optional: the service the user named" },
+          },
+          required: ["destination"],
         },
       },
       {

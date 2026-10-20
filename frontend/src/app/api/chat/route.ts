@@ -22,6 +22,7 @@ import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
 import { cascadeOrder, LlmCascadeError, nativeGeminiFirst, userFacingOutage } from "@/lib/llmCascade";
+import { RIDE_SERVICES, rideLinks, type RideService } from "@/lib/rides";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
 import { benchedReason, noteFailure } from "@/lib/providerHealth";
 import { attachedText, attachmentsAsText, cleanAttachments, geminiParts, isTextAttachment } from "@/lib/attachments";
@@ -36,7 +37,7 @@ import { todayBlock } from "@/lib/tools/today";
 import { callMcpTool, isMcpTool, mcpToolDeclarations } from "@/lib/mcp/client";
 import { scheduleAutomation } from "@/lib/automations";
 import { identify } from "@/lib/serverIdentity";
-import { freeNearby, freeNews, freeStockQuote, freeWebSearch } from "@/lib/freeSearch";
+import { freeGeocode, freeNearby, freeNews, freeStockQuote, freeWebSearch } from "@/lib/freeSearch";
 import { isAgentKilled, logAgentAction } from "@/lib/agentGuard";
 import { generateStudio } from "@/lib/studioGenerate";
 import { MAX_FILE_CHARS, safeFilename, type SavedFile } from "@/lib/fileSave";
@@ -1000,6 +1001,27 @@ async function runTool(
       return {
         result: `Opening ${link.label} for the user (${link.url}).`,
         sideEffect: { type: "open_url", data: { url: link.url, label: link.label } },
+      };
+    }
+
+    case "book_ride": {
+      const near = ctx.location;
+      const drop = await freeGeocode(String(input.destination ?? ""), near);
+      if (!drop) return { result: `Couldn't find "${input.destination ?? ""}" on the map. Ask the user for a clearer place name or address.` };
+      const pickup = input.pickup ? await freeGeocode(String(input.pickup), near) : null;
+      if (input.pickup && !pickup) return { result: `Couldn't find the pickup "${input.pickup}" on the map. Ask the user for a clearer place name.` };
+      const named = RIDE_SERVICES.includes(input.service) ? [input.service as RideService] : RIDE_SERVICES;
+      // Uber can start from the phone's own location; Ola's link needs coordinates.
+      const here = near ? { lat: near.latitude, lng: near.longitude, name: near.label ?? "Current location" } : undefined;
+      const links = named.map((s) => rideLinks([s], drop, pickup ?? (s === "ola" ? here : undefined), process.env.OLA_XAPP_TOKEN)[0]);
+      const said = links.map((l) => `${l.label}${l.prefilled ? " (trip filled in)" : " (the user enters the destination in the app)"}`).join("; ");
+      return {
+        result: `Found ${drop.address}. Links for the user: ${said}. The ride is not booked yet: the user picks the ride type and confirms the fare in the app.`,
+        sideEffect: {
+          type: "batch",
+          // One named service opens straight away; a choice of three is offered as buttons.
+          data: links.map((l) => ({ type: "open_url", data: { url: l.url, label: l.label, ...(named.length === 1 ? { action: "ride" } : {}) } })),
+        },
       };
     }
 
