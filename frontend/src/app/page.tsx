@@ -9,12 +9,15 @@ import { Reveal } from "@/components/hud/Reveal";
 import { HoloFrame } from "@/components/hud/HoloFrame";
 import { LogoMark } from "@/components/layout/LogoMark";
 import { AppStartRedirect } from "@/components/landing/AppStartRedirect";
+import { SiteFooter } from "@/components/landing/SiteFooter";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "The Third Eye - Your Personal AI Operating System",
   description:
     "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you - capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
-};
+  path: "/",
+});
 
 const FEATURES: Feature[] = [
   {
@@ -190,39 +193,7 @@ export default async function Home() {
           </Reveal>
         </main>
 
-        <footer className="flex flex-col items-center justify-between gap-4 border-t border-border-default py-8 text-xs text-text-muted sm:flex-row">
-          <span>© {new Date().getFullYear()} The Third Eye</span>
-
-          <nav className="flex items-center gap-4 font-mono" aria-label="Legal and product links">
-            <Link href="/install" className="transition-colors hover:text-text-secondary">
-              Get the app
-            </Link>
-
-            <span className="text-border-default" aria-hidden="true">
-              ·
-            </span>
-
-            <Link href="/capabilities" className="transition-colors hover:text-text-secondary">
-              Capabilities
-            </Link>
-
-            <span className="text-border-default" aria-hidden="true">
-              ·
-            </span>
-
-            <Link href="/privacy_policy" className="transition-colors hover:text-text-secondary">
-              Privacy Policy
-            </Link>
-
-            <span className="text-border-default" aria-hidden="true">
-              ·
-            </span>
-
-            <Link href="/terms_of_service" className="transition-colors hover:text-text-secondary">
-              Terms of Service
-            </Link>
-          </nav>
-        </footer>
+        <SiteFooter />
       </div>
     </div>
   );
