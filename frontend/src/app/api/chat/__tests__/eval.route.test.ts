@@ -332,3 +332,20 @@ describe("Jarvis reliability evaluation", () => {
     expect(r.text).toMatch(/Save a note \(not verified yet\)/);
   });
 });
+
+describe("native apps", () => {
+  it("writes the assistant's new task for a native app and says it landed", async () => {
+    script = [{ calls: [{ name: "manage_tasks", args: { action: "create", title: "Call the bank", priority: "high" } }] }, { text: "Added." }];
+    const r = await chat("add a task to call the bank", { native: true });
+    expect(r.done.applied).toEqual([{ type: "task_create", ok: true }]);
+    expect(tables.tasks).toEqual([expect.objectContaining({ user_id: "u@x.com", title: "Call the bank", priority: "high", status: "todo" })]);
+  });
+
+  it("leaves the website to write its own", async () => {
+    script = [{ calls: [{ name: "manage_tasks", args: { action: "create", title: "Call the bank" } }] }, { text: "Added." }];
+    const r = await chat("add a task to call the bank");
+    expect(r.done.applied).toBeUndefined();
+    expect(tables.tasks ?? []).toEqual([]);
+    expect(r.made("task_create")).toHaveLength(1);
+  });
+});

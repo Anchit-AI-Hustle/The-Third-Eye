@@ -88,6 +88,7 @@ struct NotesView: View {
             }
             .refreshable { await model.load() }
             .task { await model.load() }
+            .reloadsOnDataChange { await model.load() }
             .overlay { if !model.loaded { ProgressView() } }
             .sheet(item: $editing) { note in
                 NoteEditor(title: note.title, content: note.content ?? "") { t, c in Task { await model.save(id: note.id, title: t, content: c) } }

@@ -52,6 +52,7 @@ import { modelFor } from "@/lib/llmCascade";
 import { CHECKLIST_INSTRUCTION, CHECKLIST_TOOLS, Checklist, classifyResult, resumeNote } from "@/lib/checklist";
 import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 import { refundCredits, spendCredits } from "@/lib/credits";
+import { applyEffects } from "@/lib/nativeClient";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1641,6 +1642,8 @@ interface ChatRequest {
   checklist?: unknown;
   /** Settings switch: confirm every world-changing action, even ones the user asked for. */
   confirmActions?: boolean;
+  /** Sent by the native apps: the server writes the assistant's record changes (lib/nativeClient). */
+  native?: boolean;
 }
 
 // Mode-aware runtime (ported from the Mirror app): the operator's active mode
@@ -1971,7 +1974,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const {
     history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], contacts = [], location, deviceInfo,
-    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist, confirmActions,
+    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist, confirmActions, native,
   } = body;
   // Autopilot works unattended, so what it would send waits for the user.
   const actsOnRequest = !confirmActions && !body.message?.startsWith(AUTOPILOT_PREFIX);
@@ -2223,6 +2226,13 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         if (cancelled) return;
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
+      // A native app gets its record changes written here and told which landed;
+      // the website writes them itself.
+      const done = async (data: { sideEffects?: { type: string; data: any }[] } & Record<string, unknown>) => {
+        const db = getDb();
+        if (native && db && email && data.sideEffects?.length) data.applied = await applyEffects(db, email, data.sideEffects);
+        send("done", data);
+      };
       // After a cancel the stream is already closed.
       const close = () => { try { controller.close(); } catch { /* cancelled */ } };
       // Tool calls (by tool and action) whose latest attempt failed. Reported at
@@ -2304,9 +2314,9 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
       const failed = () => [...failures.keys()];
       // Tools already ran (a mail may be sent) and no model can finish the
       // reply: say what ran rather than start the task again elsewhere.
-      const endPartial = () => {
+      const endPartial = async () => {
         send("text", { text: `Done so far: ${[...new Set(toolsRun)].join(", ")}. No AI provider is available to write the rest of the reply right now, so ask again in a minute to continue.${openGap() ?? ""}` });
-        send("done", { stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+        await done({ stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
         close();
       };
 
@@ -2317,7 +2327,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         const direct = directTurn(message);
         if (direct?.kind === "open") {
           send("text", { text: direct.text });
-          send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: direct.sideEffects });
+          await done({ stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: direct.sideEffects });
           close();
           return;
         }
@@ -2331,7 +2341,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             summary,
             clientAction: false,
           });
-          send("done", { stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: [] });
+          await done({ stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: [] });
           close();
           return;
         }
@@ -2366,7 +2376,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             if (loopGuard > 1) {
               send("text", { text: openGap() ?? "Done." });
               await saveMemory(email, memory, memoryStore);
-              send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+              await done({ stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
               close();
               return;
             }
@@ -2409,7 +2419,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
 
           reportShortfall();
           await saveMemory(email, memory, memoryStore);
-          send("done", { stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+          await done({ stop_reason: "end_turn", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
           // Best-effort, non-blocking: don't hold the stream open (which keeps the
           // client's composer locked) while the embedding + insert run.
           if (email && fullText) void rememberExchange(email, message, fullText).catch(() => {});
@@ -2419,7 +2429,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
 
         if (!finished) {
           send("text", { text: `${openGap() ?? ""}\n\nI've reached the time or step limit for one reply - say "continue" and I'll pick up from the first open step.` });
-          send("done", { stop_reason: "max_steps", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+          await done({ stop_reason: "max_steps", model: MODEL, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
         }
         close();
       } catch (err) {
@@ -2428,7 +2438,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         if (geminiStatus) await noteFailure("gemini", MODEL, geminiStatus, String(err));
         // Gemini failed after running tools: re-running the request on another
         // model would repeat them.
-        if (toolsRun.length) { endPartial(); return; }
+        if (toolsRun.length) { await endPartial(); return; }
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
         // Tier 2: try a tool-capable fallback (Groq/Cerebras/Mistral all speak
         // OpenAI-style function calling) so live actions — send an email, add
@@ -2483,14 +2493,14 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             send("text", { text: out.content });
             reportShortfall();
             await saveMemory(email, memory, memoryStore);
-            send("done", { stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+            await done({ stop_reason: "fallback_tools", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
             if (email && out.content) void rememberExchange(email, message, out.content).catch(() => {});
             fallbackFinished = true;
             break;
           }
           if (!fallbackFinished) {
             send("text", { text: `${openGap() ?? ""}\n\nI've reached the time or step limit for one reply - say "continue" and I'll pick up from the first open step.` });
-            send("done", { stop_reason: "max_steps", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
+            await done({ stop_reason: "max_steps", model: `${usedProvider}:${usedModel}`, memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
           }
           tier2Handled = true;
           close();
@@ -2498,7 +2508,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           // Tools already ran (a mail may be sent): say so rather than let the
           // tools-less tier 3 tell the user it cannot act.
           if (toolsRun.length) {
-            endPartial();
+            await endPartial();
             tier2Handled = true;
           }
           // Otherwise tier 2 is unavailable too; fall through to tier 3.
@@ -2536,7 +2546,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           });
           send("text", { text: out.text });
           await saveMemory(email, memory, memoryStore);
-          send("done", { stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
+          await done({ stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
           if (email && out.text) void rememberExchange(email, message, out.text).catch(() => {});
         } catch (cascadeErr) {
           // Both the primary model and every configured fallback failed. Don't
