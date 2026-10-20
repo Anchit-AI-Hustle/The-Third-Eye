@@ -1,0 +1,66 @@
+name: Android native app
+# The Jetpack Compose app in android-native/, the Android counterpart of
+# ios-native. Every run builds it, runs the unit tests and draws every screen at
+# a phone and a tablet size (Robolectric), saving the pictures so a cut-off
+# layout is caught before anyone installs it. Builds from main are release APKs
+# signed with the same key as the web-shell APK and published to the
+# "android-native-latest" release that /get links.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["android-native/**", ".github/workflows/android-native.yml"]
+  pull_request:
+    paths: ["android-native/**", ".github/workflows/android-native.yml"]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android-native
+    steps:
+      - uses: actions/checkout@v7
+      - run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+      - name: Build and test
+        run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: android-native-screens
+          path: android-native/app/build/screenshots
+      - name: Build the signed release APK
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::Set the ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD repository secrets (NATIVE_BUILD.md)."
+            exit 1
+          fi
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../the-third-eye-native.apk
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs ../the-third-eye-native.apk | grep -m1 "SHA-256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-native-apk
+          path: |
+            android-native/app/build/outputs/apk/debug/app-debug.apk
+            the-third-eye-native.apk
+          if-no-files-found: ignore
+      - name: Publish to the android-native-latest release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-native-latest >/dev/null 2>&1 || gh release create android-native-latest --title "Android native app" --notes "Install: open the-third-eye-native.apk on your phone and allow installs from your browser. The native app: Today, Assistant with voice, Tasks, Notes, Goals, Finance, Knowledge, Life Log, reminders as notifications."
+          gh release upload android-native-latest the-third-eye-native.apk --clobber

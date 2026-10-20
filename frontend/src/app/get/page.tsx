@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Download, Smartphone } from "lucide-react";
 import { LogoMark } from "@/components/layout/LogoMark";
-import { ANDROID_APK_URL, IOS_IPA_URL } from "@/lib/installPlatform";
+import { ANDROID_APK_URL, ANDROID_NATIVE_APK_URL, IOS_IPA_URL } from "@/lib/installPlatform";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata = pageMetadata({
@@ -32,6 +32,10 @@ export default function GetPage() {
             <Download size={16} /> Download for Android
           </a>
           <p className="text-xs text-text-muted">Open the downloaded file and allow installs from your browser when asked.</p>
+          <a href={ANDROID_NATIVE_APK_URL} className={secondary}>
+            <Download size={15} /> Native Android app (beta)
+          </a>
+          <p className="text-xs text-text-muted">Built natively like the iPhone app: Assistant with voice, Tasks, Notes, Goals, Finance and reminders as notifications.</p>
         </section>
 
         <section className="holo-card rounded-card p-6 space-y-3">
