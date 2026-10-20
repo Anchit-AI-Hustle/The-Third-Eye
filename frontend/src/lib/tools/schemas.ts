@@ -377,6 +377,22 @@ export const geminiTools = [
         },
       },
       {
+        name: "book_ride",
+        description:
+          "Book a cab or bike taxi on Uber, Ola or Rapido: 'get me an Uber to the airport', 'book a cab to Cyber Hub'. " +
+          "Opens the rider's own app with the trip filled in where the service allows it; the rider picks the ride type " +
+          "and confirms the fare there, so never say a ride is booked or quote a fare. Omit service to offer all three.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            destination: { type: "STRING", description: "Where to go: a place name, landmark or address" },
+            pickup: { type: "STRING", description: "Optional pickup place; omit to start from the rider's current location" },
+            service: { type: "STRING", enum: ["uber", "ola", "rapido"], description: "Optional: the service the user named" },
+          },
+          required: ["destination"],
+        },
+      },
+      {
         name: "pay",
         description: "Send money via UPI. Opens payment app PRE-FILLED with payee+amount; user approves. Requires vpa and amount - never guess.",
         parameters: {

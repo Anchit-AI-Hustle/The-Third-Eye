@@ -113,6 +113,19 @@ export async function freeStockQuote(input: string): Promise<string> {
 }
 
 const NEARBY_SPAN_DEG = 0.05;
+const CITY_SPAN_DEG = 0.5;
+
+/** The best map match for a place name, preferring ones near the user. */
+export async function freeGeocode(query: string, near?: { latitude: number; longitude: number }): Promise<{ lat: number; lng: number; name: string; address: string } | null> {
+  if (!query.trim()) return null;
+  const box = near
+    ? `&viewbox=${[near.longitude - CITY_SPAN_DEG, near.latitude + CITY_SPAN_DEG, near.longitude + CITY_SPAN_DEG, near.latitude - CITY_SPAN_DEG].map((n) => n.toFixed(4)).join(",")}`
+    : "";
+  const r = await get(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}${box}`);
+  const [p] = r ? ((await r.json().catch(() => [])) as { name?: string; display_name?: string; lat?: string; lon?: string }[]) : [];
+  if (!p?.lat || !p.lon) return null;
+  return { lat: Number(p.lat), lng: Number(p.lon), name: p.name || p.display_name?.split(",")[0] || query, address: p.display_name ?? query };
+}
 
 export async function freeNearby(query: string, location?: { latitude: number; longitude: number }): Promise<string> {
   const bounds = location
