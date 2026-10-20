@@ -105,7 +105,7 @@ final class Chat: ObservableObject {
             let effects = json["sideEffects"] as? [[String: Any]] ?? []
             for fx in effects where fx["type"] as? String == "open_url" {
                 let data = fx["data"] as? [String: Any] ?? [:]
-                guard let raw = (data["nativeUrl"] as? String) ?? (data["url"] as? String), let url = URL(string: raw) else { continue }
+                guard let raw = (data["nativeUrl"] as? String) ?? (data["url"] as? String), let url = URL(string: raw, relativeTo: API.base)?.absoluteURL else { continue }
                 let outreach = data["action"] != nil && data["missingPhone"] as? Bool != true
                 messages[index].links.append(ActionLink(url: url, label: data["label"] as? String ?? "Open", outreach: outreach))
             }
@@ -126,7 +126,8 @@ final class Chat: ObservableObject {
     /// Runs an approved action exactly as it was shown, and says what happened.
     @discardableResult
     func approve(_ action: PendingAction) async -> String {
-        guard let at = locate(action) else { return "" }
+        // A second tap while it runs must not send it twice.
+        guard let at = locate(action), messages[at.0].actions[at.1].state == .waiting else { return "" }
         set(at, .running)
         let outcome: PendingAction.State
         if let url = action.url {
@@ -357,11 +358,11 @@ enum VoiceAnswer {
 
     // Only a short, plain answer counts: "yes, and also..." is a new request.
     init?(_ said: String) {
-        let words = said.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
+        let words = said.lowercased().replacingOccurrences(of: "['’]", with: "", options: .regularExpression).components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
         guard !words.isEmpty, words.count <= 4 else { return nil }
         let phrase = words.joined(separator: " ")
         let yes = ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "go ahead", "do it", "send it", "confirm", "approve", "haan", "ha", "ji"]
-        let no = ["no", "nope", "nah", "cancel", "don't", "dont", "stop", "nahi", "mat", "leave it"]
+        let no = ["no", "nope", "nah", "cancel", "dont", "stop", "nahi", "mat", "leave it"]
         if no.contains(where: { phrase == $0 || phrase.hasPrefix($0 + " ") }) { self = .no }
         else if yes.contains(where: { phrase == $0 || phrase.hasPrefix($0 + " ") }) { self = .yes }
         else { return nil }
