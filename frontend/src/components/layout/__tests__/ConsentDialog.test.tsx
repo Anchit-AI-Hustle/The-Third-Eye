@@ -45,6 +45,16 @@ describe("ConsentDialog", () => {
     }
   });
 
+  it("stays closed inside the native iPhone app, which asks for permissions itself", async () => {
+    const ua = vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPhone) Mobile/15E148 TheThirdEyeApp/2");
+    render(<ConsentDialog />);
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(screen.queryByText("Activate Assistant")).toBeNull();
+    ua.mockRestore();
+  });
+
   it("stays closed on the public landing page, before anyone has signed in", async () => {
     pathname = "/";
     render(<ConsentDialog />);
