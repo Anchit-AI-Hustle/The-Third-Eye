@@ -6,6 +6,7 @@ import { FileText, Folder, FolderPlus, MessageSquarePlus, Pencil, Plug, Search, 
 import { cn } from "@/lib/utils";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
 import type { ChatSummary, Project, ProjectFile } from "@/hooks/useChatLibrary";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 interface Props {
   chats: ChatSummary[];
@@ -68,6 +69,7 @@ function ProjectEditor({ project, onSave, onCancel, onDelete }: {
           <input type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden" onChange={(e) => void add(e.target.files)} />
         </label>
       </div>
+      <CaptureNote id="project-files">Project files are stored in your account and sent to the AI provider with every message in this project.</CaptureNote>
       {note && <p className="text-[11px] text-warning">{note}</p>}
       <div className="flex items-center gap-2 pt-1">
         <button type="button" disabled={!draft.name.trim()} onClick={() => onSave({ ...draft, name: draft.name.trim(), updated_at: new Date().toISOString() })}

@@ -41,6 +41,9 @@ const TABLES = [
   // a surviving token went on acting as the deleted account, with a session the
   // person could not see or revoke because their account was gone.
   "gateway_tokens", "agent_control", "conversation_sources",
+  // Saved chats, project files (kept as raw base64) and synced iPhone photos with
+  // their location. The privacy note promises account deletion removes them.
+  "conversations", "projects", "device_photos",
   // agent_audit is documented append-only, and the app never deletes from it. This
   // is the one exception, stated so it does not read as a mistake: erasure on
   // request outranks keeping a record of what the agent did for an account that no

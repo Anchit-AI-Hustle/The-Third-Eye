@@ -31,6 +31,7 @@ import { classifyOpenUrl } from "@/lib/liveActions";
 import { isProviderMedia, saveMedia } from "@/lib/mediaFile";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 import { VisionButton } from "./VisionButton";
 import { ActionCard } from "./ActionCard";
 import { ChecklistCard } from "./ChecklistCard";
@@ -1374,6 +1375,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
             : "Enter to send · Shift+Enter for new line"}
         </p>
+        <CaptureNote id="chat-files" className="mt-1 text-center">
+          Attachments, camera frames and voice are sent to an AI provider to answer; files, images and audio aren&apos;t kept, the chat is.
+        </CaptureNote>
       </div>
     </div>
   );

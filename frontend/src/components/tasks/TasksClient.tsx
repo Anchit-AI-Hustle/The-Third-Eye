@@ -210,7 +210,7 @@ export function TasksClient() {
           <button onClick={exportCSV} className={btn}>
             <Download size={13} /> Export
           </button>
-          <button onClick={() => fileRef.current?.click()} className={btn}>
+          <button onClick={() => fileRef.current?.click()} className={btn} title="CSV is read in your browser; imported rows are saved as tasks">
             <Upload size={13} /> Import
           </button>
           <input ref={fileRef} type="file" accept=".csv" className="hidden"

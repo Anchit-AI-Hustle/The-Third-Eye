@@ -11,6 +11,7 @@ import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 import { localDay } from "@/lib/localDay";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const CATEGORIES = [
   "Food", "Groceries", "Transport", "Shopping", "Bills",
@@ -186,6 +187,7 @@ export function FinanceClient() {
             {parsing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Parse
           </button>
         </div>
+        <CaptureNote id="finance-voice">The mic uses your browser&apos;s speech recognition. Text goes to an AI provider only when you press Parse.</CaptureNote>
 
         {/* Structured fields (prefilled by parse, or fill directly) */}
         <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr_150px] gap-3">

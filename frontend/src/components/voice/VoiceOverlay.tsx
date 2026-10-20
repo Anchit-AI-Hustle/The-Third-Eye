@@ -27,6 +27,7 @@ import remarkGfm from "remark-gfm";
 import { saveWithConsent } from "@/components/assistant/FileCard";
 import type { SavedFile } from "@/lib/fileSave";
 import { LogoMark } from "@/components/layout/LogoMark";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 interface LiveBubble {
   phase: "recording" | "transcribing" | "interim";
@@ -649,6 +650,7 @@ export function VoiceOverlay() {
             <input type="file" ref={fileInputRef} className="hidden" multiple
               accept=".txt,.md,.csv,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log,.sql,.sh"
               onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }} />
+            <CaptureNote id="microphone" className="mb-1 px-1 text-[10px]">Voice and messages go to an AI provider to answer; audio isn&apos;t kept.</CaptureNote>
             <div className="flex items-center gap-1.5 bg-background-surface/50 border border-border-default rounded-card px-2.5 py-1.5">
               <button onClick={() => fileInputRef.current?.click()} title="Attach file"
                 className="flex-none p-0.5 text-text-muted hover:text-[#4FC3F7] transition-colors">
