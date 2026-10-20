@@ -138,3 +138,12 @@ describe("Indian food, grocery, pharmacy and travel apps", () => {
     expect(resolveAppLink(app).url).toBe(url);
   });
 });
+
+describe("pet supplies", () => {
+  it.each([
+    ["supertails", "dog food", "https://supertails.com/search?q=dog%20food"],
+    ["huft", "cat litter", "https://headsupfortails.com/search?q=cat%20litter"],
+  ])("searches %s for %s", (app, q, url) => {
+    expect(resolveAppLink(app, q).url).toBe(url);
+  });
+});

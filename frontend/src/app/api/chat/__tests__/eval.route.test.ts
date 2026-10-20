@@ -332,3 +332,33 @@ describe("Jarvis reliability evaluation", () => {
     expect(r.text).toMatch(/Save a note \(not verified yet\)/);
   });
 });
+
+describe("everyday activities", () => {
+  it("routes a daily-life message to the catalog's tool and stores the entry", async () => {
+    script = [{ calls: [{ name: "log_activity", args: { action: "log", kind: "pet_walk", amount: 30, subject: "Bruno" } }] }, { text: "Logged Bruno's 30-minute walk." }];
+    const r = await chat("I just walked the dog Bruno for 30 minutes, log it", { timezone: "UTC" });
+    expect(sent[0][0].content).toContain("## Everyday activity (runtime catalog)");
+    expect(sent[0][0].content).toContain("**Walk the dog** (for pets)");
+    expect(r.tools).toEqual(["log_activity"]);
+    expect(r.results()[0]).toMatch(/^Logged pet_walk 30 min for Bruno/);
+    expect(JSON.parse(r.done.memory.daylog)).toEqual([expect.objectContaining({ k: "pet_walk", a: 30, s: "Bruno" })]);
+    expect(r.done.failed).toEqual([]);
+  });
+
+  it("summarises from the log the device sent, and keeps it out of the raw memory dump", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const daylog = JSON.stringify([{ d: today, t: "08:00", k: "water", a: 500, u: "ml" }, { d: today, t: "12:00", k: "water", a: 750, u: "ml" }]);
+    script = [{ calls: [{ name: "log_activity", args: { action: "summary", kind: "water" } }] }, { text: "1.25 litres so far." }];
+    const r = await chat("how much water have I had today?", { timezone: "UTC", memory: { daylog } });
+    expect(sent[0][0].content).toContain("**Today's activity log:**");
+    expect(sent[0][0].content).not.toContain("- daylog:");
+    expect(r.results()[0]).toContain("2 entries - total 1250 ml");
+  });
+
+  it("refuses a kind it does not know instead of storing it", async () => {
+    script = [{ calls: [{ name: "log_activity", args: { action: "log", kind: "dance" } }] }, { text: "What should I log?" }];
+    const r = await chat("log it", { timezone: "UTC" });
+    expect(r.results()[0]).toMatch(/^log_activity failed: invalid arguments: .*kind.*Nothing was run/);
+    expect(r.done.memory.daylog).toBeUndefined();
+  });
+});
