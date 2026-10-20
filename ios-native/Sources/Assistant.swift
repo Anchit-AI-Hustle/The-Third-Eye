@@ -131,6 +131,7 @@ final class Chat: ObservableObject {
         guard let at = locate(action), messages[at.0].actions[at.1].state == .waiting else { return "" }
         set(at, .running)
         let outcome: PendingAction.State
+        var fallback: URL?
         if let url = action.url {
             outcome = await UIApplication.shared.open(url) ? .done(action.openLabel ?? "Opened") : .failed("Couldn't open that on this iPhone.")
         } else {
@@ -140,10 +141,7 @@ final class Chat: ObservableObject {
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 // A failed send can still carry a way to finish by hand (a
                 // prefilled Gmail draft), so the link is kept either way.
-                if let raw = json?["openUrl"] as? String, let url = URL(string: raw, relativeTo: API.base)?.absoluteURL {
-                    messages[at.0].links.append(ActionLink(url: url, label: "Open draft", outreach: false))
-                    _ = await UIApplication.shared.open(url)
-                }
+                if let raw = json?["openUrl"] as? String { fallback = URL(string: raw, relativeTo: API.base)?.absoluteURL }
                 outcome = json?["ok"] as? Bool == false
                     ? .failed(json?["result"] as? String ?? "It didn't go through.")
                     : .done(json?["result"] as? String ?? "Done.")
@@ -151,7 +149,12 @@ final class Chat: ObservableObject {
                 outcome = .failed(error.localizedDescription)
             }
         }
-        set(at, outcome)
+        if let fallback { _ = await UIApplication.shared.open(fallback) }
+        // The chat may have been cleared while this ran: find the card again.
+        if let now = locate(action) {
+            if let fallback { messages[now.0].links.append(ActionLink(url: fallback, label: "Open draft", outreach: false)) }
+            set(now, outcome)
+        }
         switch outcome {
         case .done(let text): return text
         case .failed(let text): return "That didn't work: \(text)"
@@ -360,16 +363,22 @@ struct AssistantView: View {
 enum VoiceAnswer {
     case yes, no
 
-    // Only a short, plain answer counts: "yes, and also..." is a new request.
+    // Only a plain answer counts. Any no word blocks a yes, and one at the
+    // start cancels; a yes must be nothing but agreeing words, so "yes, but
+    // don't send" is never an approval.
     init?(_ said: String) {
         let words = said.lowercased().replacingOccurrences(of: "['’]", with: "", options: .regularExpression).components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
         guard !words.isEmpty, words.count <= 4 else { return nil }
-        let phrase = words.joined(separator: " ")
-        let yes = ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "go ahead", "do it", "send it", "confirm", "approve", "haan", "ha", "ji"]
-        let no = ["no", "nope", "nah", "cancel", "dont", "stop", "nahi", "mat", "leave it"]
-        if no.contains(where: { phrase == $0 || phrase.hasPrefix($0 + " ") }) { self = .no }
-        else if yes.contains(where: { phrase == $0 || phrase.hasPrefix($0 + " ") }) { self = .yes }
-        else { return nil }
+        let no: Set = ["no", "nope", "nah", "cancel", "dont", "stop", "nahi", "mat", "not", "but", "wait"]
+        let core: Set = ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "confirm", "approve", "haan", "ha", "ji", "go", "do", "send"]
+        let filler: Set = ["ahead", "it", "please", "now"]
+        if words.contains(where: no.contains) {
+            if no.contains(words[0]), !["but", "wait", "not"].contains(words[0]) { self = .no } else { return nil }
+        } else if words.allSatisfy({ core.contains($0) || filler.contains($0) }), words.contains(where: core.contains) {
+            self = .yes
+        } else {
+            return nil
+        }
     }
 }
 
