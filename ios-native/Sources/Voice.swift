@@ -127,7 +127,9 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         try? AVAudioSession.sharedInstance().setActive(true)
         onSpoken = then
         let utterance = AVSpeechUtterance(string: clean)
-        utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.identifier) ?? AVSpeechSynthesisVoice(language: "en-US")
+        // Voices are named by BCP 47 tags (en-IN); Locale identifiers use an underscore (en_IN).
+        let tag = [Locale.current.language.languageCode?.identifier, Locale.current.region?.identifier].compactMap { $0 }.joined(separator: "-")
+        utterance.voice = AVSpeechSynthesisVoice(language: tag) ?? AVSpeechSynthesisVoice(language: "en-US")
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         speaking = true
         synthesizer.speak(utterance)

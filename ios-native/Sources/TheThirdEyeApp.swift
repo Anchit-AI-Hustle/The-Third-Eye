@@ -1,9 +1,14 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct TheThirdEyeApp: App {
     @StateObject private var session = Session()
     @StateObject private var app = AppState()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = ForegroundNotifications.shared
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -16,8 +21,18 @@ struct TheThirdEyeApp: App {
     }
 }
 
+// A reminder that comes due while the app is open still shows as a banner.
+final class ForegroundNotifications: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = ForegroundNotifications()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .sound, .list]
+    }
+}
+
 struct RootView: View {
     @EnvironmentObject private var session: Session
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         Group {
@@ -34,6 +49,12 @@ struct RootView: View {
             }
         }
         .task { await session.refresh() }
+        .onChange(of: session.state) { _, state in
+            if state == .signedIn { Task { await Reminders.sync() } }
+        }
+        .onChange(of: phase) { _, phase in
+            if phase == .active, session.state == .signedIn { Task { await Reminders.sync() } }
+        }
     }
 }
 

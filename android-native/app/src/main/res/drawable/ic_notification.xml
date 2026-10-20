@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The eye mark, one colour, for the status bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M12,5C7,5 2.7,8.1 1,12c1.7,3.9 6,7 11,7s9.3,-3.1 11,-7c-1.7,-3.9 -6,-7 -11,-7zM12,16.5c-2.5,0 -4.5,-2 -4.5,-4.5S9.5,7.5 12,7.5s4.5,2 4.5,4.5 -2,4.5 -4.5,4.5zM12,9.5c-1.4,0 -2.5,1.1 -2.5,2.5s1.1,2.5 2.5,2.5 2.5,-1.1 2.5,-2.5 -1.1,-2.5 -2.5,-2.5z" />
+</vector>

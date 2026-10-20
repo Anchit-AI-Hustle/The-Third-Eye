@@ -1,5 +1,6 @@
 import AuthenticationServices
 import SwiftUI
+import WebKit
 
 // Sign-in: Google refuses sign-in inside an app's own web view, so it runs in
 // the system sign-in sheet (shared with Safari, so a Google account already
@@ -15,6 +16,15 @@ final class Session: ObservableObject {
     @Published var error: String?
     @Published var name: String?
 
+    private static let wasSignedIn = "was-signed-in"
+    private var expiry: NSObjectProtocol?
+
+    init() {
+        expiry = NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.expired() }
+        }
+    }
+
     func refresh() async {
         // CI's layout screenshots open the tabs without an account.
         if UserDefaults.standard.string(forKey: "preview-tab") != nil { state = .signedIn; return }
@@ -24,9 +34,17 @@ final class Session: ObservableObject {
             let user = json?["user"] as? [String: Any]
             name = user?["name"] as? String
             state = user == nil ? .signedOut : .signedIn
+            UserDefaults.standard.set(state == .signedIn, forKey: Self.wasSignedIn)
         } catch {
-            state = .signedOut
+            // Offline is not signed out: open the app and let each screen say it can't reach the server.
+            state = UserDefaults.standard.bool(forKey: Self.wasSignedIn) ? .signedIn : .signedOut
         }
+    }
+
+    private func expired() {
+        guard state == .signedIn, UserDefaults.standard.string(forKey: "preview-tab") == nil else { return }
+        signOut()
+        error = "Your session ended. Sign in again to carry on."
     }
 
     func signIn(with web: WebAuthenticationSession) async {
@@ -39,7 +57,8 @@ final class Session: ObservableObject {
                 error = "Sign-in didn't finish. Try again."
                 return
             }
-            let data = try await API.send("GET", "/api/auth/handoff?code=\(code)")
+            let escaped = code.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+            let data = try await API.send("GET", "/api/auth/handoff?code=\(escaped)")
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             guard json?["signedIn"] as? Bool == true else {
                 error = "Sign-in expired. Try again."
@@ -52,8 +71,15 @@ final class Session: ObservableObject {
         }
     }
 
+    /// Leaves nothing signed in behind: the app's cookies, the in-app web pages'
+    /// own store, this phone's action log and its scheduled reminders.
     func signOut() {
         for cookie in HTTPCookieStorage.shared.cookies ?? [] { HTTPCookieStorage.shared.deleteCookie(cookie) }
+        WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {}
+        AgentLog.shared.clear()
+        Reminders.clear()
+        UserDefaults.standard.set(false, forKey: Self.wasSignedIn)
+        name = nil
         state = .signedOut
     }
 }

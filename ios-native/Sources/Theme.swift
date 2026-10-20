@@ -1,4 +1,14 @@
+import Combine
 import SwiftUI
+
+extension View {
+    /// Reloads when any row is saved or deleted, here or by the assistant.
+    func reloadsOnDataChange(_ load: @escaping () async -> Void) -> some View {
+        onReceive(NotificationCenter.default.publisher(for: .dataChanged).receive(on: RunLoop.main)) { _ in
+            Task { await load() }
+        }
+    }
+}
 
 // frontend/DESIGN.md tokens.
 enum Theme {

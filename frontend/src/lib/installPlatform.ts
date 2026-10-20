@@ -4,6 +4,8 @@
 // the ios-latest release (ios-app.yml) for signing with a sideloader.
 
 export const ANDROID_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-latest/the-third-eye.apk";
+// The Jetpack Compose app (android-native.yml), the counterpart of the native iPhone app.
+export const ANDROID_NATIVE_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-native-latest/the-third-eye-native.apk";
 export const IOS_IPA_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/ios-latest/the-third-eye.ipa";
 
 export type InstallPlatform = "android" | "ios-safari" | "ios-other" | "desktop" | "installed";

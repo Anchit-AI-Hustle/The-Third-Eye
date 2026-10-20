@@ -103,6 +103,7 @@ struct GoalsView: View {
         }
         .refreshable { await model.load() }
         .task { await model.load() }
+        .reloadsOnDataChange { await model.load() }
         .overlay { if !model.loaded { ProgressView() } }
         .sheet(isPresented: $adding) {
             NewGoal { title, target, unit, category in Task { await model.add(title: title, target: target, unit: unit, category: category) } }

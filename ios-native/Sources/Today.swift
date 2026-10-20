@@ -83,6 +83,7 @@ struct TodayView: View {
             .navigationTitle("Today")
             .refreshable { await load() }
             .task { await load() }
+            .reloadsOnDataChange { await load() }
         }
     }
 

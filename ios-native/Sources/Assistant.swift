@@ -59,7 +59,9 @@ final class Chat: ObservableObject {
         let index = messages.count - 1
         busy = true
         current = Task {
-            let body: [String: Any] = ["message": message, "history": history, "timezone": TimeZone.current.identifier]
+            // native: the server saves the tasks, notes, goals and expenses the
+            // assistant creates, which the website otherwise does itself.
+            let body: [String: Any] = ["message": message, "history": history, "timezone": TimeZone.current.identifier, "native": true]
             do {
                 let (bytes, response) = try await API.session.bytes(for: API.request("POST", "/api/chat", json: body))
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -102,6 +104,11 @@ final class Chat: ObservableObject {
                 id: json["id"] as? String ?? UUID().uuidString, tool: tool, args: args,
                 summary: json["summary"] as? String ?? tool, url: url, openLabel: json["openLabel"] as? String))
         case "done":
+            let applied = json["applied"] as? [[String: Any]] ?? []
+            if applied.contains(where: { $0["ok"] as? Bool == true }) { DataStore.changed() }
+            if messages[index].tools.contains(where: { $0.contains("reminder") || $0 == "automate" }) {
+                Task { await Reminders.sync() }
+            }
             let effects = json["sideEffects"] as? [[String: Any]] ?? []
             for fx in effects where fx["type"] as? String == "open_url" {
                 let data = fx["data"] as? [String: Any] ?? [:]
