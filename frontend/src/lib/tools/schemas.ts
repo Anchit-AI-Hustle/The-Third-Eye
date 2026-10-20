@@ -366,7 +366,9 @@ export const geminiTools = [
           "Open an app, a page inside JARVIS, or a website. Prefers the user's own apps: 'open my tasks', " +
           "'take me to Kolab', 'open the Music Studio' navigate inside JARVIS to Tasks, Notes, Goals, Knowledge, " +
           "Finance, Job Agent, Kolab, Lifelog and every Studio tool. Anything else opens the real service - " +
-          "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'.",
+          "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'. For orders and bookings ('biryani on Swiggy', " +
+          "'milk on Zepto', 'Dolo on 1mg', 'flights Delhi to Goa') pass the item as query: the app opens on that search " +
+          "and the user orders and pays there, so never say an order is placed.",
         parameters: {
           type: "OBJECT",
           properties: {
