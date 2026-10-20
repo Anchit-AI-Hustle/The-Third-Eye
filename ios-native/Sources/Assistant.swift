@@ -120,7 +120,8 @@ final class Chat: ObservableObject {
 
     /// The newest action still waiting for the person's OK.
     var waitingAction: PendingAction? {
-        messages.last(where: { $0.role == .assistant })?.actions.last(where: { $0.state == .waiting })
+        // Searched back past later replies: a follow-up question doesn't drop it.
+        messages.reversed().lazy.compactMap { $0.actions.last(where: { $0.state == .waiting }) }.first
     }
 
     /// Runs an approved action exactly as it was shown, and says what happened.
@@ -137,12 +138,15 @@ final class Chat: ObservableObject {
                 let args = try JSONSerialization.jsonObject(with: action.args)
                 let data = try await API.send("POST", "/api/act", json: ["tool": action.tool, "args": args])
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                if json?["ok"] as? Bool == false {
-                    outcome = .failed(json?["result"] as? String ?? "It didn't go through.")
-                } else {
-                    if let raw = json?["openUrl"] as? String, let url = URL(string: raw) { _ = await UIApplication.shared.open(url) }
-                    outcome = .done(json?["result"] as? String ?? "Done.")
+                // A failed send can still carry a way to finish by hand (a
+                // prefilled Gmail draft), so the link is kept either way.
+                if let raw = json?["openUrl"] as? String, let url = URL(string: raw, relativeTo: API.base)?.absoluteURL {
+                    messages[at.0].links.append(ActionLink(url: url, label: "Open draft", outreach: false))
+                    _ = await UIApplication.shared.open(url)
                 }
+                outcome = json?["ok"] as? Bool == false
+                    ? .failed(json?["result"] as? String ?? "It didn't go through.")
+                    : .done(json?["result"] as? String ?? "Done.")
             } catch {
                 outcome = .failed(error.localizedDescription)
             }
