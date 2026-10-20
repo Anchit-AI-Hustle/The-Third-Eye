@@ -33,8 +33,8 @@ describe("ConsentDialog", () => {
     vi.useRealTimers();
   });
 
-  it("stays closed on the public install and download pages", async () => {
-    for (const path of ["/install", "/get"]) {
+  it("stays closed on the public demo, privacy, install and download pages", async () => {
+    for (const path of ["/install", "/get", "/demo", "/privacy", "/privacy_policy", "/calculators/sip-calculator"]) {
       pathname = path;
       const { unmount } = render(<ConsentDialog />);
       await act(async () => {

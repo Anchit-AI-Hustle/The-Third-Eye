@@ -9,8 +9,9 @@ import { useConsentBundle } from "@/hooks/useConsent";
 // Pages a non-user reads before deciding to become one — legal documents and the
 // sign-in flow. Asking for the microphone over a privacy policy is both a poor
 // first impression and an obstacle to anyone reviewing the document, including
-// Google's OAuth reviewers, who open these URLs directly.
-const NO_PROMPT_PATHS = ["/privacy_policy", "/terms_of_service", "/auth", "/install", "/get"];
+// Google's OAuth reviewers, who open these URLs directly. The demo promises it
+// captures nothing, so it must not ask for the camera or microphone either.
+const NO_PROMPT_PATHS = ["/privacy", "/terms_of_service", "/auth", "/install", "/get", "/demo", "/calculators", "/upgrade"];
 
 interface ConsentItem {
   key: ConsentKey;

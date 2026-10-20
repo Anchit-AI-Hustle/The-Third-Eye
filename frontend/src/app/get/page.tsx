@@ -2,11 +2,13 @@ import Link from "next/link";
 import { Download, Smartphone } from "lucide-react";
 import { LogoMark } from "@/components/layout/LogoMark";
 import { ANDROID_APK_URL, IOS_IPA_URL } from "@/lib/installPlatform";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Download The Third Eye",
   description: "Download The Third Eye for Android and iPhone.",
-};
+  path: "/get",
+});
 
 const button = "flex w-full items-center justify-center gap-2 rounded-input bg-accent-blue px-5 h-12 text-sm font-semibold text-background-base shadow-[0_0_30px_rgba(79,195,247,0.35)] hover:brightness-110";
 const secondary = "flex w-full items-center justify-center gap-2 rounded-input border border-accent-blue/40 px-5 h-11 text-sm font-semibold text-accent-blue hover:bg-accent-blue/10";

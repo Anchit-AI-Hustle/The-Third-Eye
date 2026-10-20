@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { calculators, categories } from "@/lib/calculators/data";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL, pageMetadata } from "@/lib/site";
 
 const TITLE = "Free Financial Calculators - SIP, EMI, Loan, Retirement & More";
 const DESCRIPTION =
   "A growing library of free financial calculators - SIP, lumpsum, compound interest, EMI, loan prepayment, retirement, inflation and more. No sign-up, instant results, everything runs in your browser.";
 
 export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
+  ...pageMetadata({ title: TITLE, description: DESCRIPTION, path: "/calculators" }),
   keywords: [
     "financial calculator",
     "sip calculator",
@@ -19,14 +18,6 @@ export const metadata: Metadata = {
     "loan calculator",
     "investment calculator",
   ],
-  alternates: { canonical: "/calculators" },
-  openGraph: {
-    title: TITLE,
-    description: DESCRIPTION,
-    url: `${SITE_URL}/calculators`,
-    type: "website",
-    siteName: "The Third Eye",
-  },
 };
 
 export default function CalculatorsIndexPage() {

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { InstallClient } from "@/components/install/InstallClient";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = {
+export const metadata = pageMetadata({
   title: "Get the app - The Third Eye",
   description: "Install The Third Eye on Android with one tap, or add it to your iPhone home screen.",
-};
+  path: "/install",
+});
 
 export default function InstallPage() {
   return (

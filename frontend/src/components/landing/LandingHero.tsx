@@ -48,18 +48,27 @@ export function LandingHero() {
             maintain.
           </p>
 
-          <div data-reveal className="mt-9 flex items-center justify-center">
+          <div data-reveal className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/demo"
+              className="group flex h-12 w-full items-center justify-center gap-2 rounded-input bg-accent-blue px-7 text-sm font-semibold text-background-base shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-interaction hover:brightness-110 active:scale-[0.98] sm:w-auto"
+            >
+              Try the demo
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </Link>
             <Link
               href="/auth/signin"
-              className="group flex h-12 items-center justify-center gap-2 rounded-input bg-accent-blue px-7 text-sm font-semibold text-background-base shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-interaction hover:brightness-110 active:scale-[0.98]"
+              className="flex h-12 w-full items-center justify-center rounded-input border border-accent-blue/40 px-7 text-sm font-semibold text-accent-blue transition-colors duration-interaction hover:bg-accent-blue/10 sm:w-auto"
             >
               Get started
-              <span className="transition-transform group-hover:translate-x-0.5">→</span>
             </Link>
           </div>
 
           <p data-reveal className="mt-4 text-xs text-text-muted">
-            Private by design - your data stays in your own workspace and is visible only to you.
+            The demo runs on sample data - no sign-in, nothing saved.{" "}
+            <Link href="/privacy" className="underline hover:text-text-secondary">
+              What we keep when you sign in
+            </Link>
           </p>
 
           {/* Instrument readout: gives the hero a floor and states live status

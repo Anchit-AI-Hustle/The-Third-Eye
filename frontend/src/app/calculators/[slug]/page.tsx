@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { bySlug, calculators } from "@/lib/calculators/data";
 import { offersFor } from "@/lib/calculators/offers";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL, pageMetadata } from "@/lib/site";
 import { CalculatorRunner } from "@/components/calculators/CalculatorRunner";
 import { OfferBlock } from "@/components/calculators/OfferBlock";
 
@@ -15,19 +15,9 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   const params = await props.params;
   const c = bySlug[params.slug];
   if (!c) return {};
-  const url = `${SITE_URL}/calculators/${c.slug}`;
   return {
-    title: c.metaTitle,
-    description: c.metaDescription,
+    ...pageMetadata({ title: c.metaTitle, description: c.metaDescription, path: `/calculators/${c.slug}` }),
     keywords: c.keywords,
-    alternates: { canonical: `/calculators/${c.slug}` },
-    openGraph: {
-      title: c.metaTitle,
-      description: c.metaDescription,
-      url,
-      type: "website",
-      siteName: "The Third Eye",
-    },
   };
 }
 

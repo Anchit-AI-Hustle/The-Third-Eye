@@ -8,6 +8,7 @@ import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 import { localDay } from "@/lib/localDay";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 export function KnowledgeClient() {
   const { docs, ready, uploading, upload, remove } = useLocalKnowledge();
@@ -132,6 +133,9 @@ export function KnowledgeClient() {
         <p className="text-text-muted text-xs mt-2 font-mono">
           TXT · MD · CSV · JSON · TS · PY · HTML · YAML
         </p>
+        <CaptureNote id="documents" className="mt-2">
+          The text is stored in your account and indexed with Google&apos;s embedding service until you delete it.
+        </CaptureNote>
         {uploading && (
           <div className="mt-3 flex justify-center">
             <div className="w-4 h-4 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" />

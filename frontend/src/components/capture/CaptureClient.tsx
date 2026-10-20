@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { ConvType, useCapture } from "./CaptureContext";
 import { useCapability } from "@/components/permission/PermissionProvider";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const TYPE_META: Record<ConvType, { label: string; color: string }> = {
   meeting:    { label: "Meeting",    color: "#4F8EF7" },
@@ -41,6 +42,9 @@ export function CaptureClient() {
 
       {/* Control bar */}
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
+        <CaptureNote id="live-capture" className="mb-3">
+          Your browser transcribes; every 20 s the text goes to an AI provider to find tasks. Tasks are saved to your account, the transcript only in this browser.
+        </CaptureNote>
         <div className="flex flex-wrap items-center gap-3">
           {!supported ? (
             <p className="text-sm text-accent-red">Live transcription needs the Web Speech API - try Chrome or Edge.</p>
