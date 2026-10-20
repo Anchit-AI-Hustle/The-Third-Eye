@@ -184,10 +184,18 @@ export async function requestConsent(key: ConsentKey): Promise<ConsentState> {
   return state;
 }
 
+// A prompt that never answers (an app's embedded web view has no
+// Notification prompt and may never call back on location) must not leave
+// the dialog stuck on "Activating"; that one is left to ask again later.
+export const CONSENT_TIMEOUT_MS = 10_000;
+
 export async function requestConsentBundle(keys: ConsentKey[]): Promise<Record<ConsentKey, ConsentState>> {
   const result = {} as Record<ConsentKey, ConsentState>;
   for (const key of keys) {
-    result[key] = await requestConsent(key);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<ConsentState>((resolve) => { timer = setTimeout(() => resolve("prompt"), CONSENT_TIMEOUT_MS); });
+    result[key] = await Promise.race([requestConsent(key), timeout]);
+    clearTimeout(timer);
   }
   markBundleAsked();
   return result;

@@ -83,6 +83,9 @@ struct MoreView: View {
         case "/goals": GoalsView()
         case "/finance": FinanceView()
         case "/knowledge": KnowledgeView()
+        case "/lifelog": LifeLogView()
+        case "/activity": ActivityView()
+        case "/connectors": ConnectorsView()
         default:
             WebScreen(path: item.path)
                 .navigationTitle(item.title)

@@ -30,7 +30,10 @@ const ITEMS: ConsentItem[] = [
 export function ConsentDialog() {
   const { bundleAsked, requestAll } = useConsentBundle();
   const pathname = usePathname();
-  const suppressed = pathname === "/" || NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p));
+  // The native iPhone app asks for the microphone itself, and its web views
+  // can't show the browser's permission prompts at all.
+  const suppressed = pathname === "/" || NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p))
+    || (typeof navigator !== "undefined" && /TheThirdEyeApp\//.test(navigator.userAgent));
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<Partial<Record<ConsentKey, ConsentState>>>({});
   const [busy, setBusy] = useState(false);
