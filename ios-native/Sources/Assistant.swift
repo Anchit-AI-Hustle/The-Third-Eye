@@ -129,6 +129,11 @@ final class Chat: ObservableObject {
     func approve(_ action: PendingAction) async -> String {
         // A second tap while it runs must not send it twice.
         guard let at = locate(action), messages[at.0].actions[at.1].state == .waiting else { return "" }
+        if AgentLog.shared.killed {
+            set(at, .failed("The kill switch is on (More, Agent Activity). Nothing was run."))
+            AgentLog.shared.record(action.summary, .blocked)
+            return "That's blocked: the kill switch is on."
+        }
         set(at, .running)
         let outcome: PendingAction.State
         var fallback: URL?
@@ -154,6 +159,11 @@ final class Chat: ObservableObject {
         if let now = locate(action) {
             if let fallback { messages[now.0].links.append(ActionLink(url: fallback, label: "Open draft", outreach: false)) }
             set(now, outcome)
+        }
+        switch outcome {
+        case .done(let text): AgentLog.shared.record(action.summary, .applied, detail: text)
+        case .failed(let text): AgentLog.shared.record(action.summary, .failed, detail: text)
+        default: break
         }
         switch outcome {
         case .done(let text): return text
