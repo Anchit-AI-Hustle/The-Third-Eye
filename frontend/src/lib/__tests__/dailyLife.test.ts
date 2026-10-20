@@ -106,13 +106,34 @@ describe("matching a message to the right activity and tool", () => {
     "give me feedback on my deck",
     "schedule a meeting appointment with the team",
     "summarise this pdf",
+    "fix the memory leak in the worker",
+    "Next.js hydration error on the dashboard",
+    "set font-weight: 600 on the heading",
+    "that's just syntactic sugar",
+    "chore: bump dependencies",
+    "we are hiring a senior engineer",
+    "set the due date for Friday",
+    "run go vet on the repo",
+    "can you vet this PR",
+    "convert the site to a SPA",
+    "Bill Gates interview summary",
+    "fix the mobile and tablet layout",
+    "the server is running slow",
+    "keep cycling through the slides",
+    "add sleep(1) between retries",
+    "improve our security posture",
+    "walking through the code now",
+    "schedule lunch with Arjun",
+    "the grace period ends on Friday",
+    "print the periodic table",
   ])("leaves work requests alone: %s", (text) => {
     expect(matchActivities(text)).toEqual([]);
     expect(activityBrief(text)).toBe("");
   });
 
-  it("offers both readings of a message that touches two activities", () => {
-    expect(matchActivities("remind me to take my blood pressure tablet").map((a) => a.id)).toEqual(["health_numbers", "medicine"]);
+  it("lets the longer match win over one inside it", () => {
+    expect(matchActivities("remind me to take my blood pressure tablet").map((a) => a.id)).toEqual(["medicine"]);
+    expect(matchActivities("my blood pressure was 130/85, and I took my evening pills").map((a) => a.id)).toEqual(["health_numbers", "medicine"]);
   });
 
   it("lists several activities in one message, in the order they were asked", () => {
@@ -124,6 +145,12 @@ describe("matching a message to the right activity and tool", () => {
     expect(b).toContain("`log_activity`");
     expect(b).toContain("Steps:");
     expect(b).toContain("Rest/recovery: Rest 48 hours");
+  });
+
+  it("tells the model reminders need a first time and may be one-off for free users", () => {
+    const b = activityBrief("remind me to drink water");
+    expect(b).toContain('fire_at="<ISO-8601 first time, with their UTC offset>"');
+    expect(b).toContain("Repeating reminders are a Premium feature");
   });
 });
 
@@ -147,11 +174,14 @@ describe("the activity log", () => {
     expect(summarize(store, "today", at("2026-10-02T07:00:00Z"), "UTC")).toContain("[Bruno]");
   });
 
-  it("drops entries older than 90 days", () => {
+  it("drops entries older than 60 days, but keeps period history for the cycle estimate", () => {
     const store: Record<string, string> = {};
     addEntry(store, { kind: "steps", amount: 1000 }, at("2026-01-01T10:00:00Z"), "UTC");
     addEntry(store, { kind: "steps", amount: 2000 }, at("2026-10-01T10:00:00Z"), "UTC");
     expect(readLog(store).map((e) => e.a)).toEqual([2000]);
+    addEntry(store, { kind: "period", note: "start" }, at("2026-03-01T10:00:00Z"), "UTC");
+    addEntry(store, { kind: "steps", amount: 3000 }, at("2026-10-02T10:00:00Z"), "UTC");
+    expect(readLog(store).map((e) => e.k)).toEqual(["period", "steps", "steps"]);
   });
 
   it("predicts the next period from logged starts", () => {
@@ -174,7 +204,7 @@ describe("the activity log", () => {
     const store: Record<string, string> = {};
     addEntry(store, { kind: "steps", amount: 4000 }, at("2026-10-01T10:00:00Z"), "UTC");
     addEntry(store, { kind: "steps", amount: 6000 }, at("2026-10-02T10:00:00Z"), "UTC");
-    expect(summarize(store, "week", at("2026-10-02T12:00:00Z"), "UTC", "steps")).toContain("total 10000 steps, about 5000/day");
+    expect(summarize(store, "week", at("2026-10-02T12:00:00Z"), "UTC", "steps")).toContain("total 10000 steps, about 1428.6/day over 7 days");
   });
 
   it("says when nothing is logged", () => {
@@ -188,11 +218,49 @@ describe("the activity log", () => {
     laptop[DAYLOG_KEY] = phone[DAYLOG_KEY];
     addEntry(phone, { kind: "steps", amount: 3000 }, at("2026-10-02T09:00:00Z"), "UTC");
     addEntry(laptop, { kind: "meal", note: "dal rice" }, at("2026-10-02T13:00:00Z"), "UTC");
-    const merged = readLog({ [DAYLOG_KEY]: mergeLogs(phone[DAYLOG_KEY], laptop[DAYLOG_KEY]) });
+    const merged = readLog({ [DAYLOG_KEY]: mergeLogs("2026-10-02", phone[DAYLOG_KEY], laptop[DAYLOG_KEY]) });
     expect(merged.map((e) => e.k)).toEqual(["water", "steps", "meal"]);
   });
 
-  it("reads a damaged value as an empty log", () => {
+  it("reads a damaged value as an empty log, and drops malformed entries", () => {
     expect(readLog({ [DAYLOG_KEY]: "not json" })).toEqual([]);
+    expect(readLog({ [DAYLOG_KEY]: JSON.stringify([null, { d: "x" }, { i: "a", d: "2026-10-02", t: "08:00", k: "dance" }]) })).toEqual([]);
+  });
+
+  it("keeps two identical entries from the same minute through a merge", () => {
+    const store: Record<string, string> = {};
+    addEntry(store, { kind: "water", amount: 250 }, at("2026-10-02T08:00:00Z"), "UTC");
+    addEntry(store, { kind: "water", amount: 250 }, at("2026-10-02T08:00:10Z"), "UTC");
+    const merged = { [DAYLOG_KEY]: mergeLogs("2026-10-02", store[DAYLOG_KEY], store[DAYLOG_KEY]) };
+    expect(summarize(merged, "today", at("2026-10-02T09:00:00Z"), "UTC", "water")).toContain("2 entries - total 500 ml");
+  });
+
+  it("shows readings as a range, never a total", () => {
+    const store: Record<string, string> = {};
+    addEntry(store, { kind: "weight", amount: 71.5 }, at("2026-10-01T07:00:00Z"), "UTC");
+    addEntry(store, { kind: "weight", amount: 70.8 }, at("2026-10-02T07:00:00Z"), "UTC");
+    const s = summarize(store, "week", at("2026-10-02T08:00:00Z"), "UTC", "weight");
+    expect(s).toContain("range 70.8-71.5 kg; last 2026-10-02 07:00 70.8 kg");
+    expect(s).not.toContain("total");
+  });
+
+  it("does not crash on a time zone the browser made up", () => {
+    const store: Record<string, string> = {};
+    expect(() => addEntry(store, { kind: "steps", amount: 100 }, at("2026-10-02T08:00:00Z"), "Foo/Bar")).not.toThrow();
+  });
+
+  it("says when the predicted period is already past", () => {
+    const store: Record<string, string> = {};
+    addEntry(store, { kind: "period", note: "start" }, at("2026-08-01T08:00:00Z"), "UTC");
+    addEntry(store, { kind: "period", note: "start" }, at("2026-08-03T08:00:00Z"), "UTC");
+    const s = summarize(store, "today", at("2026-09-05T08:00:00Z"), "UTC", "period");
+    expect(s).toContain("Last period started 2026-08-01");
+    expect(s).toContain("Next expected around 2026-08-29 - that was 7 days ago");
+  });
+
+  it("does not count an unrelated note as a period start", () => {
+    const store: Record<string, string> = {};
+    addEntry(store, { kind: "period", note: "hard to start my day" }, at("2026-09-01T08:00:00Z"), "UTC");
+    expect(summarize(store, "today", at("2026-09-02T08:00:00Z"), "UTC", "period")).toContain("No period start logged yet");
   });
 });

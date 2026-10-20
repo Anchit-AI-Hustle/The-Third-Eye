@@ -988,7 +988,6 @@ async function runTool(
       const entry = addEntry(ctx.memoryStore, { kind: input.kind, amount, unit: input.unit, note: input.note, subject: input.subject }, now, ctx.timezone);
       return {
         result: `Logged ${entry.k}${entry.a !== undefined ? ` ${entry.a}${entry.u ? ` ${entry.u}` : ""}` : ""}${entry.n ? ` (${entry.n})` : ""}${entry.s ? ` for ${entry.s}` : ""} at ${entry.t} on ${entry.d}.\n${summarize(ctx.memoryStore, "today", now, ctx.timezone, entry.k)}`,
-        sideEffect: { type: "memory_update", data: { key: DAYLOG_KEY, value: ctx.memoryStore[DAYLOG_KEY] } },
       };
     }
 
@@ -1512,7 +1511,11 @@ function getHealthData(metric: string, period: string, ctx: RunContext): string 
   const logs = Object.entries(ctx.memoryStore)
     .filter(([k]) => k.startsWith("health:") || k === "health_log")
     .map(([k, v]) => `${k.replace(/^health:/, "")}: ${v}`);
-  if (ctx.memoryStore[DAYLOG_KEY]) logs.push(summarize(ctx.memoryStore, period === "year" ? "month" : period, new Date(), ctx.timezone, HEALTH_KIND[metric]));
+  const kind = HEALTH_KIND[metric];
+  if (ctx.memoryStore[DAYLOG_KEY] && (kind || metric === "summary")) {
+    const logged = summarize(ctx.memoryStore, period === "year" ? "month" : period, new Date(), ctx.timezone, kind);
+    if (!logged.startsWith("Nothing logged")) logs.push(logged);
+  }
   if (!logs.length) {
     return `JARVIS Health Log for **${metric}** (${period}): nothing stored yet. Tell me a number (steps, sleep, heart rate, weight) and I will remember it. Wearable APIs (Apple Health / Google Fit) are not linked - I will not invent readings.`;
   }
@@ -2084,7 +2087,9 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // absent entirely on a fresh device. Server first, client overrides.
   const storedMemory = await loadMemory(email);
   const memory = { ...storedMemory, ...clientMemory };
-  if (storedMemory[DAYLOG_KEY] || clientMemory[DAYLOG_KEY]) memory[DAYLOG_KEY] = mergeLogs(storedMemory[DAYLOG_KEY], clientMemory[DAYLOG_KEY]);
+  if (storedMemory[DAYLOG_KEY] || clientMemory[DAYLOG_KEY]) {
+    memory[DAYLOG_KEY] = mergeLogs(localDay(new Date(), timezone || req.headers.get("x-vercel-ip-timezone") || undefined), storedMemory[DAYLOG_KEY], clientMemory[DAYLOG_KEY]);
+  }
 
   // The synced contact book has its own capped section below; listing it here
   // too pasted thousands of contacts into every request.

@@ -347,7 +347,7 @@ describe("everyday activities", () => {
 
   it("summarises from the log the device sent, and keeps it out of the raw memory dump", async () => {
     const today = new Date().toISOString().slice(0, 10);
-    const daylog = JSON.stringify([{ d: today, t: "08:00", k: "water", a: 500, u: "ml" }, { d: today, t: "12:00", k: "water", a: 750, u: "ml" }]);
+    const daylog = JSON.stringify([{ i: "a1", d: today, t: "08:00", k: "water", a: 500, u: "ml" }, { i: "a2", d: today, t: "12:00", k: "water", a: 750, u: "ml" }]);
     script = [{ calls: [{ name: "log_activity", args: { action: "summary", kind: "water" } }] }, { text: "1.25 litres so far." }];
     const r = await chat("how much water have I had today?", { timezone: "UTC", memory: { daylog } });
     expect(sent[0][0].content).toContain("**Today's activity log:**");
