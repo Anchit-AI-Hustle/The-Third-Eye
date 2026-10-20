@@ -82,6 +82,7 @@ export function SoundtrackPicker({ onChange, accent }: { onChange: (s: Soundtrac
         {anchorOk && <option value="anchor">ANCHOR releases</option>}
       </select>
       {source === "file" && <input type="file" accept="audio/*" onChange={(e) => upload(e.target.files?.[0])} className="text-[11px] text-text-muted max-w-[220px]" aria-label="Soundtrack file" />}
+      {source === "file" && <span className="text-[11px] text-text-muted">Stays on this device</span>}
       {(source === "daily" || source === "anchor") && (
         options
           ? <select value={pick} onChange={(e) => choose(e.target.value)} className={`${field} max-w-[240px]`} aria-label="Track">

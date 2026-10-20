@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = { title: "Privacy Policy - The Third Eye" };
+export const metadata = pageMetadata({
+  title: "Privacy Policy - The Third Eye",
+  description: "What The Third Eye collects, how Google user data is used, which providers process it, how it is protected, and how to delete it.",
+  path: "/privacy_policy",
+});
 
 export default function PrivacyPolicyPage() {
   return (

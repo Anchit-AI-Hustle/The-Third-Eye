@@ -12,3 +12,16 @@ export const SITE_URL =
 export const GOOGLE_SITE_VERIFICATION = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
 export const FB_DOMAIN_VERIFICATION = process.env.NEXT_PUBLIC_FB_DOMAIN_VERIFICATION;
 export const BING_SITE_VERIFICATION = process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION;
+
+// Per-page title, description, canonical and share image. A page that sets its
+// own openGraph replaces the root one, so the image has to be named here too.
+export function pageMetadata({ title, description, path }: { title: string; description: string; path: string }) {
+  const images = [{ url: "/opengraph-image", width: 1200, height: 630, alt: "The Third Eye - your personal AI operating system" }];
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: { type: "website" as const, url: `${SITE_URL}${path}`, siteName: "The Third Eye", title, description, images },
+    twitter: { card: "summary_large_image" as const, title, description, images: images.map((i) => i.url) },
+  };
+}

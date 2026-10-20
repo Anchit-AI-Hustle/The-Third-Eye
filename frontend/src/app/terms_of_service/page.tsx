@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = { title: "Terms of Service - The Third Eye" };
+export const metadata = pageMetadata({
+  title: "Terms of Service - The Third Eye",
+  description: "The terms for using The Third Eye, a personal AI assistant: acceptable use, no financial advice, warranties and liability.",
+  path: "/terms_of_service",
+});
 
 export default function TermsOfServicePage() {
   return (

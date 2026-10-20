@@ -6,6 +6,7 @@ import { loadDay, saveDay, listDates, syncFromCloud, deleteDay } from "@/lib/lif
 import { getAudio } from "@/lib/lifelog/audioStore";
 import { emptyDay, localDateKey, type DayLog, type LogSegment, type LogEvent } from "@/lib/lifelog/types";
 import { useDayRecorder } from "@/hooks/useDayRecorder";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const KIND_COLORS: Record<string, string> = {
   meeting: "#4FC3F7", conversation: "#34D399", task: "#F0C94E",
@@ -134,6 +135,7 @@ export function LifeLog() {
           {rec.error && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{rec.error}</p>}
           {extractError && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{extractError}</p>}
           <p className="text-[10px] text-text-muted leading-relaxed">Records while this screen is open. Phones pause the mic when the app is in the background or the screen is locked - keep it foregrounded for a continuous log.</p>
+          <CaptureNote id="life-log" className="text-[10px]">Audio stays on this device. Speech is sent for transcription, and the text is saved to your account.</CaptureNote>
         </div>
 
         <CalendarCard cursor={monthCursor} setCursor={setMonthCursor} selected={selectedDate} today={today} dates={dates} onPick={setSelectedDate} />

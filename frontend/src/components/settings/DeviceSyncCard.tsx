@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { useSystemHealth } from "@/hooks/useSystemHealth";
 import { dataSave } from "@/lib/dataClient";
 import { deviceSyncPlugin, localStore, syncFolder, syncPhotos } from "@/lib/deviceSync";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 export function DeviceSyncCard() {
   const {
@@ -567,6 +568,7 @@ export function DeviceSyncCard() {
         <div className="text-[11px] text-text-muted my-1.5 leading-relaxed bg-background-base/40 p-2 rounded border border-border-default/40">
           💡 <strong>iPhone &amp; Laptop tip:</strong> On iPhone, open <em>Contacts → tap Lists/Select All → Share Contacts → Save as .vcf</em> or tap &quot;Sync Device Contacts&quot; to import directly. On Android Chrome, tapping &quot;Sync Device Contacts&quot; opens your address book picker.
         </div>
+        <CaptureNote id="contacts">Contacts are saved to your account and sent with assistant messages so it can find people.</CaptureNote>
 
         {contactSuccess && (
           <div className="flex items-center gap-2 text-xs text-success my-2">
@@ -770,6 +772,11 @@ export function DeviceSyncCard() {
         <div className="text-[11px] text-text-muted my-1.5 leading-relaxed bg-background-base/40 p-2 rounded border border-border-default/40">
           📁 <strong>Supported formats:</strong> Photos (JPG, PNG, HEIC, WebP), PDFs, Office Documents, Code, Text &amp; Markdown. Works seamlessly on iPhone, Android, and Laptop.
         </div>
+        <CaptureNote id={iosApp ? "photo-sync" : "documents"}>
+          {iosApp
+            ? "Photo sync stores thumbnails with time and location in your account."
+            : "File text is stored in your account and indexed with Google's embedding service; images keep only a description."}
+        </CaptureNote>
 
         {folderSuccess && (
           <div className="flex items-center gap-2 text-xs text-success my-2">
