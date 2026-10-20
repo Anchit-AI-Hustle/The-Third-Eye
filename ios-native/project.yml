@@ -24,7 +24,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIUserInterfaceStyle: Dark
         NSMicrophoneUsageDescription: The Third Eye listens when you tap the mic or start a call, so you can talk to your assistant.
-        NSSpeechRecognitionUsageDescription: Your words are turned into text on your iPhone so the assistant can act on what you say.
+        NSSpeechRecognitionUsageDescription: Apple speech recognition turns what you say into text so the assistant can act on it.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.thethirdeye.app
