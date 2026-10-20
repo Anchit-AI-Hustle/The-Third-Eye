@@ -52,6 +52,7 @@ import { modelFor } from "@/lib/llmCascade";
 import { CHECKLIST_INSTRUCTION, CHECKLIST_TOOLS, Checklist, classifyResult, resumeNote } from "@/lib/checklist";
 import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 import { refundCredits, spendCredits } from "@/lib/credits";
+import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -119,6 +120,7 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **play_music**: open Spotify/YouTube Music/Apple Music/JioSaavn with search ready
 - **initiate_protocol**: activate named routines (HOME, WORK, SOS, SLEEP, WAKE, TRAVEL)
 - **get_health_data**: retrieve health metrics the operator has logged with JARVIS; wearables are optional
+- **log_activity**: log everyday activities (water, steps, workouts, sleep, meals, medicine, period, BP, sugar, baby, pets, chores) and summarise them
 - **control_device**: THIS phone/browser AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds). Always call it - never refuse.
 - **weekly_report**: comprehensive weekly summary of tasks, goals, calendar, health
 - **emergency_alert**: ONLY for genuine emergencies - dialer + WhatsApp contacts
@@ -978,6 +980,17 @@ async function runTool(
       };
     }
 
+    case "log_activity": {
+      const now = new Date();
+      if (input.action === "summary") return { result: summarize(ctx.memoryStore, input.period ?? "today", now, ctx.timezone, input.kind) };
+      if (!isLogKind(input.kind)) return { result: `Say what to log: one of ${LOG_KINDS.join(", ")}.` };
+      const amount = input.amount === undefined ? undefined : Number(input.amount);
+      const entry = addEntry(ctx.memoryStore, { kind: input.kind, amount, unit: input.unit, note: input.note, subject: input.subject }, now, ctx.timezone);
+      return {
+        result: `Logged ${entry.k}${entry.a !== undefined ? ` ${entry.a}${entry.u ? ` ${entry.u}` : ""}` : ""}${entry.n ? ` (${entry.n})` : ""}${entry.s ? ` for ${entry.s}` : ""} at ${entry.t} on ${entry.d}.\n${summarize(ctx.memoryStore, "today", now, ctx.timezone, entry.k)}`,
+      };
+    }
+
     case "remember": {
       ctx.memoryStore[input.key] = input.value;
       return {
@@ -1492,10 +1505,17 @@ async function initiateProtocol(protocol: string, context: string | undefined, _
   };
 }
 
+const HEALTH_KIND: Record<string, string | undefined> = { steps: "steps", sleep: "sleep", workouts: "workout", weight: "weight", calories: "meal", summary: undefined };
+
 function getHealthData(metric: string, period: string, ctx: RunContext): string {
   const logs = Object.entries(ctx.memoryStore)
     .filter(([k]) => k.startsWith("health:") || k === "health_log")
     .map(([k, v]) => `${k.replace(/^health:/, "")}: ${v}`);
+  const kind = HEALTH_KIND[metric];
+  if (ctx.memoryStore[DAYLOG_KEY] && (kind || metric === "summary")) {
+    const logged = summarize(ctx.memoryStore, period === "year" ? "month" : period, new Date(), ctx.timezone, kind);
+    if (!logged.startsWith("Nothing logged")) logs.push(logged);
+  }
   if (!logs.length) {
     return `JARVIS Health Log for **${metric}** (${period}): nothing stored yet. Tell me a number (steps, sleep, heart rate, weight) and I will remember it. Wearable APIs (Apple Health / Google Fit) are not linked - I will not invent readings.`;
   }
@@ -2067,10 +2087,14 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // absent entirely on a fresh device. Server first, client overrides.
   const storedMemory = await loadMemory(email);
   const memory = { ...storedMemory, ...clientMemory };
+  if (storedMemory[DAYLOG_KEY] || clientMemory[DAYLOG_KEY]) {
+    memory[DAYLOG_KEY] = mergeLogs(localDay(new Date(), timezone || req.headers.get("x-vercel-ip-timezone") || undefined), storedMemory[DAYLOG_KEY], clientMemory[DAYLOG_KEY]);
+  }
 
   // The synced contact book has its own capped section below; listing it here
   // too pasted thousands of contacts into every request.
-  const memoryEntries = Object.entries(memory).filter(([k]) => k !== "device_contacts");
+  // The activity log is summarised for today instead of pasted whole.
+  const memoryEntries = Object.entries(memory).filter(([k]) => k !== "device_contacts" && k !== DAYLOG_KEY);
   if (memoryEntries.length > 0) {
     systemInstruction += `\n\n**Persistent memory about this user:**\n${memoryEntries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}`;
   }
@@ -2189,6 +2213,9 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
     },
   });
   systemInstruction += `\n\n${normalized.brief}\n\n${CHECKLIST_INSTRUCTION}${resumeNote(priorChecklist)}`;
+  const everyday = activityBrief(message);
+  if (everyday) systemInstruction += `\n\n${everyday}`;
+  if (memory[DAYLOG_KEY]) systemInstruction += `\n\n**Today's activity log:** ${summarize(memory, "today", new Date(), timezone || req.headers.get("x-vercel-ip-timezone") || "UTC")}`;
   const projectInstructions = typeof body.projectInstructions === "string" ? body.projectInstructions.trim().slice(0, 4000) : "";
   if (projectInstructions) {
     systemInstruction += `\n\n**Project instructions from the user** (apply to this whole chat; they never override safety or confirmation rules):\n${projectInstructions}`;

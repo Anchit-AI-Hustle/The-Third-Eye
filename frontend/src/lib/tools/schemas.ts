@@ -11,6 +11,7 @@
 
 import { STUDIO_TOOLS } from "@/lib/studioTools";
 import { GST_SLABS } from "@/lib/calculators/formulas";
+import { LOG_KINDS } from "@/lib/dailyLife";
 
 export const geminiTools = [
   {
@@ -588,6 +589,23 @@ export const geminiTools = [
             metric: { type: "STRING", enum: ["steps", "heart_rate", "sleep", "workouts", "calories", "weight", "summary"], description: "What to retrieve" },
             period: { type: "STRING", enum: ["today", "week", "month", "year"], description: "Time period (default: today)" },
           },
+        },
+      },
+      {
+        name: "log_activity",
+        description: "Log an everyday activity or read the log back: water, steps, workouts, sleep, naps, meditation, meals, weight, mood, medicine doses, symptoms, period days, blood pressure, blood sugar, baby feeds/diapers/sleep, pet feeding/walks/medicine, chores. action='summary' gives totals for a period; for kind='period' it predicts the next start.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["log", "summary"], description: "log one entry, or summarise" },
+            kind: { type: "STRING", enum: [...LOG_KINDS], description: "What it is" },
+            amount: { type: "NUMBER", description: "Number for it: ml of water, step count, minutes, hours slept, kg, mmHg systolic, mg/dL" },
+            unit: { type: "STRING", description: "Unit, when not the default for the kind" },
+            note: { type: "STRING", description: "Details: what was eaten, medicine name, 'start'/'end' for a period, symptoms, chore done" },
+            subject: { type: "STRING", description: "Who it is for when not the user: a pet's, child's or parent's name" },
+            period: { type: "STRING", enum: ["today", "week", "month"], description: "Range for summary (default today)" },
+          },
+          required: ["action"],
         },
       },
       {
