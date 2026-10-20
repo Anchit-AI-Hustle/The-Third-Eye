@@ -93,7 +93,8 @@ class Voice(private val context: Context) : RecognitionListener {
         stopListening()
         onSpoken = then
         speaking = true
-        tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "reply")
+        // No speech engine (or not ready yet): carry on silently rather than wait for an end that never comes.
+        if (tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "reply") != TextToSpeech.SUCCESS) spoken()
     }
 
     fun stopSpeaking() {

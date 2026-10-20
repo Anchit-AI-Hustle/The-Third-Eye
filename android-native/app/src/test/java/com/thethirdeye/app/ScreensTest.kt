@@ -17,6 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
@@ -87,9 +88,10 @@ abstract class ScreensTest {
         rule.onRoot().captureRoboImage("build/screenshots/$size-$name.png")
     }
 
-    private fun signedIn() = Session().apply { state = Session.State.SignedIn; name = "Anchit Tandon" }
+    private fun session() = Session(RuntimeEnvironment.getApplication())
+    private fun signedIn() = session().apply { state = Session.State.SignedIn; name = "Anchit Tandon" }
 
-    @Test fun signIn() = shoot("01-sign-in") { SignInScreen(Session().apply { state = Session.State.SignedOut }) }
+    @Test fun signIn() = shoot("01-sign-in") { SignInScreen(session().apply { state = Session.State.SignedOut }) }
 
     @Test fun today() = shoot("02-today") { MainTabs(signedIn(), AppState()) }
 

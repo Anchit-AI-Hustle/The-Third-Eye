@@ -45,6 +45,7 @@ class ApiError(val status: Int) : IOException() {
 object Events {
     val dataChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     val sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val signedOut = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 }
 
 /** What the screens talk to. Tests swap in a fake. */
@@ -70,6 +71,9 @@ private class WebViewCookies : CookieJar {
 }
 
 object HttpBackend : Backend {
+    // A reply can run tools for minutes before the next event.
+    private val streaming by lazy { client.newBuilder().readTimeout(5, TimeUnit.MINUTES).build() }
+
     private val client by lazy {
         OkHttpClient.Builder()
             .cookieJar(WebViewCookies())
@@ -103,7 +107,7 @@ object HttpBackend : Backend {
         }
 
     override fun stream(path: String, body: JsonElement): Flow<Pair<String, JsonObject>> = flow {
-        val response = try { client.newCall(request("POST", path, body)).execute() } catch (e: IOException) { throw ApiError(0) }
+        val response = try { streaming.newCall(request("POST", path, body)).execute() } catch (e: IOException) { throw ApiError(0) }
         response.use { r ->
             check(r.code)
             val source = r.body.source()

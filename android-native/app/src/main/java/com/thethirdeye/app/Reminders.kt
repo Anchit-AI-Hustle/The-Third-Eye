@@ -60,12 +60,27 @@ object Reminders {
         schedule(context, rows.filter { it.status == "pending" })
     }
 
+    /** One-off reminders that came due while nothing was scheduled (phone off, app not opened): shown now, once. */
+    fun missed(rows: List<ReminderRow>, shown: Set<String>, now: Instant = Instant.now()): List<ReminderRow> = rows.filter { row ->
+        val at = parse(row.fire_at)
+        row.recurrence == null && row.id !in shown && at != null && !at.isAfter(now) && at.isAfter(now.minus(1, ChronoUnit.DAYS))
+    }
+
     fun schedule(context: Context, rows: List<ReminderRow>) {
         cancelAll(context)
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val shown = prefs.getStringSet("shown", emptySet()).orEmpty()
+        missed(rows, shown).forEach { notify(context, it) }
         val alarms = context.getSystemService(AlarmManager::class.java)
+        // Exact when the person allows it (Settings, Alarms & reminders); otherwise Android's
+        // standard window, which can run a few minutes late while the phone is idle.
+        val exact = Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()
         val scheduled = rows.mapNotNull { row -> nextFire(row)?.let { row to it } }
-        for ((row, at) in scheduled) alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at.toEpochMilli(), pending(context, row))
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        for ((row, at) in scheduled) {
+            if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at.toEpochMilli(), pending(context, row))
+            else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at.toEpochMilli(), pending(context, row))
+        }
+        prefs.edit()
             .putString("rows", json.encodeToString(ListSerializer(ReminderRow.serializer()), scheduled.map { it.first }))
             .apply()
     }
@@ -92,6 +107,8 @@ object Reminders {
         )
 
     fun notify(context: Context, row: ReminderRow) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("shown", (prefs.getStringSet("shown", emptySet()).orEmpty() + row.id).toList().takeLast(200).toSet()).apply()
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH))
@@ -99,7 +116,8 @@ object Reminders {
         manager.notify(
             row.id.hashCode(),
             Notification.Builder(context, CHANNEL)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(0xFF4FC3F7.toInt())
                 .setContentTitle(row.title)
                 .setContentText(row.body.orEmpty())
                 .setContentIntent(open)
@@ -119,8 +137,11 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 }
 
+// Alarms are cleared by a restart and an app update, and a time-zone change moves "8am".
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) Reminders.schedule(context, Reminders.stored(context))
+        if (intent.action in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIMEZONE_CHANGED)) {
+            Reminders.schedule(context, Reminders.stored(context))
+        }
     }
 }

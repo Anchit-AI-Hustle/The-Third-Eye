@@ -48,27 +48,30 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) session.start(applicationContext)
-        handle(intent)
+        if (savedInstanceState == null) handle(intent)
         setContent { TheThirdEyeTheme { Root(session, app) } }
     }
 
+    private var claimed = false
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handle(intent)
     }
 
     override fun onResume() {
         super.onResume()
-        // Came back from the sign-in tab without a code.
-        if (session.busy && intent?.data == null) session.returned()
+        // Came back from the sign-in tab without a code (closed it).
+        if (!claimed) session.returned()
+        claimed = false
     }
 
     private fun handle(intent: Intent?) {
         val data = intent?.data ?: return
         if (data.scheme == "thethirdeye" && data.host == "auth") {
-            session.claim(data.getQueryParameter("code"))
-            intent.data = null
+            claimed = true
+            session.claim(data.getQueryParameter("code"), data.getQueryParameter("state"))
         }
     }
 }

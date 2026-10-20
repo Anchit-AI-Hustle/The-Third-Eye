@@ -80,6 +80,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -138,10 +139,21 @@ private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)
 // confirm, done, error), the same endpoint and tool loop the website uses.
 class Chat(app: Application) : AndroidViewModel(app) {
     val messages = mutableStateListOf<ChatMessage>()
+    // Lives with the chat, on the app's context, so it outlasts a tab switch and never holds the Activity.
+    val voice = Voice(app)
     var busy by mutableStateOf(false)
         private set
     private var current: Job? = null
     private var nextId = 0L
+
+    init {
+        // The next person to sign in must not see, or send, this one's conversation.
+        viewModelScope.launch { Events.signedOut.collect { clear() } }
+    }
+
+    override fun onCleared() {
+        voice.release()
+    }
 
     private fun open(url: String): Boolean = try {
         getApplication<Application>().startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -291,10 +303,11 @@ class Chat(app: Application) : AndroidViewModel(app) {
 fun AssistantScreen(app: AppState, chat: Chat = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val voice = remember { Voice(context) }
-    DisposableEffect(Unit) { onDispose { voice.release() } }
+    val voice = chat.voice
     var draft by remember { mutableStateOf("") }
     var callMode by remember { mutableStateOf(false) }
+    // Leaving the tab ends a call: nothing keeps listening behind another screen.
+    DisposableEffect(Unit) { onDispose { callMode = false; voice.stopListening(); voice.stopSpeaking() } }
     val list = rememberLazyListState()
     var afterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -328,7 +341,8 @@ fun AssistantScreen(app: AppState, chat: Chat = viewModel()) {
     listenForCall = {
         if (callMode && !chat.busy) voice.listen { said ->
             if (!callMode) return@listen
-            if (said.isEmpty()) return@listen listenForCall()
+            // Heard nothing: a short pause before listening again, so the recognizer doesn't restart in a tight loop.
+            if (said.isEmpty()) return@listen scope.launch { delay(400); listenForCall() }.let {}
             val waiting = chat.waitingAction
             val answer = VoiceAnswer.of(said)
             if (waiting != null && answer != null) {
@@ -339,8 +353,9 @@ fun AssistantScreen(app: AppState, chat: Chat = viewModel()) {
 
     // Mic or permission trouble: stop the call rather than loop on it.
     LaunchedEffect(voice.error) { if (voice.error != null) callMode = false }
-    LaunchedEffect(app.pendingAsk) {
-        app.pendingAsk?.let { app.pendingAsk = null; chat.send(it, ::replied) }
+    LaunchedEffect(app.pendingAsk, chat.busy) {
+        val ask = app.pendingAsk
+        if (ask != null && !chat.busy) { app.pendingAsk = null; chat.send(ask, ::replied) }
     }
     LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.text?.length) {
         if (chat.messages.isNotEmpty()) list.animateScrollToItem(chat.messages.size - 1)

@@ -1,6 +1,9 @@
 package com.thethirdeye.app
 
+import android.app.Application
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.util.Base64
 import android.net.Uri
 import android.webkit.CookieManager
 import android.webkit.WebStorage
@@ -34,20 +37,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import java.net.URLEncoder
+import java.security.SecureRandom
 
 // Sign-in: Google refuses sign-in inside an app's own web view, so it runs in a
 // Custom Tab (the phone's browser, where a Google account may already be signed
 // in). api/app-signin hands back a one-time code through thethirdeye://auth,
 // which the app claims for its own session cookie at /api/auth/handoff.
-class Session : ViewModel() {
+class Session(app: Application) : AndroidViewModel(app) {
     enum class State { Checking, SignedOut, SignedIn }
 
     var state by mutableStateOf(State.Checking)
@@ -55,46 +60,60 @@ class Session : ViewModel() {
     var error by mutableStateOf<String?>(null)
     var name by mutableStateOf<String?>(null)
 
-    private var prefs: android.content.SharedPreferences? = null
+    private val prefs = app.getSharedPreferences("session", Context.MODE_PRIVATE)
 
-    fun start(context: Context) {
-        prefs = context.getSharedPreferences("session", Context.MODE_PRIVATE)
-        viewModelScope.launch { Events.sessionExpired.collect { expired(context) } }
+    // Started here rather than from the Activity, so a process the system
+    // killed in the background comes back checking the session, not spinning.
+    init {
+        viewModelScope.launch { Events.sessionExpired.collect { expired() } }
         viewModelScope.launch { refresh() }
     }
 
     suspend fun refresh() {
         state = try {
-            val user = json.parseToJsonElement(Api.backend.send("GET", "/api/auth/session")).jsonObject["user"]
-            name = (user as? kotlinx.serialization.json.JsonObject)?.get("name")?.jsonPrimitive?.contentOrNull
-            val signedIn = user is kotlinx.serialization.json.JsonObject
-            prefs?.edit()?.putBoolean("was-signed-in", signedIn)?.apply()
-            if (signedIn) State.SignedIn else State.SignedOut
+            val user = json.parseToJsonElement(Api.backend.send("GET", "/api/auth/session")).jsonObject["user"] as? JsonObject
+            name = user?.get("name")?.jsonPrimitive?.contentOrNull
+            prefs.edit().putBoolean("was-signed-in", user != null).apply()
+            if (user != null) State.SignedIn else State.SignedOut
         } catch (e: ApiError) {
             // Offline is not signed out: open the app and let each screen say it can't reach the server.
-            if (e.status == 0 && prefs?.getBoolean("was-signed-in", false) == true) State.SignedIn else State.SignedOut
+            if (e.status == 0 && prefs.getBoolean("was-signed-in", false)) State.SignedIn else State.SignedOut
+        } catch (e: Exception) {
+            // Not JSON (a captive portal, an error page): treat it like being offline.
+            if (prefs.getBoolean("was-signed-in", false)) State.SignedIn else State.SignedOut
         }
     }
 
     fun signIn(context: Context) {
         error = null
-        busy = true
-        CustomTabsIntent.Builder()
-            .setDefaultColorSchemeParams(CustomTabColorSchemeParams.Builder().setToolbarColor(0xFF050505.toInt()).build())
-            .build()
-            .launchUrl(context, Uri.parse(Api.url("/api/app-signin")))
+        // A one-time value the server sends back with the code. A thethirdeye://auth
+        // link without it was not asked for by this app and is ignored.
+        val state = Base64.encodeToString(ByteArray(24).also { SecureRandom().nextBytes(it) }, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        prefs.edit().putString("sign-in-state", state).apply()
+        try {
+            CustomTabsIntent.Builder()
+                .setDefaultColorSchemeParams(CustomTabColorSchemeParams.Builder().setToolbarColor(0xFF050505.toInt()).build())
+                .build()
+                .launchUrl(context, Uri.parse(Api.url("/api/app-signin?state=$state")))
+            busy = true
+        } catch (e: ActivityNotFoundException) {
+            error = "No web browser is installed to sign in with."
+        }
     }
 
-    /** thethirdeye://auth?code=… came back from the browser. */
-    fun claim(code: String?) {
+    /** thethirdeye://auth?code=…&state=… came back from the browser. */
+    fun claim(code: String?, returnedState: String?) {
+        val expected = prefs.getString("sign-in-state", null)
+        if (state == State.SignedIn || expected == null || returnedState != expected) return
+        prefs.edit().remove("sign-in-state").apply()
         viewModelScope.launch {
             busy = true
             try {
                 if (code.isNullOrBlank()) { error = "Sign-in didn't finish. Try again."; return@launch }
                 val reply = json.parseToJsonElement(Api.backend.send("GET", "/api/auth/handoff?code=${URLEncoder.encode(code, "UTF-8")}")).jsonObject
                 if (reply["signedIn"]?.jsonPrimitive?.booleanOrNull == true) refresh() else error = "Sign-in expired. Try again."
-            } catch (e: ApiError) {
-                error = e.message
+            } catch (e: Exception) {
+                error = (e as? ApiError)?.message ?: "Sign-in didn't finish. Try again."
             } finally {
                 busy = false
             }
@@ -103,23 +122,25 @@ class Session : ViewModel() {
 
     /** Back from the browser without a code (closed the tab). */
     fun returned() {
-        busy = false
+        if (prefs.contains("sign-in-state")) busy = false
     }
 
-    private fun expired(context: Context) {
+    private fun expired() {
         if (state != State.SignedIn) return
-        signOut(context)
+        signOut()
         error = "Your session ended. Sign in again to carry on."
     }
 
-    /** Leaves nothing signed in behind: cookies (shared with the in-app web pages), their storage, the action log and scheduled reminders. */
-    fun signOut(context: Context) {
+    /** Leaves nothing signed in behind: cookies (shared with the in-app web pages), their storage, the chat, the action log and scheduled reminders. */
+    fun signOut() {
+        val app = getApplication<Application>()
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         WebStorage.getInstance().deleteAllData()
-        AgentLog.get(context).clear()
-        Reminders.clear(context)
-        prefs?.edit()?.putBoolean("was-signed-in", false)?.apply()
+        AgentLog.get(app).clear()
+        Reminders.clear(app)
+        Events.signedOut.tryEmit(Unit)
+        prefs.edit().putBoolean("was-signed-in", false).apply()
         name = null
         state = State.SignedOut
     }

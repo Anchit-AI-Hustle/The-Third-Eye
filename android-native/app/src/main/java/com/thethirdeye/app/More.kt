@@ -6,7 +6,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import android.webkit.PermissionRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -52,6 +54,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -129,7 +132,7 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
                 item(group) { SectionLabel(group, Palette.muted) }
                 items.forEach { item -> item(item.path) { MenuRow(item.title, item.icon) { nav.push(Dest.Screen(item)) } } }
             }
-            item("signout") { MenuRow("Sign out", Icons.AutoMirrored.Outlined.Logout, Palette.red) { session.signOut(context) } }
+            item("signout") { MenuRow("Sign out", Icons.AutoMirrored.Outlined.Logout, Palette.red) { session.signOut() } }
         }
         is Dest.Screen -> when (top.item.path) {
             "/goals" -> GoalsScreen(nav::back)
@@ -169,7 +172,7 @@ fun WebScreen(title: String, path: String, onBack: () -> Unit) {
     var pendingMic by remember { mutableStateOf<PermissionRequest?>(null) }
     var view by remember { mutableStateOf<WebView?>(null) }
 
-    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         pendingFiles?.onReceiveValue(uris.toTypedArray())
         pendingFiles = null
     }
@@ -179,6 +182,7 @@ fun WebScreen(title: String, path: String, onBack: () -> Unit) {
     }
 
     BackHandler { if (view?.canGoBack() == true) view?.goBack() else onBack() }
+    DisposableEffect(Unit) { onDispose { view?.apply { stopLoading(); destroy() }; view = null } }
 
     TitledScreen(title, onBack) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
@@ -198,6 +202,14 @@ fun WebScreen(title: String, path: String, onBack: () -> Unit) {
                                 override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
                                     if (request.isForMainFrame) { loading = false; failed = true }
                                 }
+                                // A crashed page must not take the app down with it.
+                                override fun onRenderProcessGone(v: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                    view = null
+                                    v.destroy()
+                                    loading = false
+                                    failed = true
+                                    return true
+                                }
                                 override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
                                     val url = request.url
                                     val ours = url.host == Uri.parse(BASE_URL).host
@@ -210,11 +222,12 @@ fun WebScreen(title: String, path: String, onBack: () -> Unit) {
                                 override fun onShowFileChooser(v: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
                                     pendingFiles?.onReceiveValue(null)
                                     pendingFiles = callback
-                                    pickFiles.launch(params.acceptTypes.firstOrNull { it.isNotBlank() && !it.startsWith(".") } ?: "*/*")
+                                    pickFiles.launch(mimeTypes(params.acceptTypes))
                                     return true
                                 }
                                 override fun onPermissionRequest(request: PermissionRequest) {
-                                    if (PermissionRequest.RESOURCE_AUDIO_CAPTURE !in request.resources) return request.deny()
+                                    val ours = request.origin.host == Uri.parse(BASE_URL).host
+                                    if (!ours || PermissionRequest.RESOURCE_AUDIO_CAPTURE !in request.resources) return request.deny()
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                                         request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
                                     } else {
@@ -222,6 +235,10 @@ fun WebScreen(title: String, path: String, onBack: () -> Unit) {
                                         askMic.launch(Manifest.permission.RECORD_AUDIO)
                                     }
                                 }
+                            }
+                            // Generated files open in the browser, which can save them.
+                            setDownloadListener { url, _, _, _, _ ->
+                                if (url.startsWith("http")) runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                             }
                             loadUrl(Api.url(path))
                             view = this
@@ -234,4 +251,12 @@ fun WebScreen(title: String, path: String, onBack: () -> Unit) {
                 ) else if (loading) CircularProgressIndicator(Modifier.align(Alignment.Center), color = Palette.blue)
             }
     }
+}
+
+// An <input accept> list (image types, ".pdf") as the MIME types the system picker filters by.
+fun mimeTypes(accept: Array<String>): Array<String> {
+    val types = accept.flatMap { it.split(",") }.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.mapNotNull {
+        if (it.startsWith(".")) MimeTypeMap.getSingleton().getMimeTypeFromExtension(it.drop(1)) else it
+    }.distinct()
+    return if (types.isEmpty()) arrayOf("*/*") else types.toTypedArray()
 }
