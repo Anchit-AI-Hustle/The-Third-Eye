@@ -21,7 +21,7 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var onSpoken: (() -> Void)?
 
     // How long a pause ends what the person is saying.
-    private let endOfSpeech: Duration = .milliseconds(1400)
+    private let endOfSpeech: Duration = .milliseconds(1600)
 
     override init() {
         super.init()
@@ -37,7 +37,8 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         return speech && mic
     }
 
-    /// Listens until the person pauses, then hands over what they said.
+    /// Listens until the person pauses, then hands over what they said (empty
+    /// when they said nothing).
     func listen(onFinal: @escaping (String) -> Void) async {
         guard !listening else { return }
         guard await authorize() else { return }
@@ -57,7 +58,9 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
             request.addsPunctuation = true
-            if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
+            // Apple's server model is markedly more accurate than on-device,
+            // above all for Indian English; it falls back on its own offline.
+            request.taskHint = .dictation
             self.request = request
 
             let input = engine.inputNode
@@ -100,7 +103,7 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         let text = partial.trimmingCharacters(in: .whitespacesAndNewlines)
         let deliver = onFinal
         stopListening()
-        if !text.isEmpty { deliver?(text) }
+        deliver?(text)
     }
 
     func stopListening() {
