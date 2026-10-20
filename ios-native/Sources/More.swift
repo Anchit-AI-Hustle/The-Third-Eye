@@ -79,9 +79,11 @@ struct MoreView: View {
 
     @ViewBuilder
     private func destination(_ item: MenuItem) -> some View {
-        if item.path == "/goals" {
-            GoalsView()
-        } else {
+        switch item.path {
+        case "/goals": GoalsView()
+        case "/finance": FinanceView()
+        case "/knowledge": KnowledgeView()
+        default:
             WebScreen(path: item.path)
                 .navigationTitle(item.title)
                 .navigationBarTitleDisplayMode(.inline)
