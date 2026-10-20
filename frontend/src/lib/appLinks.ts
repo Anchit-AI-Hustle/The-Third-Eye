@@ -104,6 +104,10 @@ const APPS: AppEntry[] = [
   { label: "PharmEasy", aliases: ["pharmeasy", "pharm easy"], home: "https://pharmeasy.in", search: (q) => `https://pharmeasy.in/search/all?name=${enc(q)}` },
   { label: "Urban Company", aliases: ["urban company", "urbanclap"], home: "https://www.urbancompany.com" },
 
+  // ── Pets ──────────────────────────────────────────────────────────────────
+  { label: "Supertails", aliases: ["supertails", "super tails"], home: "https://supertails.com", search: (q) => `https://supertails.com/search?q=${enc(q)}` },
+  { label: "Heads Up For Tails", aliases: ["heads up for tails", "huft"], home: "https://headsupfortails.com", search: (q) => `https://headsupfortails.com/search?q=${enc(q)}` },
+
   // ── Ride-Hailing & Transport ──────────────────────────────────────────────
   { label: "Uber", aliases: ["uber"], home: "https://m.uber.com" },
   { label: "Ola", aliases: ["ola", "ola cab"], home: "https://www.olacabs.com" },
