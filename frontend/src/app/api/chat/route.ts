@@ -56,7 +56,9 @@ import { applyEffects } from "@/lib/nativeClient";
 import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Fluid compute lets Hobby run 300s; a long tool sweep (twenty GitHub calls)
+// no longer gets cut off mid-reply at a minute.
+export const maxDuration = 300;
 
 // A recipient names a contact only by its full name, first name or relationship.
 // Substring matching sent "moment@x.com" to whoever was saved as "Mom".

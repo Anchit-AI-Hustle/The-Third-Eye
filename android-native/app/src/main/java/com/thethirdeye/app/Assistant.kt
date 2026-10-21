@@ -483,10 +483,11 @@ private fun MessageBubble(m: ChatMessage, busy: Boolean, approve: (PendingAction
                     Text(s.title, fontSize = 12.sp, color = if (s.status == "failed") Palette.red else if (s.status == "done") Palette.blue else Palette.secondary)
                 }
             }
-            m.tools.forEach { t ->
+            // One line per tool with a count: twenty GitHub calls read "github ×20".
+            m.tools.groupingBy { it }.eachCount().forEach { (t, count) ->
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Bolt, null, tint = Palette.blue, modifier = Modifier.size(14.dp))
-                    Text(t, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = Palette.blue)
+                    Text(if (count > 1) "$t ×$count" else t, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = Palette.blue)
                 }
             }
             if (m.text.isNotEmpty()) SelectionContainer { Text(inlineMarkdown(m.text), fontSize = 15.sp) }

@@ -63,7 +63,10 @@ final class Chat: ObservableObject {
             // assistant creates, which the website otherwise does itself.
             let body: [String: Any] = ["message": message, "history": history, "timezone": TimeZone.current.identifier, "native": true]
             do {
-                let (bytes, response) = try await API.session.bytes(for: API.request("POST", "/api/chat", json: body))
+                var request = API.request("POST", "/api/chat", json: body)
+                // The server may work on a long tool sweep for up to five minutes.
+                request.timeoutInterval = 300
+                let (bytes, response) = try await API.session.bytes(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard status == 200 else { throw APIError(status: status) }
                 var event = ""
@@ -500,10 +503,23 @@ struct StepList: View {
 
 struct FlowTools: View {
     let tools: [String]
+
+    private struct Chip: Identifiable { let id: String; let count: Int }
+
+    private var grouped: [Chip] {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for t in tools {
+            if counts[t] == nil { order.append(t) }
+            counts[t, default: 0] += 1
+        }
+        return order.map { Chip(id: $0, count: counts[$0]!) }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(tools.enumerated()), id: \.offset) { _, tool in
-                Label(tool, systemImage: "bolt.fill")
+            // One line per tool with a count: twenty GitHub calls read "github ×20".
+            ForEach(grouped) { chip in
+                Label(chip.count > 1 ? "\(chip.id) ×\(chip.count)" : chip.id, systemImage: "bolt.fill")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Theme.blue)
             }
