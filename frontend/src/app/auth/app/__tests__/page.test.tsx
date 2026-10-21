@@ -15,4 +15,13 @@ describe("/auth/app", () => {
     expect((form.elements.namedItem("callbackUrl") as HTMLInputElement).value).toBe("/api/app-signin");
     expect(screen.getByText(/Opening Google/)).toBeInTheDocument();
   });
+
+  it("carries the app's sign-in state through Google", async () => {
+    window.history.replaceState(null, "", "/auth/app?state=Zq8_xY-3kLm9Pq2RsT4uVw");
+    submit.mockClear();
+    const { container } = render(<AppSignIn />);
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect((container.querySelector("form")!.elements.namedItem("callbackUrl") as HTMLInputElement).value).toBe("/api/app-signin?state=Zq8_xY-3kLm9Pq2RsT4uVw");
+    window.history.replaceState(null, "", "/");
+  });
 });

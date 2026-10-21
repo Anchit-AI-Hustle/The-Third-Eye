@@ -136,6 +136,7 @@ struct FinanceView: View {
         }
         .refreshable { await model.load() }
         .task { await model.load() }
+        .reloadsOnDataChange { await model.load() }
         .overlay { if !model.loaded { ProgressView() } }
         .sheet(item: $editing) { e in
             ExpenseEditor(expense: e) { a, c, n, d in Task { await model.save(id: e.id, amount: a, category: c, note: n, date: d) } }

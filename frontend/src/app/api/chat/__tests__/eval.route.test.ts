@@ -332,3 +332,50 @@ describe("Jarvis reliability evaluation", () => {
     expect(r.text).toMatch(/Save a note \(not verified yet\)/);
   });
 });
+
+describe("native apps", () => {
+  it("writes the assistant's new task for a native app and says it landed", async () => {
+    script = [{ calls: [{ name: "manage_tasks", args: { action: "create", title: "Call the bank", priority: "high" } }] }, { text: "Added." }];
+    const r = await chat("add a task to call the bank", { native: true });
+    expect(r.done.applied).toEqual([{ type: "task_create", ok: true }]);
+    expect(tables.tasks).toEqual([expect.objectContaining({ user_id: "u@x.com", title: "Call the bank", priority: "high", status: "todo" })]);
+  });
+
+  it("leaves the website to write its own", async () => {
+    script = [{ calls: [{ name: "manage_tasks", args: { action: "create", title: "Call the bank" } }] }, { text: "Added." }];
+    const r = await chat("add a task to call the bank");
+    expect(r.done.applied).toBeUndefined();
+    expect(tables.tasks ?? []).toEqual([]);
+    expect(r.made("task_create")).toHaveLength(1);
+  });
+});
+
+describe("everyday activities", () => {
+  it("routes a daily-life message to the catalog's tool and stores the entry", async () => {
+    script = [{ calls: [{ name: "log_activity", args: { action: "log", kind: "pet_walk", amount: 30, subject: "Bruno" } }] }, { text: "Logged Bruno's 30-minute walk." }];
+    const r = await chat("I just walked the dog Bruno for 30 minutes, log it", { timezone: "UTC" });
+    expect(sent[0][0].content).toContain("## Everyday activity (runtime catalog)");
+    expect(sent[0][0].content).toContain("**Walk the dog** (for pets)");
+    expect(r.tools).toEqual(["log_activity"]);
+    expect(r.results()[0]).toMatch(/^Logged pet_walk 30 min for Bruno/);
+    expect(JSON.parse(r.done.memory.daylog)).toEqual([expect.objectContaining({ k: "pet_walk", a: 30, s: "Bruno" })]);
+    expect(r.done.failed).toEqual([]);
+  });
+
+  it("summarises from the log the device sent, and keeps it out of the raw memory dump", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const daylog = JSON.stringify([{ i: "a1", d: today, t: "08:00", k: "water", a: 500, u: "ml" }, { i: "a2", d: today, t: "12:00", k: "water", a: 750, u: "ml" }]);
+    script = [{ calls: [{ name: "log_activity", args: { action: "summary", kind: "water" } }] }, { text: "1.25 litres so far." }];
+    const r = await chat("how much water have I had today?", { timezone: "UTC", memory: { daylog } });
+    expect(sent[0][0].content).toContain("**Today's activity log:**");
+    expect(sent[0][0].content).not.toContain("- daylog:");
+    expect(r.results()[0]).toContain("2 entries - total 1250 ml");
+  });
+
+  it("refuses a kind it does not know instead of storing it", async () => {
+    script = [{ calls: [{ name: "log_activity", args: { action: "log", kind: "dance" } }] }, { text: "What should I log?" }];
+    const r = await chat("log it", { timezone: "UTC" });
+    expect(r.results()[0]).toMatch(/^log_activity failed: invalid arguments: .*kind.*Nothing was run/);
+    expect(r.done.memory.daylog).toBeUndefined();
+  });
+});

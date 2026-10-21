@@ -11,7 +11,7 @@ vi.mock("@/lib/authHandoff", () => ({
 }));
 
 const { GET } = await import("@/app/api/app-signin/route");
-const open = () => GET(new Request("https://app.test/api/app-signin"));
+const open = (q = "") => GET(new Request(`https://app.test/api/app-signin${q}`));
 
 beforeEach(() => { session = null; approved.clear(); });
 
@@ -34,5 +34,19 @@ describe("app sign-in", () => {
     expect(html).toContain('http-equiv="refresh"');
     const again = /code=([0-9a-f]{64})/.exec(await (await open()).text())?.[1];
     expect(again).not.toBe(code);
+  });
+
+  it("returns the app's own state with the code, through Google and back", async () => {
+    const state = "Zq8_xY-3kLm9Pq2RsT4uVw";
+    expect((await open(`?state=${state}`)).headers.get("location")).toBe(`https://app.test/auth/app?state=${state}`);
+    session = { user: { email: "a@x.test" } };
+    expect(await (await open(`?state=${state}`)).text()).toMatch(new RegExp(`thethirdeye://auth\\?code=[0-9a-f]{64}&state=${state}`));
+  });
+
+  it("drops a state that could break out of the link", async () => {
+    session = { user: { email: "a@x.test" } };
+    const html = await (await open(`?state=${encodeURIComponent('x"><script>')}`)).text();
+    expect(html).not.toContain("state=");
+    expect(html).not.toContain("<script>");
   });
 });

@@ -60,6 +60,14 @@ struct MoreView: View {
                         }
                     }
                 }
+                Section("About") {
+                    ForEach([MenuItem(title: "Privacy note", icon: "hand.raised", path: "/privacy"),
+                             MenuItem(title: "Privacy Policy", icon: "lock.doc", path: "/privacy_policy"),
+                             MenuItem(title: "Terms of Service", icon: "doc.plaintext", path: "/terms_of_service")]) { item in
+                        NavigationLink { destination(item) } label: { Label(item.title, systemImage: item.icon) }
+                            .listRowBackground(Theme.surface.opacity(0.7))
+                    }
+                }
                 Section {
                     NavigationLink { destination(MenuItem(title: "Settings", icon: "gearshape", path: "/settings")) } label: {
                         Label("Settings", systemImage: "gearshape")
@@ -95,8 +103,37 @@ struct MoreView: View {
     }
 }
 
-struct WebScreen: UIViewRepresentable {
+// A website page inside the app, signed in, without the website's own menus.
+// Shows a spinner while it loads and says so when it can't; links to other
+// sites open in Safari instead of failing silently.
+struct WebScreen: View {
     let path: String
+    @State private var loading = true
+    @State private var failed = false
+
+    var body: some View {
+        WebPage(path: path, loading: $loading, failed: $failed)
+            .overlay {
+                if failed {
+                    Text("Couldn't load this page. Check your connection and try again.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(24)
+                } else if loading {
+                    ProgressView().tint(Theme.blue)
+                }
+            }
+            .background(Theme.background)
+    }
+}
+
+struct WebPage: UIViewRepresentable {
+    let path: String
+    @Binding var loading: Bool
+    @Binding var failed: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -107,6 +144,8 @@ struct WebScreen: UIViewRepresentable {
         view.isOpaque = false
         view.backgroundColor = UIColor(Theme.background)
         view.scrollView.contentInsetAdjustmentBehavior = .automatic
+        view.navigationDelegate = context.coordinator
+        view.uiDelegate = context.coordinator
         let store = config.websiteDataStore.httpCookieStore
         let cookies = HTTPCookieStorage.shared.cookies(for: API.base) ?? []
         let group = DispatchGroup()
@@ -118,5 +157,51 @@ struct WebScreen: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: WKWebView, context: Context) {}
+    func updateUIView(_ view: WKWebView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        var parent: WebPage
+
+        init(_ parent: WebPage) { self.parent = parent }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            parent.loading = true
+            parent.failed = false
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            parent.loading = false
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { fail(error) }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { fail(error) }
+
+        private func fail(_ error: Error) {
+            parent.loading = false
+            if (error as NSError).code != NSURLErrorCancelled { parent.failed = true }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
+            guard let url = action.request.url else { return .allow }
+            let web = ["http", "https"].contains(url.scheme ?? "")
+            let elsewhere = web && url.host != API.base.host && action.navigationType == .linkActivated
+            if elsewhere || !(web || ["about", "blob", "data"].contains(url.scheme ?? "")) {
+                await UIApplication.shared.open(url)
+                return .cancel
+            }
+            return .allow
+        }
+
+        // target=_blank: this site stays in the app, anything else opens in Safari.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = action.request.url {
+                if url.host == API.base.host { webView.load(action.request) } else { UIApplication.shared.open(url) }
+            }
+            return nil
+        }
+    }
 }

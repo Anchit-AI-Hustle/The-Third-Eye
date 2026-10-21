@@ -53,6 +53,24 @@ final class TasksModel: ObservableObject {
         }
     }
 
+    func save(_ item: TaskItem, title: String, description: String, priority: String, due: Date?) async {
+        let dueText = due.map { FinanceModel.day.string(from: $0) }
+        if let i = tasks.firstIndex(where: { $0.id == item.id }) {
+            tasks[i].title = title
+            tasks[i].description = description
+            tasks[i].priority = priority
+            tasks[i].due_date = dueText
+        }
+        let patch: [String: Any] = [
+            "title": title, "description": description, "priority": priority,
+            "due_date": dueText ?? NSNull(), "updated_at": ISO8601DateFormatter().string(from: Date()),
+        ]
+        do { try await DataStore.update("tasks", id: item.id, patch) } catch {
+            self.error = error.localizedDescription
+            await load()
+        }
+    }
+
     func delete(_ item: TaskItem) async {
         tasks.removeAll { $0.id == item.id }
         do { try await DataStore.delete("tasks", id: item.id) } catch {
@@ -66,6 +84,7 @@ struct TasksView: View {
     @StateObject private var model = TasksModel()
     @State private var draft = ""
     @State private var priority = "medium"
+    @State private var editing: TaskItem?
 
     var body: some View {
         NavigationStack {
@@ -100,7 +119,13 @@ struct TasksView: View {
             .navigationTitle("Tasks")
             .refreshable { await model.load() }
             .task { await model.load() }
+            .reloadsOnDataChange { await model.load() }
             .overlay { if !model.loaded { ProgressView() } }
+            .sheet(item: $editing) { item in
+                TaskEditor(item: item) { title, description, priority, due in
+                    Task { await model.save(item, title: title, description: description, priority: priority, due: due) }
+                }
+            }
         }
     }
 
@@ -127,6 +152,9 @@ struct TasksView: View {
                 }
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { editing = item }
+        .accessibilityAction(named: "Edit") { editing = item }
         .listRowBackground(Theme.surface.opacity(0.7))
         .swipeActions {
             Button(role: .destructive) { Task { await model.delete(item) } } label: { Label("Delete", systemImage: "trash") }
@@ -138,5 +166,53 @@ struct TasksView: View {
         guard !title.isEmpty else { return }
         draft = ""
         Task { await model.add(title, priority: priority) }
+    }
+}
+
+struct TaskEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var description: String
+    @State private var priority: String
+    @State private var hasDue: Bool
+    @State private var due: Date
+    let onSave: (String, String, String, Date?) -> Void
+
+    init(item: TaskItem, onSave: @escaping (String, String, String, Date?) -> Void) {
+        let parsed = item.due_date.flatMap { FinanceModel.day.date(from: String($0.prefix(10))) }
+        _title = State(initialValue: item.title)
+        _description = State(initialValue: item.description ?? "")
+        _priority = State(initialValue: item.priority)
+        _hasDue = State(initialValue: parsed != nil)
+        _due = State(initialValue: parsed ?? .now)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Task", text: $title)
+                TextField("Details", text: $description, axis: .vertical).lineLimit(2...6)
+                Picker("Priority", selection: $priority) {
+                    ForEach(["low", "medium", "high", "urgent"], id: \.self) { Text($0.capitalized) }
+                }
+                Toggle("Due date", isOn: $hasDue.animation())
+                if hasDue { DatePicker("Due", selection: $due, displayedComponents: .date) }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
+            .navigationTitle("Edit task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(title.trimmingCharacters(in: .whitespacesAndNewlines), description, priority, hasDue ? due : nil)
+                        dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
     }
 }

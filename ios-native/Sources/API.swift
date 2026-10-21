@@ -1,5 +1,12 @@
 import Foundation
 
+extension Notification.Name {
+    /// A row was saved or deleted here or by the assistant: lists reload.
+    static let dataChanged = Notification.Name("TheThirdEye.dataChanged")
+    /// The server answered 401: the session cookie has expired.
+    static let sessionExpired = Notification.Name("TheThirdEye.sessionExpired")
+}
+
 // The same server the website uses. Requests carry the NextAuth session
 // cookie the sign-in handoff sets, kept in the shared cookie store.
 enum API {
@@ -15,7 +22,7 @@ enum API {
     }()
 
     static func url(_ path: String) -> URL {
-        URL(string: path, relativeTo: base)!.absoluteURL
+        URL(string: path, relativeTo: base)?.absoluteURL ?? base
     }
 
     static func request(_ method: String, _ path: String, json: Any? = nil) -> URLRequest {
@@ -32,6 +39,7 @@ enum API {
     static func send(_ method: String, _ path: String, json: Any? = nil) async throws -> Data {
         let (data, response) = try await session.data(for: request(method, path, json: json))
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { NotificationCenter.default.post(name: .sessionExpired, object: nil) }
         guard (200..<300).contains(status) else { throw APIError(status: status) }
         return data
     }
@@ -62,14 +70,22 @@ enum DataStore {
 
     static func insert(_ entity: String, _ row: [String: Any]) async throws {
         try await API.send("POST", "/api/data/\(entity)", json: row)
+        changed()
     }
 
     static func update(_ entity: String, id: String, _ patch: [String: Any]) async throws {
         try await API.send("PATCH", "/api/data/\(entity)", json: ["id": id, "patch": patch])
+        changed()
     }
 
     static func delete(_ entity: String, id: String) async throws {
         let escaped = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
         try await API.send("DELETE", "/api/data/\(entity)?id=\(escaped)")
+        changed()
+    }
+
+    /// Every screen showing these rows reloads, so Today and Tasks agree.
+    static func changed() {
+        NotificationCenter.default.post(name: .dataChanged, object: nil)
     }
 }

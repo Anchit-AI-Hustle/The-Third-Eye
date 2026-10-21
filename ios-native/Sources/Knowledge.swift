@@ -80,6 +80,7 @@ struct KnowledgeView: View {
         .navigationTitle("Knowledge")
         .refreshable { await model.load() }
         .task { await model.load() }
+        .reloadsOnDataChange { await model.load() }
         .overlay { if !model.loaded { ProgressView() } }
         // Uploading and text extraction stay on the website's tested pipeline.
         .sheet(isPresented: $upload, onDismiss: { Task { await model.load() } }) {
