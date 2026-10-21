@@ -10,6 +10,7 @@ import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
 import { useChatTaskSync } from "@/hooks/useChatTaskSync";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
+import { groupToolLabels } from "@/lib/toolChips";
 import { micButton } from "@/lib/micButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1447,12 +1448,15 @@ function MessageBubble({
         {!isUser && message.checklist && message.checklist.length > 0 && <ChecklistCard steps={message.checklist} />}
         {message.toolsUsed && message.toolsUsed.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {message.toolsUsed.map((tool, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet">
-                <Zap size={9} className={message.streaming && i === message.toolsUsed!.length - 1 ? "animate-pulse" : undefined} />
-                {tool}{message.streaming && i === message.toolsUsed!.length - 1 ? "…" : ""}
-              </span>
-            ))}
+            {groupToolLabels(message.toolsUsed).map(({ label, count }) => {
+              const running = message.streaming && label === message.toolsUsed!.at(-1);
+              return (
+                <span key={label} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet">
+                  <Zap size={9} className={running ? "animate-pulse" : undefined} />
+                  {label}{count > 1 ? ` ×${count}` : ""}{running ? "…" : ""}
+                </span>
+              );
+            })}
           </div>
         )}
         <div className={cn("rounded-card px-4 py-3 text-sm leading-relaxed",

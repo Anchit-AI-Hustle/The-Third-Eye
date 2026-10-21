@@ -54,7 +54,9 @@ import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 import { refundCredits, spendCredits } from "@/lib/credits";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Fluid compute lets Hobby run 300s; a long tool sweep (twenty GitHub calls)
+// no longer gets cut off mid-reply at a minute.
+export const maxDuration = 300;
 
 // A recipient names a contact only by its full name, first name or relationship.
 // Substring matching sent "moment@x.com" to whoever was saved as "Mom".
