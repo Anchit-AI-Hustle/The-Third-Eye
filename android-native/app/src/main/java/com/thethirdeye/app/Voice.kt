@@ -1,5 +1,7 @@
 package com.thethirdeye.app
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -10,9 +12,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import java.util.Locale
 
 // Native voice: Android's speech recognizer for what the person says (it ends
@@ -87,12 +87,18 @@ class Voice(private val context: Context) : RecognitionListener {
         listening = false
     }
 
-    fun speak(text: String, then: (() -> Unit)? = null) {
+    /** How a voice sounds: a language tag such as en-GB, with its own pitch and speed. */
+    data class Accent(val tag: String, val pitch: Float, val rate: Float)
+
+    fun speak(text: String, accent: Accent? = null, then: (() -> Unit)? = null) {
         val clean = speakable(text)
         if (clean.isEmpty()) { then?.invoke(); return }
         stopListening()
         onSpoken = then
         speaking = true
+        tts.language = accent?.let { Locale.forLanguageTag(it.tag) } ?: Locale.getDefault()
+        tts.setPitch(accent?.pitch ?: 1f)
+        tts.setSpeechRate(accent?.rate ?: 1f)
         // No speech engine (or not ready yet): carry on silently rather than wait for an end that never comes.
         if (tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "reply") != TextToSpeech.SUCCESS) spoken()
     }
