@@ -39,7 +39,7 @@
     "openai": "^7.32.0",
     "pg": "^8.23.0",
     "qrcode": "1.5.4",
-    "react": "19.3.0",
+    "react": "19.3.1",
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.0",
