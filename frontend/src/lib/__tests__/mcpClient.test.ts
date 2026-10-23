@@ -181,6 +181,7 @@ describe("declarations handed to the model", () => {
               after: { anyOf: [{ type: "string" }, { type: "null" }], default: null, title: "After" },
               limit: { default: 20, title: "Limit", type: "integer" },
               ids: { type: "array", items: { type: "string", title: "Id" } },
+              draft: { type: "object", default: { title: "Draft", properties: null } },
             },
             required: [],
           },
@@ -189,11 +190,12 @@ describe("declarations handed to the model", () => {
     }));
     const [decl] = await mcpToolDeclarations();
     expect(decl.parameters).toEqual({
-      type: "object",
+      type: "OBJECT",
       properties: {
-        after: { type: "string", nullable: true },
-        limit: { type: "integer", default: 20 },
-        ids: { type: "array", items: { type: "string" } },
+        after: { type: "STRING", nullable: true },
+        limit: { type: "INTEGER", default: 20 },
+        ids: { type: "ARRAY", items: { type: "STRING" } },
+        draft: { type: "OBJECT", default: { title: "Draft", properties: null } },
       },
       required: [],
     });

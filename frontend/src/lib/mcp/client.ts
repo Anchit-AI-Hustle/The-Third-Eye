@@ -151,12 +151,15 @@ export function isMcpTool(name: string): boolean {
 }
 
 const DROPPED_KEYS = new Set(["title", "additionalProperties", "$schema"]);
+// Values, not schemas: copied as they are.
+const LITERAL_KEYS = new Set(["default", "examples", "enum", "const", "required"]);
 
 /**
  * Python servers (FastMCP via pydantic) emit `title` on every node and
  * `anyOf: [X, {type: "null"}]` for optional arguments; Gemini rejects the
  * whole request over fields outside its schema subset, so one such connector
- * would take chat down.
+ * would take chat down. Types go uppercase as Gemini declares them;
+ * geminiToolsToOpenAI lowers them again for the OpenAI-format fallbacks.
  */
 function geminiSchema(schema: any): any {
   if (Array.isArray(schema)) return schema.map(geminiSchema);
@@ -170,7 +173,10 @@ function geminiSchema(schema: any): any {
   const out: any = {};
   for (const [k, v] of Object.entries(schema)) {
     if (DROPPED_KEYS.has(k) || (k === "default" && v === null)) continue;
-    out[k] = k === "properties" ? Object.fromEntries(Object.entries(v as object).map(([p, s]) => [p, geminiSchema(s)])) : geminiSchema(v);
+    out[k] = LITERAL_KEYS.has(k) ? v
+      : k === "type" && typeof v === "string" ? v.toUpperCase()
+      : k === "properties" ? Object.fromEntries(Object.entries((v ?? {}) as object).map(([p, s]) => [p, geminiSchema(s)]))
+      : geminiSchema(v);
   }
   return out;
 }
