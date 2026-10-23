@@ -218,6 +218,7 @@ final class JobModel: ObservableObject {
 
     func removeSaved(_ row: SavedJobRow) async {
         saved.removeAll { $0.id == row.id }
+        savedRows.removeAll { $0.id == row.id }
         do { try await DataStore.delete("saved_jobs", id: row.id) } catch {
             self.error = error.localizedDescription
             await loadLists()
