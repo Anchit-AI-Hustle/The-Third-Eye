@@ -53,7 +53,11 @@ const CEREBRAS_BASE  = "https://api.cerebras.ai/v1";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MISTRAL_BASE   = "https://api.mistral.ai/v1";
 // A user's own Ollama (their Mac, through a tunnel) wins over the deployment's.
-const ollamaBase = () => (currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "");
+// Spoken to through its OpenAI-compatible /v1, so any local server with that
+// API (OpenJarvis `jarvis serve`, llama.cpp, vLLM) works the same way.
+const ollamaBase = () => `${(currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "")}/v1`;
+// Ollama ignores the key; a server behind an authenticated tunnel needs one.
+const ollamaKey = () => (process.env.OLLAMA_API_KEY ?? "").trim() || "ollama";
 
 // Vercel env-var names are case-sensitive; we also strip BOM/zero-width chars
 // because Powershell-piped values sometimes inject them.
@@ -512,33 +516,6 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
   } finally { clear(); }
 }
 
-async function callOllama(model: string, opts: LlmCascadeOptions) {
-  const { signal, clear } = withTimeout(opts.timeoutMs ?? 60_000);
-  try {
-    const r = await fetch(`${ollamaBase()}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [
-          ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-          ...opts.messages,
-        ],
-        stream: false,
-        options: { temperature: opts.temperature ?? 0.7, num_predict: opts.maxTokens ?? 2000 },
-      }),
-      signal,
-    });
-    if (!r.ok) {
-      return { ...(await failed(r)), quota: false };
-    }
-    const data = await r.json();
-    return { ok: true as const, text: data.message?.content ?? "", model };
-  } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
-  } finally { clear(); }
-}
-
 // ─── Cascade entrypoint ──────────────────────────────────────────────────
 
 // Unattended work (Gmail scan, log sync) never spends paid credit.
@@ -617,7 +594,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       if (res.quota) startCooldown(healthName("mistral"), res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
       const model = modelFor("ollama");
-      const res = await callOllama(model, opts);
+      const res = await callOpenAICompatible(ollamaBase(), ollamaKey(), model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 });
       attempts.push(attempt("ollama", model, res));
       if (res.ok) { await noteSuccess(healthName("ollama"), model); return { text: res.text, provider: "ollama", model, attempts }; }
     }
@@ -782,7 +759,10 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
   if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
   const rank = cascadeOrder();
-  return rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
+  rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
+  // Last, as in the text cascade: slowest, but never out of quota.
+  if (keys.ollama) rows.push({ provider: "ollama", base: ollamaBase(), model: modelFor("ollama"), key: ollamaKey() });
+  return rows;
 }
 
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
