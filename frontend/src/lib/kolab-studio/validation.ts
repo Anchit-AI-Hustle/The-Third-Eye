@@ -135,7 +135,7 @@ export const subscribeSchema = z.object({
 
 export const kycInitiateSchema = z.object({
   aadhaar: aadhaarSchema,
-  consent: z.literal(true, { errorMap: () => ({ message: "Explicit consent is required" }) }),
+  consent: z.literal(true, { error: "Explicit consent is required" }),
 });
 
 export const kycVerifySchema = z.object({
