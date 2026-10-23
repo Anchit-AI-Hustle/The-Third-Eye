@@ -10,7 +10,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -32,12 +35,23 @@ const val BASE_URL = "https://the-third-eye.anchit-tandon.com"
 
 val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true; explicitNulls = false }
 
-class ApiError(val status: Int) : IOException() {
+class ApiError(val status: Int, body: String = "") : IOException() {
+    private val reply = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+    private fun field(key: String) = (reply?.get(key) as? JsonPrimitive)?.contentOrNull
+
+    /** What the server could not delete, when it says. */
+    val failed get() = (reply?.get("failed") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+
+    /** The Job Agent answers 403 with this when the server has it switched off. */
+    val disabled get() = (reply?.get("disabled") as? JsonPrimitive)?.booleanOrNull == true
+
     override val message: String
-        get() = when (status) {
-            401 -> "You're signed out. Sign in again."
-            0 -> "No connection. Check your internet."
-            else -> "The server said $status. Try again."
+        get() = when {
+            status == 401 -> "You're signed out. Sign in again."
+            status == 0 -> "No connection. Check your internet."
+            status == 402 && field("code") == "insufficient_credits" ->
+                "Not enough credits (needs ${field("cost")}, you have ${field("balance")}). See Plans & Credits."
+            else -> field("error") ?: "The server said $status. Try again."
         }
 }
 
@@ -87,17 +101,18 @@ object HttpBackend : Backend {
             .method(method, body?.toString()?.toRequestBody(type) ?: if (method == "GET" || method == "DELETE") null else "".toRequestBody(type))
             .build()
 
-    private fun check(status: Int) {
+    private fun check(status: Int, body: String = "") {
         if (status == 401) Events.sessionExpired.tryEmit(Unit)
-        if (status !in 200..299) throw ApiError(status)
+        if (status !in 200..299) throw ApiError(status, body)
     }
 
     override suspend fun send(method: String, path: String, body: JsonElement?): String =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 client.newCall(request(method, path, body)).execute().use { r ->
-                    check(r.code)
-                    r.body.string()
+                    val text = r.body.string()
+                    check(r.code, text)
+                    text
                 }
             } catch (e: ApiError) {
                 throw e

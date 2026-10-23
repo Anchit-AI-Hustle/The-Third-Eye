@@ -2,8 +2,8 @@ import SwiftUI
 import WebKit
 
 // The website's More menu (frontend Sidebar MAIN_ITEMS + MORE_GROUPS), in the
-// same groups and order. Goals is native; screens not yet rebuilt open the
-// website page inside the app, signed in, without the website's own menus.
+// same groups and order. Every screen is native except the three legal pages,
+// which open the website page inside the app, signed in, without its own menus.
 struct MenuItem: Identifiable {
     let title: String
     let icon: String
@@ -48,6 +48,7 @@ let moreMenu: [MenuGroup] = [
 
 struct MoreView: View {
     @EnvironmentObject private var session: Session
+    @State private var previewing: Target?
 
     var body: some View {
         NavigationStack {
@@ -82,24 +83,13 @@ struct MoreView: View {
             .scrollContentBackground(.hidden)
             .background(Starfield())
             .navigationTitle("More")
+            .navigationDestination(item: $previewing) { RouteView(path: $0.path) }
+            .task { if let path = PreviewMode.path { previewing = Target(path: path) } }
         }
     }
 
-    @ViewBuilder
     private func destination(_ item: MenuItem) -> some View {
-        switch item.path {
-        case "/goals": GoalsView()
-        case "/finance": FinanceView()
-        case "/knowledge": KnowledgeView()
-        case "/lifelog": LifeLogView()
-        case "/activity": ActivityView()
-        case "/connectors": ConnectorsView()
-        default:
-            WebScreen(path: item.path)
-                .navigationTitle(item.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .ignoresSafeArea(edges: .bottom)
-        }
+        RouteView(path: item.path, title: item.title)
     }
 }
 

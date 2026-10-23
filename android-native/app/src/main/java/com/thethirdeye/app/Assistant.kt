@@ -52,25 +52,30 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,9 +95,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.time.ZoneId
 
@@ -449,14 +452,19 @@ private fun CircleAction(icon: ImageVector, active: Boolean, label: String, enab
     ) { Icon(icon, contentDescription = label, tint = if (active) Palette.background else Palette.blue) }
 }
 
-/** **bold** and `code`, the inline markdown replies use most. */
+/** **bold**, *italic*, `code` and [links](https://…): the inline markdown replies and generated text use. */
 fun inlineMarkdown(s: String): AnnotatedString = buildAnnotatedString {
     var i = 0
-    val pattern = Regex("""\*\*(.+?)\*\*|`([^`]+)`""")
+    val pattern = Regex("""\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)]\((https?://[^)\s]+)\)|\*([^*\s][^*]*?)\*""")
     for (m in pattern.findAll(s)) {
         append(s.substring(i, m.range.first))
-        if (m.groupValues[1].isNotEmpty()) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(m.groupValues[1]) }
-        else withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(m.groupValues[2]) }
+        val g = m.groupValues
+        when {
+            g[1].isNotEmpty() -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(g[1]) }
+            g[2].isNotEmpty() -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(g[2]) }
+            g[3].isNotEmpty() -> withLink(LinkAnnotation.Url(g[4], TextLinkStyles(SpanStyle(color = Palette.blue, textDecoration = TextDecoration.Underline)))) { append(g[3]) }
+            else -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(g[5]) }
+        }
         i = m.range.last + 1
     }
     append(s.substring(i))

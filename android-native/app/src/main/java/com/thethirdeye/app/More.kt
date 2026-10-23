@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.Diamond
-import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.History
@@ -54,12 +53,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -71,8 +70,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 
 // The website's More menu (frontend Sidebar MAIN_ITEMS + MORE_GROUPS), in the
-// same groups and order. Native screens where the iPhone app has them; the rest
-// open the website page inside the app, signed in, without the website's menus.
+// same groups and order. Every item is a native screen except the three legal
+// pages, which open the website page inside the app, signed in, without the website's menus.
 data class MenuItem(val title: String, val icon: ImageVector, val path: String)
 
 val moreMenu: List<Pair<String, List<MenuItem>>> = listOf(
@@ -112,6 +111,7 @@ val moreMenu: List<Pair<String, List<MenuItem>>> = listOf(
 sealed interface Dest {
     data class Screen(val item: MenuItem) : Dest
     data class Web(val title: String, val path: String) : Dest
+    data class Tool(val id: String) : Dest
     data class Document(val doc: KnowledgeDoc) : Dest
     data class Day(val day: LifeLogDay) : Dest
 }
@@ -141,9 +141,21 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
             "/lifelog" -> LifeLogScreen(nav)
             "/activity" -> ActivityScreen(nav::back)
             "/connectors" -> ConnectorsScreen(nav::back)
+            "/tools" -> StudioScreen(app, nav)
+            "/generations" -> GenerationsScreen(nav::back)
+            "/skills" -> SkillsScreen(app, nav::back)
+            "/apps" -> AppsScreen(app, nav)
+            "/plans" -> PlansScreen(nav::back)
+            "/capabilities" -> CapabilitiesScreen(nav::back)
+            "/agents" -> AgentsScreen(app, nav)
+            "/audit" -> AuditScreen(app, nav)
+            "/kolab" -> KolabScreen(nav)
+            "/job-agent" -> JobAgentScreen(session, nav)
+            "/settings" -> SettingsScreen(session, nav)
             else -> WebScreen(top.item.title, top.item.path, nav::back)
         }
         is Dest.Web -> WebScreen(top.title, top.path, nav::back)
+        is Dest.Tool -> ToolScreen(top.id, nav::back)
         is Dest.Document -> DocumentScreen(top.doc, nav::back)
         is Dest.Day -> LifeLogDayScreen(top.day, nav::back)
     }

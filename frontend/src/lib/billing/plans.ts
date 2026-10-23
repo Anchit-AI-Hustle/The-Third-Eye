@@ -97,3 +97,17 @@ export function pricePer100(b: Bundle): number {
 // Sign-up gift: exactly enough to try every paid action once.
 export const WELCOME_CREDITS = Object.values(CREDIT_COSTS).reduce((a, b) => a + b, 0);
 
+// Usage levels by creations made, shown on the Plans wallet.
+export const LEVELS = [
+  { min: 0, name: "Newcomer", avatar: "🌱" },
+  { min: 15, name: "Explorer", avatar: "🧭" },
+  { min: 50, name: "Operator", avatar: "⚙️" },
+  { min: 150, name: "Power User", avatar: "⚡" },
+  { min: 400, name: "Architect", avatar: "🛰️" },
+  { min: 1000, name: "Legend", avatar: "👑" },
+];
+export function userLevel(n: number): { name: string; avatar: string; index: number; next?: number } {
+  let idx = 0;
+  for (let i = 0; i < LEVELS.length; i++) if (n >= LEVELS[i].min) idx = i;
+  return { name: LEVELS[idx].name, avatar: LEVELS[idx].avatar, index: idx, next: LEVELS[idx + 1]?.min };
+}
