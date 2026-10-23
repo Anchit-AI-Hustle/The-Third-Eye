@@ -27,6 +27,36 @@ export function ConnectionsCard() {
     "connected" | "error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_disconnected" | null
   >(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [patInput, setPatInput] = useState("");
+  const [savingPat, setSavingPat] = useState(false);
+  const [showPatInput, setShowPatInput] = useState(false);
+  const [patError, setPatError] = useState<string | null>(null);
+
+  const savePat = async () => {
+    if (!patInput.trim()) return;
+    setSavingPat(true);
+    setPatError(null);
+    try {
+      const r = await fetch("/api/connect/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: patInput.trim() }),
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok && j?.ok) {
+        setGithub({ connected: true, login: j.login, configured: true });
+        setBanner("github_connected");
+        setPatInput("");
+        setShowPatInput(false);
+      } else {
+        setPatError(j?.error || "Failed to verify GitHub token");
+      }
+    } catch (e) {
+      setPatError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setSavingPat(false);
+    }
+  };
 
   useEffect(() => {
     // Reflect the result of the OAuth round-trip.
@@ -132,18 +162,12 @@ export function ConnectionsCard() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {status?.available === false && !connected ? (
-          <span className="text-xs text-text-muted">
-            Gmail and Calendar access is in Google&apos;s review and opens to everyone once it&apos;s approved.
-          </span>
-        ) : (
         <a
           href="/api/connect/google"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
         >
           {connected ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
         </a>
-        )}
         {connected && (
           <button
             type="button"
@@ -158,7 +182,6 @@ export function ConnectionsCard() {
 
       <p className="text-text-muted text-[11px] mt-3 leading-relaxed">
         Sign-in does not grant mail. Connect here when you want the assistant to read or send it.
-        While Google's review of those permissions is open, only listed accounts can start this step.
         Disconnecting revokes the permission at Google and deletes the token stored here.
       </p>
 
@@ -186,13 +209,18 @@ export function ConnectionsCard() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {github?.configured === false ? (
-            <p className="text-xs text-text-muted">GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are not set on this deployment.</p>
-          ) : (
+          {github?.configured !== false && (
             <a href="/api/connect/github" className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors">
-              <Link2 size={14} /> {github?.connected ? "Reconnect GitHub" : "Connect GitHub"}
+              <Link2 size={14} /> {github?.connected ? "Reconnect GitHub (OAuth)" : "Connect GitHub (OAuth)"}
             </a>
           )}
+          <button
+            type="button"
+            onClick={() => setShowPatInput(!showPatInput)}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-input bg-white/5 border border-border-default text-text-secondary text-sm font-medium hover:text-text-primary hover:bg-white/10 transition-colors"
+          >
+            <Link2 size={14} /> {github?.connected ? "Update Access Token" : "Connect with Token (PAT)"}
+          </button>
           {github?.connected && (
             <button
               type="button"
@@ -208,6 +236,36 @@ export function ConnectionsCard() {
             </button>
           )}
         </div>
+
+        {showPatInput && (
+          <div className="mt-3 p-3 rounded-card bg-surface-subtle border border-border-default space-y-2">
+            <p className="text-xs text-text-secondary font-mono">
+              Enter a GitHub Personal Access Token (classic or fine-grained with <code className="text-[#4FC3F7]">repo</code> and <code className="text-[#4FC3F7]">read:user</code> scopes):
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={patInput}
+                onChange={(e) => setPatInput(e.target.value)}
+                placeholder="ghp_... or github_pat_..."
+                className="flex-1 px-3 py-1.5 rounded-input bg-surface-card border border-border-default text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#4FC3F7]"
+              />
+              <button
+                type="button"
+                onClick={savePat}
+                disabled={savingPat || !patInput.trim()}
+                className="px-4 py-1.5 rounded-input bg-[#4FC3F7] text-black text-sm font-medium hover:bg-[#4FC3F7]/90 transition-colors disabled:opacity-50"
+              >
+                {savingPat ? "Connecting…" : "Save Token"}
+              </button>
+            </div>
+            {patError && (
+              <p className="text-xs text-accent-red font-mono flex items-center gap-1.5">
+                <AlertCircle size={12} /> {patError}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

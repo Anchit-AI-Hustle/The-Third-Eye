@@ -179,6 +179,8 @@ describe("email content boundaries", () => {
   it("leaves prose-writing requests and missing content to the model", () => {
     expect(directTurn("write an email to ada@example.com apologizing for the delay")).toBeNull();
     expect(directTurn("email ada@example.com")).toBeNull();
+    expect(directTurn("send a mail to anchit.tandon2803@gmail.com - explain how to integrate aws bedrck api key")).toBeNull();
+    expect(directTurn("send an email to team@company.com - draft a summary of Q3 goals")).toBeNull();
   });
   it("does not mistake a mentioned address for the intended recipient", () => {
     expect(directTurn("write an email to Alice saying contact bob@example.com")).toBeNull();

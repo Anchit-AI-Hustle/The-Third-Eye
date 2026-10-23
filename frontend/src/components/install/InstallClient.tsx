@@ -68,7 +68,7 @@ function PhoneQr() {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     QRCode.toString(GET_URL, { type: "svg", margin: 1, color: { dark: "#000000", light: "#ffffff" } })
-      .then((svg) => setSrc(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`));
+      .then((svg: string) => setSrc(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`));
   }, []);
   return (
     <section className="holo-card rounded-card p-6 flex flex-col sm:flex-row items-center gap-6">
