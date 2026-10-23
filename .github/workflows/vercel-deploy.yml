@@ -108,12 +108,15 @@ jobs:
         env:
           SHA: ${{ steps.target.outputs.sha }}
         run: |
+          # A later push to main can go live first (Vercel builds the newest
+          # commit and skips the queued one); that still carries this commit.
+          contains() { [ -n "$1" ] && { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch -q origin main; } && git merge-base --is-ancestor "$SHA" "$1" 2>/dev/null; }
           live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""')
           echo "Live commit:   ${live:-<none reported>}"
           echo "Target commit: $SHA"
-          if [ "$live" = "$SHA" ]; then
+          if [ "$live" = "$SHA" ] || contains "$live"; then
             echo "current=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Production is already serving $SHA — nothing to deploy."
+            echo "::notice::Production is already serving $live, which includes $SHA — nothing to deploy."
           else
             echo "current=false" >> "$GITHUB_OUTPUT"
           fi
@@ -181,6 +184,9 @@ jobs:
           # Git integration's — so that waits too. Only a scheduled run with no
           # deploy of our own has nothing to wait for, and one look is enough
           # there to say whether the live site is behind.
+          # A later push to main can go live first (Vercel builds the newest
+          # commit and skips the queued one); that still carries this commit.
+          contains() { [ -n "$1" ] && { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch -q origin main; } && git merge-base --is-ancestor "$SHA" "$1" 2>/dev/null; }
           if [ "${{ steps.trigger.outputs.deployed }}" = "true" ] || [ "${{ github.event_name }}" != "schedule" ]; then
             deadline=$(( $(date +%s) + 900 ))
           else
@@ -190,6 +196,10 @@ jobs:
             live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' || echo "")
             if [ "$live" = "$SHA" ]; then
               echo "::notice::Production is serving $SHA."
+              exit 0
+            fi
+            if contains "$live"; then
+              echo "::notice::Production is serving $live, a later commit that includes $SHA."
               exit 0
             fi
             [ "$(date +%s)" -ge "$deadline" ] && break
