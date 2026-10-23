@@ -15,6 +15,7 @@ final class Session: ObservableObject {
     @Published var busy = false
     @Published var error: String?
     @Published var name: String?
+    @Published var email: String?
 
     private static let wasSignedIn = "was-signed-in"
     private var expiry: NSObjectProtocol?
@@ -27,12 +28,18 @@ final class Session: ObservableObject {
 
     func refresh() async {
         // CI's layout screenshots open the tabs without an account.
-        if UserDefaults.standard.string(forKey: "preview-tab") != nil { state = .signedIn; return }
+        if UserDefaults.standard.string(forKey: "preview-tab") != nil {
+            state = .signedIn
+            name = PreviewMode.name
+            email = PreviewMode.email
+            return
+        }
         do {
             let data = try await API.send("GET", "/api/auth/session")
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let user = json?["user"] as? [String: Any]
             name = user?["name"] as? String
+            email = user?["email"] as? String
             state = user == nil ? .signedOut : .signedIn
             UserDefaults.standard.set(state == .signedIn, forKey: Self.wasSignedIn)
         } catch {
@@ -72,14 +79,18 @@ final class Session: ObservableObject {
     }
 
     /// Leaves nothing signed in behind: the app's cookies, the in-app web pages'
-    /// own store, this phone's action log and its scheduled reminders.
+    /// own store, this phone's action log, creations, skills and Kolab brand, and its scheduled reminders.
     func signOut() {
         for cookie in HTTPCookieStorage.shared.cookies ?? [] { HTTPCookieStorage.shared.deleteCookie(cookie) }
         WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {}
         AgentLog.shared.clear()
+        GenerationStore.shared.reset()
+        SkillStore.shared.reset()
+        LocalStore.remove(LocalFile.kolab)
         Reminders.clear()
         UserDefaults.standard.set(false, forKey: Self.wasSignedIn)
         name = nil
+        email = nil
         state = .signedOut
     }
 }

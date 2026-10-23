@@ -7,6 +7,7 @@ struct TheThirdEyeApp: App {
     @StateObject private var app = AppState()
 
     init() {
+        PreviewMode.seed()
         UNUserNotificationCenter.current().delegate = ForegroundNotifications.shared
     }
 
