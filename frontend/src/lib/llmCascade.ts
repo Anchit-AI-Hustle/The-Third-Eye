@@ -57,7 +57,8 @@ const MISTRAL_BASE   = "https://api.mistral.ai/v1";
 // API (OpenJarvis `jarvis serve`, llama.cpp, vLLM) works the same way.
 const ollamaBase = () => `${(currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "")}/v1`;
 // Ollama ignores the key; a server behind an authenticated tunnel needs one.
-const ollamaKey = () => (process.env.OLLAMA_API_KEY ?? "").trim() || "ollama";
+// The deployment's key is only for the deployment's URL, never a user's own.
+const ollamaKey = () => (currentOwnKeys()?.ollama ? "" : (process.env.OLLAMA_API_KEY ?? "").trim()) || "ollama";
 
 // Vercel env-var names are case-sensitive; we also strip BOM/zero-width chars
 // because Powershell-piped values sometimes inject them.

@@ -92,6 +92,15 @@ describe("a user's own provider keys", () => {
     expect(seen[0].auth).toBe("Bearer local-secret");
     delete process.env.OLLAMA_API_KEY;
   });
+
+  it("never sends the deployment's OLLAMA_API_KEY to a user's own Ollama URL", async () => {
+    process.env.OLLAMA_API_KEY = "local-secret";
+    const seen = stub(() => ok("x"));
+    await withKeys({ userId: "a@x.com", ollama: "https://their-mac.example.com" }, () => llmCascade({ messages: [{ role: "user", content: "hi" }] }));
+    expect(seen[0].url).toBe("https://their-mac.example.com/v1/chat/completions");
+    expect(seen[0].auth).toBe("Bearer ollama");
+    delete process.env.OLLAMA_API_KEY;
+  });
 });
 
 describe("background work", () => {
