@@ -4,6 +4,11 @@ updates:
     directory: "/frontend"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    groups:
+      # React refuses to run when react and react-dom differ by even a patch
+      # (#478 bumped react alone and failed 40 test files on main).
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
     ignore:
       # These majors broke main when they merged unattended:
       #   typescript 7: Next resolves typescript/lib/typescript.js, which the
