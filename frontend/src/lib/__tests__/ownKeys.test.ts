@@ -65,10 +65,41 @@ describe("a user's own provider keys", () => {
   });
 
   it("an own Ollama URL is called instead of localhost", async () => {
-    const seen = stub(() => ({ status: 200, body: { message: { content: "local answer" } } }));
+    const seen = stub(() => ok("local answer"));
     const r = await withKeys({ userId: "a@x.com", ollama: "https://my-mac.example.com/" }, () => llmCascade({ messages: [{ role: "user", content: "hi" }] }));
     expect(r.provider).toBe("ollama");
-    expect(seen[0].url).toBe("https://my-mac.example.com/api/chat");
+    expect(r.text).toBe("local answer");
+    expect(seen[0].url).toBe("https://my-mac.example.com/v1/chat/completions");
+  });
+
+  it("a local model answers tool calls when no cloud provider can", async () => {
+    process.env.GROQ_API_KEY = "shared-groq";
+    const seen = stub((url) => host(url) === "api.groq.com"
+      ? { status: 429, body: { error: { message: "rate limit" } } }
+      : { status: 200, body: { choices: [{ message: { content: null, tool_calls: [{ id: "1", type: "function", function: { name: "manage_tasks", arguments: "{}" } }] } }] } });
+    const r = await withKeys({ userId: "a@x.com", ollama: "https://my-mac.example.com" }, () => toolCallCascade({ messages: [{ role: "user", content: "add a task" }], tools: [] }));
+    expect(r.provider).toBe("ollama");
+    expect(r.tool_calls?.[0].function.name).toBe("manage_tasks");
+    expect(seen.at(-1)?.url).toBe("https://my-mac.example.com/v1/chat/completions");
+  });
+
+  it("sends OLLAMA_API_KEY so the local server can sit behind an authenticated tunnel", async () => {
+    process.env.OLLAMA_ENABLED = "1";
+    process.env.OLLAMA_BASE = "https://jarvis.example.com";
+    process.env.OLLAMA_API_KEY = "local-secret";
+    const seen = stub(() => ok("x"));
+    await llmCascade({ messages: [{ role: "user", content: "hi" }] });
+    expect(seen[0].auth).toBe("Bearer local-secret");
+    delete process.env.OLLAMA_API_KEY;
+  });
+
+  it("never sends the deployment's OLLAMA_API_KEY to a user's own Ollama URL", async () => {
+    process.env.OLLAMA_API_KEY = "local-secret";
+    const seen = stub(() => ok("x"));
+    await withKeys({ userId: "a@x.com", ollama: "https://their-mac.example.com" }, () => llmCascade({ messages: [{ role: "user", content: "hi" }] }));
+    expect(seen[0].url).toBe("https://their-mac.example.com/v1/chat/completions");
+    expect(seen[0].auth).toBe("Bearer ollama");
+    delete process.env.OLLAMA_API_KEY;
   });
 });
 
