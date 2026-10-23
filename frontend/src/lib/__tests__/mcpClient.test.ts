@@ -182,6 +182,8 @@ describe("declarations handed to the model", () => {
               limit: { default: 20, title: "Limit", type: "integer" },
               ids: { type: "array", items: { type: "string", title: "Id" } },
               draft: { type: "object", default: { title: "Draft", properties: null } },
+              mode: { type: "string", enum: ["a", "b"], examples: ["a"], const: "a" },
+              level: { type: "integer", enum: [1, 2] },
             },
             required: [],
           },
@@ -196,6 +198,8 @@ describe("declarations handed to the model", () => {
         limit: { type: "INTEGER", default: 20 },
         ids: { type: "ARRAY", items: { type: "STRING" } },
         draft: { type: "OBJECT", default: { title: "Draft", properties: null } },
+        mode: { type: "STRING", enum: ["a", "b"] },
+        level: { type: "INTEGER" },
       },
       required: [],
     });

@@ -150,9 +150,10 @@ export function isMcpTool(name: string): boolean {
   return name.startsWith(PREFIX);
 }
 
-const DROPPED_KEYS = new Set(["title", "additionalProperties", "$schema"]);
+// Outside Gemini's schema subset (it has no `examples` or `const`).
+const DROPPED_KEYS = new Set(["title", "additionalProperties", "$schema", "examples", "const"]);
 // Values, not schemas: copied as they are.
-const LITERAL_KEYS = new Set(["default", "examples", "enum", "const", "required"]);
+const LITERAL_KEYS = new Set(["default", "enum", "required"]);
 
 /**
  * Python servers (FastMCP via pydantic) emit `title` on every node and
@@ -173,6 +174,8 @@ function geminiSchema(schema: any): any {
   const out: any = {};
   for (const [k, v] of Object.entries(schema)) {
     if (DROPPED_KEYS.has(k) || (k === "default" && v === null)) continue;
+    // Gemini only takes string enums.
+    if (k === "enum" && !(Array.isArray(v) && v.every((e) => typeof e === "string"))) continue;
     out[k] = LITERAL_KEYS.has(k) ? v
       : k === "type" && typeof v === "string" ? v.toUpperCase()
       : k === "properties" ? Object.fromEntries(Object.entries((v ?? {}) as object).map(([p, s]) => [p, geminiSchema(s)]))
