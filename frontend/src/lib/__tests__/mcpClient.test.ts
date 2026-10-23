@@ -166,6 +166,38 @@ describe("declarations handed to the model", () => {
     const decls = await mcpToolDeclarations();
     expect(decls[0].parameters).toEqual({ type: "OBJECT", properties: {} });
   });
+
+  it("rewrites Python-generated schemas into the subset Gemini accepts", async () => {
+    setServers([{ name: "py", url: "https://py.example.com" }]);
+    vi.stubGlobal("fetch", mockRpc({
+      "https://py.example.com": () => ({
+        tools: [{
+          name: "list_messages",
+          inputSchema: {
+            title: "list_messagesArguments",
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              after: { anyOf: [{ type: "string" }, { type: "null" }], default: null, title: "After" },
+              limit: { default: 20, title: "Limit", type: "integer" },
+              ids: { type: "array", items: { type: "string", title: "Id" } },
+            },
+            required: [],
+          },
+        }],
+      }),
+    }));
+    const [decl] = await mcpToolDeclarations();
+    expect(decl.parameters).toEqual({
+      type: "object",
+      properties: {
+        after: { type: "string", nullable: true },
+        limit: { type: "integer", default: 20 },
+        ids: { type: "array", items: { type: "string" } },
+      },
+      required: [],
+    });
+  });
 });
 
 describe("calling a tool", () => {
