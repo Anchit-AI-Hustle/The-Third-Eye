@@ -59,24 +59,29 @@ class ToolRun(private val tool: CatalogData.StudioTool, private val local: Local
 
     val ready get() = tool.fields.filter { it.required }.all { values[it.name].orEmpty().isNotBlank() }
 
-    private fun inputs() = tool.fields.mapNotNull { f -> values[f.name]?.takeIf { it.isNotBlank() }?.let { Generation.Input(f.label, it) } }
+    private var outputTitle = ""
+
+    private fun inputs(entered: Map<String, String>) = tool.fields.mapNotNull { f -> entered[f.name]?.takeIf { it.isNotBlank() }?.let { Generation.Input(f.label, it) } }
 
     suspend fun generate() {
         busy = true
         error = null
         saved = false
+        val entered = values.toMap()
+        val mode = local.mode
         try {
             val body = buildJsonObject {
                 put("tool", tool.id)
-                put("inputs", buildJsonObject { tool.fields.forEach { f -> put(f.name, values[f.name].orEmpty()) } })
-                put("mode", local.mode)
+                put("inputs", buildJsonObject { tool.fields.forEach { f -> put(f.name, entered[f.name].orEmpty()) } })
+                put("mode", mode)
             }
             val reply = json.decodeFromString(Generated.serializer(), Api.backend.send("POST", "/api/tools/generate", body))
             output = reply.output
             kind = reply.format
             provider = reply.provider
-            val inputs = inputs()
-            local.addGeneration(Generation("gen_${newId()}", "studio", tool.id, tool.label, studioTitle(tool, inputs), reply.format, now(), inputs, reply.output))
+            val inputs = inputs(entered)
+            outputTitle = studioTitle(tool, inputs)
+            local.addGeneration(Generation("gen_${newId()}", "studio", tool.id, tool.label, outputTitle, reply.format, now(), inputs, reply.output))
         } catch (e: Exception) {
             error = e.message
         }
@@ -87,7 +92,7 @@ class ToolRun(private val tool: CatalogData.StudioTool, private val local: Local
         val text = output ?: return
         try {
             DataStore.insert("knowledge_docs", buildJsonObject {
-                put("id", newId()); put("title", studioTitle(tool, inputs())); put("content", text); put("file_type", tool.downloadExt)
+                put("id", newId()); put("title", outputTitle); put("content", text); put("file_type", tool.downloadExt)
                 put("file_size_bytes", text.toByteArray().size); put("created_at", now()); put("chunk_count", 0); put("processing_status", "ready")
             })
             saved = true

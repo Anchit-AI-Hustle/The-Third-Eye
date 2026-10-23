@@ -250,7 +250,7 @@ fun SettingsScreen(session: Session, nav: Nav, model: SettingsModel = remember {
                     g.connected -> "Connected as ${g.login ?: "you"}"
                     else -> "Not connected"
                 }, g?.connected == true) {
-                    if (g?.configured == true) {
+                    if (g != null) {
                         if (g.connected) TextButton(onClick = { scope.launch { model.disconnectGithub() } }) { Text("Disconnect", color = Palette.red) }
                         else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Field("Personal access token", githubToken, { githubToken = it }, secret = true)

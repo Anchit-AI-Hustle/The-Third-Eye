@@ -72,16 +72,17 @@ final class KolabModel: ObservableObject {
         running = true
         error = nil
         defer { running = false }
-        let brief = String(draft.brief.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Kolab.briefLimit))
-        var body: [String: Any] = ["mode": draft.mode, "brand": draft.brand.payload]
+        let sent = draft
+        let brief = String(sent.brief.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Kolab.briefLimit))
+        var body: [String: Any] = ["mode": sent.mode, "brand": sent.brand.payload]
         if !brief.isEmpty { body["brief"] = brief }
         do {
             let reply = try await API.call("POST", "/api/kolab/generate", json: body, as: Reply.self)
             output = reply.output
-            let name = draft.brand.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            var inputs = [Generation.Input(label: "Program", value: Kolab.label(draft.mode)), Generation.Input(label: "Brand", value: name)]
+            let name = sent.brand.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            var inputs = [Generation.Input(label: "Program", value: Kolab.label(sent.mode)), Generation.Input(label: "Brand", value: name)]
             if !brief.isEmpty { inputs.append(Generation.Input(label: "Brief", value: brief)) }
-            GenerationStore.shared.add(app: "kolab", tool: nil, appLabel: "Kolab", title: "\(Kolab.label(draft.mode)): \(name)",
+            GenerationStore.shared.add(app: "kolab", tool: nil, appLabel: "Kolab", title: "\(Kolab.label(sent.mode)): \(name)",
                                        kind: "markdown", inputs: inputs, output: reply.output)
             return true
         } catch {
@@ -111,27 +112,31 @@ struct KolabView: View {
             }
             .listRowBackground(Theme.surface.opacity(0.7))
             Section("Brand") {
-                TextField("Brand name (required)", text: $model.draft.brand.name)
-                TextField("Industry", text: $model.draft.brand.industry)
-                TextField("Product", text: $model.draft.brand.product, axis: .vertical)
-                TextField("Audience", text: $model.draft.brand.audience, axis: .vertical)
-                TextField("Positioning", text: $model.draft.brand.positioning, axis: .vertical)
-                TextField("Unique selling points", text: $model.draft.brand.usp, axis: .vertical)
-                Picker("Price point", selection: $model.draft.brand.pricePoint) {
-                    Text("Not set").tag("")
-                    ForEach(prices, id: \.0) { Text($0.1).tag($0.0) }
+                Group {
+                    TextField("Brand name (required)", text: $model.draft.brand.name)
+                    TextField("Industry", text: $model.draft.brand.industry)
+                    TextField("Product", text: $model.draft.brand.product, axis: .vertical)
+                    TextField("Audience", text: $model.draft.brand.audience, axis: .vertical)
+                    TextField("Positioning", text: $model.draft.brand.positioning, axis: .vertical)
+                    TextField("Unique selling points", text: $model.draft.brand.usp, axis: .vertical)
+                    Picker("Price point", selection: $model.draft.brand.pricePoint) {
+                        Text("Not set").tag("")
+                        ForEach(prices, id: \.0) { Text($0.1).tag($0.0) }
+                    }
+                    TextField("Region", text: $model.draft.brand.region)
                 }
-                TextField("Region", text: $model.draft.brand.region)
-                TextField("Channels, comma separated", text: $model.draft.brand.channels)
-                TextField("Competitors", text: $model.draft.brand.competitors, axis: .vertical)
-                TextField("Tone of voice", text: $model.draft.brand.toneOfVoice)
-                Picker("Stage", selection: $model.draft.brand.stage) {
-                    Text("Not set").tag("")
-                    ForEach(stages, id: \.0) { Text($0.1).tag($0.0) }
+                Group {
+                    TextField("Channels, comma separated", text: $model.draft.brand.channels)
+                    TextField("Competitors", text: $model.draft.brand.competitors, axis: .vertical)
+                    TextField("Tone of voice", text: $model.draft.brand.toneOfVoice)
+                    Picker("Stage", selection: $model.draft.brand.stage) {
+                        Text("Not set").tag("")
+                        ForEach(stages, id: \.0) { Text($0.1).tag($0.0) }
+                    }
+                    TextField("Goals", text: $model.draft.brand.goals, axis: .vertical)
+                    TextField("Current numbers", text: $model.draft.brand.metricsNote, axis: .vertical)
+                    TextField("Constraints", text: $model.draft.brand.constraints, axis: .vertical)
                 }
-                TextField("Goals", text: $model.draft.brand.goals, axis: .vertical)
-                TextField("Current numbers", text: $model.draft.brand.metricsNote, axis: .vertical)
-                TextField("Constraints", text: $model.draft.brand.constraints, axis: .vertical)
             }
             .listRowBackground(Theme.surface.opacity(0.7))
             Section {

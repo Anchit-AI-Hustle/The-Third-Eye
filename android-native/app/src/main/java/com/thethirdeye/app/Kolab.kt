@@ -64,16 +64,19 @@ class KolabRun(private val local: Local) {
         error = null
         try {
             val brand = local.brand
+            val sentMode = mode
+            val sentBrief = brief.trim()
+            val sentLabel = modeLabel
             val body = buildJsonObject {
-                put("mode", mode)
+                put("mode", sentMode)
                 put("brand", brandPayload(brand))
-                if (brief.isNotBlank()) put("brief", brief.trim())
+                if (sentBrief.isNotEmpty()) put("brief", sentBrief)
             }
             val text = json.decodeFromString(Program.serializer(), Api.backend.send("POST", "/api/kolab/generate", body)).output
             output = text
-            val inputs = listOf(Generation.Input("Program", modeLabel), Generation.Input("Brand", brand.name)) +
-                if (brief.isNotBlank()) listOf(Generation.Input("Brief", brief.trim())) else emptyList()
-            local.addGeneration(Generation("gen_${newId()}", "kolab", null, "Kolab", "$modeLabel: ${brand.name}", "markdown", now(), inputs, text))
+            val inputs = listOf(Generation.Input("Program", sentLabel), Generation.Input("Brand", brand.name)) +
+                if (sentBrief.isNotEmpty()) listOf(Generation.Input("Brief", sentBrief)) else emptyList()
+            local.addGeneration(Generation("gen_${newId()}", "kolab", null, "Kolab", "$sentLabel: ${brand.name}", "markdown", now(), inputs, text))
         } catch (e: Exception) {
             error = e.message
         }
