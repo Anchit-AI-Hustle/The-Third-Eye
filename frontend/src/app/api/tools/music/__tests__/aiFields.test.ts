@@ -26,7 +26,7 @@ describe("auto-fill", () => {
     expect(f.vocalEffects).toBe("Heavy delay, voc");
   });
 
-  it("turns a misspelled prompt into a title, both genres, and moods — never the prompt itself", async () => {
+  it("turns a misspelled prompt into a title, both genres, and moods - never the prompt itself", async () => {
     cascade.mockRejectedValueOnce(new Error("down"));
     const f = await infer("psychadelic acid");
     expect(f.description).toBe("psychedelic acid");

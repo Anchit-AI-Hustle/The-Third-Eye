@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Card3D } from "@/components/hud/Card3D";
 import {
   LayoutTemplate, Mail, Workflow, Music, PenLine, Presentation, Megaphone,
   ClipboardList, FileBarChart, ListChecks, Plane, ChefHat, Palette, Rocket,
@@ -24,13 +25,13 @@ const ICONS: Record<string, LucideIcon> = {
 // only (Personal → Hobby Studio, Professional → Startup Studio, Enterprise →
 // Office Studio). A tab row lets you switch studios, which switches the app mode.
 const ORDER: ModeId[] = ["professional", "enterprise", "personal"];
-const ALL = [...STUDIO_TOOLS, ...STUDIO_LINKS];
 
-export function StudioHub() {
+export function StudioHub({ showAnchor }: { showAnchor: boolean }) {
   const { modeId, setMode } = useMode();
   const studio = STUDIOS[modeId];
   const StudioIcon = ICONS[studio.icon] ?? Rocket;
-  const tools = ALL.filter((t) => t.mode === modeId);
+  const all = [...STUDIO_TOOLS, ...(showAnchor ? STUDIO_LINKS : [])];
+  const tools = all.filter((t) => t.mode === modeId);
 
   return (
     <div className="space-y-6">
@@ -40,13 +41,13 @@ export function StudioHub() {
           const s = STUDIOS[m];
           const Icon = ICONS[s.icon] ?? Rocket;
           const active = modeId === m;
-          const count = ALL.filter((t) => t.mode === m).length;
+          const count = all.filter((t) => t.mode === m).length;
           return (
             <button
               key={m}
               onClick={() => setMode(m)}
               aria-pressed={active}
-              title={`${s.name} — ${s.tagline}`}
+              title={`${s.name} - ${s.tagline}`}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-input border text-sm transition-colors ${
                 active
                   ? "font-semibold"
@@ -101,17 +102,21 @@ export function StudioHub() {
                 {inCat.map((t) => {
                   const Icon = ICONS[t.icon] ?? LayoutTemplate;
                   return (
-                    <Link key={t.id} href={`/tools/${t.id}`}
-                      className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden hover:-translate-y-0.5 transition-transform">
-                      <div className="flex items-center justify-between mb-2">
+                    <Card3D key={t.id} intensity={7} lift={10} className="rounded-card h-full">
+                    <Link href={`/tools/${t.id}`}
+                      className="group holo-card rounded-card p-4 relative overflow-hidden preserve-3d block h-full">
+                      <div className="flex items-center justify-between mb-2 depth-2">
                         <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-none" style={{ background: `${t.accent}1A`, color: t.accent }}>
                           <Icon size={18} />
                         </span>
                         <ArrowRight size={14} className="text-text-muted group-hover:text-text-primary group-hover:translate-x-0.5 transition-all" />
                       </div>
-                      <div className="text-sm font-semibold text-text-primary">{t.label}</div>
-                      <div className="text-xs text-text-muted mt-1 leading-relaxed line-clamp-3">{t.blurb}</div>
+                      <div className="depth-1">
+                        <div className="text-sm font-semibold text-text-primary">{t.label}</div>
+                        <div className="text-xs text-text-muted mt-1 leading-relaxed line-clamp-3">{t.blurb}</div>
+                      </div>
                     </Link>
+                    </Card3D>
                   );
                 })}
               </div>

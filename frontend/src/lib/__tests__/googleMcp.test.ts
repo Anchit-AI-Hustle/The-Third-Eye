@@ -52,7 +52,7 @@ describe("communicate(email) is confirmed", () => {
     expect(isSensitive("communicate", undefined)).toBe(true);
   });
 
-  it("leaves deep-link modes alone — those already need a tap", () => {
+  it("leaves deep-link modes alone - those already need a tap", () => {
     expect(isSensitive("communicate", { action: "whatsapp" })).toBe(false);
     expect(isSensitive("communicate", { action: "sms" })).toBe(false);
     expect(isSensitive("communicate", { action: "call" })).toBe(false);

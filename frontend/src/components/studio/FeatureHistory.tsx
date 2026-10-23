@@ -28,7 +28,7 @@ export function FeatureHistory({ tool, accent }: { tool: string; accent: string 
         <span className="hud-label" style={{ color: accent }}>History</span>
         <span className="text-[11px] font-mono text-text-muted">{items.length}</span>
       </div>
-      {!items.length && <p className="text-xs text-text-muted">Nothing made here yet — everything this feature produces is listed here.</p>}
+      {!items.length && <p className="text-xs text-text-muted">Nothing made here yet - everything this feature produces is listed here.</p>}
       <ul className="divide-y divide-border-default">
         {items.slice(0, visible).map((g) => (
           <li key={g.id} className="flex items-center gap-3 py-2">

@@ -65,13 +65,13 @@ describe("direct email", () => {
   });
 
   it("sends the words after that to every address, not the leftover sentence", () => {
-    const turn = directTurn("Write a mail to anchit.tandon@gmail.com and anchit.tandon@vahdam.com that test-mail by Jarvis");
+    const turn = directTurn("Write a mail to anchit.tandon@gmail.com and anchit.tandon2803@gmail.com that test-mail by Jarvis");
     expect(turn?.kind).toBe("email");
     if (turn?.kind !== "email") return;
-    expect(turn.args.to).toBe("anchit.tandon@gmail.com, anchit.tandon@vahdam.com");
+    expect(turn.args.to).toBe("anchit.tandon@gmail.com, anchit.tandon2803@gmail.com");
     expect(turn.args.body).toBe("test-mail by Jarvis");
     expect(turn.args.subject).toBe("test-mail by Jarvis");
-    expect(turn.args.subject).not.toMatch(/vahdam/);
+    expect(turn.args.subject).not.toMatch(/2803/);
   });
 
   it("strips header injection out of the subject", () => {

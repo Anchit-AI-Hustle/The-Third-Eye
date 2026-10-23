@@ -13,14 +13,14 @@
   --color-border-hover: #1A3A5C;
   --color-text-primary: #FFFFFF;
   --color-text-secondary: #B0B8C8;
-  --color-text-muted: #6B7394;
+  --color-text-muted: #7F87A8;
   --color-accent-blue: #4FC3F7;
   --color-accent-violet: #7B5CF0;
+  --color-accent-amber: #FFB547;
   --color-accent-red: #EF4444;
   --color-success: #10B981;
   --color-warning: #F59E0B;
-  /* Kept as an alias of the primary accent: `--color-arc` is consumed by the
-     arc-reactor motif, which is the same brand blue by definition. */
+  /* Alias of the primary accent, the same brand blue by definition. */
   --color-arc: var(--color-accent-blue);
   --accent-rgb: 79, 195, 247;
   --violet-rgb: 123, 92, 240;
@@ -81,17 +81,14 @@ body {
 
 /* Reduced motion: disable non-essential animations */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  html:not([data-motion-full]) :is(.route-scan, .route-shutter, .ambient-scene) { display: none; }
+  html:not([data-motion-full]) *, html:not([data-motion-full]) *::before, html:not([data-motion-full]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .hud-scanline::after { animation: none !important; }
-  .arc-reactor::before, .arc-reactor::after { animation: none !important; }
-  .arc-reactor-core { animation: none !important; }
-  .holo-card::before { transition: none !important; }
-  .data-ticker-inner { animation: none !important; }
+  html:not([data-motion-full]) .holo-card::before { transition: none !important; }
 }
 
 /* Touch target sizing handled via Tailwind min-h-[48px] on BottomNav */
@@ -123,123 +120,142 @@ body {
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
-/* ── HUD grid lines ──────────────────────────────────── */
-.hud-grid {
-  background-image:
-    linear-gradient(rgba(79,195,247,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(79,195,247,0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-/* ── HUD corner brackets (Iron Man frame) ────────────── */
-.hud-frame {
-  position: relative;
-}
-.hud-frame::before,
-.hud-frame::after {
-  content: '';
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  pointer-events: none;
-}
-.hud-frame::before {
-  top: -1px;
-  left: -1px;
-  border-top: 2px solid rgba(79,195,247,0.4);
-  border-left: 2px solid rgba(79,195,247,0.4);
-}
-.hud-frame::after {
-  bottom: -1px;
-  right: -1px;
-  border-bottom: 2px solid rgba(79,195,247,0.4);
-  border-right: 2px solid rgba(79,195,247,0.4);
-}
-
-/* ── Arc reactor ─────────────────────────────────────── */
-.arc-reactor {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(79,195,247,0.15) 0%, transparent 70%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.arc-reactor::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  border: 2px solid rgba(79,195,247,0.5);
-  animation: arcSpin 8s linear infinite;
-  box-shadow: 0 0 10px rgba(79,195,247,0.3), inset 0 0 10px rgba(79,195,247,0.1);
-}
-.arc-reactor::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(79,195,247,0.3);
-  border-top-color: transparent;
-  border-bottom-color: transparent;
-  animation: arcSpin 4s linear infinite reverse;
-}
-.arc-reactor-core {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #4FC3F7 0%, rgba(79,195,247,0.5) 60%, transparent 100%);
-  box-shadow: 0 0 8px rgba(79,195,247,0.6), 0 0 20px rgba(79,195,247,0.3);
-  animation: arcPulse 2s ease-in-out infinite;
-  z-index: 1;
-}
-
-.arc-reactor-lg {
-  width: 120px;
-  height: 120px;
-}
-.arc-reactor-lg::before {
-  border-width: 3px;
-}
-.arc-reactor-lg::after {
-  inset: 20px;
-  border-width: 2px;
-}
-.arc-reactor-lg .arc-reactor-core {
-  width: 30px;
-  height: 30px;
-  box-shadow: 0 0 15px rgba(79,195,247,0.6), 0 0 40px rgba(79,195,247,0.3), 0 0 80px rgba(79,195,247,0.1);
-}
-
-/* Third ring for large reactor */
-.arc-reactor-lg .arc-reactor-ring3 {
-  position: absolute;
-  inset: 10px;
-  border-radius: 50%;
-  border: 1px solid rgba(79,195,247,0.2);
-  border-left-color: transparent;
-  border-right-color: transparent;
-  animation: arcSpin 6s linear infinite;
-}
-
 /* ── Animations ───────────────────────────────────────── */
 @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+/* Page change: the page fades in under a scan line that sweeps the screen.
+   Opacity only on the page, with no fill afterwards: a transform left on
+   <main> would make it the containing block for every position:fixed child
+   (dialogs, the composer). */
+@keyframes pageEnter {
+  from { opacity: 0; clip-path: circle(0% at 50% 35%); }
+  60%  { opacity: 1; }
+  to   { clip-path: circle(150% at 50% 35%); }
+}
+.page-enter { animation: pageEnter 650ms var(--ease-depth) backwards; }
+
+/* Cards rise into place one after another on every page. Transform only while
+   the animation runs (no fill), so nothing is left holding a transform. */
+@keyframes cardRise {
+  from { opacity: 0; transform: perspective(900px) translateY(28px) rotateX(14deg) scale(0.96); }
+}
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card) {
+  animation: cardRise 560ms var(--ease-depth) backwards;
+}
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(2) { animation-delay: 60ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(3) { animation-delay: 120ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(4) { animation-delay: 180ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(5) { animation-delay: 240ms; }
+.page-enter :is(.holo-card, .card-3d, .bg-background-surface, .rounded-card):nth-child(n+6) { animation-delay: 300ms; }
+
+/* Page change shutter: two holographic panels swing open in 3D. */
+@keyframes shutterLeft  { from { transform: rotateY(0deg); opacity: 0.85; } to { transform: rotateY(88deg); opacity: 0; } }
+@keyframes shutterRight { from { transform: rotateY(0deg); opacity: 0.85; } to { transform: rotateY(-88deg); opacity: 0; } }
+.route-shutter {
+  position: fixed; inset: 0; z-index: 59; pointer-events: none; display: flex; perspective: 1200px;
+}
+.route-shutter > span {
+  flex: 1; height: 100%;
+  background: linear-gradient(135deg, rgba(79, 195, 247, 0.22), rgba(123, 92, 240, 0.18) 55%, rgba(8, 12, 22, 0.6));
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  backdrop-filter: blur(6px);
+  animation: shutterLeft 620ms var(--ease-depth) forwards;
+  transform-origin: left center;
+}
+.route-shutter > span + span { animation-name: shutterRight; transform-origin: right center; }
+
+/* Tap feedback everywhere: the `scale` property composes with any transform. */
+:where(button, a, [role="button"], .holo-card, .card-3d):active:not(:disabled) { scale: 0.96; }
+
+/* ── Ambient backdrop behind every page ──────────────────── */
+.ambient-scene { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; color: #4FC3F7; }
+.ambient-glow {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(40% 35% at 78% 18%, rgba(79,195,247,0.11), transparent 70%),
+    radial-gradient(50% 40% at 20% 85%, rgba(123,92,240,0.06), transparent 70%);
+  animation: glowBreathe 12s ease-in-out infinite alternate;
+}
+@keyframes glowBreathe { to { opacity: 0.6; transform: scale(1.05); } }
+/* Grid floor: a plane tilted away from the viewer, its lines drifting toward them. */
+.ambient-floor {
+  position: absolute; left: -50%; right: -50%; bottom: -10%; height: 55vh;
+  transform: perspective(600px) rotateX(72deg); transform-origin: 50% 100%;
+  background-image:
+    linear-gradient(rgba(79,195,247,0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,195,247,0.16) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 85%);
+  animation: floorDrift 6s linear infinite;
+}
+@keyframes floorDrift { to { background-position: 0 64px, 0 0; } }
+.hud-dial { position: absolute; width: min(64vmin, 560px); height: min(64vmin, 560px); top: -12vmin; right: -14vmin; opacity: 0.28; filter: drop-shadow(0 0 4px rgba(79,195,247,0.35)); }
+@media (max-width: 640px) { .hud-dial { width: 80vw; height: 80vw; top: -28vw; right: -36vw; opacity: 0.18; } }
+.hud-dial g { transform-origin: 100px 100px; transform-box: view-box; }
+.hud-dial-outer { animation: dialSpin 80s linear infinite; }
+.hud-dial-inner { animation: dialSpin 45s linear infinite reverse; }
+.hud-dial-sweep { animation: dialSpin 8s linear infinite; }
+@keyframes dialSpin { to { transform: rotate(360deg); } }
+.ambient-scan {
+  position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(79,195,247,0.45) 30%, rgba(79,195,247,0.45) 70%, transparent);
+  box-shadow: 0 0 12px rgba(79,195,247,0.35);
+  animation: scanPass 14s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes scanPass {
+  0% { transform: translateY(-10px); opacity: 0; }
+  8% { opacity: 0.7; }
+  55% { transform: translateY(100vh); opacity: 0.4; }
+  56%, 100% { transform: translateY(100vh); opacity: 0; }
+}
+.ambient-mote {
+  position: absolute; bottom: -6px; width: 2px; height: 2px; border-radius: 50%;
+  background: #4FC3F7; box-shadow: 0 0 6px rgba(79,195,247,0.8); opacity: 0;
+  animation: moteRise 18s linear infinite;
+}
+@keyframes moteRise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  15% { opacity: 0.6; }
+  100% { transform: translate3d(0, -100vh, 0); opacity: 0; }
+}
+
+/* ── Signal trace: the live telemetry line on the dashboard ── */
+.signal-trace { position: relative; overflow: hidden; color: #4FC3F7; }
+.signal-trace svg { position: absolute; inset: 0; width: 200%; height: 100%; animation: traceScroll 6s linear infinite; }
+.signal-trace svg:last-child { animation-duration: 10s; opacity: 0.4; }
+@keyframes traceScroll { to { transform: translateX(-50%); } }
+
+/* ── JARVIS core: tick rings turning around the persona ───── */
+.hud-core { position: relative; }
+.hud-core > span {
+  position: absolute; inset: -18%; border-radius: 50%; pointer-events: none;
+  border: 1.5px solid currentColor; opacity: 0.55;
+  border-top-color: transparent; border-bottom-color: #FFB547;
+  animation: dialSpin 9s linear infinite;
+}
+.hud-core > span:nth-child(2) { inset: -32%; opacity: 0.35; border-style: dashed; border-bottom-color: transparent; animation-duration: 16s; animation-direction: reverse; }
+.hud-core > span:nth-child(3) { inset: -6%; opacity: 0.8; border-width: 2px; border-left-color: transparent; border-right-color: transparent; border-bottom-color: currentColor; animation-duration: 4s; filter: drop-shadow(0 0 6px currentColor); }
+
+/* ── Panels: cards rise in as the page assembles ───────── */
+.page-enter :is(div, section, article, li):is(.holo-card, .border.rounded-card, .border.rounded-xl, .border.rounded-2xl) {
+  animation: cardRise 480ms var(--ease-depth) backwards;
+}
+
+@keyframes routeScan {
+  from { transform: translateY(0); opacity: 0.9; }
+  to   { transform: translateY(100vh); opacity: 0; }
+}
+.route-scan {
+  position: fixed; inset: 0 0 auto 0; height: 2px; z-index: 60; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--color-accent-blue) 20%, #7B5CF0 50%, var(--color-accent-blue) 80%, transparent);
+  box-shadow: 0 0 18px rgba(79, 195, 247, 0.6);
+  animation: routeScan 520ms var(--ease-depth) forwards;
+}
 @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes slideIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 @keyframes pulseGlow {
   0%,100% { box-shadow: 0 0 4px rgba(16,185,129,0.4); }
   50%      { box-shadow: 0 0 12px rgba(16,185,129,0.8), 0 0 24px rgba(16,185,129,0.3); }
-}
-@keyframes arcSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes arcPulse {
-  0%,100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-@keyframes scanLine {
-  0%   { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
 }
 @keyframes hologramFlicker {
   0%,97%,100% { opacity: 1; }
@@ -255,7 +271,6 @@ body {
   50% { border-color: rgba(79,195,247,0.35); }
 }
 @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
-@keyframes ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
 @keyframes bootReveal {
   from { clip-path: inset(0 100% 0 0); opacity: 0; }
   to   { clip-path: inset(0 0 0 0); opacity: 1; }
@@ -282,43 +297,24 @@ body {
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
-/* ── Scan line overlay ────────────────────────────────── */
-.hud-scanline::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(79,195,247,0.15), transparent);
-  animation: scanLine 8s linear infinite;
-  pointer-events: none;
-}
-
-/* ── Data ticker bar ─────────────────────────────────── */
-.data-ticker {
-  background: rgba(79,195,247,0.03);
-  border-top: 1px solid rgba(79,195,247,0.1);
-  border-bottom: 1px solid rgba(79,195,247,0.1);
-  overflow: hidden;
-}
-.data-ticker-inner {
-  display: flex;
-  animation: ticker 30s linear infinite;
-  white-space: nowrap;
-}
 
 /* ── Holographic card ────────────────────────────────── */
+/* Glass panel with a hairline light edge: cyan from the top left fading to
+   violet at the bottom right, a lit top rim and a soft floor shadow. */
 .holo-card {
-  background: linear-gradient(135deg, rgba(79,195,247,0.03) 0%, rgba(14,14,42,0.8) 50%, rgba(123,92,240,0.03) 100%);
-  border: 1px solid rgba(79,195,247,0.12);
-  transition: all 200ms;
+  background:
+    linear-gradient(180deg, rgba(18, 24, 46, 0.78), rgba(9, 11, 26, 0.86)) padding-box,
+    linear-gradient(135deg, rgba(79,195,247,0.42), rgba(79,195,247,0.07) 32%, rgba(123,92,240,0.07) 68%, rgba(123,92,240,0.34)) border-box;
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px -16px rgba(0,0,0,0.7);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  transition: box-shadow 250ms var(--ease-depth), transform 250ms var(--ease-depth);
   position: relative;
   overflow: hidden;
 }
 .holo-card:hover {
-  border-color: rgba(79,195,247,0.3);
-  box-shadow: 0 0 20px rgba(79,195,247,0.08), inset 0 0 20px rgba(79,195,247,0.02);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(79,195,247,0.12), 0 18px 44px -16px rgba(79,195,247,0.28);
 }
 .holo-card::before {
   content: '';
@@ -337,11 +333,12 @@ body {
 
 /* ── HUD label ────────────────────────────────────────── */
 .hud-label {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
-  letter-spacing: 0.15em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(79,195,247,0.5);
+  white-space: nowrap;
+  color: var(--color-text-muted);
 }
 
 /* ── Markdown prose ───────────────────────────────────── */
@@ -393,6 +390,16 @@ body {
               box-shadow var(--dur-depth) var(--ease-depth),
               border-color var(--dur-interaction) var(--ease-depth);
   will-change: transform;
+}
+/* Scrolling into view: the card swings up into place. Only set once the card
+   has been seen off-screen, so nothing visible on load is hidden first. */
+.card-3d[data-inview="false"] {
+  opacity: 0;
+  transform: perspective(900px) rotateX(18deg) translateY(28px) scale(0.96);
+}
+.card-3d[data-inview] {
+  transition: transform 640ms var(--ease-depth), opacity 520ms var(--ease-depth),
+              box-shadow var(--dur-depth) var(--ease-depth);
 }
 /* While the pointer is down/over, track it immediately instead of easing —
    easing during tracking reads as lag, easing on release reads as settle. */
@@ -512,20 +519,22 @@ body {
    already on screen would blink back out each time the window is resized. */
 [data-reveal-armed="true"] [data-reveal]:not([data-revealed]) { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
-  [data-reveal-armed="true"] [data-reveal] { opacity: 1; transform: none; }
+  html:not([data-motion-full]) [data-reveal-armed="true"] [data-reveal] { opacity: 1; transform: none; }
 }
 
 /* ── Reduced motion: flatten the entire depth system ─────── */
 @media (prefers-reduced-motion: reduce) {
-  .card-3d {
+  html:not([data-motion-full]) .card-3d {
     transform: none !important;
     transition: border-color var(--dur-interaction) linear !important;
   }
-  .card-3d::after { opacity: 0 !important; }
-  .depth-1, .depth-2, .depth-3 { transform: none !important; }
-  .depth-field { transform: none !important; }
+  html:not([data-motion-full]) .card-3d::after { opacity: 0 !important; }
+  html:not([data-motion-full]) .card-3d[data-inview="false"] { opacity: 1 !important; }
+  html:not([data-motion-full]) .depth-1, html:not([data-motion-full]) .depth-2, html:not([data-motion-full]) .depth-3 { transform: none !important; }
+  html:not([data-motion-full]) .depth-field { transform: none !important; }
   /* Hold the brackets at their resting length instead of pinning every
      variant to the md value, which shrank the lg frame. */
-  .holo-frame:hover > .holo-frame-corner,
-  .holo-frame:focus-within > .holo-frame-corner { --frame-extend: 0px; }
+  html:not([data-motion-full]) .holo-frame:hover > .holo-frame-corner, html:not([data-motion-full]) .holo-frame:focus-within > .holo-frame-corner { --frame-extend: 0px; }
 }
+/* .holo-card's own gradient is a background-image the HUD layers replace; keep its tint. */
+.page-enter .holo-card { background-color: rgba(9, 16, 32, 0.82); }

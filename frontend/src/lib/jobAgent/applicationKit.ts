@@ -106,7 +106,7 @@ TARGET JOB ANALYSIS (untrusted): ${untrustedBlock("job_analysis", JSON.stringify
   };
 
   if (!parsed || !Array.isArray(parsed.sections)) {
-    warnings.push("AI resume generation was unavailable or malformed — showing your base resume. Edit it before applying.");
+    warnings.push("AI resume generation was unavailable or malformed - showing your base resume. Edit it before applying.");
     const resume = baseResume ?? {
       contact, templateId: "classic-ats",
       sections: [{ id: "summary", label: "Summary", kind: "summary" as const, visible: true, text: profile.summary || "" }],
@@ -121,7 +121,7 @@ TARGET JOB ANALYSIS (untrusted): ${untrustedBlock("job_analysis", JSON.stringify
       ...e,
       bullets: (e.bullets as any[] | undefined)?.map((b) => {
         const { valid, invalid } = pruneFactIds(b.sourceFactIds, idx);
-        if (invalid.length) warnings.push(`A resume bullet cited unknown fact ids (${invalid.join(", ")}) — verify: "${String(b.text).slice(0, 60)}…"`);
+        if (invalid.length) warnings.push(`A resume bullet cited unknown fact ids (${invalid.join(", ")}) - verify: "${String(b.text).slice(0, 60)}…"`);
         return { text: String(b.text ?? ""), sourceFactIds: valid, generated: true };
       }),
     }));
@@ -162,7 +162,7 @@ JOB (untrusted): ${untrustedBlock("job", `${job.title} at ${job.company}\n${(job
   const warnings: string[] = parsed.warnings || [];
   const paragraphs = (parsed.paragraphs as any[]).map((p) => {
     const { valid, invalid } = pruneFactIds(p.sourceFactIds, idx);
-    if (invalid.length) warnings.push("A cover-letter claim cited unknown fact ids — please verify.");
+    if (invalid.length) warnings.push("A cover-letter claim cited unknown fact ids - please verify.");
     return { text: String(p.text ?? ""), sourceFactIds: valid, companySourceIds: p.companySourceIds || [] };
   });
   return { greeting: parsed.greeting || "Dear Hiring Team,", paragraphs, closing: parsed.closing || "Sincerely,", signature: profile.fullName, warnings };
@@ -199,7 +199,7 @@ FACTS:\n${factsForPrompt(facts)}`;
       requiresUserInput: forceUser,
       isSensitive,
       isLegalAttestation: isLegal,
-      warning: isSensitive ? "Sensitive/EEO question — you must answer this yourself." : isLegal ? "Legal attestation — you must confirm this yourself." : a?.warning,
+      warning: isSensitive ? "Sensitive/EEO question - you must answer this yourself." : isLegal ? "Legal attestation - you must confirm this yourself." : a?.warning,
     };
   });
 }
@@ -247,13 +247,13 @@ export async function buildApplicationKit(input: BuildKitInput): Promise<Applica
       warnings.push(...(coverLetter.warnings || []));
       screeningAnswers = await generateScreeningAnswers(input.questions || [], profile, facts);
     } catch (e) {
-      warnings.push("AI generation degraded — using deterministic drafts. Review carefully before applying.");
+      warnings.push("AI generation degraded - using deterministic drafts. Review carefully before applying.");
     }
   } else {
-    warnings.push("AI provider not configured — showing your base resume and a template cover letter. Edit before applying.");
+    warnings.push("AI provider not configured - showing your base resume and a template cover letter. Edit before applying.");
   }
 
-  if (match.eligibility === "likely_ineligible") warnings.unshift("Hard eligibility conflict detected — review before applying: " + match.penaltiesApplied.join("; "));
+  if (match.eligibility === "likely_ineligible") warnings.unshift("Hard eligibility conflict detected - review before applying: " + match.penaltiesApplied.join("; "));
   if (!facts.length) needsInformation.push("Import or add your career facts so tailoring can cite real evidence.");
 
   return {

@@ -11,6 +11,7 @@
 
 import { STUDIO_TOOLS } from "@/lib/studioTools";
 import { GST_SLABS } from "@/lib/calculators/formulas";
+import { LOG_KINDS } from "@/lib/dailyLife";
 
 export const geminiTools = [
   {
@@ -58,7 +59,7 @@ export const geminiTools = [
       },
       {
         name: "fail_step",
-        description: "Record that a step failed and why, before fixing and retrying it — or when it truly cannot be done.",
+        description: "Record that a step failed and why, before fixing and retrying it - or when it truly cannot be done.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -76,12 +77,12 @@ export const geminiTools = [
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["create", "update", "search", "delete"], description: "What to do with the task" },
-            id: { type: "STRING", description: "Task ID, if known from a previous search. Omit it rather than guessing — pass title instead." },
+            id: { type: "STRING", description: "Task ID, if known from a previous search. Omit it rather than guessing - pass title instead." },
             title: { type: "STRING", description: "Task title. On create, the new task's title. On update/delete without an id, the title to match against existing tasks; with an id, the new title to rename to." },
             priority: { type: "STRING", enum: ["low", "medium", "high", "urgent"], description: "Priority level" },
-            status: { type: "STRING", enum: ["todo", "in_progress", "review", "done", "cancelled"], description: "Task status (for update). 'review' is the In Review column — work finished but awaiting a check." },
+            status: { type: "STRING", enum: ["todo", "in_progress", "review", "done", "cancelled"], description: "Task status (for update). 'review' is the In Review column - work finished but awaiting a check." },
             assignee: { type: "STRING", description: "Person responsible" },
-            agent: { type: "STRING", description: "Appointed AI agent profile id (jarvis|friday|edith|ultron|zeus|athena) — set when the user appoints an agent to the task, '' to un-appoint" },
+            agent: { type: "STRING", description: "Appointed AI agent profile id (jarvis|friday|edith|ultron|zeus|athena) - set when the user appoints an agent to the task, '' to un-appoint" },
             due_date: { type: "STRING", description: "Due date YYYY-MM-DD (infer from 'tomorrow', 'Friday', etc.)" },
             description: { type: "STRING", description: "Additional context or notes" },
             filter: { type: "STRING", enum: ["all", "open", "urgent", "overdue"], description: "Filter for search (default: open)" },
@@ -140,7 +141,7 @@ export const geminiTools = [
             // assistant fell into its "connection temporarily down" mode for good.
             // The slabs are listed for the model in the description and enforced
             // where the value lands (toGstSlab in lib/calculators/formulas.ts).
-            gst_rate: { type: "NUMBER", description: `GST % already included in the amount — one of ${GST_SLABS.join(", ")}. Use 0 if unknown or none.` },
+            gst_rate: { type: "NUMBER", description: `GST % already included in the amount - one of ${GST_SLABS.join(", ")}. Use 0 if unknown or none.` },
             spent_on: { type: "STRING", description: "Date YYYY-MM-DD (defaults to today; infer from 'yesterday' etc.)" },
           },
           required: ["action"],
@@ -193,12 +194,12 @@ export const geminiTools = [
       },
       {
         name: "manage_contacts",
-        description: "Unified contact manager and phone sync: search, list, get, or add contacts synchronized across the user's phone, laptop, and cloud. action='search' to find a contact by name (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') or relationship, 'list' to view all synced phone/device contacts, 'get' to retrieve phone/email details, 'add' to save a new contact. All device contacts synced from phone/Google/iCloud are accessible here.",
+        description: "Unified contact manager and phone sync: search, list, get, or add contacts synchronized across the user's phone, laptop, and cloud. action='search' to find a contact by name (e.g. 'Priya Sharma', 'Mom', 'Priya') or relationship, 'list' to view all synced phone/device contacts, 'get' to retrieve phone/email details, 'add' to save a new contact. All device contacts synced from phone/Google/iCloud are accessible here.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["search", "list", "get", "add"], description: "What to do" },
-            query: { type: "STRING", description: "Contact name, relationship, or keyword to search for (e.g. 'Aviral Vahdam', 'Mom')" },
+            query: { type: "STRING", description: "Contact name, relationship, or keyword to search for (e.g. 'Priya Sharma', 'Mom')" },
             name: { type: "STRING", description: "Contact full name (for add/get)" },
             phone: { type: "STRING", description: "Phone number (for add)" },
             email: { type: "STRING", description: "Email address (for add)" },
@@ -210,12 +211,12 @@ export const geminiTools = [
       },
       {
         name: "communicate",
-        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or make a call, execute directly without asking repetitive confirmations. Recipient names (e.g. 'Aviral Vahdam', 'Mom', 'Rohit') are automatically resolved from synced phone contacts.",
+        description: "Unified communication hub: send WhatsApp, SMS, email, make calls, read emails. action='whatsapp'/'sms'/'email'/'call'/'read_emails'. When the user asks to send a WhatsApp, SMS, or make a call, execute directly without asking repetitive confirmations. Recipient names (e.g. 'Priya Sharma', 'Mom', 'Priya') are automatically resolved from synced phone contacts.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["whatsapp", "sms", "email", "call", "read_emails"], description: "Communication channel" },
-            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Aviral Vahdam', 'Mom')" },
+            to: { type: "STRING", description: "Recipient (phone number, email, or contact name/relationship like 'Priya Sharma', 'Mom')" },
             number: { type: "STRING", description: "Phone number or contact name (for sms/call/whatsapp)" },
             message: { type: "STRING", description: "Message text" },
             subject: { type: "STRING", description: "Email subject (for email)" },
@@ -287,7 +288,7 @@ export const geminiTools = [
             name: { type: "STRING", description: "Automation name (for schedule)" },
             trigger: { type: "STRING", description: "Time of day to run (for schedule): 'morning' (08:00 UTC) or 'evening' (19:00 UTC). Omit to start one full interval from now." },
             automation_action: { type: "STRING", description: "What action to take (for schedule)" },
-            schedule: { type: "STRING", enum: ["daily", "weekly", "monthly"], description: "How often it repeats (for schedule). Only these three run — there is no event-driven scheduler." },
+            schedule: { type: "STRING", enum: ["daily", "weekly", "monthly"], description: "How often it repeats (for schedule). Only these three run - there is no event-driven scheduler." },
             check_type: { type: "STRING", enum: ["overdue_tasks", "deadlines", "calendar", "habits", "all"], description: "What to check (for check, default: all)" },
           },
           required: ["action"],
@@ -365,8 +366,10 @@ export const geminiTools = [
         description:
           "Open an app, a page inside JARVIS, or a website. Prefers the user's own apps: 'open my tasks', " +
           "'take me to Kolab', 'open the Music Studio' navigate inside JARVIS to Tasks, Notes, Goals, Knowledge, " +
-          "Finance, Job Agent, Kolab, Lifelog and every Studio tool. Anything else opens the real service — " +
-          "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'.",
+          "Finance, Job Agent, Kolab, Lifelog and every Studio tool. Anything else opens the real service - " +
+          "'open YouTube', 'play lo-fi on Spotify', 'open gmail.com'. For orders and bookings ('biryani on Swiggy', " +
+          "'milk on Zepto', 'Dolo on 1mg', 'flights Delhi to Goa') pass the item as query: the app opens on that search " +
+          "and the user orders and pays there, so never say an order is placed.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -377,8 +380,24 @@ export const geminiTools = [
         },
       },
       {
+        name: "book_ride",
+        description:
+          "Book a cab or bike taxi on Uber, Ola or Rapido: 'get me an Uber to the airport', 'book a cab to Cyber Hub'. " +
+          "Opens the rider's own app with the trip filled in where the service allows it; the rider picks the ride type " +
+          "and confirms the fare there, so never say a ride is booked or quote a fare. Omit service to offer all three.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            destination: { type: "STRING", description: "Where to go: a place name, landmark or address" },
+            pickup: { type: "STRING", description: "Optional pickup place; omit to start from the rider's current location" },
+            service: { type: "STRING", enum: ["uber", "ola", "rapido"], description: "Optional: the service the user named" },
+          },
+          required: ["destination"],
+        },
+      },
+      {
         name: "pay",
-        description: "Send money via UPI. Opens payment app PRE-FILLED with payee+amount; user approves. Requires vpa and amount — never guess.",
+        description: "Send money via UPI. Opens payment app PRE-FILLED with payee+amount; user approves. Requires vpa and amount - never guess.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -411,6 +430,20 @@ export const geminiTools = [
             query: { type: "STRING", description: "The search query" },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "search_photos",
+        description: "Find the user's own photos synced from their iPhone, by date, place or favourites, and show them.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            from: { type: "STRING", description: "Earliest date taken, YYYY-MM-DD" },
+            to: { type: "STRING", description: "Latest date taken, YYYY-MM-DD" },
+            place: { type: "STRING", description: "Place the photos were taken near, e.g. a city" },
+            favorite: { type: "BOOLEAN", description: "Only favourites" },
+            limit: { type: "NUMBER", description: "How many to show, up to 24 (default 12)" },
+          },
         },
       },
       {
@@ -481,7 +514,7 @@ export const geminiTools = [
       },
       {
         name: "anchor",
-        description: "ANCHOR autopilot — the user's robot that releases one hard-techno track a day to YouTube (video + Short) and Instagram (Reel). action='status' for the last run, next post and recent releases; 'run_drop' to make and publish today's drop now; 'rehearse' to render today's drop without releasing; 'queue_song' to queue one of their Suno songs for the next drop; 'mix' to build the week's or month's continuous mix. Everything except status is confirmed by the user first.",
+        description: "ANCHOR autopilot - the user's robot that releases one hard-techno track a day to YouTube (video + Short) and Instagram (Reel). action='status' for the last run, next post and recent releases; 'run_drop' to make and publish today's drop now; 'rehearse' to render today's drop without releasing; 'queue_song' to queue one of their Suno songs for the next drop; 'mix' to build the week's or month's continuous mix. Everything except status is confirmed by the user first.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -495,7 +528,7 @@ export const geminiTools = [
       },
       {
         name: "deep_research",
-        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons — not for a simple factual lookup, use web_search for that.",
+        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons - not for a simple factual lookup, use web_search for that.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -508,7 +541,7 @@ export const geminiTools = [
       },
       {
         name: "business_agent",
-        description: "Run a multi-step business agent that researches and writes a finished deliverable. Kinds: competitor_intel (competitors, comparison table, gaps, pricing angles), launch_intel (how a product launch is landing), meeting_prep (company research, strategy, agenda, one-page brief), outreach_drafts (find matching companies and draft personalised emails — drafts only), web_scrape (extract structured data from a URL), trend_analysis (sector patterns, gaps, opportunities), seo_audit (score and fix list for a URL), contract_review, cv_screen and data_analysis (work on the user's attached text/CSV file), travel_plan, course_plan, financial_coach (uses their recorded expenses), property_search, podcast_script (two-host script from a topic or URL). Prefer this over web_search/deep_research whenever the request matches one of these jobs.",
+        description: "Run a multi-step business agent that researches and writes a finished deliverable. Kinds: competitor_intel (competitors, comparison table, gaps, pricing angles), launch_intel (how a product launch is landing), meeting_prep (company research, strategy, agenda, one-page brief), outreach_drafts (find matching companies and draft personalised emails - drafts only), web_scrape (extract structured data from a URL), trend_analysis (sector patterns, gaps, opportunities), seo_audit (score and fix list for a URL), contract_review, cv_screen and data_analysis (work on the user's attached text/CSV file), travel_plan, course_plan, financial_coach (uses their recorded expenses), property_search, podcast_script (two-host script from a topic or URL). Prefer this over web_search/deep_research whenever the request matches one of these jobs.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -559,13 +592,30 @@ export const geminiTools = [
         },
       },
       {
+        name: "log_activity",
+        description: "Log an everyday activity or read the log back: water, steps, workouts, sleep, naps, meditation, meals, weight, mood, medicine doses, symptoms, period days, blood pressure, blood sugar, baby feeds/diapers/sleep, pet feeding/walks/medicine, chores. action='summary' gives totals for a period; for kind='period' it predicts the next start.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["log", "summary"], description: "log one entry, or summarise" },
+            kind: { type: "STRING", enum: [...LOG_KINDS], description: "What it is" },
+            amount: { type: "NUMBER", description: "Number for it: ml of water, step count, minutes, hours slept, kg, mmHg systolic, mg/dL" },
+            unit: { type: "STRING", description: "Unit, when not the default for the kind" },
+            note: { type: "STRING", description: "Details: what was eaten, medicine name, 'start'/'end' for a period, symptoms, chore done" },
+            subject: { type: "STRING", description: "Who it is for when not the user: a pet's, child's or parent's name" },
+            period: { type: "STRING", enum: ["today", "week", "month"], description: "Range for summary (default today)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
         name: "control_device",
-        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this — the client executor applies it. Do not refuse.",
+        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this - the client executor applies it. Do not refuse.",
         parameters: {
           type: "OBJECT",
           properties: {
             action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight"], description: "Action to perform" },
-            device: { type: "STRING", description: "Device name or type — e.g. living room lights, front door, flashlight, phone" },
+            device: { type: "STRING", description: "Device name or type - e.g. living room lights, front door, flashlight, phone" },
             value: { type: "STRING", description: "Value for dim/temperature/text/duration" },
           },
           required: ["action", "device"],
@@ -584,7 +634,7 @@ export const geminiTools = [
       },
       {
         name: "emergency_alert",
-        description: "Open emergency channels — dialer for 112 and WhatsApp for contacts. ONLY for genuine emergencies. User must confirm each action.",
+        description: "Open emergency channels - dialer for 112 and WhatsApp for contacts. ONLY for genuine emergencies. User must confirm each action.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -619,6 +669,37 @@ export const geminiTools = [
             query: { type: "STRING", description: "Code search query (search_code)" },
           },
           required: ["action"],
+        },
+      },
+      {
+        name: "shopping",
+        description: "Shop for the user: search real store listings (Amazon India and Flipkart by default), compare them, keep a cart, and at checkout give the store links so the user buys and pays on the store. JARVIS never pays. Prices are the listed prices from search; never invent one.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["search", "add", "remove", "view", "clear", "checkout"], description: "search listings, add/remove a cart item, view or clear the cart, or checkout" },
+            query: { type: "STRING", description: "What to search for (search)" },
+            stores: { type: "STRING", description: "Comma-separated store domains to search, e.g. amazon.in,flipkart.com,myntra.com (search, optional)" },
+            title: { type: "STRING", description: "Product title (add)" },
+            url: { type: "STRING", description: "Product page link from a search result (add), or the item to remove" },
+            price: { type: "NUMBER", description: "Listed price from the search result, if it had one (add)" },
+            currency: { type: "STRING", enum: ["INR", "USD"], description: "Currency of the listed price (add)" },
+            qty: { type: "NUMBER", description: "Quantity (add, default 1)" },
+            item: { type: "STRING", description: "Cart position (1, 2, ...) or link to remove (remove)" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "build_app",
+        description: "Build a complete static web app (HTML, CSS, JavaScript, data in the browser) from the user's description, put it in a new public repo on their GitHub, and publish it on GitHub Pages. The user confirms before anything is created. Needs GitHub connected; if github status says it isn't, call github with action='connect' first.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            name: { type: "STRING", description: "Short app name, used for the repo" },
+            description: { type: "STRING", description: "Everything the app must do: screens, features, data it keeps, look and feel" },
+          },
+          required: ["name", "description"],
         },
       },
       {

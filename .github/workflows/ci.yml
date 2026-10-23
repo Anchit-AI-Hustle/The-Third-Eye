@@ -19,7 +19,15 @@ jobs:
       - run: npm run type-check
       - run: npm run lint
       - run: npm test
-      - run: npm run build
+      # The raw log is only on GitHub's blob store; a failed build also posts
+      # its error lines as annotations, so the cause is readable from the API.
+      - name: Build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/build.log" || {
+            grep -iE "error|failed|exception|killed|heap|ELIFECYCLE" "$RUNNER_TEMP/build.log" | tail -10 | sed 's/^/::error title=next build::/'
+            exit 1
+          }
         env:
           GEMINI_API_KEY: ci-placeholder
           NEXTAUTH_SECRET: ci-placeholder

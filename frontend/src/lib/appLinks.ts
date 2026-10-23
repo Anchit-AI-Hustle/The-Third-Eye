@@ -74,6 +74,9 @@ const APPS: AppEntry[] = [
   { label: "Amazon", aliases: ["amazon"], home: "https://www.amazon.com", search: (q) => `https://www.amazon.com/s?k=${enc(q)}` },
   { label: "Amazon India", aliases: ["amazon india", "amazon in"], home: "https://www.amazon.in", search: (q) => `https://www.amazon.in/s?k=${enc(q)}` },
   { label: "Flipkart", aliases: ["flipkart"], home: "https://www.flipkart.com", search: (q) => `https://www.flipkart.com/search?q=${enc(q)}` },
+  { label: "Nykaa", aliases: ["nykaa"], home: "https://www.nykaa.com" },
+  { label: "AJIO", aliases: ["ajio"], home: "https://www.ajio.com" },
+  { label: "Meesho", aliases: ["meesho"], home: "https://www.meesho.com" },
   { label: "Myntra", aliases: ["myntra"], home: "https://www.myntra.com", search: (q) => `https://www.myntra.com/${enc(q)}` },
   { label: "Meesho", aliases: ["meesho"], home: "https://www.meesho.com", search: (q) => `https://www.meesho.com/search?q=${enc(q)}` },
   { label: "Nykaa", aliases: ["nykaa"], home: "https://www.nykaa.com", search: (q) => `https://www.nykaa.com/search?q=${enc(q)}` },
@@ -84,12 +87,26 @@ const APPS: AppEntry[] = [
 
   // ── Food Delivery ─────────────────────────────────────────────────────────
   { label: "Zomato", aliases: ["zomato"], home: "https://www.zomato.com" },
-  { label: "Swiggy", aliases: ["swiggy"], home: "https://www.swiggy.com" },
+  { label: "Swiggy", aliases: ["swiggy"], home: "https://www.swiggy.com", search: (q) => `https://www.swiggy.com/search?query=${enc(q)}` },
   { label: "Domino's", aliases: ["dominos", "domino's", "pizza"], home: "https://www.dominos.co.in" },
   { label: "Uber Eats", aliases: ["uber eats", "ubereats"], home: "https://www.ubereats.com" },
   { label: "DoorDash", aliases: ["doordash", "door dash"], home: "https://www.doordash.com" },
   { label: "Grubhub", aliases: ["grubhub"], home: "https://www.grubhub.com" },
   { label: "Instacart", aliases: ["instacart"], home: "https://www.instacart.com" },
+
+  // ── Groceries & Pharmacy (India) ──────────────────────────────────────────
+  { label: "Swiggy Instamart", aliases: ["instamart", "swiggy instamart"], home: "https://www.swiggy.com/instamart", search: (q) => `https://www.swiggy.com/instamart/search?query=${enc(q)}` },
+  { label: "Zepto", aliases: ["zepto"], home: "https://www.zeptonow.com", search: (q) => `https://www.zeptonow.com/search?query=${enc(q)}` },
+  { label: "Blinkit", aliases: ["blinkit"], home: "https://blinkit.com" },
+  { label: "BigBasket", aliases: ["bigbasket", "big basket"], home: "https://www.bigbasket.com", search: (q) => `https://www.bigbasket.com/ps/?q=${enc(q)}` },
+  { label: "JioMart", aliases: ["jiomart", "jio mart"], home: "https://www.jiomart.com", search: (q) => `https://www.jiomart.com/search/${enc(q)}` },
+  { label: "Tata 1mg", aliases: ["1mg", "tata 1mg"], home: "https://www.1mg.com", search: (q) => `https://www.1mg.com/search/all?name=${enc(q)}` },
+  { label: "PharmEasy", aliases: ["pharmeasy", "pharm easy"], home: "https://pharmeasy.in", search: (q) => `https://pharmeasy.in/search/all?name=${enc(q)}` },
+  { label: "Urban Company", aliases: ["urban company", "urbanclap"], home: "https://www.urbancompany.com" },
+
+  // ── Pets ──────────────────────────────────────────────────────────────────
+  { label: "Supertails", aliases: ["supertails", "super tails"], home: "https://supertails.com", search: (q) => `https://supertails.com/search?q=${enc(q)}` },
+  { label: "Heads Up For Tails", aliases: ["heads up for tails", "huft"], home: "https://headsupfortails.com", search: (q) => `https://headsupfortails.com/search?q=${enc(q)}` },
 
   // ── Ride-Hailing & Transport ──────────────────────────────────────────────
   { label: "Uber", aliases: ["uber"], home: "https://m.uber.com" },
@@ -178,7 +195,9 @@ const APPS: AppEntry[] = [
   { label: "Airbnb", aliases: ["airbnb"], home: "https://www.airbnb.com", search: (q) => `https://www.airbnb.com/s/${enc(q)}` },
   { label: "Trip.com", aliases: ["trip.com", "tripcom"], home: "https://www.trip.com" },
   { label: "IRCTC", aliases: ["irctc", "train ticket"], home: "https://www.irctc.co.in/nget/train-search" },
-  { label: "Google Flights", aliases: ["flights", "google flights"], home: "https://www.google.com/travel/flights" },
+  { label: "Google Flights", aliases: ["flights", "google flights"], home: "https://www.google.com/travel/flights", search: (q) => `https://www.google.com/travel/flights?q=${enc(q)}` },
+  { label: "redBus", aliases: ["redbus", "red bus", "bus ticket"], home: "https://www.redbus.in" },
+  { label: "BookMyShow", aliases: ["bookmyshow", "book my show", "movie tickets"], home: "https://in.bookmyshow.com" },
   { label: "Rome2Rio", aliases: ["rome2rio"], home: "https://www.rome2rio.com" },
 
   // ── News & Reading ────────────────────────────────────────────────────────
@@ -275,7 +294,7 @@ export function resolveAppLink(targetRaw: string, query?: string): ResolvedLink 
     }
   }
   if (best) {
-    if (q && best.search) return { url: best.search(q), label: `${best.label} — ${q}` };
+    if (q && best.search) return { url: best.search(q), label: `${best.label} - ${q}` };
     return { url: best.home, label: best.label };
   }
 

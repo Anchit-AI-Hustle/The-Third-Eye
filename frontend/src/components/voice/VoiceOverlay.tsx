@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -25,6 +26,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { saveWithConsent } from "@/components/assistant/FileCard";
 import type { SavedFile } from "@/lib/fileSave";
+import { LogoMark } from "@/components/layout/LogoMark";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 interface LiveBubble {
   phase: "recording" | "transcribing" | "interim";
@@ -307,6 +310,7 @@ export function VoiceOverlay() {
             history: historyRef.current,
             memory: memoryRef.current,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            confirmActions: confirmActionsOn(),
             userName: session?.user?.name?.split(" ")[0],
             userEmail: session?.user?.email,
             agentName: agent.name,
@@ -467,23 +471,19 @@ export function VoiceOverlay() {
               {micOn ? status : agent.name}
             </span>
           )}
-          <div className="arc-reactor flex-none" style={{ width: 28, height: 28 }}>
-            <div className="arc-reactor-core" style={{ width: 7, height: 7 }} />
-          </div>
+          <LogoMark size={28} className="flex-none" />
         </button>
       )}
 
       {/* ── Expanded panel ── */}
       {expanded && (
-        <div className="holo-card rounded-card shadow-2xl animate-slide-in flex flex-col card-glow-arc hud-frame overflow-hidden"
+        <div className="holo-card rounded-card shadow-2xl animate-slide-in flex flex-col card-glow-arc overflow-hidden"
           style={{ maxHeight: "min(65vh, 480px)" }}>
 
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-[rgba(79,195,247,0.1)] flex-none">
             <div className="flex items-center gap-2">
-              <div className="arc-reactor flex-none" style={{ width: 22, height: 22 }}>
-                <div className="arc-reactor-core" style={{ width: 5, height: 5 }} />
-              </div>
+              <LogoMark size={22} className="flex-none" />
               <div>
                 <span className="hud-label text-[#4FC3F7] text-[9px]">{status}</span>
               </div>
@@ -491,12 +491,12 @@ export function VoiceOverlay() {
             <div className="flex items-center gap-0.5">
               {/* Green means it is genuinely listening. Amber means the wake
                   word is on but the mic is not granted, or this browser has no
-                  speech recognition — tap to fix rather than sit on a lie. */}
+                  speech recognition - tap to fix rather than sit on a lie. */}
               <button onClick={toggleWake}
                 title={
-                  wake.listening ? `Listening — say "${agent.name}"`
+                  wake.listening ? `Listening - say "${agent.name}"`
                   : wakeEnabled && !wake.supported ? "This browser can't do wake words"
-                  : wakeEnabled ? "Wake word needs the microphone — tap to allow"
+                  : wakeEnabled ? "Wake word needs the microphone - tap to allow"
                   : "Wake word off"
                 }
                 className={cn("p-1.5 rounded-input transition-colors",
@@ -604,19 +604,17 @@ export function VoiceOverlay() {
                 {stt.permissionDenied || (micOn && stt.recognitionIssue) ? (
                   <AlertTriangle size={20} className="text-warning mb-2" />
                 ) : (
-                  <div className="arc-reactor mb-3" style={{ width: 36, height: 36 }}>
-                    <div className="arc-reactor-core" style={{ width: 10, height: 10 }} />
-                  </div>
+                  <LogoMark size={36} className="mb-3" />
                 )}
                 <p className="hud-label text-[#4FC3F7]/60 text-[9px]">
                   {stt.permissionDenied
-                    ? "Microphone blocked — allow it in your browser's address bar, then tap the mic again"
+                    ? "Microphone blocked - allow it in your browser's address bar, then tap the mic again"
                     : micOn && stt.recognitionIssue === "network"
-                    ? "Speech recognition can't reach its service — check your connection or try typing"
+                    ? "Speech recognition can't reach its service - check your connection or try typing"
                     : micOn && stt.recognitionIssue === "audio-capture"
-                    ? "No microphone detected — check your input device"
+                    ? "No microphone detected - check your input device"
                     : micOn
-                    ? "Listening — speak or type"
+                    ? "Listening - speak or type"
                     : "Tap mic to start"}
                 </p>
               </div>
@@ -652,6 +650,7 @@ export function VoiceOverlay() {
             <input type="file" ref={fileInputRef} className="hidden" multiple
               accept=".txt,.md,.csv,.json,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log,.sql,.sh"
               onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }} />
+            <CaptureNote id="microphone" className="mb-1 px-1 text-[10px]">Voice and messages go to an AI provider to answer; audio isn&apos;t kept.</CaptureNote>
             <div className="flex items-center gap-1.5 bg-background-surface/50 border border-border-default rounded-card px-2.5 py-1.5">
               <button onClick={() => fileInputRef.current?.click()} title="Attach file"
                 className="flex-none p-0.5 text-text-muted hover:text-[#4FC3F7] transition-colors">

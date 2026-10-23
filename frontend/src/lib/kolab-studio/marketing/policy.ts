@@ -1,5 +1,5 @@
 // web/lib/marketing/policy.ts
-// Sending governance ported from the vahdam-lifecycle-os Master Operating Contract:
+// Sending governance ported from the lifecycle-os Master Operating Contract:
 // promotional frequency caps, quiet hours, dedupe window, and per-journey throttles.
 // Pure + testable — the send pipeline calls canSend() before every message.
 

@@ -5,6 +5,7 @@ import { Play, Loader2, Sparkles, Download, Square, RefreshCw } from "lucide-rea
 import { cn } from "@/lib/utils";
 import { recordGeneration } from "@/lib/generations";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
+import { localDay } from "@/lib/localDay";
 
 interface AvatarState {
   phase: "idle" | "recording" | "generating" | "playing" | "error";
@@ -339,7 +340,7 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
     if (!state.videoBlob) return;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(state.videoBlob);
-    a.download = `avatar-${new Date().toISOString().slice(0, 10)}.webm`;
+    a.download = `avatar-${localDay()}.webm`;
     a.click();
     URL.revokeObjectURL(a.href);
   }, [state.videoBlob]);
@@ -403,7 +404,7 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
               {styleDef.icon}
             </div>
             <p className="text-sm text-text-muted">Enter a script and click "Generate avatar"</p>
-            <p className="text-[11px] text-text-muted/60">Video preview — voice plays live via browser speech synthesis.</p>
+            <p className="text-[11px] text-text-muted">Video preview - voice plays live via browser speech synthesis.</p>
           </div>
         )}
 

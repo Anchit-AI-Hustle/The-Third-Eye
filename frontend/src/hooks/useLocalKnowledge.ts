@@ -16,17 +16,21 @@ export interface KnowledgeDoc {
   error?: string;
 }
 
+// Per-account device cache; the database is the source of truth when there is one.
 const KEY = "jarvis_knowledge_v1";
+let activeUser: string | null = null;
+const storageKey = () => (activeUser ? `${KEY}:${activeUser}` : KEY);
+const useStorageUser = (u: string | null) => { activeUser = u; };
 const CHUNK_SIZE = 500;
 
 function ls(): KnowledgeDoc[] {
   if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(KEY) ?? "[]"); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(storageKey()) ?? "[]"); } catch { return []; }
 }
 function lsSet(v: KnowledgeDoc[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(v));
+    localStorage.setItem(storageKey(), JSON.stringify(v));
     window.dispatchEvent(new CustomEvent("jarvis:knowledge", { detail: v }));
   } catch (err) {
     console.warn("Failed to persist knowledge docs in localStorage:", err);
@@ -98,6 +102,7 @@ export function searchDocs(docs: KnowledgeDoc[], query: string, topK = 5): Searc
 export function useLocalKnowledge() {
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
+  useStorageUser(userId);
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [ready, setReady] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -115,19 +120,13 @@ export function useLocalKnowledge() {
     dataList<KnowledgeDoc>("knowledge_docs").then((r) => {
       if (cancelled) return;
       remote.current = r.remote;
-      const local = ls();
-      if (r.remote && r.rows.length > 0) {
-        const map = new Map<string, KnowledgeDoc>();
-        local.forEach((d) => map.set(d.id, d));
-        r.rows.forEach((d) => map.set(d.id, d));
-        const merged = Array.from(map.values());
-        lsSet(merged);
-        setDocs(merged);
+      // With a database, its rows are the list: merging the cache back in is
+      // what brought deleted documents back on the next load.
+      if (r.remote) {
+        lsSet(r.rows);
+        setDocs(r.rows);
       } else {
-        setDocs(local);
-        if (r.remote && local.length > 0) {
-          dataInsert("knowledge_docs", local).catch(() => {});
-        }
+        setDocs(ls());
       }
       setReady(true);
     });
@@ -169,22 +168,21 @@ export function useLocalKnowledge() {
       }
 
       if (DOC_TYPES.has(ext)) {
+        // Real text out of the PDF or Word file; one that can't be read is
+        // marked failed with the reason, never stored as "ready" binary junk.
         try {
-          // Attempt plain text read for PDF/DOC (often contains text streams)
-          const raw = await readFileAsText(file);
-          const cleanText = raw.replace(/[^\x20-\x7E\r\n\t]/g, " ").replace(/\s{2,}/g, " ").trim();
-          const preview = cleanText.length > 50 ? cleanText : `[Document: ${title} (${Math.round(file.size / 1024)} KB)]`;
-          const chunks = chunkText(preview);
+          const { extractDocText } = await import("@/lib/docText");
+          const content = await extractDocText(title, new Uint8Array(await file.arrayBuffer()));
           newDocs.push({
-            id, title, content: preview, file_type: ext.replace(".", "") || "doc",
+            id, title, content, file_type: ext.replace(".", ""),
             file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: chunks.length, processing_status: "ready",
+            chunk_count: chunkText(content).length, processing_status: "ready",
           });
-        } catch {
+        } catch (err) {
           newDocs.push({
-            id, title, content: `[Document: ${title} (${Math.round(file.size / 1024)} KB)]`, file_type: ext.replace(".", ""),
+            id, title, content: "", file_type: ext.replace(".", ""),
             file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: 1, processing_status: "ready",
+            chunk_count: 0, processing_status: "failed", error: err instanceof Error ? err.message : "Couldn't read this document.",
           });
         }
         continue;
@@ -275,7 +273,7 @@ export function useLocalKnowledge() {
   const remove = useCallback(async (id: string) => {
     setDocs((prev) => {
       const next = prev.filter((d) => d.id !== id);
-      if (!remote.current) lsSet(next);
+      lsSet(next);
       return next;
     });
     if (remote.current) await dataDelete("knowledge_docs", id);
@@ -287,62 +285,16 @@ export function useLocalKnowledge() {
     try {
       const r = await dataList<KnowledgeDoc>("knowledge_docs");
       remote.current = r.remote;
-      const local = ls();
-      if (r.remote && r.rows.length > 0) {
-        const map = new Map<string, KnowledgeDoc>();
-        local.forEach((d) => map.set(d.id, d));
-        r.rows.forEach((d) => map.set(d.id, d));
-        const merged = Array.from(map.values());
-        lsSet(merged);
-        setDocs(merged);
-        setUploading(false);
-        return { count: merged.length };
-      } else {
-        setDocs(local);
-        if (r.remote && local.length > 0) {
-          await dataInsert("knowledge_docs", local).catch(() => {});
-        }
-        setUploading(false);
-        return { count: local.length };
-      }
+      const list = r.remote ? r.rows : ls();
+      if (r.remote) lsSet(list);
+      setDocs(list);
+      setUploading(false);
+      return { count: list.length };
     } catch (err: any) {
       setUploading(false);
       return { count: ls().length, error: err?.message || "Vault sync failed" };
     }
   }, []);
 
-  const seedSampleKnowledge = useCallback(async (): Promise<KnowledgeDoc[]> => {
-    const starterDocs: KnowledgeDoc[] = [
-      {
-        id: crypto.randomUUID(),
-        title: "JARVIS_Device_Voice_Guide.md",
-        content: `# JARVIS Voice & Device Quick Guide\n\n- Phone Calls: "Call Mom", "Call Rohit Sharma"\n- Messaging: "Send WhatsApp to Rohit saying I am arriving soon"\n- Knowledge: "Search vault for emergency contacts"\n- Multi-Device Sync: Contacts and vault automatically sync between iPhone, Android, and Laptop.`,
-        file_type: "md",
-        file_size_bytes: 420,
-        created_at: new Date().toISOString(),
-        chunk_count: 1,
-        processing_status: "ready",
-      },
-      {
-        id: crypto.randomUUID(),
-        title: "Personal_Medical_Emergency_Notes.txt",
-        content: `Personal Emergency Notes:\n- Primary emergency contact: Mom (+91 98765 43210)\n- Secondary contact: Rohit Sharma (+91 98739 45238)\n- Blood Group: O+\n- Allergies: None recorded\n- Local Dispatch: 112 / 911`,
-        file_type: "txt",
-        file_size_bytes: 310,
-        created_at: new Date().toISOString(),
-        chunk_count: 1,
-        processing_status: "ready",
-      },
-    ];
-
-    setDocs((prev) => {
-      const next = [...starterDocs, ...prev];
-      if (!remote.current) lsSet(next);
-      return next;
-    });
-    if (remote.current) await dataInsert("knowledge_docs", starterDocs);
-    return starterDocs;
-  }, []);
-
-  return { docs, ready, uploading, upload, remove, syncDeviceFolder, refreshFromCloud, seedSampleKnowledge };
+  return { docs, ready, uploading, upload, remove, syncDeviceFolder, refreshFromCloud };
 }

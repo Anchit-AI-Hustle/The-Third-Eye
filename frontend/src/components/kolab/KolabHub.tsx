@@ -46,13 +46,13 @@ export function KolabHub() {
         const modeLabel = KOLAB_MODES.find((m) => m.id === mode)?.label ?? mode;
         recordGeneration({
           app: "kolab", appLabel: `Kolab · ${modeLabel}`,
-          title: `${modeLabel} — ${brand.name}`,
+          title: `${modeLabel} - ${brand.name}`,
           kind: "markdown",
           inputs: fieldsFrom(brand as unknown as Record<string, unknown>), inputText: brief || undefined,
           output: d.output, meta: { provider: d.provider, mode },
         });
       }
-    } catch { setError("Network error — please try again."); }
+    } catch { setError("Network error - please try again."); }
     finally { setLoading(false); }
   }
 
@@ -74,9 +74,9 @@ export function KolabHub() {
         </button>
         {showBrand && (
           <div className="mt-3 space-y-2.5">
-            <p className="text-[11px] text-text-muted">Adapts everything to <em>your</em> brand — enter any company, saved on your device.</p>
+            <p className="text-[11px] text-text-muted">Adapts everything to <em>your</em> brand - enter any company, saved on your device.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <F label="Brand name *"><input value={brand.name} onChange={(e) => set("name")(e.target.value)} className={inp} placeholder="e.g. Vahdam India (or any brand)" /></F>
+              <F label="Brand name *"><input value={brand.name} onChange={(e) => set("name")(e.target.value)} className={inp} placeholder="e.g. Your brand name" /></F>
               <F label="Industry"><input value={brand.industry ?? ""} onChange={(e) => set("industry")(e.target.value)} className={inp} placeholder="e.g. D2C wellness tea" /></F>
               <F label="Product / what you sell"><input value={brand.product ?? ""} onChange={(e) => set("product")(e.target.value)} className={inp} /></F>
               <F label="Target audience"><input value={brand.audience ?? ""} onChange={(e) => set("audience")(e.target.value)} className={inp} /></F>
@@ -84,8 +84,8 @@ export function KolabHub() {
               <F label="USP / differentiators"><input value={brand.usp ?? ""} onChange={(e) => set("usp")(e.target.value)} className={inp} /></F>
               <F label="Region"><input value={brand.region ?? ""} onChange={(e) => set("region")(e.target.value)} className={inp} placeholder="e.g. India, US" /></F>
               <F label="Channels"><input value={(brand.channels || []).join(", ")} onChange={(e) => set("channels")(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))} className={inp} placeholder="Meta, Google, email, WhatsApp…" /></F>
-              <F label="Price point"><select value={brand.pricePoint ?? ""} onChange={(e) => set("pricePoint")((e.target.value || undefined) as any)} className={inp}><option value="">—</option><option value="value">Value</option><option value="mid">Mid</option><option value="premium">Premium</option><option value="luxury">Luxury</option></select></F>
-              <F label="Stage"><select value={brand.stage ?? ""} onChange={(e) => set("stage")((e.target.value || undefined) as any)} className={inp}><option value="">—</option><option value="pre-launch">Pre-launch</option><option value="early">Early</option><option value="growth">Growth</option><option value="scale">Scale</option><option value="mature">Mature</option></select></F>
+              <F label="Price point"><select value={brand.pricePoint ?? ""} onChange={(e) => set("pricePoint")((e.target.value || undefined) as any)} className={inp}><option value="">-</option><option value="value">Value</option><option value="mid">Mid</option><option value="premium">Premium</option><option value="luxury">Luxury</option></select></F>
+              <F label="Stage"><select value={brand.stage ?? ""} onChange={(e) => set("stage")((e.target.value || undefined) as any)} className={inp}><option value="">-</option><option value="pre-launch">Pre-launch</option><option value="early">Early</option><option value="growth">Growth</option><option value="scale">Scale</option><option value="mature">Mature</option></select></F>
             </div>
             <F label="Primary goal + KPI"><input value={brand.goals ?? ""} onChange={(e) => set("goals")(e.target.value)} className={inp} placeholder="e.g. grow repeat rate to 35%" /></F>
             <F label="Constraints / do-nots"><input value={brand.constraints ?? ""} onChange={(e) => set("constraints")(e.target.value)} className={inp} placeholder="budget, compliance, brand no-gos" /></F>

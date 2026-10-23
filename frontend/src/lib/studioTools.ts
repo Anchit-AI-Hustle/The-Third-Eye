@@ -30,9 +30,9 @@ export interface StudioTool {
 
 // The three studios, one per mode.
 export const STUDIOS: Record<ModeId, { name: string; tagline: string; accent: string; icon: string }> = {
-  personal:     { name: "Hobby Studio",   tagline: "Create for the joy of it — music, writing, plans", accent: "#34D399", icon: "Palette" },
-  professional: { name: "Startup Studio", tagline: "Ship growth assets — pages, mailers, decks, ads",   accent: "#4FC3F7", icon: "Rocket" },
-  enterprise:   { name: "Office Studio",  tagline: "Run the org — lifecycle, reports, meetings, SOPs",  accent: "#A78BFA", icon: "Building2" },
+  personal:     { name: "Hobby Studio",   tagline: "Create for the joy of it - music, writing, plans", accent: "#34D399", icon: "Palette" },
+  professional: { name: "Startup Studio", tagline: "Ship growth assets - pages, mailers, decks, ads",   accent: "#4FC3F7", icon: "Rocket" },
+  enterprise:   { name: "Office Studio",  tagline: "Run the org - lifecycle, reports, meetings, SOPs",  accent: "#A78BFA", icon: "Building2" },
 };
 
 const P = "#4FC3F7", E = "#A78BFA", H = "#34D399";
@@ -41,7 +41,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   // ── Hobby Studio (Personal) ──────────────────────────────────────────────
   {
     id: "music", label: "Music Studio", mode: "personal", icon: "Music", accent: H,
-    blurb: "Generate actual music — a playable, downloadable audio track — from a description. Instrumental or with AI vocals + lyrics.",
+    blurb: "Generate actual music - a playable, downloadable audio track - from a description. Instrumental or with AI vocals + lyrics.",
     format: "markdown", downloadExt: "mp3", cta: "Generate music", fields: [],
   },
   {
@@ -106,7 +106,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
 
   {
     id: "how-to", label: "How-To Guide", mode: "personal", icon: "BookOpenCheck", accent: H,
-    blurb: "A clear, step-by-step how-to guide for anything — a life skill, a task, a process. Try \"how to swim\".",
+    blurb: "A clear, step-by-step how-to guide for anything - a life skill, a task, a process. Try \"how to swim\".",
     format: "markdown", downloadExt: "md", cta: "Create guide",
     fields: [
       { name: "topic", label: "What do you want to learn / do", type: "text", placeholder: "e.g. how to swim", required: true },
@@ -128,7 +128,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "video", label: "OTT / Video Studio", mode: "personal", icon: "Clapperboard", accent: "#F0C94E",
-    blurb: "Scripts for reels, YouTube episodes or an OTT series — then every shot rendered as a real clip, voiced, and assembled into one episode file.",
+    blurb: "Scripts for reels, YouTube episodes or an OTT series - then every shot rendered as a real clip, voiced, and assembled into one episode file.",
     format: "markdown", downloadExt: "md", cta: "Write script",
     fields: [
       { name: "concept", label: "Concept", type: "textarea", placeholder: "The story, topic, or hook…", required: true },
@@ -139,7 +139,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "reel", label: "Reel Studio", mode: "personal", icon: "Film", accent: "#F472B6",
-    blurb: "Vertical 9:16 reels, Shorts and TikToks — hook, shots and captions, rendered into real clips and cut to your track.",
+    blurb: "Vertical 9:16 reels, Shorts and TikToks - hook, shots and captions, rendered into real clips and cut to your track.",
     format: "markdown", downloadExt: "md", cta: "Write reel",
     fields: [
       { name: "concept", label: "What the reel is about", type: "textarea", placeholder: "the hook, the story, the drop it's cut to…", required: true },
@@ -151,7 +151,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "book", label: "Book Studio", mode: "personal", icon: "BookOpen", accent: "#F0C94E",
-    blurb: "Write a whole book — premise to outline to every chapter — then export an EPUB and the KDP listing to publish it.",
+    blurb: "Write a whole book - premise to outline to every chapter - then export an EPUB and the KDP listing to publish it.",
     format: "markdown", downloadExt: "md", cta: "Plan book",
     fields: [
       { name: "premise", label: "Premise", type: "textarea", placeholder: "what the book is about, who it's for, the promise it makes…", required: true },
@@ -164,7 +164,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "avatar", label: "Video Avatar Studio", mode: "personal", icon: "Video", accent: "#A78BFA",
-    blurb: "Generate an animated avatar video from a script — canvas-rendered visual with browser TTS voice playback. Download as .webm with audio track.",
+    blurb: "Generate an animated avatar video from a script - canvas-rendered visual with browser TTS voice playback. Download as .webm with audio track.",
     format: "markdown", downloadExt: "mp4", cta: "Generate avatar",
     fields: [
       { name: "script", label: "What the avatar says", type: "textarea", placeholder: "Type the script or transcript for the avatar to speak…", required: true },
@@ -177,19 +177,19 @@ export const STUDIO_TOOLS: StudioTool[] = [
   // ── Startup Studio (Professional) ────────────────────────────────────────
   {
     id: "landing", label: "Landing Page Engine", mode: "professional", icon: "LayoutTemplate", accent: P,
-    blurb: "A complete, responsive HTML landing page from a product brief — preview, copy, or ship.",
+    blurb: "A complete, responsive HTML landing page from a product brief - preview, copy, or ship.",
     format: "html", downloadExt: "html", cta: "Generate landing page",
     fields: [
-      { name: "product", label: "Product / brand", type: "text", placeholder: "e.g. Vahdam Turmeric Latte", required: true },
+      { name: "product", label: "Product / brand", type: "text", placeholder: "e.g. Cold-brew coffee concentrate", required: true },
       { name: "brief", label: "What it is & why it's great", type: "textarea", placeholder: "The offer, key benefits, proof points…", required: true },
       { name: "audience", label: "Target audience", type: "text", placeholder: "e.g. wellness-focused millennials" },
-      { name: "cta", label: "Primary CTA", type: "text", placeholder: "e.g. Shop now – 20% off" },
+      { name: "cta", label: "Primary CTA", type: "text", placeholder: "e.g. Shop now - 20% off" },
       { name: "tone", label: "Tone", type: "select", options: ["Premium & minimal", "Warm & wellness", "Bold & punchy", "Editorial"] },
     ],
   },
   {
     id: "mailer", label: "HTML Mailer Architect", mode: "professional", icon: "Mail", accent: P,
-    blurb: "An email-client-safe, table-based HTML mailer — inline styles, mobile-friendly.",
+    blurb: "An email-client-safe, table-based HTML mailer - inline styles, mobile-friendly.",
     format: "html", downloadExt: "html", cta: "Generate mailer",
     fields: [
       { name: "campaign", label: "Campaign goal", type: "text", placeholder: "e.g. Diwali gifting launch", required: true },
@@ -212,10 +212,10 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "adcopy", label: "Ad Copy Studio", mode: "professional", icon: "Megaphone", accent: P,
-    blurb: "Performance ad copy — hooks, primary text, headlines and CTAs — per channel.",
+    blurb: "Performance ad copy - hooks, primary text, headlines and CTAs - per channel.",
     format: "markdown", downloadExt: "md", cta: "Write ads",
     fields: [
-      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Vahdam Chai sampler", required: true },
+      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Starter sampler box", required: true },
       { name: "angle", label: "Angle / benefit", type: "textarea", placeholder: "What to lead with, audience, offer…", required: true },
       { name: "channel", label: "Channel", type: "select", options: ["Meta (FB/IG)", "Google Search", "TikTok", "Email subject lines"] },
       { name: "tone", label: "Tone", type: "text", placeholder: "e.g. playful, premium, urgent" },
@@ -236,10 +236,10 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "social", label: "Social Content Calendar", mode: "professional", icon: "CalendarDays", accent: P,
-    blurb: "A ready-to-post content calendar — hooks, captions, and formats across a week or month.",
+    blurb: "A ready-to-post content calendar - hooks, captions, and formats across a week or month.",
     format: "markdown", downloadExt: "md", cta: "Build calendar",
     fields: [
-      { name: "brand", label: "Brand / product", type: "text", placeholder: "e.g. Vahdam India", required: true },
+      { name: "brand", label: "Brand / product", type: "text", placeholder: "e.g. Your brand name", required: true },
       { name: "goal", label: "Goal & themes", type: "textarea", placeholder: "e.g. drive Diwali gifting, educate on wellness…", required: true },
       { name: "platforms", label: "Platforms", type: "text", placeholder: "e.g. Instagram, LinkedIn" },
       { name: "cadence", label: "Timeframe", type: "select", options: ["1 week", "2 weeks", "1 month"] },
@@ -258,7 +258,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   },
   {
     id: "naming", label: "Naming & Tagline", mode: "professional", icon: "Tag", accent: P,
-    blurb: "Brandable name ideas and taglines for a product, feature, or campaign — with rationale.",
+    blurb: "Brandable name ideas and taglines for a product, feature, or campaign - with rationale.",
     format: "markdown", downloadExt: "md", cta: "Generate names",
     fields: [
       { name: "what", label: "What are we naming", type: "text", placeholder: "e.g. a new cold-brew tea line", required: true },
@@ -270,10 +270,10 @@ export const STUDIO_TOOLS: StudioTool[] = [
 
   {
     id: "campaign", label: "Campaign Planner", mode: "professional", icon: "TrendingUp", accent: P,
-    blurb: "A full multi-channel marketing campaign plan — angles, channels, timeline, budget split, and KPIs.",
+    blurb: "A full multi-channel marketing campaign plan - angles, channels, timeline, budget split, and KPIs.",
     format: "markdown", downloadExt: "md", cta: "Plan campaign",
     fields: [
-      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Vahdam Diwali gifting", required: true },
+      { name: "product", label: "Product / offer", type: "text", placeholder: "e.g. Festive gift hampers", required: true },
       { name: "objective", label: "Objective & context", type: "textarea", placeholder: "Goal, audience, timing, budget, constraints…", required: true },
       { name: "channels", label: "Channels", type: "text", placeholder: "e.g. Meta, Google, email, influencers" },
       { name: "duration", label: "Duration", type: "select", options: ["1 week", "2 weeks", "1 month", "Quarter"] },
@@ -283,7 +283,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
   // ── Office Studio (Enterprise) ───────────────────────────────────────────
   {
     id: "lifecycle", label: "Lifecycle OS", mode: "enterprise", icon: "Workflow", accent: E,
-    blurb: "A full customer-lifecycle program — stage messaging, channels, timing and KPIs.",
+    blurb: "A full customer-lifecycle program - stage messaging, channels, timing and KPIs.",
     format: "markdown", downloadExt: "md", cta: "Design lifecycle plan",
     fields: [
       { name: "product", label: "Product / segment", type: "text", placeholder: "e.g. first-time subscribers", required: true },
@@ -298,7 +298,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     format: "markdown", downloadExt: "md", cta: "Summarize meeting",
     fields: [
       { name: "notes", label: "Notes / transcript", type: "textarea", placeholder: "Paste raw meeting notes or transcript…", required: true },
-      { name: "meeting", label: "Meeting & attendees", type: "text", placeholder: "e.g. Weekly growth sync — A, R, S" },
+      { name: "meeting", label: "Meeting & attendees", type: "text", placeholder: "e.g. Weekly growth sync - A, R, S" },
       { name: "output", label: "Output", type: "select", options: ["Minutes + action items", "Action items only", "Executive summary"] },
     ],
   },
@@ -308,7 +308,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     format: "markdown", downloadExt: "md", cta: "Draft report",
     fields: [
       { name: "topic", label: "Report topic", type: "text", placeholder: "e.g. Q3 UK growth review", required: true },
-      { name: "inputs", label: "Key points / data", type: "textarea", placeholder: "Metrics, findings, context — bullet points are fine", required: true },
+      { name: "inputs", label: "Key points / data", type: "textarea", placeholder: "Metrics, findings, context - bullet points are fine", required: true },
       { name: "type", label: "Format", type: "select", options: ["Business report", "One-page memo", "Executive brief", "Weekly update"] },
       { name: "audience", label: "Audience", type: "text", placeholder: "e.g. leadership, board, team" },
     ],
@@ -361,7 +361,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
     blurb: "A client proposal or statement of work: scope, deliverables, timeline, and pricing structure.",
     format: "markdown", downloadExt: "md", cta: "Draft proposal",
     fields: [
-      { name: "client", label: "Client / project", type: "text", placeholder: "e.g. Acme — website revamp", required: true },
+      { name: "client", label: "Client / project", type: "text", placeholder: "e.g. Acme - website revamp", required: true },
       { name: "scope", label: "Scope & deliverables", type: "textarea", placeholder: "What you'll do, outcomes…", required: true },
       { name: "timeline", label: "Timeline & pricing hints", type: "text", placeholder: "e.g. 6 weeks, retainer vs fixed" },
       { name: "type", label: "Document", type: "select", options: ["Proposal", "Statement of Work", "Both"] },
@@ -374,7 +374,7 @@ export const STUDIO_TOOLS: StudioTool[] = [
 export const STUDIO_LINKS: Pick<StudioTool, "id" | "label" | "mode" | "icon" | "accent" | "blurb">[] = [
   {
     id: "anchor", label: "ANCHOR Autopilot", mode: "personal", icon: "AudioLines", accent: "#FF3B1F",
-    blurb: "The daily hard-techno robot: today's drop, the queue, the Short and Reel, YouTube — status and controls.",
+    blurb: "The daily hard-techno robot: today's drop, the queue, the Short and Reel, YouTube - status and controls.",
   },
 ];
 

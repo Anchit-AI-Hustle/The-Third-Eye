@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, ExternalLink, Building2, Download } from "lucide-react";
 import { useJobAgent, type ApplicationRow } from "@/hooks/useJobAgent";
+import { localDay } from "@/lib/localDay";
 
 const STATUSES = [
   "preparing", "needs_review", "ready_to_apply", "applying", "submitted",
@@ -12,7 +13,7 @@ const STATUSES = [
 
 const STATUS_COLOR: Record<string, string> = {
   submitted: "#4FC3F7", interview: "#A78BFA", final_interview: "#A78BFA", offer: "#34D399",
-  accepted: "#34D399", rejected: "#EF4444", withdrawn: "#7878A8", archived: "#7878A8",
+  accepted: "#34D399", rejected: "#EF4444", withdrawn: "#8E8EBC", archived: "#8E8EBC",
 };
 
 export function ApplicationsPanel() {
@@ -29,7 +30,7 @@ export function ApplicationsPanel() {
       .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `job-applications-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
+    a.download = `job-applications-${localDay()}.csv`; a.click(); URL.revokeObjectURL(a.href);
   }
 
   return (

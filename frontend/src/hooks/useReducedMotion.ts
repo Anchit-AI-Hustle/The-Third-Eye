@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MOTION_EVENT, reducedMotion } from "@/lib/motion";
 
 // Tracks prefers-reduced-motion and keeps tracking it — the OS setting can be
 // toggled while the page is open, and a one-shot read at mount would strand
@@ -29,8 +30,11 @@ export function useReducedMotion(): boolean {
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    return onMediaChange(mq, (e) => setReduced(e.matches));
+    const sync = () => setReduced(reducedMotion());
+    sync();
+    window.addEventListener(MOTION_EVENT, sync);
+    const off = onMediaChange(mq, sync);
+    return () => { off(); window.removeEventListener(MOTION_EVENT, sync); };
   }, []);
 
   return reduced;

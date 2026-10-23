@@ -2,9 +2,10 @@
 
 import { signOut } from "next-auth/react";
 import { signOutAndClear } from "@/lib/signOutClean";
-import { User, Shield, Bell, Cpu, LogOut, ExternalLink, Check, Activity, CheckCircle2, XCircle, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { User, Shield, Cpu, LogOut, ExternalLink, Activity, CheckCircle2, XCircle, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useSystemHealth } from "@/hooks/useSystemHealth";
 
 interface Props {
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -19,8 +20,7 @@ interface ServiceStatus {
 }
 
 export function SettingsClient({ user }: Props) {
-  const [notifs, setNotifs] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const health = useSystemHealth();
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [showDelete, setShowDelete] = useState(false);
@@ -53,11 +53,6 @@ export function SettingsClient({ user }: Props) {
       .catch(() => setStatusLoading(false));
   }, []);
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
   return (
     <div className="space-y-4">
       {/* Profile */}
@@ -73,7 +68,7 @@ export function SettingsClient({ user }: Props) {
           <div>
             <p className="text-text-primary font-medium">{user?.name ?? "Unknown"}</p>
             <p className="text-text-muted text-sm mt-0.5">{user?.email ?? ""}</p>
-            <p className="text-text-muted text-xs mt-1 font-mono">Signed in with Google</p>
+            <p className="text-text-muted text-xs mt-1">Signed in with Google</p>
           </div>
         </div>
       </Section>
@@ -81,45 +76,17 @@ export function SettingsClient({ user }: Props) {
       {/* AI preferences */}
       <Section icon={<Cpu size={15} />} title="AI Configuration">
         <div className="px-5 py-4 space-y-4">
-          <Row label="Model" sub="Primary inference engine">
+          <Row label="Model" sub="The AI provider answering right now; others take over when it is busy">
             <span className="text-xs font-mono text-[#4FC3F7] bg-[#4FC3F7]/10 px-2 py-1 rounded">
-              gemini-2.5-flash
+              {health?.aiProvider ?? (health ? "Offline" : "Checking…")}
             </span>
           </Row>
-          <Row label="Prompt caching" sub="Reduces cost by caching system prompt">
-            <span className="text-xs text-success font-mono">On</span>
-          </Row>
-          <Row label="Memory" sub="Remembers facts within a session">
+          <Row label="Memory" sub="Remembers facts you tell it, across conversations">
             <span className="text-xs text-success font-mono">On</span>
           </Row>
           <Row label="Streaming" sub="Token-by-token response rendering">
             <span className="text-xs text-success font-mono">On</span>
           </Row>
-        </div>
-      </Section>
-
-      {/* Notifications */}
-      <Section icon={<Bell size={15} />} title="Preferences">
-        <div className="px-5 py-4 space-y-4">
-          <Row label="Notifications" sub="Browser notification prompts">
-            <Toggle enabled={notifs} onChange={setNotifs} />
-          </Row>
-          <Row label="Sound effects" sub="UI interaction sounds — coming soon">
-            <span className="text-xs text-text-muted font-mono">Soon</span>
-          </Row>
-        </div>
-        <div className="px-5 pb-4">
-          <button
-            onClick={handleSave}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-input text-sm font-medium transition-all",
-              saved
-                ? "bg-success/10 border border-success/30 text-success"
-                : "bg-accent-blue/10 border border-accent-blue/30 text-accent-blue hover:bg-accent-blue/20"
-            )}
-          >
-            {saved ? <><Check size={14} /> Saved</> : "Save preferences"}
-          </button>
         </div>
       </Section>
 
@@ -147,17 +114,12 @@ export function SettingsClient({ user }: Props) {
             </div>
           ) : (
             <>
-              <StatusRow label="Gemini AI" ok={status?.ai} hint="Required — GEMINI_API_KEY" />
-              <StatusRow label="OpenAI (Whisper)" ok={status?.openai} hint="Optional — OPENAI_API_KEY, Groq, or Gemini" />
-              <StatusRow label="Web Search" ok={status?.serper} hint="Optional — SERPER_API_KEY, or Gemini search" />
-              <StatusRow label="Database" ok={status?.database} hint="Optional — cross-device sync" />
-              <StatusRow label="Google OAuth" ok={status?.google_oauth} hint="Required — sign-in + calendar/email" />
+              <StatusRow label="AI provider" ok={status?.ai} hint="Required: at least one AI provider key" />
+              <StatusRow label="Speech to text" ok={status?.openai} hint="Optional: Groq, OpenAI or Gemini" />
+              <StatusRow label="Web search" ok={status?.serper} hint="Optional: keyless search is used without it" />
+              <StatusRow label="Database" ok={status?.database} hint="Required for sync across devices" />
+              <StatusRow label="Google sign-in" ok={status?.google_oauth} hint="Required: sign-in, Gmail and Calendar" />
             </>
-          )}
-          {status && !status.ai && (
-            <p className="text-xs text-text-muted mt-2 pt-2 border-t border-border-default">
-              Add <code className="font-mono bg-background-elevated px-1 rounded text-accent-blue">GEMINI_API_KEY</code> in Vercel → Settings → Environment Variables → Redeploy.
-            </p>
           )}
         </div>
       </Section>
@@ -169,10 +131,10 @@ export function SettingsClient({ user }: Props) {
             <span>Version</span><span className="text-text-secondary">0.1.0</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Stack</span><span className="text-text-secondary">Next.js 14 · Tailwind · Anthropic</span>
+            <span>Stack</span><span className="text-text-secondary">Next.js 16 · Tailwind · Postgres</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Runtime</span><span className="text-text-secondary">Node.js · Vercel Edge</span>
+            <span>Runtime</span><span className="text-text-secondary">Node.js · Vercel</span>
           </div>
         </div>
       </Section>
@@ -194,7 +156,7 @@ export function SettingsClient({ user }: Props) {
         </div>
         <div className="p-5 space-y-3">
           <p className="text-sm text-text-secondary">
-            Permanently delete your account and <span className="text-text-primary">all associated data</span> —
+            Permanently delete your account and <span className="text-text-primary">all associated data</span> -
             tasks, notes, goals, knowledge, music, life-log recordings, job-agent data, memory and connected tokens,
             on this device and in the cloud. This cannot be undone.
           </p>
@@ -261,7 +223,7 @@ function StatusRow({ label, ok, hint }: { label: string; ok?: boolean; hint: str
         <p className="text-xs text-text-muted mt-0.5">{hint}</p>
       </div>
       {ok === undefined ? (
-        <span className="text-xs text-text-muted font-mono">—</span>
+        <span className="text-xs text-text-muted font-mono">-</span>
       ) : ok ? (
         <div className="flex items-center gap-1 text-success">
           <CheckCircle2 size={13} />
@@ -277,21 +239,3 @@ function StatusRow({ label, ok, hint }: { label: string; ok?: boolean; hint: str
   );
 }
 
-function Toggle({ enabled, onChange, disabled }: { enabled: boolean; onChange?: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={() => onChange?.(!enabled)}
-      disabled={disabled}
-      className={cn(
-        "w-9 h-5 rounded-full relative transition-colors flex-none",
-        enabled ? "bg-accent-blue" : "bg-background-elevated border border-border-default",
-        disabled && "opacity-50 cursor-default"
-      )}
-    >
-      <span className={cn(
-        "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform",
-        enabled ? "translate-x-4" : "translate-x-0.5"
-      )} />
-    </button>
-  );
-}

@@ -25,6 +25,10 @@ import {
 import { useLocalContacts, type DeviceContact } from "@/hooks/useLocalContacts";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { cn } from "@/lib/utils";
+import { useSystemHealth } from "@/hooks/useSystemHealth";
+import { dataSave } from "@/lib/dataClient";
+import { deviceSyncPlugin, localStore, syncFolder, syncPhotos } from "@/lib/deviceSync";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 export function DeviceSyncCard() {
   const {
@@ -36,7 +40,6 @@ export function DeviceSyncCard() {
     importContactsFromFile,
     importBatch,
     refreshFromCloud: refreshContactsFromCloud,
-    seedEssentialContacts,
     hasNativePicker,
   } = useLocalContacts();
 
@@ -47,7 +50,6 @@ export function DeviceSyncCard() {
     remove: removeDoc,
     syncDeviceFolder,
     refreshFromCloud: refreshKnowledgeFromCloud,
-    seedSampleKnowledge,
   } = useLocalKnowledge();
 
   const [contactError, setContactError] = useState<string | null>(null);
@@ -57,12 +59,15 @@ export function DeviceSyncCard() {
 
   const [isMasterSyncing, setIsMasterSyncing] = useState(false);
   const [masterSyncFeedback, setMasterSyncFeedback] = useState<string | null>(null);
-  const [lastSyncedText, setLastSyncedText] = useState<string | null>("Just now");
+  const [lastSyncedText, setLastSyncedText] = useState<string | null>(null);
+  const health = useSystemHealth();
 
   const [showAddContact, setShowAddContact] = useState(false);
   const [showPasteContacts, setShowPasteContacts] = useState(false);
   const [showContactsSyncModal, setShowContactsSyncModal] = useState(false);
   const [isLaptop, setIsLaptop] = useState(false);
+  const [iosApp, setIosApp] = useState(false);
+  const [syncingPhotos, setSyncingPhotos] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [showContactList, setShowContactList] = useState(false);
   const [showFileList, setShowFileList] = useState(false);
@@ -84,7 +89,28 @@ export function DeviceSyncCard() {
     const ua = navigator.userAgent;
     const isMobile = /iPad|iPhone|iPod|Android/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     setIsLaptop(!isMobile);
+    setIosApp(!!deviceSyncPlugin());
   }, []);
+
+  const handleSyncPhotos = async () => {
+    const plugin = deviceSyncPlugin();
+    if (!plugin) return;
+    setFolderError(null);
+    setFolderSuccess(null);
+    setSyncingPhotos(true);
+    try {
+      if ((await plugin.photoAccess()).status === "denied") {
+        setFolderError("Photo access is off. Turn it on in Settings > The Third Eye > Photos, then sync again.");
+        return;
+      }
+      const n = await syncPhotos(plugin, async (rows) => (await dataSave("device_photos", rows)) === "saved", localStore);
+      setFolderSuccess(n ? `Synced ${n} photo${n === 1 ? "" : "s"} from your library.` : "Photos are up to date.");
+    } catch (err: any) {
+      setFolderError(err?.message || "Photo sync didn't finish.");
+    } finally {
+      setSyncingPhotos(false);
+    }
+  };
 
   const handleCompleteSyncup = async () => {
     setIsMasterSyncing(true);
@@ -99,15 +125,19 @@ export function DeviceSyncCard() {
         fetch("/api/user/sync/settings").catch(() => null),
       ]);
 
-      const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      setLastSyncedText(nowStr);
+      const failed = contactRes.error || vaultRes.error;
+      if (failed) {
+        setMasterSyncFeedback(`Sync didn't finish: ${failed}`);
+        return;
+      }
+      setLastSyncedText(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
       setMasterSyncFeedback(
-        `✓ All devices in sync! ${contactRes.count} contact${contactRes.count === 1 ? "" : "s"} & ${vaultRes.count} vault item${vaultRes.count === 1 ? "" : "s"} synchronized.`
+        `In sync: ${contactRes.count} contact${contactRes.count === 1 ? "" : "s"} and ${vaultRes.count} vault item${vaultRes.count === 1 ? "" : "s"}.`
       );
       setContactSuccess(`Contacts synced: ${contactRes.count} total`);
       setFolderSuccess(`Vault indexed: ${vaultRes.count} total`);
     } catch (err: any) {
-      setMasterSyncFeedback(`Sync completed: ${err?.message || "All devices synced"}`);
+      setMasterSyncFeedback(`Sync didn't finish: ${err?.message || "unknown error"}`);
     } finally {
       setIsMasterSyncing(false);
     }
@@ -197,6 +227,20 @@ export function DeviceSyncCard() {
     setFolderError(null);
     setFolderSuccess(null);
 
+    // The iPhone app keeps access to the folder chosen here and re-syncs it on every open.
+    const plugin = deviceSyncPlugin();
+    if (plugin) {
+      const picked = await plugin.chooseFolder().catch(() => null);
+      if (!picked) return;
+      try {
+        const n = await syncFolder(plugin, async (files) => (await upload(files)).length, localStore);
+        setFolderSuccess(`${picked.name}: ${n} file${n === 1 ? "" : "s"} synced. New and changed files sync automatically.`);
+      } catch (err: any) {
+        setFolderError(err?.message || "Folder sync didn't finish.");
+      }
+      return;
+    }
+
     // On iOS Safari / mobile browsers without directory picker, trigger file/photo picker immediately
     if (typeof window !== "undefined" && !("showDirectoryPicker" in window)) {
       setFolderSuccess("Opening file selector to sync multiple files & photos into your vault...");
@@ -277,16 +321,16 @@ export function DeviceSyncCard() {
 
       <div className="flex items-center gap-2 mb-1">
         {isLaptop ? <Laptop size={14} className="text-[#4FC3F7]" /> : <Smartphone size={14} className="text-[#4FC3F7]" />}
-        <span className="hud-label text-[#4FC3F7]">// Device Connectors &amp; Local Hub</span>
+        <span className="hud-label text-[#4FC3F7]">Device Connectors &amp; Local Hub</span>
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
         <h2 className="font-display text-lg font-semibold text-text-primary">Device Data &amp; Media Sync</h2>
         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#4FC3F7]/10 border border-[#4FC3F7]/25 text-[11px] text-[#4FC3F7] font-mono w-fit">
-          <Cloud size={11} /> Mobile &amp; Laptop Cloud Sync Active
+          <Cloud size={11} /> {health ? (health.database ? "Cloud sync on" : "This device only") : "Checking…"}
         </div>
       </div>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider leading-relaxed">
-        Allow JARVIS to access device contacts, files, and photos natively and locally. Contacts resolve names (&ldquo;Mom&rdquo;, &ldquo;Rohit&rdquo;, &ldquo;Aviral&rdquo;) to numbers for WhatsApp/Calls/SMS and follow you across all devices.
+      <p className="text-text-muted text-xs mt-1 mb-4 leading-relaxed">
+        Add or import your contacts and files here. JARVIS uses the contacts to turn names (&ldquo;Mom&rdquo;, &ldquo;Priya&rdquo;) into numbers for WhatsApp, calls and SMS, and they follow you to every device you sign in on.
       </p>
 
       {/* Master Complete Device Sync Hub */}
@@ -303,7 +347,7 @@ export function DeviceSyncCard() {
               </span>
             </div>
             <p className="text-xs text-text-muted mt-1">
-              Seamless bidirectional cloud sync between your iPhone, Android, and Laptop browsers.
+              Pulls your contacts and vault from the cloud and pushes this device's changes back.
             </p>
           </div>
 
@@ -330,11 +374,11 @@ export function DeviceSyncCard() {
           </div>
           <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
             <span className="text-[10px] text-text-muted block">Cloud Status</span>
-            <span className="font-mono font-medium text-emerald-400">✓ Connected</span>
+            <span className={cn("font-mono font-medium", health?.database ? "text-emerald-400" : "text-text-muted")}>{health ? (health.database ? "Connected" : "Not set up") : "…"}</span>
           </div>
           <div className="bg-background-base/60 p-2 rounded border border-border-default/40">
             <span className="text-[10px] text-text-muted block">Last Full Sync</span>
-            <span className="font-mono font-medium text-text-secondary">{lastSyncedText || "Just now"}</span>
+            <span className="font-mono font-medium text-text-secondary">{lastSyncedText || "Not this session"}</span>
           </div>
         </div>
 
@@ -366,31 +410,6 @@ export function DeviceSyncCard() {
                 className="text-text-muted hover:text-text-primary p-1 rounded hover:bg-white/5"
               >
                 <X size={16} />
-              </button>
-            </div>
-
-            {/* Quick Option: Load Essential Contacts */}
-            <div className="p-3.5 rounded-card bg-emerald-500/10 border border-emerald-500/30 space-y-2">
-              <div className="font-medium text-xs text-text-primary flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-emerald-400" />
-                  <span>⚡ Quick Seed: 1-Tap Load Essential Contacts</span>
-                </div>
-                <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/20 px-2 py-0.5 rounded">Instant</span>
-              </div>
-              <p className="text-[11px] text-text-muted leading-relaxed">
-                Immediately loads Mom, Dad, Rohit Sharma, Aviral Vahdam, and Emergency Dispatch into JARVIS memory &amp; cloud so you can test calling and WhatsApp right away.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const count = seedEssentialContacts();
-                  setContactSuccess(`Added ${count} essential contacts to JARVIS memory & synced to cloud.`);
-                  setShowContactsSyncModal(false);
-                }}
-                className="w-full py-2 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded text-xs font-semibold hover:bg-emerald-500/30 transition-colors"
-              >
-                ⚡ Load 5 Essential Contacts (Mom, Dad, Rohit, Aviral, Emergency)
               </button>
             </div>
 
@@ -435,7 +454,7 @@ export function DeviceSyncCard() {
                 rows={3}
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Aviral Vahdam, +91 9876543210&#10;Rohit Sharma, +91 9873945238&#10;Mom, +1 555 123 4567"
+                placeholder="Priya Sharma, +91 90000 00000&#10;Mom, +1 555 123 4567"
                 className="w-full bg-background-base border border-border-default rounded p-2 text-xs text-text-primary outline-none focus:border-[#4FC3F7] font-mono"
               />
               <button
@@ -535,17 +554,6 @@ export function DeviceSyncCard() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                const count = seedEssentialContacts();
-                setContactSuccess(`Added ${count} essential contacts to JARVIS memory & synced across your devices.`);
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-input text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-              title="Instantly add test contacts (Mom, Dad, Rohit Sharma, Aviral Vahdam, Emergency)"
-            >
-              <Sparkles size={12} /> Essential
-            </button>
-            <button
-              type="button"
               onClick={handleSyncContacts}
               disabled={syncingContacts}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input bg-[#4FC3F7]/15 border border-[#4FC3F7]/30 text-[#4FC3F7] text-xs font-medium hover:bg-[#4FC3F7]/25 transition-colors disabled:opacity-50"
@@ -560,6 +568,7 @@ export function DeviceSyncCard() {
         <div className="text-[11px] text-text-muted my-1.5 leading-relaxed bg-background-base/40 p-2 rounded border border-border-default/40">
           💡 <strong>iPhone &amp; Laptop tip:</strong> On iPhone, open <em>Contacts → tap Lists/Select All → Share Contacts → Save as .vcf</em> or tap &quot;Sync Device Contacts&quot; to import directly. On Android Chrome, tapping &quot;Sync Device Contacts&quot; opens your address book picker.
         </div>
+        <CaptureNote id="contacts">Contacts are saved to your account and sent with assistant messages so it can find people.</CaptureNote>
 
         {contactSuccess && (
           <div className="flex items-center gap-2 text-xs text-success my-2">
@@ -576,13 +585,13 @@ export function DeviceSyncCard() {
         {showPasteContacts && (
           <form onSubmit={handlePasteSubmit} className="mt-3 p-3 bg-background-base rounded-input border border-border-default space-y-2">
             <label className="block text-xs font-medium text-text-primary">
-              Paste Contacts (one per line, e.g. &ldquo;Aviral Vahdam, +91 9876543210&rdquo;):
+              Paste Contacts (one per line, e.g. &ldquo;Priya Sharma, +91 90000 00000&rdquo;):
             </label>
             <textarea
               rows={3}
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
-              placeholder="Aviral Vahdam, +91 9876543210&#10;Rohit Sharma, +91 9873945238"
+              placeholder="Priya Sharma, +91 90000 00000"
               className="w-full bg-background-surface border border-border-default rounded p-2 text-xs text-text-primary outline-none focus:border-[#4FC3F7] font-mono"
             />
             <div className="flex justify-end gap-2">
@@ -610,7 +619,7 @@ export function DeviceSyncCard() {
               <input
                 required
                 type="text"
-                placeholder="Name (e.g. Rohit Sharma, Aviral Vahdam, Mom)"
+                placeholder="Name (e.g. Priya Sharma, Mom)"
                 value={newContact.name}
                 onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
                 className="bg-background-surface border border-border-default rounded px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-[#4FC3F7]"
@@ -711,18 +720,30 @@ export function DeviceSyncCard() {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => photoInputRef.current?.click()}
-              disabled={uploading}
-              className={cn(
-                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
-                uploading && "opacity-50 pointer-events-none"
-              )}
-              title="Upload photos, camera roll, and images from device"
-            >
-              <ImageIcon size={12} className="text-emerald-400" /> Upload Photos
-            </button>
+            {iosApp ? (
+              <button
+                type="button"
+                onClick={handleSyncPhotos}
+                disabled={syncingPhotos}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary disabled:opacity-50"
+                title="Sync your whole photo library"
+              >
+                {syncingPhotos ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} className="text-emerald-400" />} Sync All Photos
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploading}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer",
+                  uploading && "opacity-50 pointer-events-none"
+                )}
+                title="Upload photos, camera roll, and images from device"
+              >
+                <ImageIcon size={12} className="text-emerald-400" /> Upload Photos
+              </button>
+            )}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -734,18 +755,6 @@ export function DeviceSyncCard() {
               title="Upload PDFs, office documents, notes, and code"
             >
               <FileText size={12} className="text-[#4FC3F7]" /> Upload Documents
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                const res = await seedSampleKnowledge();
-                setFolderSuccess(`Indexed ${res.length} starter documents into your vault.`);
-              }}
-              disabled={uploading}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-input text-xs font-medium border border-border-default hover:bg-background-elevated transition-colors text-text-secondary cursor-pointer"
-              title="Index starter guide & personal emergency notes into vault"
-            >
-              <Sparkles size={12} className="text-[#4FC3F7]" /> Starter Docs
             </button>
             <button
               type="button"
@@ -763,6 +772,11 @@ export function DeviceSyncCard() {
         <div className="text-[11px] text-text-muted my-1.5 leading-relaxed bg-background-base/40 p-2 rounded border border-border-default/40">
           📁 <strong>Supported formats:</strong> Photos (JPG, PNG, HEIC, WebP), PDFs, Office Documents, Code, Text &amp; Markdown. Works seamlessly on iPhone, Android, and Laptop.
         </div>
+        <CaptureNote id={iosApp ? "photo-sync" : "documents"}>
+          {iosApp
+            ? "Photo sync stores thumbnails with time and location in your account."
+            : "File text is stored in your account and indexed with Google's embedding service; images keep only a description."}
+        </CaptureNote>
 
         {folderSuccess && (
           <div className="flex items-center gap-2 text-xs text-success my-2">

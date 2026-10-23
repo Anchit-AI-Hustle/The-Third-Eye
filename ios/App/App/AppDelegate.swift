@@ -1,5 +1,8 @@
 import UIKit
 import Capacitor
+import Photos
+import UniformTypeIdentifiers
+import AppIntents
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -46,4 +49,308 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let config = UISceneConfiguration(name: "Default Configuration",
+                                          sessionRole: connectingSceneSession.role)
+        config.delegateClass = SceneDelegate.self
+        return config
+    }
+
+}
+
+// iOS 27 ends apps that don't adopt the scene lifecycle at launch
+// (_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption). This is
+// Capacitor's UIScene template, with the app's own bridge controller.
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+
+        window = UIWindow(windowScene: windowScene)
+        window?.rootViewController = BridgeViewController()
+        window?.makeKeyAndVisible()
+
+        SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
+    }
+
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        SceneDelegateProxy.shared.scene(scene, continue: userActivity)
+    }
+}
+
+// Registers the app's own native plugin with the Capacitor bridge
+// (Main.storyboard uses this controller).
+class BridgeViewController: CAPBridgeViewController {
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(DeviceSyncPlugin())
+        NotificationCenter.default.addObserver(self, selector: #selector(openPendingAsk), name: AssistantLink.opened, object: nil)
+    }
+
+    // A Siri request that launched the app arrives before the web view is up.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        openPendingAsk()
+    }
+
+    @objc func openPendingAsk() {
+        guard let pending = AssistantLink.pending, let base = bridge?.config.serverURL else { return }
+        AssistantLink.pending = nil
+        var link = URLComponents(url: base.appendingPathComponent(pending.path), resolvingAgainstBaseURL: false)
+        link?.queryItems = pending.query
+        guard let url = link?.url else { return }
+        DispatchQueue.main.async { _ = self.webView?.load(URLRequest(url: url)) }
+    }
+}
+
+// Siri and Shortcuts open the assistant at /assistant?ask=<message>, which
+// sends the message (frontend AssistantClient); shared text goes to /share.
+enum AssistantLink {
+    static let opened = Notification.Name("ThirdEyeOpenAssistant")
+    static var pending: (path: String, query: [URLQueryItem])?
+
+    static func open(_ message: String) {
+        go("assistant", [URLQueryItem(name: "ask", value: message)])
+    }
+
+    static func share(_ text: String) {
+        go("share", [URLQueryItem(name: "text", value: text)])
+    }
+
+    private static func go(_ path: String, _ query: [URLQueryItem]) {
+        pending = (path: path, query: query)
+        NotificationCenter.default.post(name: opened, object: nil)
+    }
+}
+
+@available(iOS 16.0, *)
+struct AskThirdEyeIntent: AppIntent {
+    static var title: LocalizedStringResource = "Ask The Third Eye"
+    static var description = IntentDescription("Opens The Third Eye and asks it your question.")
+    static var openAppWhenRun = true
+
+    @Parameter(title: "Question", requestValueDialog: "What would you like to ask?")
+    var question: String
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.open(question)
+        return .result()
+    }
+}
+
+@available(iOS 16.0, *)
+struct MorningBriefingIntent: AppIntent {
+    static var title: LocalizedStringResource = "Morning briefing"
+    static var description = IntentDescription("Opens The Third Eye with today's tasks, meetings and weather.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.open("Give me my morning briefing")
+        return .result()
+    }
+}
+
+// In a share-sheet Shortcut ("Save to The Third Eye" with Shortcut Input),
+// anything shared from another app is saved as a note.
+@available(iOS 16.0, *)
+struct SaveToThirdEyeIntent: AppIntent {
+    static var title: LocalizedStringResource = "Save to The Third Eye"
+    static var description = IntentDescription("Saves text or a link to The Third Eye as a note.")
+    static var openAppWhenRun = true
+
+    @Parameter(title: "Content", requestValueDialog: "What should I save?")
+    var content: String
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.share(content)
+        return .result()
+    }
+}
+
+// "Hey Siri, ask The Third Eye" (Siri then asks for the question) and
+// "Hey Siri, morning briefing in The Third Eye"; both also appear in Shortcuts.
+@available(iOS 16.0, *)
+struct ThirdEyeShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(intent: AskThirdEyeIntent(), phrases: ["Ask \(.applicationName)", "Talk to \(.applicationName)"])
+        AppShortcut(intent: MorningBriefingIntent(), phrases: ["Morning briefing in \(.applicationName)", "Brief me with \(.applicationName)"])
+        AppShortcut(intent: SaveToThirdEyeIntent(), phrases: ["Save to \(.applicationName)", "Note this in \(.applicationName)"])
+    }
+}
+
+// Sync without picking: the whole photo library once access is allowed, and
+// every file in one folder the person grants once (iOS lets no app read all
+// files). Called from frontend/src/lib/deviceSync.ts.
+@objc(DeviceSyncPlugin)
+public class DeviceSyncPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
+    public let identifier = "DeviceSyncPlugin"
+    public let jsName = "DeviceSync"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "photoAccess", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listPhotos", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "chooseFolder", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "folderStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listFolderFiles", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readFolderFile", returnType: CAPPluginReturnPromise),
+    ]
+
+    private let bookmarkKey = "DeviceSync.folderBookmark"
+    private var pendingFolderCall: CAPPluginCall?
+    private let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    @objc func photoAccess(_ call: CAPPluginCall) {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            switch status {
+            case .authorized: call.resolve(["status": "full"])
+            case .limited: call.resolve(["status": "limited"])
+            default: call.resolve(["status": "denied"])
+            }
+        }
+    }
+
+    // after: oldest-first newer than that date; otherwise newest-first, older than before.
+    @objc func listPhotos(_ call: CAPPluginCall) {
+        let options = PHFetchOptions()
+        options.fetchLimit = call.getInt("limit") ?? 25
+        if let after = call.getString("after").flatMap({ iso.date(from: $0) }) {
+            options.predicate = NSPredicate(format: "creationDate > %@", after as NSDate)
+            options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+        } else {
+            if let before = call.getString("before").flatMap({ iso.date(from: $0) }) {
+                options.predicate = NSPredicate(format: "creationDate < %@", before as NSDate)
+            }
+            options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        }
+        DispatchQueue.global(qos: .utility).async {
+            let assets = PHAsset.fetchAssets(with: .image, options: options)
+            let request = PHImageRequestOptions()
+            request.isSynchronous = true
+            request.deliveryMode = .highQualityFormat
+            request.resizeMode = .fast
+            request.isNetworkAccessAllowed = true
+            var photos: [[String: Any]] = []
+            assets.enumerateObjects { asset, _, _ in
+                guard let created = asset.creationDate else { return }
+                var thumb = ""
+                PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 384, height: 384), contentMode: .aspectFit, options: request) { image, _ in
+                    thumb = image?.jpegData(compressionQuality: 0.6)?.base64EncodedString() ?? ""
+                }
+                var row: [String: Any] = [
+                    "id": asset.localIdentifier,
+                    "takenAt": self.iso.string(from: created),
+                    "width": asset.pixelWidth,
+                    "height": asset.pixelHeight,
+                    "favorite": asset.isFavorite,
+                    "thumb": thumb,
+                ]
+                if let at = asset.location?.coordinate {
+                    row["lat"] = at.latitude
+                    row["lon"] = at.longitude
+                }
+                photos.append(row)
+            }
+            call.resolve(["photos": photos])
+        }
+    }
+
+    @objc func chooseFolder(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+            picker.delegate = self
+            self.pendingFolderCall = call
+            self.bridge?.viewController?.present(picker, animated: true)
+        }
+    }
+
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let call = pendingFolderCall, let url = urls.first else { return }
+        pendingFolderCall = nil
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let bookmark = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) else {
+            call.reject("Couldn't keep access to that folder.")
+            return
+        }
+        UserDefaults.standard.set(bookmark, forKey: bookmarkKey)
+        call.resolve(["name": url.lastPathComponent])
+    }
+
+    public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        pendingFolderCall?.reject("cancelled")
+        pendingFolderCall = nil
+    }
+
+    private func folderURL() -> URL? {
+        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return nil }
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale) else { return nil }
+        if stale, url.startAccessingSecurityScopedResource() {
+            if let fresh = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) {
+                UserDefaults.standard.set(fresh, forKey: bookmarkKey)
+            }
+            url.stopAccessingSecurityScopedResource()
+        }
+        return url
+    }
+
+    @objc func folderStatus(_ call: CAPPluginCall) {
+        if let url = folderURL() { call.resolve(["name": url.lastPathComponent]) } else { call.resolve([:]) }
+    }
+
+    @objc func listFolderFiles(_ call: CAPPluginCall) {
+        guard let root = folderURL() else { call.resolve(["files": []]); return }
+        DispatchQueue.global(qos: .utility).async {
+            let scoped = root.startAccessingSecurityScopedResource()
+            defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+            let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+            let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants])
+            let rootPath = root.standardizedFileURL.path
+            var files: [[String: Any]] = []
+            while let found = walker?.nextObject() as? URL, files.count < 5000 {
+                var url = found
+                let name = found.lastPathComponent
+                // An iCloud Drive file not yet on the phone is a hidden ".name.icloud" stub.
+                if name.hasPrefix(".") {
+                    guard name.hasSuffix(".icloud") else { walker?.skipDescendants(); continue }
+                    url = found.deletingLastPathComponent().appendingPathComponent(String(name.dropFirst().dropLast(7)))
+                }
+                guard let values = try? found.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+                files.append([
+                    "path": String(url.standardizedFileURL.path.dropFirst(rootPath.count + 1)),
+                    "size": values.fileSize ?? 0,
+                    "modified": self.iso.string(from: values.contentModificationDate ?? Date(timeIntervalSince1970: 0)),
+                ])
+            }
+            call.resolve(["files": files])
+        }
+    }
+
+    @objc func readFolderFile(_ call: CAPPluginCall) {
+        guard let root = folderURL(), let path = call.getString("path") else { call.reject("No folder chosen"); return }
+        let url = root.appendingPathComponent(path).standardizedFileURL
+        guard url.path.hasPrefix(root.standardizedFileURL.path + "/") else { call.reject("Outside the chosen folder"); return }
+        DispatchQueue.global(qos: .utility).async {
+            let scoped = root.startAccessingSecurityScopedResource()
+            defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+            var data: Data?
+            var error: NSError?
+            // Coordinated read downloads an iCloud Drive file that isn't on the phone yet.
+            NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { data = try? Data(contentsOf: $0) }
+            guard let data, data.count <= 10 * 1024 * 1024 else { call.reject("Couldn't read \(path)"); return }
+            call.resolve(["data": data.base64EncodedString()])
+        }
+    }
 }

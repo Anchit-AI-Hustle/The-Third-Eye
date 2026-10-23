@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useLocalTasks } from "./useLocalTasks";
+import { loadLocalContacts, saveLocalContacts } from "./useLocalContacts";
 import { useLocalGoals } from "./useLocalGoals";
 import { useLocalNotes } from "./useLocalNotes";
 import { useLocalExpenses } from "./useLocalExpenses";
@@ -67,6 +68,7 @@ export function useAgentActions() {
         const local: UndoableAction[] = [];
         for (const fx of effects) {
           const d = fx.data ?? {};
+          let outcome: "applied" | "failed" = "applied";
           switch (fx.type) {
             case "task_create":
               if (d.title) {
@@ -134,18 +136,11 @@ export function useAgentActions() {
               break;
             case "contact_add":
               if (d.contact && typeof window !== "undefined") {
-                try {
-                  const raw = localStorage.getItem("jarvis_contacts_v1");
-                  const list = raw ? JSON.parse(raw) : [];
-                  list.push(d.contact);
-                  localStorage.setItem("jarvis_contacts_v1", JSON.stringify(list));
-                  window.dispatchEvent(new CustomEvent("jarvis:contacts", { detail: list }));
-                } catch {}
+                saveLocalContacts([...loadLocalContacts(), d.contact]);
               }
               break;
-            case "open_url":
-              if (d.url) openResolved(d.url);
-              break;
+            // open_url is opened by useAgentConfirm.openLinks, which every caller
+            // also runs; opening it here too gave two tabs or a "blocked" card.
             case "open_urls":
               if (Array.isArray(d.data)) {
                 for (const item of d.data) {
@@ -157,11 +152,14 @@ export function useAgentActions() {
             case "device_action":
               if (d.action) {
                 const { executeDeviceAction } = await import("@/lib/deviceControl");
-                await executeDeviceAction({
+                const r = await executeDeviceAction({
                   action: String(d.action),
                   device: String(d.device ?? "phone"),
                   value: d.value == null ? null : String(d.value),
                 });
+                outcome = r.ok ? "applied" : "failed";
+                // The reply was written before the device answered; this is what really happened.
+                window.dispatchEvent(new CustomEvent("te:device-result", { detail: { ok: r.ok, applied: r.applied } }));
               }
               break;
             case "home_action":
@@ -184,7 +182,7 @@ export function useAgentActions() {
             default:
               break;
           }
-          logAgentAction({ type: fx.type, label: describeSideEffect(fx.type, d), outcome: "applied" });
+          logAgentAction({ type: fx.type, label: describeSideEffect(fx.type, d), outcome });
         }
         return local;
       };

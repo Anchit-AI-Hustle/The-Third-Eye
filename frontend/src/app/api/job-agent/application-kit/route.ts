@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { JOB_AGENT } from "@/lib/jobAgent/config";
 import { buildApplicationKit } from "@/lib/jobAgent/applicationKit";
 import type { CandidateFact, CareerProfile, NormalizedJob } from "@/lib/jobAgent/types";
+import { chargedRoute } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,7 +13,7 @@ export const maxDuration = 60;
 // plus the authenticated user's own profile + verified facts (which it manages
 // via the data API / local storage). We never accept another user's data — the
 // kit is generated only from what the caller owns.
-export async function POST(req: NextRequest) {
+async function create(req: NextRequest) {
   if (!JOB_AGENT.enabled) return Response.json({ error: "Job Agent is disabled", disabled: true }, { status: 403 });
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -36,6 +37,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ kit });
   } catch (e) {
     console.error("job-agent kit:", e instanceof Error ? e.message : e);
-    return Response.json({ error: "Application kit generation failed — please try again." }, { status: 502 });
+    return Response.json({ error: "Application kit generation failed - please try again." }, { status: 502 });
   }
 }
+
+export const POST = chargedRoute("jobagent.kit", create);

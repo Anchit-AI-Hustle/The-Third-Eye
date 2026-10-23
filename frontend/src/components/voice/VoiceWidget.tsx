@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
@@ -92,6 +93,7 @@ export function VoiceWidget() {
           history: historyRef.current.slice(-4).map((t) => ({ role: t.role === "assistant" ? "assistant" : "user", content: t.content })),
           memory: memoryRef.current,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          confirmActions: confirmActionsOn(),
           userName: session?.user?.name?.split(" ")[0],
           email: session?.user?.email ?? undefined,
           accessToken: (session as any)?.accessToken ?? undefined,
@@ -185,7 +187,7 @@ export function VoiceWidget() {
     : liveBubble?.text
     ? "Listening…"
     : micOn
-    ? "Ready — speak"
+    ? "Ready - speak"
     : "JARVIS Widget";
 
   return (
@@ -279,7 +281,7 @@ export function VoiceWidget() {
             {!liveBubble && !lastTurn && !isStreaming && (
               <div className="text-center py-4">
                 <p className="text-xs text-text-muted">
-                  {micOn ? "Speak to JARVIS — listening now" : "Enable mic or type in the assistant"}
+                  {micOn ? "Speak to JARVIS - listening now" : "Enable mic or type in the assistant"}
                 </p>
                 <button
                   onClick={() => router.push("/assistant")}

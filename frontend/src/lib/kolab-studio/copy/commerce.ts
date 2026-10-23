@@ -5,7 +5,7 @@ export const commerceCopy: CopyDict = {
   homeEyebrow: "Your store's growth engine",
   homeTitle: "Turn one-time buyers into repeat revenue",
   homeSubtitle:
-    "Lifecycle journeys, RFM segments and creator-sourced demand — with attribution running end to end, in one place.",
+    "Lifecycle journeys, RFM segments and creator-sourced demand - with attribution running end to end, in one place.",
   audienceWord: "customer",
   audienceWordPlural: "customers",
   contactWord: "customer",

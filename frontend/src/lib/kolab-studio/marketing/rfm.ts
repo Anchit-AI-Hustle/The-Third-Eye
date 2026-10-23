@@ -1,6 +1,6 @@
 // web/lib/marketing/rfm.ts
 // RFM segmentation + lifecycle stages for the Commerce/Local packs (spec §5, §6).
-// Logic adapted from the vahdam-lifecycle-os retention engine (segment taxonomy, lifecycle
+// Logic adapted from the lifecycle-os retention engine (segment taxonomy, lifecycle
 // stages), generalised and brand-agnostic — no product/brand facts are copied (their own
 // zero-fabrication rule). Pure functions; unit-tested.
 
@@ -73,14 +73,14 @@ export const RFM_SEGMENTS: RfmSegment[] = [
 
 /** One-line meaning per segment for UI tooltips. */
 export const SEGMENT_BLURB: Record<RfmSegment, string> = {
-  Champions: "Recent, frequent, high spend — reward and give early access.",
-  Loyal: "Consistent repeat buyers — upsell and refer.",
-  "Potential Loyalist": "Recent with growing frequency — nurture into loyalty.",
-  Promising: "Recent first buyers — convert the second order.",
-  New: "Just bought once — welcome and onboard.",
-  "Need Attention": "Slipping cadence — timely nudge before they lapse.",
-  "About to Sleep": "Fading engagement — re-engage now.",
-  "At Risk": "Were valuable, now quiet — win back before it's too late.",
-  Hibernating: "Long inactive — low-cost reactivation.",
-  Lost: "Effectively churned — suppress or a final win-back only.",
+  Champions: "Recent, frequent, high spend - reward and give early access.",
+  Loyal: "Consistent repeat buyers - upsell and refer.",
+  "Potential Loyalist": "Recent with growing frequency - nurture into loyalty.",
+  Promising: "Recent first buyers - convert the second order.",
+  New: "Just bought once - welcome and onboard.",
+  "Need Attention": "Slipping cadence - timely nudge before they lapse.",
+  "About to Sleep": "Fading engagement - re-engage now.",
+  "At Risk": "Were valuable, now quiet - win back before it's too late.",
+  Hibernating: "Long inactive - low-cost reactivation.",
+  Lost: "Effectively churned - suppress or a final win-back only.",
 };

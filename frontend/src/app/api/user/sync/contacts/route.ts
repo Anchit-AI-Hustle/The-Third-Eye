@@ -18,14 +18,6 @@ export interface DeviceContactRecord {
 
 const MEMORY_KEY = "device_contacts";
 
-export const ESSENTIAL_CONTACT_RECORDS: DeviceContactRecord[] = [
-  { id: "c_mom", name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_dad", name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_rohit", name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_aviral", name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-  { id: "c_emergency", name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line", source: "manual", updated_at: "2026-01-01T00:00:00.000Z" },
-];
-
 export async function GET() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
@@ -35,7 +27,7 @@ export async function GET() {
 
   const db = getDb();
   if (!db) {
-    return NextResponse.json({ ok: false, error: "Database not configured", contacts: ESSENTIAL_CONTACT_RECORDS }, { status: 501 });
+    return NextResponse.json({ ok: false, error: "Database not configured", contacts: [] }, { status: 501 });
   }
 
   const { data, error } = await db
@@ -71,7 +63,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const contacts: DeviceContactRecord[] = Array.isArray(body?.contacts) ? body.contacts : [];
+    const incoming: DeviceContactRecord[] = Array.isArray(body?.contacts) ? body.contacts : [];
+    const removed = new Set<string>(Array.isArray(body?.removed) ? body.removed.map(String) : []);
+    // A device's list is merged into the saved one, not written over it: an
+    // older device would otherwise erase contacts saved from another. Deletes
+    // come as ids, so a removed contact is not merged back in.
+    const { data: cur } = await db.from("jarvis_memory").select("value").eq("user_id", email).eq("key", MEMORY_KEY).maybeSingle();
+    let saved: DeviceContactRecord[] = [];
+    try { saved = cur?.value ? JSON.parse(cur.value) : []; } catch { saved = []; }
+    const contacts = mergeContacts(Array.isArray(saved) ? saved : [], incoming, removed);
 
     const now = new Date().toISOString();
     const { error } = await db.from("jarvis_memory").upsert(
@@ -94,4 +94,22 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err?.message || "Invalid payload" }, { status: 400 });
   }
+}
+
+const phoneKey = (p?: string) => (p ?? "").replace(/\D/g, "").slice(-10);
+
+function mergeContacts(saved: DeviceContactRecord[], incoming: DeviceContactRecord[], removed: Set<string>): DeviceContactRecord[] {
+  const out = new Map<string, DeviceContactRecord>();
+  for (const c of saved) if (c?.id && !removed.has(c.id)) out.set(c.id, c);
+  for (const c of incoming) {
+    if (!c?.id || removed.has(c.id)) continue;
+    // The same person under another id (same phone, or same name with no phone) is replaced, not duplicated.
+    for (const [id, o] of out) {
+      const samePhone = phoneKey(c.phone) && phoneKey(c.phone) === phoneKey(o.phone);
+      const sameName = !c.phone && !o.phone && c.name?.trim().toLowerCase() === o.name?.trim().toLowerCase();
+      if (id !== c.id && (samePhone || sameName)) out.delete(id);
+    }
+    out.set(c.id, c);
+  }
+  return [...out.values()];
 }

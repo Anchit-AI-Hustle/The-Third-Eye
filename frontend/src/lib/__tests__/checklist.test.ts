@@ -12,7 +12,7 @@ const plan = (c: Checklist) =>
 
 describe("classifyResult", () => {
   it("reads a handler's own failure phrasing, not words inside the user's data", () => {
-    expect(classifyResult("Couldn't build the calendar link — missing details.")).toBe("failed");
+    expect(classifyResult("Couldn't build the calendar link - missing details.")).toBe("failed");
     expect(classifyResult("[News fetch failed: timeout]")).toBe("failed");
     expect(classifyResult("Calculation failed: bad input")).toBe("failed");
     expect(classifyResult("GitHub isn't connected. The connect screen is open.")).toBe("failed");
@@ -20,6 +20,24 @@ describe("classifyResult", () => {
     expect(classifyResult("Proposed to the user for confirmation: Email a@b.c")).toBe("awaiting");
     expect(classifyResult("Task created: Fix the error page (id t1)")).toBe("ok");
     expect(classifyResult("3 results: How to fix error 404 …")).toBe("ok");
+  });
+
+  it("reads the failures handlers word as a refusal or a missing input", () => {
+    for (const r of [
+      'No goal matching "Run" was found, so nothing was updated. Tell the user; do not claim progress was saved.',
+      "No file content was given, so nothing was saved.",
+      "I need a positive amount to log an expense.",
+      "Please provide a contact name or query to search.",
+      "GST Calculator needs amount. It got: nothing. Ask the user for the missing values; do not guess them.",
+      'EMI Calculator could not work that out from {"p":0}. Check the numbers with the user.',
+      "ANCHOR is a private release robot that is not available on this account. Tell the user so.",
+      'manage_tasks failed: invalid arguments: missing required argument "action".',
+    ]) expect(classifyResult(r), r).toBe("failed");
+    expect(classifyResult("No expenses logged for 2026-10 yet.")).toBe("ok");
+    expect(classifyResult('No notes found matching "visa".')).toBe("ok");
+    expect(classifyResult("No emails found matching: from:bank")).toBe("ok");
+    expect(classifyResult("Queued flashlight_on on the operator's device. The device executor will apply it and the next message will reflect the real outcome - do not claim OS-level success.")).toBe("ok");
+    expect(classifyResult("Note saved: Please provide feedback by Friday")).toBe("ok");
   });
 });
 
@@ -65,7 +83,7 @@ describe("Checklist", () => {
     c.apply("fail_step", { step: 2, reason: "Gmail not connected" });
     const gap = c.shortfall()!;
     expect(gap).toContain("1/3 verified");
-    expect(gap).toContain("Email the invite (failed — Gmail not connected)");
+    expect(gap).toContain("Email the invite (failed - Gmail not connected)");
     expect(gap).toContain("Summarise for the user (not verified yet)");
   });
 

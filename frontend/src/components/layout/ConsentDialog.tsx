@@ -9,8 +9,9 @@ import { useConsentBundle } from "@/hooks/useConsent";
 // Pages a non-user reads before deciding to become one — legal documents and the
 // sign-in flow. Asking for the microphone over a privacy policy is both a poor
 // first impression and an obstacle to anyone reviewing the document, including
-// Google's OAuth reviewers, who open these URLs directly.
-const NO_PROMPT_PATHS = ["/privacy_policy", "/terms_of_service", "/auth"];
+// Google's OAuth reviewers, who open these URLs directly. The demo promises it
+// captures nothing, so it must not ask for the camera or microphone either.
+const NO_PROMPT_PATHS = ["/privacy", "/terms_of_service", "/auth", "/install", "/get", "/demo", "/calculators", "/upgrade"];
 
 interface ConsentItem {
   key: ConsentKey;
@@ -21,15 +22,18 @@ interface ConsentItem {
 
 const ITEMS: ConsentItem[] = [
   { key: "microphone",    icon: Mic,     title: "Microphone",    reason: "Voice commands & wake-word (JARVIS / FRIDAY / EDITH)" },
-  { key: "location",      icon: MapPin,  title: "Location",      reason: "Local weather, traffic, nearby search — never stored" },
+  { key: "location",      icon: MapPin,  title: "Location",      reason: "Local weather, traffic, nearby search - never stored" },
   { key: "notifications", icon: Bell,    title: "Notifications", reason: "Reminders, daily briefings, urgent task alerts" },
-  { key: "camera",        icon: Camera,  title: "Camera",        reason: "Vision analysis (EDITH-mode) — describe what you see" },
+  { key: "camera",        icon: Camera,  title: "Camera",        reason: "Vision analysis (EDITH-mode) - describe what you see" },
 ];
 
 export function ConsentDialog() {
   const { bundleAsked, requestAll } = useConsentBundle();
   const pathname = usePathname();
-  const suppressed = NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p));
+  // The native iPhone app asks for the microphone itself, and its web views
+  // can't show the browser's permission prompts at all.
+  const suppressed = pathname === "/" || NO_PROMPT_PATHS.some((p) => pathname?.startsWith(p))
+    || (typeof navigator !== "undefined" && /TheThirdEyeApp\//.test(navigator.userAgent));
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<Partial<Record<ConsentKey, ConsentState>>>({});
   const [busy, setBusy] = useState(false);
@@ -88,7 +92,7 @@ export function ConsentDialog() {
             </div>
             <div>
               <h2 className="text-lg font-semibold">Activate Assistant</h2>
-              <p className="text-xs text-text-muted">Grant once — never asked again unless reset</p>
+              <p className="text-xs text-text-muted">Grant once - never asked again unless reset</p>
             </div>
           </div>
         </div>

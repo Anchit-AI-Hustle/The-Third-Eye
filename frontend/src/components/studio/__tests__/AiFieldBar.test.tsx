@@ -41,7 +41,7 @@ describe("AiFieldBar", () => {
   });
 
   it("shows why a suggestion failed", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "No usable suggestion came back — try again." }), { status: 502 })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "No usable suggestion came back - try again." }), { status: 502 })));
     render(<AiFieldBar tool={{ label: "X" }} field={{ name: "a", label: "A", type: "text" }} value="" context={{}} onChange={vi.fn()} />);
     fireEvent.click(screen.getByText("New").previousSibling as HTMLElement);
     expect(await screen.findByText(/No usable suggestion/)).toBeTruthy();

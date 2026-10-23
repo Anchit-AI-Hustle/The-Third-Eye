@@ -3,6 +3,8 @@
 // sign-in straight into another one.
 
 const BLOCKED = [/^\/auth(?:\/|$)/, /^\/api\/auth(?:\/|$)/];
+// Except the app sign-in hand-offs, which Google has to come back to.
+const ALLOWED = ["/auth/handoff", "/api/app-signin"];
 
 export function firstQueryValue(value: string | string[] | undefined | null): string | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -26,6 +28,7 @@ export function safeCallbackPath(raw: string | null | undefined, baseOrigin?: st
   }
   if (!path.startsWith("/") || path.startsWith("//")) return "/dashboard";
   const pathname = path.split("?")[0] || "/";
+  if (ALLOWED.includes(pathname)) return path;
   if (pathname === "/" || BLOCKED.some((re) => re.test(pathname))) return "/dashboard";
   return path;
 }

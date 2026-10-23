@@ -111,3 +111,39 @@ describe("isInternalLink", () => {
     expect(resolveAppLink("/tasks").url).toBe("/tasks");
   });
 });
+
+describe("Indian food, grocery, pharmacy and travel apps", () => {
+  it.each([
+    ["swiggy", "biryani", "https://www.swiggy.com/search?query=biryani"],
+    ["instamart", "milk", "https://www.swiggy.com/instamart/search?query=milk"],
+    ["zepto", "milk", "https://www.zeptonow.com/search?query=milk"],
+    ["bigbasket", "atta", "https://www.bigbasket.com/ps/?q=atta"],
+    ["jiomart", "rice", "https://www.jiomart.com/search/rice"],
+    ["1mg", "dolo 650", "https://www.1mg.com/search/all?name=dolo%20650"],
+    ["pharmeasy", "dolo", "https://pharmeasy.in/search/all?name=dolo"],
+    ["google flights", "Delhi to Goa", "https://www.google.com/travel/flights?q=Delhi%20to%20Goa"],
+  ])("searches %s for %s", (app, q, url) => {
+    expect(resolveAppLink(app, q).url).toBe(url);
+  });
+
+  it.each([
+    ["blinkit", "https://blinkit.com"],
+    ["nykaa", "https://www.nykaa.com"],
+    ["ajio", "https://www.ajio.com"],
+    ["meesho", "https://www.meesho.com"],
+    ["bookmyshow", "https://in.bookmyshow.com"],
+    ["urban company", "https://www.urbancompany.com"],
+    ["redbus", "https://www.redbus.in"],
+  ])("opens %s", (app, url) => {
+    expect(resolveAppLink(app).url).toBe(url);
+  });
+});
+
+describe("pet supplies", () => {
+  it.each([
+    ["supertails", "dog food", "https://supertails.com/search?q=dog%20food"],
+    ["huft", "cat litter", "https://headsupfortails.com/search?q=cat%20litter"],
+  ])("searches %s for %s", (app, q, url) => {
+    expect(resolveAppLink(app, q).url).toBe(url);
+  });
+});

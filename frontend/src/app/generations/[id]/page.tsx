@@ -1,6 +1,6 @@
 import { GenerationDetail } from "@/components/generations/GenerationDetail";
 
-export const metadata = { title: "Generation — The Third Eye" };
+export const metadata = { title: "Generation - The Third Eye" };
 
 export default async function GenerationDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;

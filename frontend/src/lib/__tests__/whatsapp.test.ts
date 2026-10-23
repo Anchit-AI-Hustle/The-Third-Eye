@@ -78,7 +78,7 @@ describe("whatsapp helpers", () => {
 
   it("turns markdown into WhatsApp formatting", async () => {
     const { toWhatsAppText } = await import("@/lib/whatsapp");
-    expect(toWhatsAppText("## Today\n**3 tasks** — [Draft](https://mail.google.com/x)")).toBe("Today\n*3 tasks* — Draft (https://mail.google.com/x)");
+    expect(toWhatsAppText("## Today\n**3 tasks** - [Draft](https://mail.google.com/x)")).toBe("Today\n*3 tasks* - Draft (https://mail.google.com/x)");
   });
 
   it("uses plain text inside the 24-hour window and the template outside it", async () => {
@@ -151,6 +151,6 @@ describe("handleInbound", () => {
     await handleInbound(msg("no"));
     await handleInbound(msg("no"));
     expect(calls).toEqual([]);
-    expect(sent.map((s) => s.body)).toEqual(["Cancelled — nothing was done."]);
+    expect(sent.map((s) => s.body)).toEqual(["Cancelled - nothing was done."]);
   });
 });

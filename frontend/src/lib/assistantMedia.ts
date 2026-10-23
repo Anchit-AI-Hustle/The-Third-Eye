@@ -6,7 +6,7 @@ export type MediaKind = "image" | "music" | "video";
 export async function startAssistantMedia(user: string | undefined, kind: MediaKind, prompt: string, options: { style?: string; size?: string } = {}) {
   if (!user) return { result: "Sign in before generating media." };
   if (!prompt.trim()) return { result: "Describe the media you want to generate." };
-  if (!replicateConfigured()) return { result: "Media rendering is not configured. Set REPLICATE_API_TOKEN on the server. No media was generated." };
+  if (!replicateConfigured()) return { result: "Media rendering is not available right now. No media was generated." };
   if (!process.env.TOKEN_ENCRYPTION_KEY) return { result: "Media job delivery needs TOKEN_ENCRYPTION_KEY on the server. No job was started." };
   const aspect = options.size === "portrait" ? "9:16" : options.size === "landscape" || options.size === "wide" ? "16:9" : "1:1";
   const model = kind === "image" ? process.env.IMAGE_MODEL || "black-forest-labs/flux-schnell"
@@ -32,4 +32,11 @@ export async function assistantMediaStatus(user: string, ticket: string) {
   const output = prediction.status === "succeeded" ? videoUrlFrom(prediction.output) ?? audioUrlFrom(prediction.output) : null;
   const url = output?.startsWith("https://") ? output : null;
   return { kind: job.kind, status: prediction.status, url, error: prediction.error ?? (prediction.status === "succeeded" && !url ? "Provider returned no downloadable output" : null) };
+}
+
+// With no video model, video is drawn and recorded in the browser by Video
+// Studio or Reel Studio; the chat opens the right one with the idea filled in.
+export function studioVideoLink(prompt: string): string {
+  const reel = /\b(reels?|shorts?|tiktok|vertical|9:16|story|stories)\b/i.test(prompt);
+  return `/tools/${reel ? "reel" : "video"}?prefill=${encodeURIComponent(prompt.slice(0, 1500))}`;
 }

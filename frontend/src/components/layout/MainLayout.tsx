@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { VoiceOverlay } from "../voice/VoiceOverlay";
 import { AiStatusBanner } from "./AiStatusBanner";
+import { AmbientScene } from "../hud/AmbientScene";
+import { MotionNotice } from "../hud/MotionNotice";
+import { NativeAutoSync } from "./NativeAutoSync";
 import { useJarvisTriggers } from "@/hooks/useJarvisTriggers";
 import { activateAssistant } from "@/lib/activation";
+import { cn } from "@/lib/utils";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -16,10 +21,21 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, mainClassName }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const [nativeApp, setNativeApp] = useState(false);
+  // A page opened inside the native SwiftUI app: the app has its own tab bar,
+  // menu and voice, so only the page itself shows.
+  const [embedded, setEmbedded] = useState(false);
+  useEffect(() => {
+    setNativeApp(!!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    setEmbedded(/TheThirdEyeApp\//.test(navigator.userAgent));
+  }, []);
   useJarvisTriggers(activateAssistant);
 
   return (
-    <div className="flex h-screen bg-background-base overflow-hidden">
+    <div className="relative flex h-screen bg-background-base overflow-hidden">
+      <AmbientScene />
+      {!embedded && <>
       {/* Mobile hamburger button — visible below lg breakpoint.
           Insets are on the button itself: the scroll container below applies
           the top inset as padding, but this is `fixed`, so it never inherited
@@ -34,19 +50,30 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       </button>
 
       <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
+      </>}
       <main
         id="main-content"
         tabIndex={-1}
-        className={
-          mainClassName ??
-          "flex-1 overflow-y-auto pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 pl-14 pr-16 lg:pl-0 lg:pr-40"
-        }
+        className={cn(
+          mainClassName ?? (embedded ? "flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]" :
+          "flex-1 overflow-y-auto pt-[calc(3.5rem_+_env(safe-area-inset-top))] sm:pt-[env(safe-area-inset-top)] lg:pt-0 pb-[calc(9rem_+_env(safe-area-inset-bottom))] lg:pb-28 sm:pl-14 sm:pr-16 lg:pl-0 lg:pr-40"),
+          "relative z-[1]",
+        )}
       >
-        <AiStatusBanner />
-        {children}
+        {/* A page with its own <main> layout (the assistant) is a flex column whose
+            content fills what the banner leaves; the wrapper must pass that on. */}
+        <AiStatusBanner clearMenu={!!mainClassName} />
+        <div key={pathname} className={cn("page-enter", mainClassName ? "flex-1 min-h-0 flex flex-col" : "h-full")}>{children}</div>
       </main>
-      <BottomNav />
-      <VoiceOverlay />
+      {/* Page change: a holographic shutter swings away and a scan line sweeps the screen. */}
+      <div key={`shutter-${pathname}`} className="route-shutter" aria-hidden="true"><span /><span /></div>
+      <div key={pathname} className="route-scan" aria-hidden="true" />
+      <MotionNotice />
+      {nativeApp && <NativeAutoSync />}
+      {!embedded && <>
+        <BottomNav onMore={() => setMobileMenuOpen(true)} />
+        <VoiceOverlay />
+      </>}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
 import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder, ExternalLink, ArrowUpRight, MessageCircle, Mail } from "lucide-react";
@@ -9,12 +10,16 @@ import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
 import { useChatTaskSync } from "@/hooks/useChatTaskSync";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
+import { groupToolLabels } from "@/lib/toolChips";
+import { micButton } from "@/lib/micButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
 import { matchSystemsCommand } from "@/lib/systems";
 import { triggerSystemsOnline } from "@/components/systems/SystemsOnline";
-import { usePush } from "@/hooks/usePush";
+import { NotifyPrompt } from "./NotifyPrompt";
+import { takeUrlParam } from "@/lib/urlParam";
+import { REMINDERS_CHANGED } from "@/lib/localReminders";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalNotes } from "@/hooks/useLocalNotes";
@@ -27,6 +32,7 @@ import { classifyOpenUrl } from "@/lib/liveActions";
 import { isProviderMedia, saveMedia } from "@/lib/mediaFile";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 import { VisionButton } from "./VisionButton";
 import { ActionCard } from "./ActionCard";
 import { ChecklistCard } from "./ChecklistCard";
@@ -42,6 +48,8 @@ import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { Persona3D } from "@/components/persona/Persona3D";
 import { personaFor } from "@/lib/persona/personas";
 import { toolLabel } from "@/lib/toolLabels";
+import { toWhatsAppNumber } from "@/lib/whatsappNumber";
+import { deviceSendable, sendFromDevice } from "@/lib/nativeOutreach";
 
 // Replies whose files should save and open on arrival (after the permission
 // check); files in reopened chats only act when their buttons are clicked.
@@ -106,7 +114,6 @@ const SUGGESTIONS = [
   "Help me plan my week",
   "Search my knowledge base",
   "Draft a follow-up email",
-  "Write a mail to anchit.tandon@gmail.com and anchit.tandon@vahdam.com that test-mail by Jarvis",
 ];
 
 const LANGUAGES = [
@@ -167,11 +174,30 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
-  usePush();
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRef = useRef<HistoryEntry[]>([]);
+  const outreachQueueRef = useRef<string[]>([]);
+  useEffect(() => {
+    const next = () => {
+      if (document.visibilityState !== "visible" || !outreachQueueRef.current.length) return;
+      const url = outreachQueueRef.current.shift()!;
+      setTimeout(() => { try { window.location.href = url; } catch {} }, 700);
+    };
+    document.addEventListener("visibilitychange", next);
+    return () => document.removeEventListener("visibilitychange", next);
+  }, []);
+  const sendDirect = useCallback((messageId: string, link: MessageLink) => {
+    void sendFromDevice(link).then((r) => {
+      if (!r) return;
+      setMessages((prev) => prev.map((m) => m.id !== messageId ? m : {
+        ...m,
+        content: `${m.content}\n\n${r.text}`,
+        links: r.ok ? m.links?.filter((l) => l !== link) : m.links,
+      }));
+    });
+  }, []);
   const [files, setFiles] = useState<(Attachment & { size: number })[]>([]);
   const [fileNote, setFileNote] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -194,7 +220,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     for (const f of array) {
       const used = next.reduce((n, a) => n + a.size, 0);
       if (next.length >= MAX_ATTACHMENTS) { setFileNote(`Up to ${MAX_ATTACHMENTS} files per message.`); break; }
-      if (used + f.size > MAX_ATTACHMENT_BYTES) { setFileNote(`"${f.name}" is too large — files can total 3 MB per message.`); continue; }
+      if (used + f.size > MAX_ATTACHMENT_BYTES) { setFileNote(`"${f.name}" is too large - files can total 3 MB per message.`); continue; }
       next.push({ name: f.name, mimeType: f.type || "text/plain", data: await readAsBase64(f), size: f.size });
     }
     setFiles(next);
@@ -275,6 +301,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setUndoable(actions);
     if (undoTimer.current) clearTimeout(undoTimer.current);
     undoTimer.current = setTimeout(() => setUndoable([]), 12000);
+  }, []);
+
+  // Device actions run after the reply was written; append what really happened.
+  useEffect(() => {
+    const onResult = (e: Event) => {
+      const r = (e as CustomEvent<{ ok: boolean; applied: string }>).detail;
+      if (!r?.applied) return;
+      setMessages((prev) => {
+        const i = prev.map((m) => m.role).lastIndexOf("assistant");
+        if (i < 0) return prev;
+        const next = [...prev];
+        next[i] = { ...next[i], content: `${next[i].content}\n\n_${r.ok ? "Done on this device" : "Didn't work on this device"}: ${r.applied}_` };
+        return next;
+      });
+    };
+    window.addEventListener("te:device-result", onResult);
+    return () => window.removeEventListener("te:device-result", onResult);
   }, []);
 
   const runUndo = useCallback(() => {
@@ -584,6 +627,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           history: historyRef.current,
           memory: memoryRef.current,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          confirmActions: confirmActionsOn(),
           userName: userName ?? session?.user?.name?.split(" ")[0],
           email: session?.user?.email ?? undefined,
           tasks: allTasks,
@@ -617,6 +661,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
       let buffer = "";
       let fullText = "";
       const toolsUsed: string[] = [];
+      let remindersChanged = false;
       let eventType = "";
 
       while (true) {
@@ -638,6 +683,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   m.id === assistantId ? { ...m, content: fullText, toolsUsed } : m
                 ));
               } else if (eventType === "tool" && parsed.name && !CHECKLIST_TOOLS.has(parsed.name)) {
+                if (parsed.name === "manage_reminders") remindersChanged = true;
                 toolsUsed.push(toolLabel(parsed.name, parsed.input));
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, toolsUsed: [...toolsUsed] } : m
@@ -681,14 +727,19 @@ export function AssistantClient({ userName }: { userName?: string }) {
                     missingPhone: Boolean(fx.data.missingPhone),
                   }));
 
-                // Auto-dispatch outreach deep links (WhatsApp, dialer, SMS) directly ONLY when a phone number is present
-                const autoOutreach = links.find((l) => l.action === "whatsapp" || l.action === "call" || l.action === "sms");
-                if (autoOutreach && !autoOutreach.missingPhone) {
-                  const targetUri = autoOutreach.nativeUrl || autoOutreach.url;
-                  const hasDigits = /\d{7,15}/.test(targetUri);
-                  if (hasDigits && /^(whatsapp|tel|sms):/i.test(targetUri)) {
-                    try { window.location.href = targetUri; } catch {}
-                  }
+                // Outreach deep links (WhatsApp, dialer, SMS) with a number open straight
+                // away. Several recipients open one after another: the next one opens
+                // when the user comes back from the app (see the visibility effect).
+                // In the Android app SMS and calls leave from the phone itself; the
+                // outcome is added to the reply rather than opening Messages or the dialer.
+                links.filter((l) => !l.missingPhone && deviceSendable(l)).forEach((l) => sendDirect(assistantId, l));
+                const outreach = links
+                  .filter((l) => (l.action === "whatsapp" || l.action === "call" || l.action === "sms") && !l.missingPhone && !deviceSendable(l))
+                  .map((l) => l.nativeUrl || l.url)
+                  .filter((u) => /\d{7,15}/.test(u) && /^(whatsapp|tel|sms):/i.test(u));
+                if (outreach.length) {
+                  outreachQueueRef.current = outreach.slice(1);
+                  try { window.location.href = outreach[0]; } catch {}
                 }
 
                 let effectiveContent = fullText;
@@ -705,6 +756,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "assistant", content: effectiveContent },
                 ];
                 applyActions(parsed.sideEffects).then(offerUndo);
+                // The phone app reschedules its reminder notifications.
+                if (remindersChanged) window.dispatchEvent(new Event(REMINDERS_CHANGED));
                 openLinks(parsed.sideEffects);
                 const media = (parsed.sideEffects ?? [])
                   .filter((fx: { type?: string; data?: { url?: string } }) => fx.type === "media" && fx.data?.url)
@@ -719,7 +772,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 if (media.length) {
                   setMessages((prev) => prev.map((m) => {
                     if (m.id !== assistantId) return m;
-                    const missing = media.map((x: { url: string }) => x.url).filter((u: string) => !m.content.includes(u));
+                    // Photos from the person's library show only as thumbnails, not as links in the text.
+                    const missing = media.map((x: { url: string }) => x.url).filter((u: string) => !m.content.includes(u) && !u.startsWith("/api/photos/"));
                     return { ...m, media, content: missing.length ? `${m.content}\n\n${missing.join("\n")}` : m.content };
                   }));
                 }
@@ -750,7 +804,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setIsStreaming(false);
       }
     }
-  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, contacts, modeId, agent]);
+  }, [input, files, project, session, userName, allTasks, docs, applyActions, tts, addPending, openLinks, offerUndo, supersedePending, pendingActions, confirmAction, cancelAction, notes, goals, expenses, contacts, modeId, agent, sendDirect]);
 
   useEffect(() => { sendRef.current = sendMessage; }, [sendMessage]);
 
@@ -838,17 +892,16 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setShowChats(false);
   }
 
-  // A task in the tracker links back here with ?chat=<id>.
+  // A task in the tracker links back here with ?chat=<id>; a phone
+  // notification (the morning briefing) with ?ask=<message>.
   const linkedChat = useRef(false);
   useEffect(() => {
     if (!library.ready || linkedChat.current) return;
     linkedChat.current = true;
-    const url = new URL(window.location.href);
-    const id = url.searchParams.get("chat");
-    if (!id) return;
-    url.searchParams.delete("chat");
-    window.history.replaceState(null, "", url.pathname + url.search);
-    void openChat(id, true);
+    const id = takeUrlParam("chat");
+    if (id) void openChat(id, true);
+    const ask = takeUrlParam("ask");
+    if (ask) void sendMessage(ask);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [library.ready]);
 
@@ -978,9 +1031,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : isStreaming ? "bg-accent-violet animate-pulse"
             : "bg-text-muted"
           )} />
-          <span className={cn("text-xs font-mono transition-colors duration-300",
+          <span className={cn("text-[11px] tracking-wide truncate transition-colors duration-300",
             killed ? "text-warning"
-            : systemOnline ? "text-success"
+            : systemOnline ? "text-text-secondary"
             : doneMsg ? "text-accent-blue"
             : tts.speaking ? "text-accent-violet"
             : isStreaming ? "text-accent-violet"
@@ -988,9 +1041,9 @@ export function AssistantClient({ userName }: { userName?: string }) {
             : "text-text-muted"
           )}>
             {killed ? "Agent stopped · turn it back on in Settings"
-              : systemOnline ? "JARVIS activated · all systems online"
-              : stt.recognitionIssue === "server" ? "I heard you, but transcription failed — say it once more"
-              : stt.recognitionIssue ? "Browser speech recognition stalled — keep talking, I'll transcribe it here"
+              : systemOnline ? "Online"
+              : stt.recognitionIssue === "server" ? "I heard you, but transcription failed - say it once more"
+              : stt.recognitionIssue ? "Browser speech recognition stalled - keep talking, I'll transcribe it here"
               : tts.speaking ? "Speaking · hold on…"
               : doneMsg ?? (
                 isStreaming ? "Processing · composing response…"
@@ -1069,11 +1122,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
           <div className="flex items-start gap-3">
             <AlertCircle size={14} className="text-warning flex-none mt-0.5" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-warning">JARVIS needs configuration</p>
-              <p className="text-xs text-text-muted mt-0.5">
-                <code className="font-mono bg-background-elevated px-1 rounded">GEMINI_API_KEY</code> is not set.
-                {" "}Go to Vercel → Settings → Environment Variables → add it → Redeploy.
-              </p>
+              <p className="text-sm font-medium text-warning">The assistant isn&apos;t switched on yet</p>
+              <p className="text-xs text-text-muted mt-0.5">No AI provider is set up on this site, so The Third Eye can&apos;t answer. The site owner needs to add one.</p>
             </div>
             <a href="/settings" className="flex-none text-text-muted hover:text-text-secondary transition-colors p-0.5 rounded">
               <Settings size={13} />
@@ -1099,7 +1149,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} />
+          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} onSendDirect={sendDirect} />
         ))}
 
         {pendingActions.map((a) => (
@@ -1138,6 +1188,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         <div ref={bottomRef} />
       </div>
 
+      <div className="flex-none px-4 sm:px-8 pt-3 empty:hidden"><NotifyPrompt /></div>
       {/* Composer — integrated control: mode chip · reply selector · mic · send */}
       <div
         onDragOver={handleDragOver}
@@ -1204,7 +1255,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder={micOn ? "Or type here…" : "Message JARVIS…"}
+              placeholder={micOn ? "Or type here…" : "Ask The Third Eye…"}
               aria-label="Message input"
               rows={1}
               disabled={isStreaming}
@@ -1224,7 +1275,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <div className="flex items-center gap-1">
               <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
                 onChange={(e) => void addFiles(e.target.files)} />
-              <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files — images, PDFs, code, text" aria-label="Attach files"
+              <button type="button" onClick={() => fileInputRef.current?.click()} title="Attach files - images, PDFs, code, text" aria-label="Attach files"
                 className="flex-none p-1.5 rounded-input text-text-muted hover:text-text-secondary transition-colors">
                 <Paperclip size={15} />
               </button>
@@ -1255,29 +1306,33 @@ export function AssistantClient({ userName }: { userName?: string }) {
             <div className="flex items-center gap-1 sm:order-3">
               {/* Reply selector: how answers come back */}
               <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5" role="group" aria-label="How replies come back">
-                <button type="button" onClick={() => setReplyMode("text")} title="Text only — silent answers"
+                <button type="button" onClick={() => setReplyMode("text")} title="Text only - silent answers"
                   className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
                   <Type size={13} />
                 </button>
-                <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply — answers read aloud"
+                <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply - answers read aloud"
                   className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "voice" ? "bg-accent-violet/15 text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
                   <Volume2 size={13} />
                 </button>
                 {stt.supported && (
-                  <button type="button" onClick={() => setReplyMode("call")} title="Call — hands-free voice conversation"
+                  <button type="button" onClick={() => setReplyMode("call")} title="Call - hands-free voice conversation"
                     className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "call" ? "bg-success/15 text-success" : "text-text-muted hover:text-text-secondary")}>
                     <Phone size={13} />
                   </button>
                 )}
               </div>
-              {stt.supported && (
-                <button onClick={toggleDictate}
-                  title={micOn && voiceMode === "dictate" ? "Stop dictation" : "Dictate — speech fills the box, doesn't send"}
-                  className={cn("flex-none p-1.5 rounded-input transition-colors",
-                    micOn && voiceMode === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
-                  {micOn && voiceMode === "dictate" ? <Mic size={15} /> : <MicOff size={15} />}
-                </button>
-              )}
+              {stt.supported && (() => {
+                const m = micButton(micOn, voiceMode);
+                return (
+                  <button onClick={toggleDictate} title={m.title} aria-pressed={m.live}
+                    className={cn("flex-none p-1.5 rounded-input transition-colors",
+                      m.tone === "dictate" ? "text-accent-blue bg-accent-blue/10"
+                      : m.tone === "call" ? "text-success bg-success/10 animate-pulse"
+                      : "text-text-muted hover:text-text-secondary")}>
+                    {m.live ? <Mic size={15} /> : <MicOff size={15} />}
+                  </button>
+                );
+              })()}
               <button
                 onClick={async () => {
                   if (wakeEnabled) {
@@ -1289,7 +1344,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   updateActivation("wakeWordEnabled", true);
                 }}
                 title={
-                  wakeEnabled ? `Wake word on — say "${agent?.name ?? "JARVIS"}" to go hands-free`
+                  wakeEnabled ? `Wake word on - say "${agent?.name ?? "JARVIS"}" to go hands-free`
                     : "Enable wake word (\"Hey JARVIS\")"
                 }
                 className={cn("flex-none p-1.5 rounded-input transition-colors",
@@ -1303,7 +1358,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   <X size={15} /><span className="text-[11px] font-mono">Esc</span>
                 </button>
               ) : (
-                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming}
+                <button onClick={() => sendMessage()} disabled={(!input.trim() && !files.length) || isStreaming} aria-label="Send message"
                   className={cn("flex-none p-1.5 rounded-input transition-colors shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center",
                     input.trim() && !isStreaming ? "text-accent-blue hover:bg-accent-blue/10" : "text-text-muted cursor-not-allowed")}>
                   <Send size={15} />
@@ -1312,14 +1367,18 @@ export function AssistantClient({ userName }: { userName?: string }) {
             </div>
           </div>
         </div>
-        <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted")}>
+        <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted",
+          !stt.permissionDenied && !micOn && replyMode === "text" && "hidden sm:block")}>
           {stt.permissionDenied
-            ? "Microphone blocked for this site — click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
+            ? "Microphone blocked for this site - click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
             : micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
-            : replyMode === "call" ? "Call mode · speak naturally, JARVIS replies aloud"
+            : replyMode === "call" ? "Call mode · speak naturally, replies are spoken aloud"
             : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
             : "Enter to send · Shift+Enter for new line"}
         </p>
+        <CaptureNote id="chat-files" className="mt-1 text-center">
+          Attachments, camera frames and voice are sent to an AI provider to answer; files, images and audio aren&apos;t kept, the chat is.
+        </CaptureNote>
       </div>
     </div>
   );
@@ -1346,20 +1405,22 @@ function EmptyState({ userName, supported, onSuggest, persona, speaking, childre
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[50vh] gap-8 animate-fade-in">
       <div className="text-center">
-        <div className="w-36 h-36 mx-auto mb-3"><Persona3D color={persona.color} speaking={speaking} className="w-full h-full" /></div>
-        <p className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: persona.color }}>{persona.name}</p>
-        <p className="text-text-primary font-semibold text-base mb-1">
-          {userName ? `Good to see you, ${userName}.` : "JARVIS is online."}
+        <div className="hud-core w-36 h-36 mx-auto mb-6" style={{ color: persona.color }}>
+          <span /><span /><span />
+          <Persona3D color={persona.color} speaking={speaking} className="relative w-full h-full" />
+        </div>
+        <p className="text-text-primary font-display font-light text-2xl tracking-tight mb-1.5">
+          {userName ? `Good to see you, ${userName}.` : "Ready when you are."}
         </p>
-        <p className="text-text-secondary text-sm">
-          {supported ? "Just speak — or tap a suggestion below." : "Type below to begin."}
+        <p className="text-text-muted text-[13px]">
+          {supported ? "Speak, or choose a starting point." : "Type below to begin."}
         </p>
       </div>
       {children}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+      <div className="grid grid-cols-2 gap-1.5 w-full max-w-lg">
         {SUGGESTIONS.map((s) => (
           <button key={s} onClick={() => onSuggest(s)}
-            className="text-left px-4 py-3 rounded-card bg-background-surface border border-border-default hover:border-accent-blue/30 hover:bg-accent-blue/5 transition-all text-sm text-text-secondary hover:text-text-primary">
+            className="text-left px-3 py-2.5 rounded-input bg-white/[0.02] border border-white/[0.07] hover:border-accent-blue/30 hover:bg-accent-blue/5 transition-all text-[12.5px] leading-snug text-text-secondary hover:text-text-primary">
             {s}
           </button>
         ))}
@@ -1372,10 +1433,12 @@ function MessageBubble({
   message,
   session,
   onAddContact,
+  onSendDirect,
 }: {
   message: Message;
   session: any;
   onAddContact?: (c: { name: string; phone?: string; email?: string; notes?: string }) => void;
+  onSendDirect: (messageId: string, link: MessageLink) => void;
 }) {
   const isUser = message.role === "user";
   return (
@@ -1385,12 +1448,15 @@ function MessageBubble({
         {!isUser && message.checklist && message.checklist.length > 0 && <ChecklistCard steps={message.checklist} />}
         {message.toolsUsed && message.toolsUsed.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {message.toolsUsed.map((tool, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet">
-                <Zap size={9} className={message.streaming && i === message.toolsUsed!.length - 1 ? "animate-pulse" : undefined} />
-                {tool}{message.streaming && i === message.toolsUsed!.length - 1 ? "…" : ""}
-              </span>
-            ))}
+            {groupToolLabels(message.toolsUsed).map(({ label, count }) => {
+              const running = message.streaming && label === message.toolsUsed!.at(-1);
+              return (
+                <span key={label} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-badge bg-accent-violet/10 border border-accent-violet/20 text-accent-violet">
+                  <Zap size={9} className={running ? "animate-pulse" : undefined} />
+                  {label}{count > 1 ? ` ×${count}` : ""}{running ? "…" : ""}
+                </span>
+              );
+            })}
           </div>
         )}
         <div className={cn("rounded-card px-4 py-3 text-sm leading-relaxed",
@@ -1438,21 +1504,25 @@ function MessageBubble({
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
               )}
               {message.saved?.map((f, i) => <FileCard key={i} file={f} claimAuto={() => freshFiles.delete(`${message.id}:${i}`)} />)}
-              {message.media?.map((item) => (
-                <div key={item.url} className="mt-2">
-                  {item.kind === "audio" ? (
-                    <audio src={item.url} controls className="w-full" />
-                  ) : item.kind === "video" ? (
-                    <video src={item.url} controls className="w-full rounded-input" />
-                  ) : (
-                    <img src={item.url} alt={item.alt || ""} className="max-w-full rounded-input" />
-                  )}
-                  <button type="button" onClick={() => { void saveMedia(item.url, item.alt || item.kind); }}
-                    className="mt-1 text-[11px] text-text-muted hover:text-text-primary">
-                    Download
-                  </button>
+              {message.media && (
+                <div className={cn(message.media.length > 1 && message.media.every((m) => m.kind === "image") && "grid grid-cols-3 gap-1.5")}>
+                  {message.media.map((item) => (
+                    <div key={item.url} className="mt-2">
+                      {item.kind === "audio" ? (
+                        <audio src={item.url} controls className="w-full" />
+                      ) : item.kind === "video" ? (
+                        <video src={item.url} controls className="w-full rounded-input" />
+                      ) : (
+                        <img src={item.url} alt={item.alt || ""} className="max-w-full rounded-input" />
+                      )}
+                      <button type="button" onClick={() => { void saveMedia(item.url, item.alt || item.kind); }}
+                        className="mt-1 text-[11px] text-text-muted hover:text-text-primary">
+                        Download
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
               {message.links && message.links.length > 0 && (
                 <div className="flex flex-col gap-2.5 mt-3 pt-2.5 border-t border-border-default/60">
                   <div className="flex flex-wrap gap-2">
@@ -1463,7 +1533,9 @@ function MessageBubble({
                       const isEmail = link.action === "email" || link.url.startsWith("mailto:");
 
                       const handleClick = () => {
-                        if (link.nativeUrl) {
+                        if (deviceSendable(link)) {
+                          onSendDirect(message.id, link);
+                        } else if (link.nativeUrl) {
                           try { window.location.href = link.nativeUrl; } catch {}
                           setTimeout(() => {
                             try { window.open(link.url, "_blank", "noopener,noreferrer"); } catch {}
@@ -1567,29 +1639,18 @@ function WhatsAppPhonePicker({
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    let clean = phone.replace(/[^\d+]/g, "");
+    const clean = toWhatsAppNumber(phone, Intl.DateTimeFormat().resolvedOptions().timeZone);
     if (!clean) return;
-    if (/^\d{10}$/.test(clean)) clean = "91" + clean;
-    else if (clean.startsWith("+")) clean = clean.slice(1);
 
     const contactName = name.trim() || link.to || `Contact ${clean}`;
     if (onSaveContact) {
       onSaveContact({ name: contactName, phone: clean });
     }
 
-    const text = link.message || "";
-    const webUrl = `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
-    const nativeUrl = `whatsapp://send?phone=${clean}&text=${encodeURIComponent(text)}`;
-
+    // wa.me hands off to the WhatsApp app on a phone and to WhatsApp Web on a
+    // computer; opening the app link as well put WhatsApp up twice.
     setSent(true);
-    try {
-      window.location.href = nativeUrl;
-    } catch {}
-    setTimeout(() => {
-      try {
-        window.open(webUrl, "_blank", "noopener,noreferrer");
-      } catch {}
-    }, 600);
+    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(link.message || "")}`, "_blank", "noopener,noreferrer");
   };
 
   if (sent) {

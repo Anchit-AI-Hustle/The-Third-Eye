@@ -7,6 +7,7 @@ import { ConsentDialog } from "@/components/layout/ConsentDialog";
 import { CaptureProvider } from "@/components/capture/CaptureContext";
 import { PermissionProvider } from "@/components/permission/PermissionProvider";
 import { IngestBridge } from "@/components/tasks/IngestBridge";
+import { TaskAutopilot } from "@/components/tasks/TaskAutopilot";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { CommandPalette } from "@/components/command/CommandPalette";
@@ -79,6 +80,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <LocationBridge />
             <DeviceInfoBridge />
             <IngestBridge />
+            <TaskAutopilot />
             <DeviceLogBridge />
             <SystemsOnline />
             <CommandPalette />

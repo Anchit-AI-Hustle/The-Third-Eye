@@ -24,7 +24,7 @@ export const CHECKLIST_TOOLS = new Set(["plan_checklist", "start_step", "complet
 // Handlers report trouble in their first words ("Couldn't …", "[News error …]",
 // "Need a …", "Not signed in"); content further in is the user's data and may
 // say "error" legitimately.
-const FAILED = /^\s*(\[[^\]\n]{0,60}\b(error|failed|unavailable)\b|⚠|❌|error\b|failed\b|(\w+ ){1,2}failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|need (a|an|the)\b|no \w+ named\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set|no email was sent|rejected the send)\b/i;
+const FAILED = /^\s*(\[[^\]\n]{0,60}\b(error|failed|unavailable)\b|⚠|❌|error\b|failed\b|(\w+ ){1,2}failed\b|couldn'?t\b|could not\b|cannot\b|can'?t\b|unable\b|sorry\b|(i )?need (a|an|the)\b|please provide\b|no \w+ (named|matching)\b|no [\w ]{1,30} was given\b|(\w+ ){1,3}(could not|couldn'?t)\b|no such\b|not signed in|unknown\b|no handler|i don'?t have a handler|that's a jarvis premium)|\b(isn'?t connected|not connected|not configured|is not set|no email was sent|rejected the send|ask the user for the missing|check the numbers with the user|not available on this account)\b/i;
 
 export function classifyResult(result: string): Outcome {
   if (/^Proposed to the user for confirmation/.test(result)) return "awaiting";
@@ -53,8 +53,8 @@ function parseSteps(raw: unknown): Step[] {
 export function resumeNote(raw: unknown): string {
   const steps = parseSteps(raw);
   if (!steps.some((s) => s.status !== "done")) return "";
-  const lines = steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title} — verify: ${s.verify}`);
-  return `\n\n**Checklist carried over from your last reply** (already loaded — don't re-plan unless the user changed the request; start_step the first open one):\n${lines.join("\n")}`;
+  const lines = steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title} - verify: ${s.verify}`);
+  return `\n\n**Checklist carried over from your last reply** (already loaded - don't re-plan unless the user changed the request; start_step the first open one):\n${lines.join("\n")}`;
 }
 
 export class Checklist {
@@ -146,7 +146,7 @@ export class Checklist {
     if (!step) return `There is no step ${id}.`;
     if (step.status === "done") return `Step ${id} is already verified done.`;
     if (evidence.trim().length < 8) {
-      return `Not ticked: step ${id} needs evidence — quote what the tool returned that proves "${step.verify}".`;
+      return `Not ticked: step ${id} needs evidence - quote what the tool returned that proves "${step.verify}".`;
     }
     if (step.needsTool) {
       const seen = this.outcomes.get(id) ?? [];
@@ -157,7 +157,7 @@ export class Checklist {
         return `Not ticked: step ${id} is waiting for the user's Confirm. Tell them it is ready to confirm; it is not done until they do.`;
       }
       if (last === "failed") {
-        return `Not ticked: the last tool call for step ${id} failed. Fix the cause, retry, verify, then complete it — or fail_step with the reason if it cannot be done.`;
+        return `Not ticked: the last tool call for step ${id} failed. Fix the cause, retry, verify, then complete it - or fail_step with the reason if it cannot be done.`;
       }
       if (!seen.includes("ok")) return `Not ticked: no successful tool result for step ${id}.`;
     }
@@ -191,7 +191,7 @@ export class Checklist {
     if (!open.length) return null;
     const done = this.steps.length - open.length;
     const lines = open.map((s) => {
-      const why = s.status === "awaiting" ? "waiting for your Confirm" : s.status === "failed" ? `failed — ${s.note}` : "not verified yet";
+      const why = s.status === "awaiting" ? "waiting for your Confirm" : s.status === "failed" ? `failed - ${s.note}` : "not verified yet";
       return `- ${s.id}. ${s.title} (${why})`;
     });
     return `\n\n**Checklist: ${done}/${this.steps.length} verified.** Still open:\n${lines.join("\n")}`;
@@ -200,4 +200,4 @@ export class Checklist {
 
 export const CHECKLIST_INSTRUCTION = `**Verified checklist.** For multi-step workflows or requests that require several distinct sequential actions (complex research, multi-file code generation, multi-stage projects), first call plan_checklist with every small step and how each will be verified. Then for each step in order: start_step → do it with tools → check the outcome with a tool where one exists → complete_step with the evidence you saw. The server refuses to tick a step without a successful tool result, after a failed call, or while it waits for the user's Confirm. When a step fails, find the cause, fix it, retry and re-verify; use fail_step only when it truly cannot be done, and say why. Steps that are pure reasoning or writing may be planned with needs_tool=false. Never say a multi-step task is done unless every step is ticked.
 CRITICAL EXECUTION RULE: Single direct user commands (such as sending a WhatsApp, SMS, email, making a call, looking up a contact, creating a single task/event/reminder, setting an alarm, or a quick question) MUST BE EXECUTED DIRECTLY WITHOUT A CHECKLIST. Do not create checklist steps or ask permission again for an action the user explicitly instructed you to do.
-When the user asks to message or contact someone (e.g. 'Aviral Vahdam', 'Mom', 'Rohit'), call communicate or manage_contacts immediately — never create a checklist to check for phone sync tools, because phone contacts are already synchronized across all devices.`;
+When the user asks to message or contact someone (e.g. 'Priya Sharma', 'Mom'), call communicate or manage_contacts immediately; never create a checklist to check for phone sync tools, because phone contacts are already synchronized across all devices.`;

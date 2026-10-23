@@ -153,7 +153,7 @@ export async function saveExtractedTasks(
     const spoc = cleanIdentifier(t.owner);
     const normalized = normalizeHeading(heading);
     const hash = dedupeHash(ctx.sourceType, ctx.sourceRefId, heading);
-    // Email/Chat extraction is Vahdam-gated, so anything without an explicit
+    // Anything extracted without an explicit
     // classification lands on the Office tab.
     const workspace: TaskWorkspace = t.workspace ?? ctx.workspace ?? "office";
 

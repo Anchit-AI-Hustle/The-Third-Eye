@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Workflow, Pause, Play, Trash2, AlertCircle, Loader2, Clock } from "lucide-react";
 import { dataUpdate, dataDelete } from "@/lib/dataClient";
 import { formatRelativeTime } from "@/lib/utils";
+import { REMINDERS_CHANGED } from "@/lib/localReminders";
+
+// The phone app reschedules its reminder notifications on this.
+const rescheduleOnPhone = () => window.dispatchEvent(new Event(REMINDERS_CHANGED));
 
 interface Automation {
   id: string;
@@ -25,7 +29,7 @@ export function AutomationsCard() {
       const r = await fetch("/api/automations");
       if (r.status === 401 || r.status === 501) {
         setRows([]);
-        setError("Automations need cloud sync — set up the database to see and manage them here.");
+        setError("Automations need cloud sync - set up the database to see and manage them here.");
         return;
       }
       const d = (await r.json()) as { automations?: Automation[]; error?: string };
@@ -51,7 +55,9 @@ export function AutomationsCard() {
     setBusy(a.id);
     setRows((prev) => (prev ?? []).map((r) => (r.id === a.id ? { ...r, status: next } : r)));
     const ok = await dataUpdate("reminders", a.id, { status: next });
-    if (!ok) {
+    if (ok) {
+      rescheduleOnPhone();
+    } else {
       setRows((prev) => (prev ?? []).map((r) => (r.id === a.id ? { ...r, status: a.status } : r)));
       setError("Couldn't save that change.");
     }
@@ -64,6 +70,7 @@ export function AutomationsCard() {
     const ok = await dataDelete("reminders", a.id);
     if (ok) {
       setRows((prev) => (prev ?? []).filter((r) => r.id !== a.id));
+      rescheduleOnPhone();
     } else {
       setError("Couldn't delete that automation.");
       setBusy(null);
@@ -74,11 +81,11 @@ export function AutomationsCard() {
     <div className="holo-card rounded-card p-5 mt-5">
       <div className="flex items-center gap-2 mb-1">
         <Workflow size={14} className="text-[#4FC3F7]" />
-        <span className="hud-label text-[#4FC3F7]">// Automations</span>
+        <span className="hud-label text-[#4FC3F7]">Automations</span>
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Scheduled automations</h2>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
-        Recurring actions the assistant runs on your behalf. Ask it to set one up — e.g. &quot;send me a morning brief every day at 8am&quot;.
+      <p className="text-text-muted text-xs mt-1 mb-4">
+        Recurring actions the assistant runs on your behalf. Ask it to set one up - e.g. &quot;send me a morning brief every day at 8am&quot;.
       </p>
 
       {error && (
@@ -88,9 +95,9 @@ export function AutomationsCard() {
       )}
 
       {rows === null ? (
-        <p className="text-text-muted text-xs font-mono">Loading…</p>
+        <p className="text-text-muted text-xs">Loading…</p>
       ) : rows.length === 0 && !error ? (
-        <p className="text-text-muted text-xs font-mono">No automations scheduled yet.</p>
+        <p className="text-text-muted text-xs">No automations scheduled yet.</p>
       ) : (
         <ul className="divide-y divide-white/5">
           {rows.map((a) => (

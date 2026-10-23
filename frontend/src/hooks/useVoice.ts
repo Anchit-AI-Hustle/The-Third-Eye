@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { naturalVoiceOn, speakNatural, stopNatural } from "@/lib/naturalVoice";
+import { speechRecognizer } from "@/lib/speechRecognizer";
+import { downsample, encodeWav, PcmClip, TARGET_RATE } from "@/lib/pcmClip";
 
 import { useWakeLock } from "./useWakeLock";
 
@@ -27,7 +30,11 @@ export interface VoiceSTTCallbacks {
 // and the server never received audio when the browser recognizer was down.
 const SPEECH_PEAK = 0.02;
 const BARGE_PEAK = 0.12;
-const SILENCE_MS = 700;
+// A phrase ends after this much quiet. Shorter cut sentences in two at a
+// natural pause, and Whisper transcribes fragments much worse than sentences.
+const SILENCE_MS = 1100;
+// Audio kept from just before speech is detected, so the first word is whole.
+const PRE_ROLL_S = 0.5;
 // Speech has to clear the room's own level by this factor, and last this many
 // frames (~60/s), before a phrase is sent: fans, traffic and keyboard clicks
 // otherwise reach Whisper, which turns noise into "Thank you." in any language.
@@ -68,6 +75,11 @@ export function isEchoOf(transcript: string, spoken: string): boolean {
 // of it counts as echo (Infinity while it is still speaking). The recognizer
 // hands back its last words within a second or so of the voice stopping.
 const ECHO_TEXT_MS = 1_500;
+// Watchdog for the OS voice: a reply that has not started by this point was
+// dropped, and one still "speaking" well past its length lost its end event.
+const SPEECH_START_TIMEOUT_MS = 3_000;
+const SPEECH_MS_PER_CHAR = 90;
+const SPEECH_END_GRACE_MS = 4_000;
 const lastSpoken = { text: "", startedAt: 0, until: 0 };
 const ttsSpeaking = () => lastSpoken.until === Infinity;
 
@@ -109,7 +121,6 @@ export function pcmPeak(buf: Uint8Array): number {
 
 /** Record each spoken phrase and transcribe it on the server when the browser recognizer returns nothing. */
 function armUtteranceRecorder(
-  stream: MediaStream,
   analyser: AnalyserNode,
   active: () => boolean,
   suppressed: () => boolean,
@@ -121,28 +132,28 @@ function armUtteranceRecorder(
   onFail: () => void,
   skip: () => boolean,
 ): () => void {
-  if (typeof MediaRecorder === "undefined") return () => {};
-  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported?.(m)) || "";
+  const ctx = analyser.context as AudioContext;
+  if (typeof ctx.createScriptProcessor !== "function") return () => {};
   let raf = 0;
-  let rec: MediaRecorder | null = null;
-  let parts: Blob[] = [];
   let voiced = false;
   let silenceAt = 0;
   let stopped = false;
   let holdUntil = 0;
   let barged = false;
   let floor = 0;
+  let floorSeeded = false;
   let speechFrames = 0;
   const barge = createBargeDetector();
   let replyStart = 0;
+  // Raw samples rather than a MediaRecorder: see lib/pcmClip.ts.
+  const clip = new PcmClip(ctx.sampleRate, Math.round(ctx.sampleRate * PRE_ROLL_S));
+  const tap = ctx.createScriptProcessor(4096, 1, 1);
+  tap.onaudioprocess = (e) => { if (!stopped) clip.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  analyser.connect(tap);
+  tap.connect(ctx.destination);
 
   const drop = () => {
-    parts = [];
-    if (rec && rec.state === "recording") {
-      rec.onstop = null;
-      try { rec.stop(); } catch { /* already stopped */ }
-    }
-    rec = null;
+    clip.drop();
     voiced = false;
     silenceAt = 0;
     speechFrames = 0;
@@ -153,7 +164,7 @@ function armUtteranceRecorder(
     onTranscribing();
     try {
       const fd = new FormData();
-      fd.append("audio", blob, mime.includes("mp4") ? "speech.mp4" : "speech.webm");
+      fd.append("audio", blob, "speech.wav");
       const code = lang();
       if (code) fd.append("lang", code);
       const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
@@ -169,27 +180,12 @@ function armUtteranceRecorder(
   };
 
   const begin = () => {
-    if (rec && rec.state === "recording") return;
-    parts = [];
-    try {
-      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    } catch {
-      return;
-    }
-    rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
-    rec.onstop = () => {
-      const blob = new Blob(parts, { type: mime || "audio/webm" });
-      parts = [];
-      void flush(blob);
-    };
-    try { rec.start(250); } catch { rec = null; }
+    if (!clip.recording) clip.start();
   };
 
   const end = () => {
     if (speechFrames < MIN_SPEECH_FRAMES) { drop(); return; }
-    if (rec && rec.state === "recording") {
-      try { rec.stop(); } catch { /* noop */ }
-    }
+    if (clip.recording) void flush(encodeWav(downsample(clip.stop(), ctx.sampleRate, TARGET_RATE), TARGET_RATE));
     voiced = false;
     silenceAt = 0;
     speechFrames = 0;
@@ -217,7 +213,9 @@ function armUtteranceRecorder(
     barge.reset();
     barged = false;
     const threshold = Math.max(SPEECH_PEAK, floor * NOISE_MARGIN);
-    if (!voiced) floor = floor ? floor * 0.98 + peak * 0.02 : peak;
+    // Seeded once: re-seeding whenever the level read exactly zero made the
+    // first loud frame of speech the room's level, and the speaker inaudible.
+    if (!voiced) { floor = floorSeeded ? floor * 0.98 + peak * 0.02 : peak; floorSeeded = true; }
     if (peak >= threshold) {
       if (voiced) speechFrames++;
       if (Date.now() >= holdUntil) {
@@ -238,6 +236,8 @@ function armUtteranceRecorder(
     stopped = true;
     cancelAnimationFrame(raf);
     drop();
+    tap.onaudioprocess = null;
+    try { analyser.disconnect(tap); tap.disconnect(); } catch { /* already disconnected */ }
   };
 }
 
@@ -294,9 +294,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   }, []);
 
   useEffect(() => {
-    const SR = typeof window !== "undefined"
-      ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
-      : null;
+    const SR = speechRecognizer();
     const mic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
     setSupported(!!SR || mic);
 
@@ -310,8 +308,8 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const resumeCtxRef = useRef<(() => void) | null>(null);
   const srDelayRef = useRef(150);
 
-  const startMeter = useCallback(async () => {
-    if (streamRef.current) return;
+  const startMeter = useCallback(async (opened?: AudioContext) => {
+    if (streamRef.current) { void opened?.close().catch(() => {}); return; }
     const synthetic = () => {
       const tick = () => {
         if (!activeRef.current) return;
@@ -327,10 +325,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       });
       if (!activeRef.current) {
         stream.getTracks().forEach((t) => t.stop());
+        void opened?.close().catch(() => {});
         return;
       }
       streamRef.current = stream;
-      const ctx = new AudioContext();
+      const ctx = opened ?? new AudioContext();
       // Chrome/Safari can hand back a context in "suspended" state — the await
       // above breaks the direct user-gesture chain autoplay policy checks for.
       // Suspended means getByteFrequencyData reads all zeros forever, so the
@@ -354,7 +353,6 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       const time = new Uint8Array(analyser.fftSize);
       stopEarRef.current?.();
       stopEarRef.current = armUtteranceRecorder(
-        stream,
         analyser,
         () => activeRef.current,
         () => !!cbRef.current.shouldSuppress?.(),
@@ -384,6 +382,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       };
       rafRef.current = requestAnimationFrame(tick);
     } catch {
+      void opened?.close().catch(() => {});
       synthetic();
     }
   }, [emitTranscript]);
@@ -406,7 +405,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
   const enable = useCallback(async () => {
     if (activeRef.current) return;
-    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    const SRClass = speechRecognizer();
     const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
     if (!SRClass && !canMic) return;
     activeRef.current = true;
@@ -416,11 +415,16 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     srDelayRef.current = 150;
     // Mid-conversation the screen must not sleep, or the mic is suspended.
     wakeLock.acquire();
+    // Opened and resumed here, still inside the tap: Safari only runs an
+    // AudioContext started from a gesture. One made after the await below stays
+    // suspended, the level meter reads silence, and no phrase is ever recorded.
+    let ctx: AudioContext | undefined;
+    try { ctx = new AudioContext(); void ctx.resume(); } catch { /* no Web Audio */ }
 
     // Open the capture stream before the browser recognizer. Starting
     // SpeechRecognition first, then getUserMedia, leaves Chrome's recognizer
     // with a dead mic: it stays on "listening" and never returns words.
-    await startMeter();
+    await startMeter(ctx);
     if (!activeRef.current || !SRClass) return;
 
     const startRec = () => {
@@ -544,7 +548,14 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     if (!supported) return;
 
     const onVisible = () => {
-      if (document.visibilityState === "visible") forceRestart();
+      if (document.visibilityState !== "visible") return;
+      // iOS ends the microphone track while an installed app is in the
+      // background; reopen it, or the recorder hears nothing when the user returns.
+      if (activeRef.current && streamRef.current?.getAudioTracks().some((t) => t.readyState === "ended")) {
+        stopMeter();
+        void startMeter();
+      }
+      forceRestart();
     };
     document.addEventListener("visibilitychange", onVisible);
 
@@ -558,7 +569,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(watchdog);
     };
-  }, [supported, forceRestart]);
+  }, [supported, forceRestart, startMeter, stopMeter]);
 
   return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, enable, disable };
 }
@@ -703,11 +714,34 @@ export function useTTS(voicePreference?: string) {
     // "still speaking" marker set.
     if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
 
+    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
+    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
+    if (w.__jarvisDnd && !force) { onEnd?.(); return; }
+    const volume = typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1;
+    const started = () => {
+      lastSpoken.text = clean;
+      lastSpoken.startedAt = Date.now();
+      lastSpoken.until = Infinity;
+      setSpeaking(true);
+    };
+    let over = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const finished = () => {
+      if (over) return;
+      over = true;
+      clearTimeout(watchdog);
+      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+      setSpeaking(false);
+      stopKeepalive();
+      onEnd?.();
+    };
+    if (naturalVoiceOn() && (await speakNatural(clean, { volume, onStart: started, onEnd: finished }))) return;
+
     const voices = await waitForVoices(1500);
     const u = new SpeechSynthesisUtterance(clean);
     u.rate = isIOS ? 1.0 : 1.05;
     u.pitch = 0.9;
-    u.volume = 1;
+    u.volume = volume;
     const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
     const preferred =
       voices.find((v) => pattern.test(v.name)) ??
@@ -717,28 +751,28 @@ export function useTTS(voicePreference?: string) {
       voices[0];
     if (preferred) u.voice = preferred;
 
+    // iOS can drop an utterance without onstart, or play it without onend.
+    // Either leaves "speaking" set, the mic muted and call mode stuck after
+    // one reply, so both are timed out.
+    let begun = false;
     u.onstart = () => {
-      lastSpoken.text = clean;
-      lastSpoken.startedAt = Date.now();
-      lastSpoken.until = Infinity;
-      setSpeaking(true);
+      begun = true;
+      started();
       startKeepalive();
+      clearTimeout(watchdog);
+      watchdog = setTimeout(finished, clean.length * SPEECH_MS_PER_CHAR + SPEECH_END_GRACE_MS);
     };
-    const finish = () => {
-      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
-      setSpeaking(false);
-      stopKeepalive();
-      onEnd?.();
-    };
-    u.onend = finish;
-    u.onerror = finish;
+    u.onend = finished;
+    u.onerror = finished;
 
     setTimeout(() => {
-      try { window.speechSynthesis.speak(u); } catch { finish(); }
+      try { window.speechSynthesis.speak(u); } catch { finished(); return; }
+      if (!begun) watchdog = setTimeout(finished, SPEECH_START_TIMEOUT_MS);
     }, isIOS ? 80 : 0);
   }, [enabled, supported, voicePreference, startKeepalive, stopKeepalive]);
 
   const stop = useCallback(() => {
+    stopNatural();
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }

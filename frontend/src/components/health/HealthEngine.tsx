@@ -10,6 +10,7 @@ import { vaultGet, vaultSet } from "@/lib/deviceVault";
 import { recordSignal, personalizationContext, topValue } from "@/lib/personalization";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
 import { fieldsFrom, recordGeneration } from "@/lib/generations";
+import { localDay } from "@/lib/localDay";
 
 const APP = "health";
 
@@ -84,7 +85,7 @@ export function HealthEngine() {
         output: d.plan, meta: { provider: d.provider },
       });
       if (d.warning) setError(d.warning);
-    } catch { setError("Network error — your targets on the left are still accurate."); }
+    } catch { setError("Network error - your targets on the left are still accurate."); }
     finally { setLoading(false); }
   }
 
@@ -92,7 +93,7 @@ export function HealthEngine() {
     if (!plan) return;
     const blob = new Blob([plan], { type: "text/markdown" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `health-plan-${new Date().toISOString().slice(0, 10)}.md`; a.click(); URL.revokeObjectURL(a.href);
+    a.download = `health-plan-${localDay()}.md`; a.click(); URL.revokeObjectURL(a.href);
   }
 
   return (
@@ -138,12 +139,12 @@ export function HealthEngine() {
                   <Field label="Session (min)"><input type="number" value={f.sessionMinutes ?? ""} onChange={(e) => set("sessionMinutes")(e.target.value ? Number(e.target.value) : undefined)} className={inp} /></Field>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Experience"><select value={f.experience ?? ""} onChange={(e) => set("experience")((e.target.value || undefined) as any)} className={inp}><option value="">—</option><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></Field>
+                  <Field label="Experience"><select value={f.experience ?? ""} onChange={(e) => set("experience")((e.target.value || undefined) as any)} className={inp}><option value="">-</option><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></Field>
                   <Field label="Equipment" ai={aiBar("equipment", "Equipment", "home / gym / bodyweight")}><input value={f.equipment ?? ""} onChange={(e) => set("equipment")(e.target.value)} placeholder="home / gym / bodyweight" className={inp} /></Field>
                 </div>
                 <Field label="Injuries / cautions"><input value={f.injuries ?? ""} onChange={(e) => set("injuries")(e.target.value)} className={inp} /></Field>
               </>}
-              <Field label="Medical conditions"><input value={f.conditions ?? ""} onChange={(e) => set("conditions")(e.target.value)} placeholder="e.g. diabetes, PCOS — planned cautiously" className={inp} /></Field>
+              <Field label="Medical conditions"><input value={f.conditions ?? ""} onChange={(e) => set("conditions")(e.target.value)} placeholder="e.g. diabetes, PCOS - planned cautiously" className={inp} /></Field>
             </div>
           )}
 
@@ -170,7 +171,7 @@ export function HealthEngine() {
               <Stat label="Water" value={`${(targets.waterMl / 1000).toFixed(1)}L`} />
             </div>
             <div className="mt-3 text-[11px] text-text-muted">
-              Healthy weight for your height: {targets.healthyWeightRangeKg[0]}–{targets.healthyWeightRangeKg[1]} kg{targets.estWeeklyChangeKg ? ` · ~${Math.abs(targets.estWeeklyChangeKg)} kg/week` : ""}{targets.etaWeeks ? ` · ~${targets.etaWeeks} weeks to target` : ""}
+              Healthy weight for your height: {targets.healthyWeightRangeKg[0]}-{targets.healthyWeightRangeKg[1]} kg{targets.estWeeklyChangeKg ? ` · ~${Math.abs(targets.estWeeklyChangeKg)} kg/week` : ""}{targets.etaWeeks ? ` · ~${targets.etaWeeks} weeks to target` : ""}
             </div>
             {targets.warnings.length > 0 && <div className="mt-2 text-[11px] text-[#F0C94E]">{targets.warnings.map((w, i) => <div key={i}>• {w}</div>)}</div>}
           </div>

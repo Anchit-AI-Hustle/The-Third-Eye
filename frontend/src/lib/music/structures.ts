@@ -12,49 +12,49 @@ const FAMILIES: Family[] = [
   {
     keys: ["psy", "goa", "full-on", "full on", "forest", "hi-tech", "hitech", "darkpsy", "dark psy", "psycore", "trance", "acid", "rave"],
     structures: [
-      "Intro–Groove–Acid Build–Drop–Mantra Breakdown–Build–Drop–Outro",
-      "Intro–Build–Drop–Vocal Break–Drop–Acid Break–Final Drop–Outro",
-      "DJ Intro–Main Groove–Breakdown–Peak–Main Groove–DJ Outro",
-      "Intro–Kick & Bass–Lead Theme–Breakdown–Climax–Outro",
-      "Intro–Rapid Build–Drop–Glitch Break–Drop–Outro",
+      "Intro - Groove - Acid Build - Drop - Mantra Breakdown - Build - Drop - Outro",
+      "Intro - Build - Drop - Vocal Break - Drop - Acid Break - Final Drop - Outro",
+      "DJ Intro - Main Groove - Breakdown - Peak - Main Groove - DJ Outro",
+      "Intro - Kick & Bass - Lead Theme - Breakdown - Climax - Outro",
+      "Intro - Rapid Build - Drop - Glitch Break - Drop - Outro",
     ],
   },
   {
     keys: ["techno", "hardcore", "frenchcore", "speedcore", "gabber", "hardstyle", "industrial", "hardtek", "tekno"],
     structures: [
-      "Intro–Build–Drop–Break–Drop–Outro",
-      "DJ Intro–Loop A–Loop B–Break–Loop A–DJ Outro",
-      "Intro–Build–Drop–Screech Break–Build–Drop–Outro",
+      "Intro - Build - Drop - Break - Drop - Outro",
+      "DJ Intro - Loop A - Loop B - Break - Loop A - DJ Outro",
+      "Intro - Build - Drop - Screech Break - Build - Drop - Outro",
     ],
   },
   {
     keys: ["house", "edm", "dance", "electro", "garage", "amapiano"],
     structures: [
-      "Intro–Verse–Build–Drop–Verse–Build–Drop–Outro",
-      "Intro–Build–Drop–Breakdown–Build–Drop–Outro",
-      "Intro–Groove–Vocal Hook–Groove–Break–Vocal Hook–Outro",
+      "Intro - Verse - Build - Drop - Verse - Build - Drop - Outro",
+      "Intro - Build - Drop - Breakdown - Build - Drop - Outro",
+      "Intro - Groove - Vocal Hook - Groove - Break - Vocal Hook - Outro",
     ],
   },
   {
     keys: ["drum", "dnb", "d&b", "jungle", "dubstep", "riddim", "bass"],
     structures: [
-      "Intro–Build–Drop–Halftime Break–Build–Drop–Outro",
-      "Intro–Verse–Build–Drop–Verse–Drop–Outro",
+      "Intro - Build - Drop - Halftime Break - Build - Drop - Outro",
+      "Intro - Verse - Build - Drop - Verse - Drop - Outro",
     ],
   },
   {
     keys: ["hip", "rap", "trap", "drill", "boom", "grime"],
     structures: [
-      "Intro–Verse–Hook–Verse–Hook–Bridge–Hook–Outro",
-      "Intro–Hook–Verse–Hook–Verse–Hook",
-      "Intro–Verse–Pre-hook–Hook–Verse–Pre-hook–Hook–Outro",
+      "Intro - Verse - Hook - Verse - Hook - Bridge - Hook - Outro",
+      "Intro - Hook - Verse - Hook - Verse - Hook",
+      "Intro - Verse - Pre-hook - Hook - Verse - Pre-hook - Hook - Outro",
     ],
   },
   {
     keys: ["cinematic", "orchestral", "classical", "ambient", "score", "new age", "minimal"],
     structures: [
-      "Intro–Rise–Climax–Resolution",
-      "Theme–Development–Recapitulation",
+      "Intro - Rise - Climax - Resolution",
+      "Theme - Development - Recapitulation",
       "Theme and variations",
       "Through-composed (no repeats)",
     ],
@@ -62,11 +62,11 @@ const FAMILIES: Family[] = [
 ];
 
 const GENERAL = [
-  "Verse–Chorus–Verse–Chorus–Bridge–Chorus",
-  "Intro–Verse–Chorus–Verse–Chorus–Bridge–Chorus–Outro",
-  "Intro–Verse–Pre-chorus–Chorus–Verse–Pre-chorus–Chorus–Bridge–Chorus–Outro",
-  "Intro–Build–Drop–Breakdown–Drop–Outro",
-  "Intro–Theme–Solo–Theme–Outro",
+  "Verse - Chorus - Verse - Chorus - Bridge - Chorus",
+  "Intro - Verse - Chorus - Verse - Chorus - Bridge - Chorus - Outro",
+  "Intro - Verse - Pre-chorus - Chorus - Verse - Pre-chorus - Chorus - Bridge - Chorus - Outro",
+  "Intro - Build - Drop - Breakdown - Drop - Outro",
+  "Intro - Theme - Solo - Theme - Outro",
   "AABA",
   "12-bar blues",
   "Call-and-response loop",

@@ -1,0 +1,63 @@
+name: Android APK
+# The Capacitor shell APK, built on GitHub's runner (free on a public repo,
+# and its image already carries the Android SDK and JDK 21). Pull requests
+# build a debug APK to check it compiles. Builds from main are release APKs
+# signed with the one key in the ANDROID_* secrets, so each installs over the
+# last, and replace the asset on the public "android-latest" release that the
+# site's /install page links for a one-tap download.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["android/**", "capacitor.config.ts", "package.json", "package-lock.json"]
+  pull_request:
+    paths: ["android/**", "capacitor.config.ts", "package.json", "package-lock.json", ".github/workflows/android-apk.yml"]
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npx cap sync android
+      - run: ./gradlew assembleDebug --no-daemon
+        if: github.event_name == 'pull_request'
+        working-directory: android
+      - name: Build the signed release APK
+        if: github.event_name != 'pull_request'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::Set the ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD repository secrets (NATIVE_BUILD.md)."
+            exit 1
+          fi
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../the-third-eye.apk
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --print-certs ../the-third-eye.apk | grep -m1 "SHA-256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: jarvis-apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            the-third-eye.apk
+          if-no-files-found: error
+      - name: Publish to the android-latest release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "Android app" --notes "Install: open the-third-eye.apk on your phone and allow installs from your browser. The app loads the live site, so it stays current."
+          gh release upload android-latest the-third-eye.apk --clobber

@@ -23,7 +23,7 @@ export default function TasksError({
           Task tracker error
         </h2>
         <p className="text-text-secondary text-sm mb-5">
-          Something went wrong with the task tracker. Your tasks are safe — try refreshing.
+          Something went wrong with the task tracker. Your tasks are safe - try refreshing.
         </p>
         <div className="flex items-center justify-center gap-3">
           <button

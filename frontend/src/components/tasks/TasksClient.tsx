@@ -6,7 +6,7 @@ import { useLocalTasks, LocalTask, TaskStatus, TaskPriority, TaskWorkspace, Team
 import {
   Plus, Search, Download, Upload, Users, X, ChevronDown, Edit2, Trash2,
   LayoutGrid, List, AlertCircle, Check, Mail, MessageSquare, Mic, User,
-  Briefcase, Heart, MonitorSmartphone, Bot,
+  Briefcase, Heart, MonitorSmartphone, Bot, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isOverdue, isDueSoon } from "@/lib/taskDates";
@@ -15,6 +15,8 @@ import { useAgentProfile, type AgentProfile } from "@/hooks/useAgentProfile";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { AUTOPILOT_RUN, autopilotOff, setAutopilotOff } from "@/components/tasks/TaskAutopilot";
+import { localDay } from "@/lib/localDay";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -23,10 +25,10 @@ type SortKey = "title" | "assignee" | "start_date" | "due_date" | "priority" | "
 
 const STATUS_OPTIONS = TASK_STATUSES;
 
-// Tab split: Office = Vahdam work, Personal = everything else. Tasks without a
-// workspace (legacy rows, Vahdam-gated email/chat extraction) land on Office.
+// Tab split: Office = work, Personal = everything else. Tasks without a
+// workspace (legacy rows from email/chat extraction) land on Office.
 const WORKSPACES: { value: TaskWorkspace; label: string; icon: typeof Briefcase }[] = [
-  { value: "office", label: "Office · Vahdam", icon: Briefcase },
+  { value: "office", label: "Office", icon: Briefcase },
   { value: "personal", label: "Personal", icon: Heart },
 ];
 const WS_KEY = "te_tasks_workspace_v1";
@@ -58,7 +60,7 @@ const STATUS_STYLE: Record<TaskStatus, string> = {
 };
 
 function fmtDate(iso?: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -145,7 +147,7 @@ export function TasksClient() {
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `thirdeye-tasks-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `thirdeye-tasks-${localDay()}.csv`;
     a.click(); URL.revokeObjectURL(url);
   }
 
@@ -204,10 +206,11 @@ export function TasksClient() {
           <span className="text-text-muted text-sm font-mono">{allTasks.length} tasks</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <AutopilotToggle className={btn} />
           <button onClick={exportCSV} className={btn}>
             <Download size={13} /> Export
           </button>
-          <button onClick={() => fileRef.current?.click()} className={btn}>
+          <button onClick={() => fileRef.current?.click()} className={btn} title="CSV is read in your browser; imported rows are saved as tasks">
             <Upload size={13} /> Import
           </button>
           <input ref={fileRef} type="file" accept=".csv" className="hidden"
@@ -221,7 +224,7 @@ export function TasksClient() {
             )}
           </button>
           <button onClick={openNew}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-input bg-accent-blue text-background-base text-sm font-medium hover:bg-accent-blue/90 transition-colors">
             <Plus size={14} /> New Task
           </button>
         </div>
@@ -280,11 +283,11 @@ export function TasksClient() {
 
         <div className="flex rounded-card border border-border-default overflow-hidden">
           <button onClick={() => setView("table")} className={cn("px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
-            view === "table" ? "bg-accent-blue text-white" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
+            view === "table" ? "bg-accent-blue text-background-base" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
             <List size={13} /> Table
           </button>
           <button onClick={() => setView("kanban")} className={cn("px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-border-default",
-            view === "kanban" ? "bg-accent-blue text-white" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
+            view === "kanban" ? "bg-accent-blue text-background-base" : "bg-background-surface text-text-secondary hover:text-text-primary")}>
             <LayoutGrid size={13} /> Kanban
           </button>
         </div>
@@ -381,11 +384,12 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                         {t.description && <p className="text-text-muted text-xs mt-0.5 truncate">{t.description}</p>}
                       </div>
                       <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                      <AutopilotBadge status={t.autopilot_status} />
                       <PillarBadge pillar={t.growth_pillar} />
                       <AgentChip id={t.agent} profiles={profiles} />
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "—"}</td>
+                  <td className="px-4 py-3 text-text-secondary whitespace-nowrap">{t.assignee || "-"}</td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.start_date)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {t.due_date ? (
@@ -394,7 +398,7 @@ function TableView({ tasks, profiles, sortKey, sortAsc, onSort, onEdit, onDelete
                         {overdue && <span className="block text-[10px]">(overdue)</span>}
                         {dueSoon && <span className="block text-[10px]">(due soon)</span>}
                       </span>
-                    ) : <span className="text-text-muted">—</span>}
+                    ) : <span className="text-text-muted">-</span>}
                   </td>
                   <td className="px-4 py-3 text-text-muted whitespace-nowrap">{fmtDate(t.completed_at)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -480,6 +484,8 @@ function KanbanView({ tasks, profiles, onEdit, onStatusChange }: {
                       <p className="text-text-primary text-sm leading-snug">{t.title}</p>
                       <div className="flex items-center gap-1 flex-none">
                         <SourceBadge type={t.source_type} link={t.source_link} detail={t.source_detail} />
+                        <AutopilotBadge status={t.autopilot_status} />
+                      <AutopilotBadge status={t.autopilot_status} />
                         <PillarBadge pillar={t.growth_pillar} />
                         <AgentChip id={t.agent} profiles={profiles} />
                       </div>
@@ -576,7 +582,7 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
           <div className="grid grid-cols-2 gap-3">
             <Field label="Assignee">
               <select value={form.assignee} onChange={f("assignee")} className={inputCls}>
-                <option value="">— Unassigned —</option>
+                <option value="">- Unassigned -</option>
                 {team.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
               </select>
             </Field>
@@ -589,7 +595,7 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
 
           <Field label="AI Agent">
             <select value={form.agent} onChange={f("agent")} className={inputCls}>
-              <option value="">— No agent appointed —</option>
+              <option value="">- No agent appointed -</option>
               {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </Field>
@@ -619,6 +625,23 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
             </Field>
           </div>
 
+          {task && (
+            <Field label="JARVIS autopilot">
+              <div className="space-y-2">
+                {task.autopilot_report && (
+                  <div className="max-h-48 overflow-y-auto rounded-input border border-border-default bg-background-surface px-3 py-2">
+                    <pre className="text-xs text-text-secondary whitespace-pre-wrap leading-relaxed">{task.autopilot_report}</pre>
+                  </div>
+                )}
+                <button type="button" disabled={task.autopilot_status === "running"}
+                  onClick={() => window.dispatchEvent(new CustomEvent(AUTOPILOT_RUN, { detail: task.id }))}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input border border-accent-blue/40 bg-accent-blue/10 text-accent-blue text-xs font-medium disabled:opacity-50">
+                  <Bot size={13} /> {task.autopilot_status === "running" ? "JARVIS is working on it" : task.autopilot_status ? "Run again with JARVIS" : "Run with JARVIS"}
+                </button>
+              </div>
+            </Field>
+          )}
+
           {task?.all_updates && (
             <Field label="Update trail">
               <div className="max-h-32 overflow-y-auto rounded-input border border-border-default bg-background-surface px-3 py-2">
@@ -633,7 +656,7 @@ function ActionModal({ task, team, profiles, defaultWorkspace, onSave, onClose }
               Cancel
             </button>
             <button type="submit"
-              className="px-4 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors flex items-center gap-2">
+              className="px-4 py-2 rounded-input bg-accent-blue text-background-base text-sm font-medium hover:bg-accent-blue/90 transition-colors flex items-center gap-2">
               <Check size={14} /> Save
             </button>
           </div>
@@ -666,7 +689,7 @@ function TeamModal({ team, newName, onNameChange, onAdd, onRemove, onClose }: {
             <input value={newName} onChange={(e) => onNameChange(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onAdd()}
               placeholder="Member name…" className={cn(inputCls, "flex-1")} />              <button onClick={onAdd} disabled={!newName.trim()} aria-label="Add team member"
-              className="px-3 py-2 rounded-input bg-accent-blue text-white text-sm disabled:opacity-40 transition-colors">
+              className="px-3 py-2 rounded-input bg-accent-blue text-background-base text-sm disabled:opacity-40 transition-colors">
               <Plus size={14} aria-hidden="true" />
             </button>
           </div>
@@ -715,9 +738,40 @@ function PillarBadge({ pillar }: { pillar?: string }) {
   );
 }
 
+const AUTOPILOT_META: Record<string, { label: string; color: string }> = {
+  running: { label: "Agent working", color: "#4FC3F7" },
+  done: { label: "Done by agent", color: "#34D399" },
+  needs_you: { label: "Needs you", color: "#F0C94E" },
+  failed: { label: "Agent failed", color: "#F87171" },
+};
+
+function AutopilotBadge({ status }: { status?: string | null }) {
+  const meta = status ? AUTOPILOT_META[status] : undefined;
+  if (!meta) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border flex-none"
+      style={{ color: meta.color, borderColor: `${meta.color}55` }}>
+      {status === "running" ? <Loader2 size={10} className="animate-spin" /> : <Bot size={10} />} {meta.label}
+    </span>
+  );
+}
+
+// Autopilot works every open task, as the selected agent, unless switched off on this device.
+function AutopilotToggle({ className }: { className: string }) {
+  const [off, setOff] = useState(false);
+  useEffect(() => setOff(autopilotOff()), []);
+  return (
+    <button type="button" className={className} aria-pressed={!off}
+      title="When on, your selected agent works every open task, each in its own run, a few at a time"
+      onClick={() => { setAutopilotOff(!off); setOff(!off); }}>
+      <Bot size={13} /> Autopilot {off ? "off" : "on"}
+    </button>
+  );
+}
+
 function SourceBadge({ type, link, detail }: { type?: string; link?: string; detail?: string }) {
   if (!type) return null;
-  const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#7878A8" };
+  const meta = SOURCE_META[type.toLowerCase()] ?? { label: type, icon: User, color: "#8E8EBC" };
   const Icon = meta.icon;
   const inner = (
     <span
@@ -741,7 +795,7 @@ function AgentChip({ id, profiles }: { id?: string; profiles: AgentProfile[] }) 
   const p = profiles.find((x) => x.id === id);
   // Custom profiles live in this browser's localStorage; on another device the
   // id won't resolve — keep the appointment visible instead of dropping it.
-  const color = p?.accentColor ?? "#7878A8";
+  const color = p?.accentColor ?? "#8E8EBC";
   const label = p ? p.name.replace(/\./g, "") : "Custom agent";
   return (
     <span

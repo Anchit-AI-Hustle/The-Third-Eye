@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { ConvType, useCapture } from "./CaptureContext";
 import { useCapability } from "@/components/permission/PermissionProvider";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const TYPE_META: Record<ConvType, { label: string; color: string }> = {
   meeting:    { label: "Meeting",    color: "#4F8EF7" },
@@ -14,7 +15,7 @@ const TYPE_META: Record<ConvType, { label: string; color: string }> = {
   work:       { label: "Work",       color: "#4FC3F7" },
   personal:   { label: "Personal",   color: "#34D399" },
   learning:   { label: "Learning",   color: "#F0C94E" },
-  other:      { label: "Other",      color: "#7878A8" },
+  other:      { label: "Other",      color: "#8E8EBC" },
 };
 
 export function CaptureClient() {
@@ -41,9 +42,12 @@ export function CaptureClient() {
 
       {/* Control bar */}
       <div className="rounded-card border border-border-default bg-background-surface/40 p-4 sm:p-5">
+        <CaptureNote id="live-capture" className="mb-3">
+          Your browser transcribes; every 20 s the text goes to an AI provider to find tasks. Tasks are saved to your account, the transcript only in this browser.
+        </CaptureNote>
         <div className="flex flex-wrap items-center gap-3">
           {!supported ? (
-            <p className="text-sm text-accent-red">Live transcription needs the Web Speech API — try Chrome or Edge.</p>
+            <p className="text-sm text-accent-red">Live transcription needs the Web Speech API - try Chrome or Edge.</p>
           ) : !listening ? (
             <button onClick={startListening} className="flex items-center gap-2 px-4 py-2.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-sm font-semibold hover:brightness-110">
               <Mic size={16} /> Start listening
@@ -88,7 +92,7 @@ export function CaptureClient() {
             </span>
           )}
           <span className="text-text-muted flex items-center gap-1" title="Web browsers cannot record audio when the tab is hidden or the screen is off. For always-on background capture, use the desktop agent.">
-            <AlertTriangle size={11} /> Foreground only — background capture needs the desktop app
+            <AlertTriangle size={11} /> Foreground only - background capture needs the desktop app
           </span>
         </div>
 
@@ -102,7 +106,7 @@ export function CaptureClient() {
                   <Check size={12} className="text-[#34D399] flex-none" />
                   <span className="text-text-secondary flex-1 min-w-0 truncate">{a.title}</span>
                   <button onClick={() => undoAutoAdd(a.rowId)}
-                    className="flex items-center gap-1 text-text-muted hover:text-accent-red flex-none" title="Undo — remove from Tracker">
+                    className="flex items-center gap-1 text-text-muted hover:text-accent-red flex-none" title="Undo - remove from Tracker">
                     <Undo2 size={12} /> Undo
                   </button>
                 </div>
@@ -209,12 +213,12 @@ function IngestStatusPanel() {
       const res = await fetch("/api/ingest/run", { method: "POST" });
       const d = await res.json();
       if (d.skipped === "not configured") { setResult("Server storage isn't configured (DATABASE_URL). Scraping can't run."); return; }
-      if (d.skipped === "cooldown") { setResult("Just scanned — try again in a moment."); return; }
+      if (d.skipped === "cooldown") { setResult("Just scanned - try again in a moment."); return; }
       const r = d.gmail;
       setResult(!r ? "Scan complete." : r.skipped ? "Gmail: not connected" : r.error ? "Gmail: error" : `Gmail: ${r.inserted ?? 0} new, ${r.merged ?? 0} merged`);
       if (d.changed) window.dispatchEvent(new CustomEvent("te:tasks-updated"));
     } catch {
-      setResult("Scan failed — check your connection.");
+      setResult("Scan failed - check your connection.");
     } finally { setScanning(false); }
   }
 
@@ -249,7 +253,7 @@ function IngestStatusPanel() {
       </div>
       {(!conn?.connected) && (
         <p className="mt-2 text-xs text-text-muted">
-          Signing in doesn’t grant inbox access — connect here to let the assistant read Gmail and turn it into tasks. Scans also run automatically every 15 minutes once connected.
+          Signing in doesn’t grant inbox access - connect here to let the assistant read Gmail and turn it into tasks. Scans also run automatically every 15 minutes once connected.
         </p>
       )}
       {result && <p className="mt-2 text-xs text-[#4FC3F7] font-mono">{result}</p>}
@@ -261,7 +265,7 @@ function StatusDot({ on, label }: { on: boolean; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-text-muted">
       <span className={`w-2 h-2 rounded-full ${on ? "bg-[#34D399]" : "bg-text-muted/40"}`} />
-      {label} {on ? "" : <span className="text-text-muted/60">off</span>}
+      {label} {on ? "" : <span className="text-text-muted">off</span>}
     </span>
   );
 }

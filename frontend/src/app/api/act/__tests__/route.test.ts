@@ -44,6 +44,15 @@ vi.mock("@/lib/mcp/client", () => ({
   isMcpTool: (t: string) => t.startsWith("mcp__"),
 }));
 
+let githubToken: string | null = "gho_x";
+vi.mock("@/lib/github", () => ({ getGithubAccessToken: async () => (githubToken ? { token: githubToken } : null) }));
+const generateApp = vi.fn();
+const publishApp = vi.fn();
+vi.mock("@/lib/appBuilder", () => ({
+  generateApp: (...a: unknown[]) => generateApp(...a),
+  publishApp: (...a: unknown[]) => publishApp(...a),
+}));
+
 async function post(body: unknown, headers: Record<string, string> = {}) {
   const { POST } = await import("@/app/api/act/route");
   const res = await POST({ json: () => Promise.resolve(body), headers: new Headers(headers) } as any);
@@ -124,7 +133,7 @@ describe("what the endpoint accepts", () => {
     expect(String(body.error)).toMatch(/non-confirmable/i);
   });
 
-  it("rejects communicate's deep-link modes — they are not confirmed here", async () => {
+  it("rejects communicate's deep-link modes - they are not confirmed here", async () => {
     // whatsapp/sms/call open a prefilled app on the tap; routing them through
     // this endpoint would mean a send with no app involved.
     for (const action of ["whatsapp", "sms", "call", "read_emails"]) {
@@ -170,7 +179,7 @@ describe("confirmed connector writes", () => {
     expect(callMcpTool).toHaveBeenCalledWith("mcp__google__gmail_send", { to: "a@b.com" }, SIGNED_IN);
   });
 
-  it("does not accept an MCP read here — reads never need confirming", async () => {
+  it("does not accept an MCP read here - reads never need confirming", async () => {
     const { status } = await post({ tool: "mcp__google__gmail_search", args: { query: "x" } });
     expect(status).toBe(400);
     expect(callMcpTool).not.toHaveBeenCalled();
@@ -191,5 +200,44 @@ describe("recipient integrity", () => {
     const { body } = await post({ tool: "communicate", args: { ...EMAIL_ARGS, to } });
     expect(body.ok).toBe(false);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmed build_app", () => {
+  const ARGS = { name: "todo", description: "a todo list" };
+  beforeEach(() => {
+    githubToken = "gho_x";
+    generateApp.mockReset().mockResolvedValue([{ path: "index.html", content: "<h1>x</h1>" }]);
+    publishApp.mockReset().mockResolvedValue({ repoUrl: "https://github.com/me/todo", pagesUrl: "https://me.github.io/todo/", pages: true });
+  });
+
+  it("builds and publishes, and gives the live link", async () => {
+    const { body } = await post({ tool: "build_app", args: ARGS });
+    expect(body.ok).toBe(true);
+    expect(body.openUrl).toBe("https://me.github.io/todo/");
+    expect(publishApp).toHaveBeenCalledWith("gho_x", "todo", "a todo list", [{ path: "index.html", content: "<h1>x</h1>" }]);
+  });
+
+  it("creates nothing when GitHub isn't connected", async () => {
+    githubToken = null;
+    const { body } = await post({ tool: "build_app", args: ARGS });
+    expect(body.ok).toBe(false);
+    expect(generateApp).not.toHaveBeenCalled();
+    expect(publishApp).not.toHaveBeenCalled();
+  });
+
+  it("creates nothing when the generated app is unusable", async () => {
+    generateApp.mockResolvedValue("The app has no index.html, so there is nothing for Pages to serve.");
+    const { body } = await post({ tool: "build_app", args: ARGS });
+    expect(body.ok).toBe(false);
+    expect(body.result).toMatch(/Nothing was created/);
+    expect(publishApp).not.toHaveBeenCalled();
+  });
+
+  it("does not hand out a Pages link that won't work", async () => {
+    publishApp.mockResolvedValue({ repoUrl: "https://github.com/me/todo", pagesUrl: "https://me.github.io/todo/", pages: false, pagesError: "GitHub 403" });
+    const { body } = await post({ tool: "build_app", args: ARGS });
+    expect(body.openUrl).toBe("https://github.com/me/todo");
+    expect(body.result).toMatch(/could not be turned on/);
   });
 });

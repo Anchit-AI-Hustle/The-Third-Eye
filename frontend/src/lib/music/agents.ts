@@ -37,10 +37,10 @@ const num = (v: unknown, lo: number, hi: number, dflt: number) => {
 export async function musicologist(i: MusicInput): Promise<MusicBrief> {
   const kb = knowledgeContext(i);
   const system = [
-    "You are a world-class musicologist and ethnomusicologist with encyclopaedic knowledge of every genre across the world and through history — its origins, instrumentation, rhythm, structure, and cultural context.",
+    "You are a world-class musicologist and ethnomusicologist with encyclopaedic knowledge of every genre across the world and through history - its origins, instrumentation, rhythm, structure, and cultural context.",
     "Given a music request and knowledge-base grounding, produce a precise musical BRIEF the production team will build from.",
     "Honour the user's explicit choices (genre, tempo, instruments, mood) but enrich them with accurate, genre-idiomatic detail. A tempo hint is the user's chosen BPM: use it exactly, even far outside the genre's usual range. Blend genres faithfully when several are named (e.g. 'hard techno + psy acid' = fast distorted kicks + rolling acid basslines).",
-    "Output ONLY a JSON object — no prose, no markdown — with keys:",
+    "Output ONLY a JSON object - no prose, no markdown - with keys:",
     "genre, subgenre, region, era, bpm (number), timeSignature, key, instruments (string[]), structure (string), moods (string[]), energy (1-10 number), vocalStyle (string; 'instrumental' if no vocals), referenceArtists (string[]; for feel only), culturalContext (1-2 sentences), productionNotes (string).",
   ].join("\n");
   const user = [
@@ -89,7 +89,7 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
 export async function beatSmith(i: MusicInput, brief: MusicBrief): Promise<BeatSpec> {
   const system = [
     "You are an elite music producer and beat-maker. From a musical brief, design the arrangement and write the PROMPT for a text-to-music model (MusicGen / Stable Audio / ACE-Step).",
-    "The model prompt must be a single vivid paragraph (max ~60 words) that opens with the exact BPM, then genre, groove, key instruments and sound design — concrete and production-specific, no fluff.",
+    "The model prompt must be a single vivid paragraph (max ~60 words) that opens with the exact BPM, then genre, groove, key instruments and sound design - concrete and production-specific, no fluff.",
     "Output ONLY JSON with keys: modelPrompt (string), styleTags (string; comma-separated descriptors), negativePrompt (string; what to avoid), tempo (number BPM), arrangement (string; brief section-by-section beat/production plan).",
   ].join("\n");
   const user = [
@@ -137,7 +137,7 @@ export function songSubject(description: string): string {
 
 export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string> {
   const langs = (i.vocalLanguage || "English").split(",").map((l) => l.trim()).filter(Boolean);
-  const structure = i.structure || brief.structure || "Verse–Chorus–Verse–Chorus–Bridge–Chorus";
+  const structure = i.structure || brief.structure || "Verse-Chorus-Verse-Chorus-Bridge-Chorus";
   const sections = sectionsOf(structure);
   const light = VOCAL_LIGHT.test(`${brief.genre} ${brief.subgenre ?? ""} ${i.genre ?? ""}`);
   const system = [
@@ -148,21 +148,21 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
       ? `Use EXACTLY these section tags, in this order, each on its own line in lowercase square brackets: ${sections.map((x) => `[${x}]`).join(" ")}. Do not add, rename or skip sections.`
       : "Use lowercase section tags on their own line: [intro], [verse], [pre-chorus], [chorus], [bridge], [outro].",
     light
-      ? "This is club music, so vocals are sparse: mantras, chants, vocal shots and short hooks of 2–6 words per line, at most 4 lines in any section. Purely instrumental sections (builds, drops, grooves, DJ intro/outro) get only their tag line, or a single short vocal shot where the genre uses one. Repetition is a feature: the hook returns word-for-word."
-      : "Verses carry the story in 4–8 lines; the chorus is the hook and repeats word-for-word each time; keep lines short and rhythmic.",
+      ? "This is club music, so vocals are sparse: mantras, chants, vocal shots and short hooks of 2-6 words per line, at most 4 lines in any section. Purely instrumental sections (builds, drops, grooves, DJ intro/outro) get only their tag line, or a single short vocal shot where the genre uses one. Repetition is a feature: the hook returns word-for-word."
+      : "Verses carry the story in 4-8 lines; the chorus is the hook and repeats word-for-word each time; keep lines short and rhythmic.",
     langs.length > 1
-      ? `Languages: ${langs.join(", ")}. Give each language a deliberate role (for example the mantra or hook in one, the verses in another) — never translate the same line into every language. Each line is entirely in one language.`
+      ? `Languages: ${langs.join(", ")}. Give each language a deliberate role (for example the mantra or hook in one, the verses in another) - never translate the same line into every language. Each line is entirely in one language.`
       : `Language: ${langs[0]}.`,
     "Write Sanskrit, Hindi and other Indic languages in simple romanized transliteration (e.g. \"om namah shivaya\"), which the singing model pronounces far more reliably than Devanagari.",
-    "Finish every section you open. Output ONLY the tagged lyrics — no title, notes, markdown or quotes.",
+    "Finish every section you open. Output ONLY the tagged lyrics - no title, notes, markdown or quotes.",
   ].join("\n");
   const user = [
-    `Title: ${i.title || "(untitled)"} — a title may be the hook only when it is not the request itself.`,
+    `Title: ${i.title || "(untitled)"} - a title may be the hook only when it is not the request itself.`,
     i.description ? `Production brief (never sing these words): ${i.description}` : `Feel: ${brief.culturalContext}`,
     `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM, energy ${brief.energy}/10`,
     `Vocal style: ${brief.vocalStyle}`,
-    i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 — sparser, softer lines toward 1 (whispered/intimate), bigger declamatory lines toward 10 (belted/anthemic).` : "",
-    i.vocalEffects ? `Vocal effects the production will add: ${i.vocalEffects} — write lines that suit them (e.g. short phrases for heavy delay).` : "",
+    i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 - sparser, softer lines toward 1 (whispered/intimate), bigger declamatory lines toward 10 (belted/anthemic).` : "",
+    i.vocalEffects ? `Vocal effects the production will add: ${i.vocalEffects} - write lines that suit them (e.g. short phrases for heavy delay).` : "",
     i.artistInspiration ? `Vibe reference (feel only, never their words): ${i.artistInspiration}` : "",
     `Structure: ${structure}`,
   ].filter(Boolean).join("\n");
@@ -278,7 +278,7 @@ export function fallbackBrief(i: MusicInput): MusicBrief {
     energy: num(i.energy, 1, 10, 6),
     vocalStyle: i.vocals === false ? "instrumental" : (i.vocalStyle || kb?.vocalStyle || "expressive"),
     referenceArtists: kb?.artists ?? [],
-    culturalContext: kb ? `${kb.name} — ${kb.region}, ${kb.era}.` : "",
+    culturalContext: kb ? `${kb.name} - ${kb.region}, ${kb.era}.` : "",
     productionNotes: kb?.production ?? "",
   };
 }

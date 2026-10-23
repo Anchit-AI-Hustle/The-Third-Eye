@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Card3D } from "@/components/hud/Card3D";
 import {
   MessageSquare, CheckSquare, Radio, FileText, Target, BookOpen,
   BarChart2, Sparkles, ShieldCheck, ArrowRight, Activity, Settings, Wand2, Briefcase, LayoutGrid,
@@ -13,6 +14,8 @@ import { useLocalKnowledge } from "@/hooks/useLocalKnowledge";
 import { useLocalExpenses } from "@/hooks/useLocalExpenses";
 
 import { getAgentLog, isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
+import { localDay } from "@/lib/localDay";
+import { reducedMotion } from "@/lib/motion";
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
@@ -48,7 +51,7 @@ export function DashboardWidgets() {
     const avgGoal = goals.length
       ? Math.round(goals.reduce((s, g) => s + (g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0), 0) / goals.length)
       : 0;
-    const month = new Date().toISOString().slice(0, 7);
+    const month = localDay().slice(0, 7);
     const spend = expenses.filter((e) => e.spent_on?.startsWith(month)).reduce((s, e) => s + (e.amount || 0), 0);
     return { open: open.length, urgent: urgent.length, avgGoal, spend };
   }, [allTasks, goals, expenses]);
@@ -56,12 +59,12 @@ export function DashboardWidgets() {
   const widgets = [
     { href: "/assistant", icon: MessageSquare, label: "Assistant", stat: "Ask anything", sub: "voice + actions", color: "#4FC3F7" },
     { href: "/apps", icon: LayoutGrid, label: "Apps", stat: "Open apps", sub: "daily apps + emergencies", color: "#34D399" },
-    { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: dataReady ? `${stats.open} open` : "—", sub: dataReady ? `${stats.urgent} urgent` : "Manage tasks", color: "#4FC3F7" },
+    { href: "/tasks", icon: CheckSquare, label: "Task Tracker", stat: dataReady ? `${stats.open} open` : "-", sub: dataReady ? `${stats.urgent} urgent` : "Manage tasks", color: "#4FC3F7" },
     { href: "/tasks", icon: Radio, label: "Live Capture", stat: "Capture", sub: "mic + inbox → tracker", color: "#F05B8D" },
-    { href: "/notes", icon: FileText, label: "Notes", stat: dataReady ? `${notes.length}` : "—", sub: "captured", color: "#F0C94E" },
-    { href: "/goals", icon: Target, label: "Goals", stat: dataReady ? `${stats.avgGoal}%` : "—", sub: "avg progress", color: "#34D399" },
-    { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: dataReady ? `${docs.length}` : "—", sub: "documents", color: "#A78BFA" },
-    { href: "/finance", icon: BarChart2, label: "Finance", stat: dataReady ? `₹${inr.format(Math.round(stats.spend))}` : "—", sub: "this month", color: "#4F8EF7" },
+    { href: "/notes", icon: FileText, label: "Notes", stat: dataReady ? `${notes.length}` : "-", sub: "captured", color: "#F0C94E" },
+    { href: "/goals", icon: Target, label: "Goals", stat: dataReady ? `${stats.avgGoal}%` : "-", sub: "avg progress", color: "#34D399" },
+    { href: "/knowledge", icon: BookOpen, label: "Knowledge", stat: dataReady ? `${docs.length}` : "-", sub: "documents", color: "#A78BFA" },
+    { href: "/finance", icon: BarChart2, label: "Finance", stat: dataReady ? `₹${inr.format(Math.round(stats.spend))}` : "-", sub: "this month", color: "#4F8EF7" },
     { href: "/tools", icon: Wand2, label: "Studio", stat: "Create", sub: "pages · mailers · more", color: "#A78BFA" },
     { href: "/job-agent", icon: Briefcase, label: "Job Agent", stat: "Apply", sub: "search · tailor · track", color: "#4FC3F7" },
     { href: "/capabilities", icon: Sparkles, label: "Capabilities", stat: "Explore", sub: "what it can do", color: "#4FC3F7" },
@@ -76,7 +79,7 @@ export function DashboardWidgets() {
     let ctx: { revert: () => void } | undefined;
     import("gsap").then(({ gsap }) => {
       if (!root.current) return;
-      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const reduce = reducedMotion();
       ctx = gsap.context(() => {
         const items = gsap.utils.toArray<HTMLElement>("[data-widget]");
         if (reduce) { gsap.set(items, { opacity: 1, y: 0 }); return; }
@@ -97,19 +100,27 @@ export function DashboardWidgets() {
         {widgets.map((w) => {
           const Icon = w.icon;
           return (
-            <Link key={w.href} href={w.href} data-widget
-              className="group holo-card rounded-card p-4 hud-frame relative overflow-hidden hover:-translate-y-0.5 transition-transform duration-150">
-              <div className="flex items-center justify-between mb-3">
+            // The entrance animation moves the outer wrapper and the tilt turns
+            // the card inside it, so the two never fight over one transform.
+            <div key={w.label} data-widget>
+            <Card3D intensity={9} lift={10} className="rounded-card h-full">
+            <Link href={w.href}
+              className="group holo-card rounded-card p-4 relative overflow-hidden preserve-3d block h-full">
+              <div className="flex items-center justify-between mb-3 depth-2">
                 <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-none"
                   style={{ background: `${w.color}1A`, color: w.color }}>
                   <Icon size={16} />
                 </span>
                 <ArrowRight size={13} className="text-text-muted group-hover:text-[#4FC3F7] group-hover:translate-x-0.5 transition-all" />
               </div>
-              <div className="text-lg font-semibold text-text-primary tabular-nums leading-none">{w.stat}</div>
-              <div className="text-xs text-text-secondary mt-1">{w.label}</div>
-              <div className="text-[10px] text-text-muted font-mono mt-0.5">{w.sub}</div>
+              <div className="depth-1">
+                <div className="text-lg font-semibold text-text-primary tabular-nums leading-none">{w.stat}</div>
+                <div className="text-xs text-text-secondary mt-1">{w.label}</div>
+                <div className="text-xs text-text-muted mt-0.5">{w.sub}</div>
+              </div>
             </Link>
+            </Card3D>
+            </div>
           );
         })}
       </div>

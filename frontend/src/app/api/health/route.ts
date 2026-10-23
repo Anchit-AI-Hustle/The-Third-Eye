@@ -16,7 +16,6 @@ export async function GET() {
 
   const providers = {
     openai:    [env.OPENAI_API_KEY, env.OPENAI_API_KEY_2, env.OPENAI_API_KEY_3].map(clean).filter(Boolean).length,
-    anthropic: !!clean(env.ANTHROPIC_API_KEY),
     gemini:    !!(clean(env.GEMINI_API_KEY) || clean(env.GOOGLE_API_KEY)),
     grok:      !!clean(env.XAI_API_KEY),
     groq:      !!clean(env.GROQ_API_KEY),
@@ -33,7 +32,7 @@ export async function GET() {
   };
 
   const llm_available =
-    providers.openai > 0 || providers.anthropic || providers.gemini ||
+    providers.openai > 0 || providers.gemini ||
     providers.grok || providers.groq || providers.cerebras || providers.ollama;
 
   // VERCEL_GIT_COMMIT_SHA is a system env var, so it is only populated when the

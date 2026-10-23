@@ -22,7 +22,7 @@ const STORES = [
 const words = (t: string) => (t.trim() ? t.trim().split(/\s+/).length : 0);
 
 function save(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage full or blocked — the draft stays on screen */ }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage full or blocked - the draft stays on screen */ }
 }
 
 function download(name: string, data: BlobPart, type: string) {
@@ -143,7 +143,7 @@ export function BookWriter({ outline, inputs, accent }: { outline: string; input
   }
 
   if (!chapters.length) {
-    return <p className="border-t border-border-default p-5 text-xs text-warning">The outline has no “### Chapter N: …” headings to write from — plan the book again.</p>;
+    return <p className="border-t border-border-default p-5 text-xs text-warning">The outline has no “### Chapter N: …” headings to write from - plan the book again.</p>;
   }
 
   const btn = "flex items-center gap-1.5 px-2.5 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary disabled:opacity-50";
@@ -166,7 +166,7 @@ export function BookWriter({ outline, inputs, accent }: { outline: string; input
         </div>
       </div>
       {chapters.length < (Number(inputs.chapters) || 0) && (
-        <p className="text-xs text-warning">The outline came back with {chapters.length} of the {inputs.chapters} chapters asked for — plan the book again for the full set.</p>
+        <p className="text-xs text-warning">The outline came back with {chapters.length} of the {inputs.chapters} chapters asked for - plan the book again for the full set.</p>
       )}
       <p className="text-xs text-text-muted">
         Each chapter is written in order, about {perChapter.toLocaleString("en-IN")} words, picking up from how the last one ended. The draft is kept in this browser as you go; edit any chapter before you export.

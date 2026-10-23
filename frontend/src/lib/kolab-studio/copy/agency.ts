@@ -5,7 +5,7 @@ export const agencyCopy: CopyDict = {
   homeEyebrow: "Every client, one cockpit",
   homeTitle: "Run every client from one place",
   homeSubtitle:
-    "Client workspaces, approvals, white-label reporting and a managed creator roster — with strict data isolation.",
+    "Client workspaces, approvals, white-label reporting and a managed creator roster - with strict data isolation.",
   audienceWord: "client",
   audienceWordPlural: "clients",
   contactWord: "contact",

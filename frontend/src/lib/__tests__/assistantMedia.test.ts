@@ -30,3 +30,19 @@ describe("assistant media delivery", () => {
     expect((await startAssistantMedia("a@example.com", "image", "A sunset")).result).toContain("quota exhausted");
   });
 });
+
+describe("studioVideoLink: video without a video model", () => {
+  it("opens Video Studio with the idea filled in", async () => {
+    const { studioVideoLink } = await import("@/lib/assistantMedia");
+    const url = new URL(studioVideoLink("a monsoon evening in Mumbai"), "https://x.test");
+    expect(url.pathname).toBe("/tools/video");
+    expect(url.searchParams.get("prefill")).toBe("a monsoon evening in Mumbai");
+  });
+
+  it("opens Reel Studio for vertical short-form asks", async () => {
+    const { studioVideoLink } = await import("@/lib/assistantMedia");
+    for (const p of ["an Instagram reel about chai", "a 30s TikTok", "a YouTube Short on budgeting", "vertical video of rain"]) {
+      expect(new URL(studioVideoLink(p), "https://x.test").pathname).toBe("/tools/reel");
+    }
+  });
+});

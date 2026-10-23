@@ -77,6 +77,15 @@ Key behaviours:
   treated as data, never instructions.
 - **Undo.** Agent-created items surface a short-lived Undo in the client
   (`hooks/useAgentActions.ts`).
+- **Argument checks at the tool boundary** (`lib/tools/args.ts`). Every call is
+  checked against its declaration (required params, enum values, numbers) and
+  unparseable JSON is rejected. A rejected call does not run; the model gets the
+  reason and can retry.
+- **Failed tools are reported.** The latest outcome of each tool is tracked; a
+  turn that ends with one still failed (and no checklist covering it) appends a
+  "Not completed" note, and the `done` event lists it in `failed`.
+- **Cancellation.** When the client stops the stream or disconnects, no further
+  model round or tool call starts.
 - **Streaming SSE** with a text/`tool`/`confirm`/`done`/`error` event protocol; on
   a failure of every tool-capable provider it falls back to a plain-text answer
   via `llmCascade`.
@@ -272,7 +281,7 @@ the self-built ones so they don't get buried in the third-party directory.
 
 `lib/ingest.ts` + `lib/tasks.ts` + `/api/cron/scrape-gmail` + `/api/ingest/run`:
 
-- Cron (GitHub Actions every 3 h, plus a daily Vercel cron), `IngestBridge` on app
+- Cron (GitHub Actions: reminders every 5 min, Gmail every 3 h; plus a daily Vercel cron), `IngestBridge` on app
   open/focus, and an on-demand "Scan now" pull unread Gmail from the last 2 days, run
   it through the LLM extractor, and dual-key **dedup/merge** into the `tasks` table
   (`dedupe_hash` + `normalize_heading` + owner match; owner-less tasks match on
@@ -294,6 +303,17 @@ the self-built ones so they don't get buried in the third-party directory.
   message is read only once. A daily cron (`/api/cron/dispatch?job=chat_tasks`)
   syncs up to 8 chats that the browser never synced.
 
+- **Task autopilot** (`lib/taskAutopilot.ts`, `components/tasks/TaskAutopilot.tsx`,
+  `/api/tasks/autopilot`): every task added after autopilot is switched on is
+  worked by JARVIS. The browser claims it on the server (one tab per task),
+  runs it through `/api/chat` with a verified checklist, and posts the outcome.
+  It is marked done only when every planned step was ticked with evidence and
+  nothing waits for approval; otherwise it is "needs you" with what was done and
+  what is left. Sends and payments always wait for the user. Files it makes go
+  to Knowledge; follow-up tasks it creates are tagged `Autopilot` and not worked
+  in turn. "Autopilot on/off" in the tracker header; "Run with JARVIS" in a
+  task's editor works an older task on request.
+
 ---
 
 ## 10. Agent safety layer
@@ -311,8 +331,11 @@ the self-built ones so they don't get buried in the third-party directory.
 
 ## 11. Front-end & dashboard
 
-- **Cinematic layer:** Three.js arc-reactor hero (`components/landing/HeroCanvas`,
-  `components/dashboard/ReactorCanvas`) and GSAP scroll-reveals — lazy-imported,
+- **Logo:** `components/layout/LogoMark` (segmented-arc eye with a "T" iris) is
+  the one app mark; `public/logo.svg` is it on the icon tile, and every web,
+  iOS and Android icon and splash PNG is rendered from that.
+- **Cinematic layer:** Three.js landing hero (`components/landing/HeroCanvas`)
+  and GSAP scroll-reveals — lazy-imported,
   DPR-capped, disposed on unmount, `prefers-reduced-motion`-aware, paused on hidden
   tabs.
 - **Command Center:** the dashboard surfaces every feature as a live widget

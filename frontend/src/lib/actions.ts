@@ -15,6 +15,8 @@ export const SENSITIVE_ACTIONS = new Set<string>([
   "send_email",
   // Deep-link intents that spend money or message people — always confirm.
   "pay", "send_whatsapp", "make_call", "send_sms",
+  // Creates a public repo on the user's GitHub.
+  "build_app",
 ]);
 
 /**
@@ -53,11 +55,11 @@ export function summarizeAction(tool: string, args: any): string {
     case "manage_contacts":
       return `Access device contacts (${args?.action ?? "search"})`;
     case "communicate":
-      return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
+      return `Send an email to ${args?.to ?? "?"} - subject "${args?.subject ?? ""}"`;
     case "send_email":
-      return `Send an email to ${args?.to ?? "?"} — subject "${args?.subject ?? ""}"`;
+      return `Send an email to ${args?.to ?? "?"} - subject "${args?.subject ?? ""}"`;
     case "pay":
-      return `Pay ${args?.amount ?? "?"} to ${args?.name ?? args?.vpa ?? "?"}${args?.note ? ` — "${args.note}"` : ""}`;
+      return `Pay ${args?.amount ?? "?"} to ${args?.name ?? args?.vpa ?? "?"}${args?.note ? ` - "${args.note}"` : ""}`;
     case "send_whatsapp":
       return `WhatsApp ${args?.to ?? "a contact"}: "${args?.message ?? ""}"`;
     case "anchor":
@@ -65,6 +67,8 @@ export function summarizeAction(tool: string, args: any): string {
         : args?.action === "mix" ? `Build and publish ANCHOR's ${args?.period === "month" ? "monthly" : "weekly"} mix`
         : args?.action === "rehearse" ? "Rehearse today's ANCHOR drop (render only, nothing posted)"
         : `Run today's ANCHOR drop${args?.now ? " and publish immediately" : " (posts at 17:30 UTC)"}`;
+    case "build_app":
+      return `Build "${args?.name ?? "app"}" and publish it as a public repo on your GitHub with a GitHub Pages site: ${String(args?.description ?? "").slice(0, 200)}`;
     case "make_call":
       return `Call ${args?.number ?? "?"}`;
     case "send_sms":

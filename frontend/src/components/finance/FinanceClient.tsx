@@ -10,6 +10,8 @@ import { gstBreakup } from "@/lib/calculators/formulas";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { localDay } from "@/lib/localDay";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const CATEGORIES = [
   "Food", "Groceries", "Transport", "Shopping", "Bills",
@@ -26,12 +28,12 @@ const META: Record<Category, { color: string; icon: typeof Utensils }> = {
   Health:        { color: "#22D3EE", icon: HeartPulse },
   Entertainment: { color: "#A78BFA", icon: Clapperboard },
   Travel:        { color: "#60A5FA", icon: Plane },
-  Other:         { color: "#7878A8", icon: Wallet },
+  Other:         { color: "#8E8EBC", icon: Wallet },
 };
 
 const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 const money = (n: number) => `₹${inr.format(Math.round(n))}`;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => localDay();
 
 const GST_RATES = [0, 5, 12, 18, 28, 40] as const;
 // GST already sits inside the logged (tax-inclusive) amount, so back it out.
@@ -95,7 +97,7 @@ export function FinanceClient() {
     try {
       const res = await fetch("/api/finance/parse", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       if (res.ok) {
         const p = await res.json();
@@ -166,7 +168,7 @@ export function FinanceClient() {
               value={nl}
               onChange={(e) => setNl(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") parseNL(); }}
-              placeholder='Type it plainly — e.g. "250 coffee" or "1200 groceries yesterday"'
+              placeholder='Type it plainly - e.g. "250 coffee" or "1200 groceries yesterday"'
               className="w-full bg-background-base border border-border-default rounded-input pl-3 pr-10 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#4FC3F7]/50"
             />
             <button
@@ -185,6 +187,7 @@ export function FinanceClient() {
             {parsing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Parse
           </button>
         </div>
+        <CaptureNote id="finance-voice">The mic uses your browser&apos;s speech recognition. Text goes to an AI provider only when you press Parse.</CaptureNote>
 
         {/* Structured fields (prefilled by parse, or fill directly) */}
         <div className="grid grid-cols-1 sm:grid-cols-[130px_1fr_150px] gap-3">
@@ -216,7 +219,7 @@ export function FinanceClient() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs transition-colors"
                 style={on
                   ? { borderColor: M.color, background: `${M.color}22`, color: M.color }
-                  : { borderColor: "var(--border-default, #1E1E38)", color: "#7878A8" }}
+                  : { borderColor: "var(--border-default, #1E1E38)", color: "#8E8EBC" }}
               >
                 <Icon size={12} /> {c}
               </button>

@@ -16,6 +16,7 @@ import { useMode, type ModeId } from "@/hooks/useMode";
 import { CloudSyncBadge } from "./CloudSyncBadge";
 import { PWAInstall } from "@/components/PWAInstall";
 import { WalletWidget } from "@/components/billing/WalletWidget";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 // Mode-aware, grouped navigation. Each item can be scoped to a subset of modes;
 // an item with no `modes` shows in every mode. Groups with no visible items in
@@ -28,24 +29,23 @@ interface NavItem {
 }
 interface NavGroup { title: string; items: NavItem[] }
 
-const NAV_GROUPS: NavGroup[] = [
+// The everyday screens first, then every other screen in its group.
+const MAIN_ITEMS: NavItem[] = [
+  { label: "Today", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Assistant", href: "/assistant", icon: MessageSquare },
+  { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "Notes", href: "/notes", icon: FileText },
+  { label: "Knowledge", href: "/knowledge", icon: BookOpen },
+];
+
+const MORE_GROUPS: NavGroup[] = [
   {
-    title: "Overview",
+    title: "Personal",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Assistant", href: "/assistant", icon: MessageSquare },
+      { label: "Goals", href: "/goals", icon: Target },
+      { label: "Life Log", href: "/lifelog", icon: Radio },
       { label: "Online Agents", href: "/agents", icon: Bot },
       { label: "Generations", href: "/generations", icon: History },
-    ],
-  },
-  {
-    title: "Workspace",
-    items: [
-      { label: "Task Tracker", href: "/tasks", icon: CheckSquare },
-      { label: "Life Log", href: "/lifelog", icon: Radio },
-      { label: "Notes", href: "/notes", icon: FileText },
-      { label: "Goals", href: "/goals", icon: Target },
-      { label: "Knowledge", href: "/knowledge", icon: BookOpen },
     ],
   },
   {
@@ -86,7 +86,7 @@ function SettingsLink({ collapsed }: { collapsed?: boolean }) {
         collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5"
       )}>
       <Settings size={16} className="flex-none" />
-      {!collapsed && <span className="flex-1 text-left font-mono text-xs tracking-wide">Settings</span>}
+      {!collapsed && <span className="flex-1 text-left text-sm">Settings</span>}
     </Link>
   );
 }
@@ -104,13 +104,38 @@ function SignOutButton({ collapsed }: { collapsed?: boolean }) {
       )}
     >
       <LogOut size={16} className="flex-none" />
-      {!collapsed && <span className="flex-1 text-left font-mono text-xs tracking-wide">Sign out</span>}
+      {!collapsed && <span className="flex-1 text-left text-sm">Sign out</span>}
     </button>
   );
 }
 
 function visibleItems(items: NavItem[], modeId: ModeId): NavItem[] {
   return items.filter((it) => !it.modes || it.modes.includes(modeId));
+}
+
+function NavLink({ item, active, collapsed, onNavigate }: { item: NavItem; active: boolean; collapsed: boolean; onNavigate?: () => void }) {
+  const { label, href, icon: Icon } = item;
+  return (
+    <Link href={href} title={collapsed ? label : undefined} aria-label={label}
+      onClick={() => onNavigate?.()}
+      className={cn(
+        "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
+        collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
+        active
+          ? "bg-[#4FC3F7]/10 text-[#4FC3F7] shadow-[inset_0_0_0_1px_rgba(79,195,247,0.25),0_0_18px_rgba(79,195,247,0.12)]"
+          : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
+      )}
+    >
+      {active && (
+        <>
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-accent-amber rounded-r shadow-[0_0_10px_rgba(255,181,71,0.7)]" />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shadow-[0_0_8px_#4FC3F7] animate-pulse" />
+        </>
+      )}
+      <Icon size={16} className="flex-none" />
+      {!collapsed && <span className="flex-1 text-sm">{label}</span>}
+    </Link>
+  );
 }
 
 export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void } = {}) {
@@ -150,21 +175,19 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
           collapsed ? "w-16" : "w-60 xl:w-64 3xl:w-72"
         )}
       >
-      {/* Logo — Arc Reactor */}
+      {/* Logo */}
       <div className={cn(
         "flex items-center gap-3 border-b border-border-default h-16 flex-none",
         collapsed ? "justify-center px-0" : "px-5"
       )}>
-        <div className="arc-reactor flex-none" style={{ width: 32, height: 32 }}>
-          <div className="arc-reactor-core" style={{ width: 8, height: 8 }} />
-        </div>
+        <LogoMark size={32} className="flex-none" />
 
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <div className="font-display font-semibold text-text-primary tracking-tight leading-none gradient-text-arc">
               The Third Eye
             </div>
-            <div className="text-[10px] font-mono text-text-muted mt-0.5 tracking-wider">v0.1.0 · ONLINE</div>
+            <div className="text-[11px] text-text-muted mt-0.5">v0.1.0</div>
           </div>
         )}
 
@@ -204,7 +227,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
                   style={on ? { background: `${m.accentColor}1A`, borderColor: m.accentColor } : undefined}>
                   <span className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: m.accentColor }} />
                   <span className={cn("text-xs font-medium flex-1", on ? "text-text-primary" : "text-text-secondary")}>{m.label}</span>
-                  {on && <span className="text-[9px] font-mono uppercase tracking-wider" style={{ color: m.accentColor }}>active</span>}
+                  {on && <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: m.accentColor }}>active</span>}
                 </button>
               );
             })}
@@ -217,45 +240,32 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
             const idx = modes.findIndex((m) => m.id === mode.id);
             setMode(modes[(idx + 1) % modes.length].id);
           }}
-          title={`Mode: ${mode.label} — click to cycle`}
+          title={`Mode: ${mode.label} - click to cycle`}
           className="mx-auto mt-3 w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-mono font-semibold text-background-base"
           style={{ background: mode.accentColor }}>
           {mode.label.slice(0, 1)}
         </button>
       )}
 
-      {/* Nav — grouped by category, filtered to the active mode */}
+      {/* Nav: everyday screens, then every other screen in its group, filtered to the active mode */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto">
-        {NAV_GROUPS.map((group, gi) => {
+        <div className="space-y-0.5">
+          {MAIN_ITEMS.map((item) => (
+            <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} onNavigate={onMobileClose} />
+          ))}
+        </div>
+        {MORE_GROUPS.map((group) => {
           const items = visibleItems(group.items, mode.id);
           if (items.length === 0) return null;
           return (
-            <div key={group.title} className={cn(gi > 0 && (collapsed ? "mt-2 pt-2 border-t border-border-default/50" : "mt-3"))}>
+            <div key={group.title} className={cn(collapsed ? "mt-2 pt-2 border-t border-border-default/50" : "mt-4")}>
               {!collapsed && (
                 <div className="hud-label text-text-muted px-3 mb-1 text-[10px]">{group.title}</div>
               )}
               <div className="space-y-0.5">
-                {items.map(({ label, href, icon: Icon }) => {
-                  const isActive = pathname.startsWith(href);
-                  return (
-                    <Link key={href} href={href} title={collapsed ? label : undefined}
-                      onClick={() => { if (onMobileClose) onMobileClose(); }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-input text-sm transition-all duration-150 relative",
-                        collapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
-                        isActive
-                          ? "bg-[#4FC3F7]/8 text-[#4FC3F7]"
-                          : "text-text-secondary hover:text-text-primary hover:bg-background-elevated"
-                      )}
-                    >
-                      {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-[#4FC3F7] rounded-r shadow-[0_0_8px_rgba(79,195,247,0.5)]" />
-                      )}
-                      <Icon size={16} className="flex-none" />
-                      {!collapsed && <span className="flex-1 font-mono text-xs tracking-wide">{label}</span>}
-                    </Link>
-                  );
-                })}
+                {items.map((item) => (
+                  <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} onNavigate={onMobileClose} />
+                ))}
               </div>
             </div>
           );
@@ -289,7 +299,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
               </div>
             )}
             {!collapsed && (
-              <span className="text-text-secondary text-xs truncate flex-1 font-mono">
+              <span className="text-text-secondary text-sm truncate flex-1">
                 {session.user.name?.split(" ")[0] ?? session.user.email}
               </span>
             )}

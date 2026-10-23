@@ -1,6 +1,6 @@
 // web/lib/marketing/calendar.ts
 // Festival / cultural-moment calendar + a deterministic campaign-calendar generator, ported and
-// generalised from vahdam-lifecycle-os (data/festivals.json + the Smart Brain calendar logic).
+// generalised from lifecycle-os (data/festivals.json + the Smart Brain calendar logic).
 // India-first (Kolab's market) with US/UK majors. Each moment carries a commercial weight (1–10),
 // tags, and recommended RFM segments. The generator is pure/deterministic — no fabricated copy or
 // offers (a moment is a slot; the brand fills the creative).

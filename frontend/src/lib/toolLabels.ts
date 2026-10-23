@@ -11,7 +11,7 @@ const ACTION_LABELS: Record<string, Record<string, string>> = {
   manage_calendar: { add: "Adding a calendar event", get: "Checking your calendar" },
   manage_expenses: { create: "Logging an expense", summary: "Checking your expenses" },
   manage_contacts: { search: "Searching device contacts", list: "Viewing synced contacts", get: "Looking up contact", add: "Saving contact" },
-  communicate: { whatsapp: "Opening WhatsApp", sms: "Opening messages", call: "Opening the dialer", read_emails: "Checking Gmail", email: "Sending an email" },
+  communicate: { whatsapp: "Opening WhatsApp", sms: "Sending the SMS", call: "Placing the call", read_emails: "Checking Gmail", email: "Sending an email" },
   navigate: { directions: "Getting directions", location: "Checking your location", nearby: "Finding nearby places" },
   generate: {
     image: "Generating an image", qr: "Generating a QR code", chart: "Building a chart",
@@ -38,6 +38,7 @@ const BASE_LABELS: Record<string, string> = {
   pay: "Setting up the payment",
   get_weather: "Checking the weather",
   search_knowledge: "Searching your documents",
+  search_photos: "Finding your photos",
   get_news: "Getting the news",
   translate: "Translating",
   stock_quote: "Checking the stock price",

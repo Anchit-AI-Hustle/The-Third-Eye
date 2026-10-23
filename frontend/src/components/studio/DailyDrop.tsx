@@ -54,7 +54,7 @@ export function DailyDrop({ preset, context = {} }: { preset: () => Record<strin
   async function act(kind: "save" | "run" | "toggle") {
     setBusy(kind); setMsg(null);
     try {
-      if (kind === "save") { await save(true); setMsg("Saved — a new track in this style arrives every morning."); }
+      if (kind === "save") { await save(true); setMsg("Saved - a new track in this style arrives every morning."); }
       else if (kind === "toggle" && settings) { await save(!settings.enabled, settings.preset); }
       else {
         const r = await fetch(API, { method: "POST" });
@@ -80,7 +80,7 @@ export function DailyDrop({ preset, context = {} }: { preset: () => Record<strin
       </div>
       <p className="text-[11px] text-text-muted">
         {settings
-          ? `${settings.enabled ? "On" : "Paused"} — ${[settings.preset.genre, settings.preset.tempo && `${settings.preset.tempo} BPM`].filter(Boolean).join(" · ")}. A new song in this style every morning (around 07:00 IST); the last 7 are kept in Library.`
+          ? `${settings.enabled ? "On" : "Paused"} - ${[settings.preset.genre, settings.preset.tempo && `${settings.preset.tempo} BPM`].filter(Boolean).join(" · ")}. A new song in this style every morning (around 07:00 IST); the last 7 are kept in Library.`
           : "Save this form as your style and a new, different song in it is made every morning (around 07:00 IST). The last 7 are kept in Library."}
       </p>
       <div className="flex items-center text-[11px] text-text-secondary">
@@ -90,7 +90,7 @@ export function DailyDrop({ preset, context = {} }: { preset: () => Record<strin
           value={refs} context={context} onChange={setRefs} />
       </div>
       <input value={refs} onChange={(e) => setRefs(e.target.value)} maxLength={300}
-        placeholder="Your tracks it should sound like — e.g. Project Mayhem, Underground Fever Dream"
+        placeholder="Artists or tracks it should sound like"
         className="w-full bg-background-base border border-border-default rounded-input px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted outline-none focus:border-[#34D399]" />
       <div className="flex flex-wrap gap-2">
         <button onClick={() => act("save")} disabled={!!busy}
@@ -162,7 +162,7 @@ export function DailyTracks() {
                 <span className="text-[10px] font-mono text-text-muted">{t.day}</span>
               </div>
               {t.theme && <p className="text-[11px] text-text-muted">{t.theme}</p>}
-              {t.status === "pending" && <p className="text-[11px] text-text-secondary flex items-center gap-1.5"><Loader2 size={11} className="animate-spin text-[#34D399]" /> Composing — refresh in a few minutes.</p>}
+              {t.status === "pending" && <p className="text-[11px] text-text-secondary flex items-center gap-1.5"><Loader2 size={11} className="animate-spin text-[#34D399]" /> Composing - refresh in a few minutes.</p>}
               {t.status === "failed" && <p className="text-[11px] text-accent-red">Couldn't render: {t.error}</p>}
               {t.status === "done" && (
                 <>

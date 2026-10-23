@@ -14,6 +14,102 @@ npm run cap:add:android     # creates android/ (requires Android Studio + JDK 17
 npm run cap:sync
 ```
 
+## Android without a local SDK
+
+The **Android APK** workflow (`.github/workflows/android-apk.yml`) builds the
+APK on GitHub's runner for free. Pull requests build a debug APK. Builds from
+`main` make a release APK signed with one fixed key and publish it to the
+public `android-latest` release, which the site's `/install` page links for a
+one-tap download. The same key on every build is what lets a new APK install
+over the old one, so keep it.
+
+Quickest: on a Mac with a JDK and the GitHub CLI (`gh auth login`), run
+`scripts/android-signing-setup.sh`. It makes the key in
+`~/.the-third-eye-android/` (back that folder up) and sets all four secrets.
+
+Or by hand: make the key once, on any machine with a JDK, and keep the file
+and passwords somewhere safe (losing them means everyone reinstalls):
+
+```bash
+keytool -genkeypair -v -keystore the-third-eye.keystore -alias the-third-eye \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 the-third-eye.keystore   # macOS: base64 -i the-third-eye.keystore
+```
+
+Then in GitHub > Settings > Secrets and variables > Actions add
+`ANDROID_KEYSTORE_BASE64` (the base64 output), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` (`the-third-eye`) and `ANDROID_KEY_PASSWORD`. A phone that
+has the older debug APK uninstalls it once before installing the signed one.
+
+## iOS on your own iPhone, free
+
+On a Mac with Xcode and the iPhone connected by cable:
+
+```bash
+scripts/ios-free-install.sh
+```
+
+It builds the native app, signs it with your free Apple ID (add it once in
+Xcode > Settings > Accounts) under a bundle ID of your own, and installs it.
+First time only, trust the developer in Settings > General > VPN & Device
+Management. A free signature lasts 7 days; run the script again to renew.
+App Store and TestFlight need the paid Apple Developer Program.
+
+### Device sync in the iOS app
+
+`DeviceSyncPlugin` (in `ios/App/App/AppDelegate.swift`) and
+`frontend/src/lib/deviceSync.ts` sync without file pickers, on every open
+and return to the app (at most every 10 minutes), and from Settings:
+
+- **Contacts:** the whole address book (Contacts plugin).
+- **Photos:** the whole library once Photos access is allowed: the newest
+  300 on the first run, then everything newer. Each photo is stored as a 384 px
+  thumbnail with date, size, place and favourite (`device_photos`).
+- **Files:** iOS lets no app read every file, so the person chooses one folder
+  once (for example iCloud Drive); new and changed documents in it then sync
+  to Knowledge on their own (text, Markdown, CSV, JSON, PDF and Word, up to
+  10 MB, 25 per run).
+
+### Share to The Third Eye
+
+Text and links shared to the app go to the site's `/share`, which opens the
+assistant asking it to save them as a note:
+
+- **Android app:** "The Third Eye" in the share sheet (`ACTION_SEND` text,
+  `MainActivity.openShared`).
+- **Installed web app (Android Chrome):** `share_target` in `manifest.json`.
+- **iPhone:** the "Save to The Third Eye" action. Make it a share-sheet
+  Shortcut once: Shortcuts > + > add "Save to The Third Eye", set Content to
+  Shortcut Input, then in the shortcut's settings turn on Show in Share Sheet.
+
+### Siri and Shortcuts
+
+`AppDelegate.swift` declares App Intents (iOS 16+): "Hey Siri, ask The Third
+Eye" (Siri then asks for the question) and "Hey Siri, morning briefing in The
+Third Eye". Both also appear in the Shortcuts app. Each opens the app at
+`/assistant?ask=<message>`, which sends the message. `INAlternativeAppNames`
+in `Info.plist` makes "Jarvis" a second name, so "Hey Siri, ask Jarvis" works
+too.
+
+iOS lets no app listen for its own wake word in the background. For a true
+"Hey Jarvis" on iOS 18+, the person sets up a Vocal Shortcut once: Settings >
+Accessibility > Vocal Shortcuts > Add Action > Shortcut > "Ask The Third
+Eye", then records the phrase "Hey Jarvis".
+
+## iOS without a Mac
+
+The **iOS app** workflow (`.github/workflows/ios-app.yml`) builds an unsigned
+`.ipa` on GitHub's macOS runner (free on a public repo). Builds from `main`
+publish it to the public `ios-latest` release. iOS installs only signed apps,
+so install it with Sideloadly or AltStore and your Apple ID (a free Apple ID's
+signature lasts 7 days). `/install` offers it under "Native iOS app", after
+Safari's Add to Home Screen, which needs no signing.
+
+The same workflow publishes `the-third-eye-simulator.zip`, a Simulator build.
+On a Mac with Xcode: open Simulator, unzip it and drag `App.app` onto the
+simulated iPhone, or run `xcrun simctl install booted App.app`. An `.ipa`
+cannot be opened on a Mac directly ("integrity could not be verified").
+
 ## Build & run
 
 ```bash
@@ -34,13 +130,22 @@ npm run cap:android         # syncs + opens Android Studio → Build ▸ Generat
 ## Permissions
 
 `AndroidManifest.xml` and `Info.plist` declare the grants the web layer needs.
-Capacitor's WebView maps the web APIs onto them, so no bridge code is required:
+Capacitor's WebView maps the web APIs onto them, so no bridge code is required (contacts is the exception: it uses the native plugin, called from `hooks/useLocalContacts.ts`):
 
 | Web call | Android | iOS |
 | --- | --- | --- |
 | `getUserMedia` (wake word, day recorder) | `RECORD_AUDIO` | `NSMicrophoneUsageDescription` |
 | `Notification.requestPermission()` | `POST_NOTIFICATIONS` | n/a — see below |
 | `geolocation` | `ACCESS_*_LOCATION` | `NSLocationWhenInUseUsageDescription` |
+| Contacts sync (`@capacitor-community/contacts`) | `READ_CONTACTS`, `WRITE_CONTACTS` | `NSContactsUsageDescription` |
+
+| SMS and calls (`DeviceControl.sendSms` / `call`, `lib/nativeOutreach.ts`) | `SEND_SMS`, `CALL_PHONE` | not possible - Messages / dialer open instead |
+
+In the Android app an SMS or call JARVIS was asked for goes out over the phone's
+own SIM straight away (one-time permission prompt); the reply says whether the
+SMS was sent. Google Play only allows `SEND_SMS` and `CALL_PHONE` for the
+default SMS / dialer app, so the debug APK keeps them and a Play build must
+drop them. iOS gives no app a way to send an SMS or place a call by itself.
 
 Without these the calls fail silently inside the app while still working in a
 browser tab, which is the confusing failure mode they exist to prevent.
@@ -64,3 +169,14 @@ service typed `microphone`, started when capture begins and stopped with it.
 `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MICROPHONE` are declared for it, but
 the service class is not written yet — so on Android, capture still stops when
 the app is backgrounded, exactly as it does in a browser tab.
+
+## TestFlight (one-tap iPhone install)
+
+`.github/workflows/ios-testflight.yml` signs the app and uploads it to
+TestFlight. It does nothing until the Apple Developer Program ($99/yr) secrets
+listed at the top of the workflow are set. After enrolling: create the app in
+App Store Connect with the bundle ID from `capacitor.config.ts` (a generic ID
+like `com.jarvis.app` may already be taken; change `appId` and the Xcode
+bundle ID together if so), add the four secrets, run the workflow, then invite
+testers in App Store Connect -> TestFlight.
+

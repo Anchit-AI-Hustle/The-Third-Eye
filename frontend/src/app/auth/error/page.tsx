@@ -49,7 +49,7 @@ function AuthErrorContent() {
       )}
       <Link
         href="/auth/signin"
-        className="inline-flex items-center gap-2 bg-accent-blue hover:bg-accent-blue/80 text-white rounded-input px-4 py-2 text-sm font-medium transition-colors duration-150"
+        className="inline-flex items-center gap-2 bg-accent-blue hover:bg-accent-blue/80 text-background-base rounded-input px-4 py-2 text-sm font-medium transition-colors duration-150"
       >
         Try again
       </Link>

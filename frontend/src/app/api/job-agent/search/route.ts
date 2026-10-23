@@ -40,6 +40,6 @@ export async function POST(req: NextRequest) {
     return Response.json(result);
   } catch (e) {
     console.error("job-agent search:", e instanceof Error ? e.message : e);
-    return Response.json({ error: "Search failed — please try again." }, { status: 502 });
+    return Response.json({ error: "Search failed - please try again." }, { status: 502 });
   }
 }

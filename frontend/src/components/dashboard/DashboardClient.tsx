@@ -3,17 +3,20 @@
 import { useState, useEffect } from "react";
 import { useLocalTasks } from "@/hooks/useLocalTasks";
 import { useAgentProfile } from "@/hooks/useAgentProfile";
-import { ReactorCanvas } from "./ReactorCanvas";
+import { SignalTrace } from "@/components/hud/SignalTrace";
 import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
 import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { taskStatusLabel } from "@/lib/taskStatus";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
-  Target, FileText, Cpu, Shield, Mic, TrendingUp, AlertTriangle,
+  Target, FileText, Cpu, Shield, Mic, AlertTriangle,
   Activity, Database, Eye,
 } from "lucide-react";
 import Link from "next/link";
+import { FirstRunGuide } from "@/components/onboarding/FirstRunGuide";
+import { useSystemHealth } from "@/hooks/useSystemHealth";
+import { LogoMark } from "@/components/layout/LogoMark";
 
 const PRIORITY_DOT: Record<string, string> = {
   low: "bg-text-muted", medium: "bg-[#4FC3F7]", high: "bg-warning", urgent: "bg-accent-red",
@@ -30,7 +33,7 @@ function useClock() {
     const tick = () => {
       const now = new Date();
       setTime(now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }));
-      setSeconds(now.toLocaleTimeString("en-US", { second: "2-digit", hour12: false }).split(":")[2]);
+      setSeconds(String(now.getSeconds()).padStart(2, "0"));
       setDate(now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }));
     };
     tick();
@@ -80,11 +83,13 @@ function useKillSwitch() {
 // is its own tiny client piece rather than inline state there.
 export function SystemStatusText() {
   const killed = useKillSwitch();
-  return (
-    <span className={killed ? "text-accent-red" : undefined}>
-      {killed ? "AGENT HALTED — KILL SWITCH ON" : "ALL SYSTEMS OPERATIONAL"}
-    </span>
-  );
+  const health = useSystemHealth();
+  const text = killed ? "Agent halted: kill switch on"
+    : !health ? "Checking systems"
+    : health.ai === "down" ? "Assistant offline"
+    : health.ai === "degraded" ? "Running on backup AI"
+    : "All systems operational";
+  return <span className={killed || health?.ai === "down" ? "text-accent-red" : undefined}>{text}</span>;
 }
 
 export function DashboardClient() {
@@ -92,6 +97,12 @@ export function DashboardClient() {
   const { active: agent } = useAgentProfile();
   const { time, date, seconds } = useClock();
   const uptime = useUptime();
+  const health = useSystemHealth();
+  const [voiceReady, setVoiceReady] = useState(false);
+  useEffect(() => {
+    const w = window as Window & { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    setVoiceReady("speechSynthesis" in window && !!(w.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
   const killed = useKillSwitch();
 
   const open     = allTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
@@ -106,30 +117,27 @@ export function DashboardClient() {
   // Generate AI Insights from available data
   const insights: string[] = [];
   if (ready) {
-    if (overdue.length > 0)    insights.push(`${overdue.length} task${overdue.length > 1 ? "s are" : " is"} overdue — review needed.`);
+    if (overdue.length > 0)    insights.push(`${overdue.length} task${overdue.length > 1 ? "s are" : " is"} overdue - review needed.`);
     if (urgent.length > 0)     insights.push(`${urgent.length} high-priority item${urgent.length > 1 ? "s" : ""} require your attention.`);
-    if (doneToday.length > 0)  insights.push(`${doneToday.length} task${doneToday.length > 1 ? "s" : ""} completed today — good momentum.`);
+    if (doneToday.length > 0)  insights.push(`${doneToday.length} task${doneToday.length > 1 ? "s" : ""} completed today - good momentum.`);
     if (inProgress.length > 0) insights.push(`${inProgress.length} task${inProgress.length > 1 ? "s" : ""} currently in progress.`);
-    if (open.length === 0)     insights.push("All clear — no open tasks. Time to plan ahead.");
+    if (open.length === 0)     insights.push("All clear - no open tasks. Time to plan ahead.");
     if (insights.length === 0) insights.push(`System ready. Ask ${agent.name} anything to get started.`);
   }
-
-  const isFirstRun = ready && allTasks.length === 0;
 
   return (
     <div className="space-y-5 animate-fade-in">
 
-      {isFirstRun && <StartHere agentName={agent.name} />}
+      <FirstRunGuide />
 
-      {/* ── Row 1: HUD Hero + Arc Reactor ────────────────────── */}
+      {/* ── Row 1: HUD Hero + logo ────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Clock + HUD */}
-        <div className="lg:col-span-2 holo-card rounded-card p-6 relative hud-scanline hud-frame">
-          <div className="absolute inset-0 hud-grid pointer-events-none rounded-card" />
+        <div className="lg:col-span-2 holo-card rounded-card p-6 relative">
           <div className="relative">
             {/* Status bar */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
               <div className="flex items-center gap-2">
                 <span
                   className="status-dot"
@@ -140,68 +148,50 @@ export function DashboardClient() {
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <span className="hud-label">uptime {uptime}</span>
-                <span className={cn("hud-label", killed ? "text-accent-red" : "text-success")}>
-                  {killed ? "kill switch engaged" : "all systems nominal"}
+                <span className="hud-label hidden sm:inline">uptime {uptime}</span>
+                <span className={cn("hud-label", killed || health?.ai === "down" ? "text-accent-red" : "text-success")}>
+                  {killed ? "kill switch engaged" : !health ? "checking" : health.ai === "down" ? "assistant offline" : health.ai === "degraded" ? "backup ai" : "all systems nominal"}
                 </span>
               </div>
             </div>
 
             {/* Time display */}
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="font-mono text-5xl sm:text-6xl font-bold text-[#4FC3F7] tracking-tight" style={{ textShadow: '0 0 30px rgba(79,195,247,0.3)' }}>
-                {time || "––:––"}
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="font-display text-4xl sm:text-5xl font-semibold text-text-primary tracking-tight tabular-nums">
+                {time || "--:--"}
               </span>
-              <span className="font-mono text-2xl text-[#4FC3F7]/50 animate-blink">
-                :{seconds || "––"}
+              <span className="font-display text-xl text-text-muted tabular-nums">
+                :{seconds || "--"}
               </span>
             </div>
-            <div className="text-text-secondary text-sm font-mono mb-6">{date}</div>
+            <div className="text-text-secondary text-sm mb-6">{date}</div>
 
             {/* Stats row */}
             <div className="flex flex-wrap gap-5">
-              <HUDStat icon={<CheckSquare size={14} />} label="ACTIVE" value={ready ? open.length : "—"} />
-              <HUDStat icon={<AlertTriangle size={14} />} label="URGENT" value={ready ? urgent.length : "—"} alert={urgent.length > 0} />
-              <HUDStat icon={<Zap size={14} />} label="COMPLETED" value={ready ? doneToday.length : "—"} />
+              <HUDStat icon={<CheckSquare size={14} />} label="Active" value={ready ? open.length : "-"} />
+              <HUDStat icon={<AlertTriangle size={14} />} label="Urgent" value={ready ? urgent.length : "-"} alert={urgent.length > 0} />
+              <HUDStat icon={<Zap size={14} />} label="Completed" value={ready ? doneToday.length : "-"} />
               {overdue.length > 0 && (
-                <HUDStat icon={<Clock size={14} />} label="OVERDUE" value={overdue.length} alert />
+                <HUDStat icon={<Clock size={14} />} label="Overdue" value={overdue.length} alert />
               )}
             </div>
+            <SignalTrace className="h-10 mt-6 opacity-70" />
           </div>
         </div>
 
-        {/* Arc Reactor + System Status */}
-        <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center hud-frame">
-          {/* Arc reactor — live 3D */}
-          <ReactorCanvas size={150} />
-          <span className="hud-label mt-2 mb-4">{agent.name}</span>
+        {/* Logo + System Status */}
+        <div className="holo-card rounded-card p-5 relative overflow-hidden flex flex-col items-center">
+          <div className="hidden sm:flex flex-col items-center drop-shadow-[0_0_24px_rgba(123,92,240,0.35)]"><LogoMark size={112} /></div>
+          <span className="hud-label self-start sm:self-center sm:mt-2 mb-4">Core systems</span>
 
           {/* System lines */}
           <div className="w-full space-y-2.5 mt-auto">
-            <StatusRow icon={<Cpu size={12} />} label="AI Engine" value="Gemini 2.5" status="online" />
-            <StatusRow icon={<Brain size={12} />} label="Memory" value="Active" status="online" />
-            <StatusRow icon={<Mic size={12} />} label="Voice I/O" value="Ready" status="online" />
-            <StatusRow icon={<Shield size={12} />} label="Auth" value="Secured" status="online" />
-            <StatusRow icon={<Database size={12} />} label="Knowledge" value="Indexed" status="idle" />
-            <StatusRow icon={<TrendingUp size={12} />} label="Finance" value="AI-assisted" status="online" />
+            <StatusRow icon={<Cpu size={12} />} label="AI Engine" value={health?.aiProvider ?? (health ? "Offline" : "…")} status={health?.ai === "down" ? "idle" : "online"} />
+            <StatusRow icon={<Brain size={12} />} label="Memory" value={health?.database ? "Synced" : health ? "This device only" : "…"} status={health?.database ? "online" : "idle"} />
+            <StatusRow icon={<Mic size={12} />} label="Voice I/O" value={voiceReady ? "Ready" : "Not supported here"} status={voiceReady ? "online" : "idle"} />
+            <StatusRow icon={<Shield size={12} />} label="Auth" value="Signed in" status="online" />
+            <StatusRow icon={<Database size={12} />} label="Knowledge" value={health?.database ? "Cloud" : health ? "This device only" : "…"} status={health?.database ? "online" : "idle"} />
           </div>
-        </div>
-      </div>
-
-      {/* ── Data ticker ──────────────────────────────────────── */}
-      <div className="data-ticker rounded-card px-4 py-1.5">
-        <div className="data-ticker-inner">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="flex items-center gap-6 mr-6">
-              <TickerItem label="TASKS" value={`${open.length} active`} />
-              <TickerItem label="PRIORITY" value={`${urgent.length} high/urgent`} />
-              <TickerItem label="COMPLETED" value={`${doneToday.length} today`} />
-              <TickerItem label="VOICE" value="STT + TTS" />
-              <TickerItem label="MODEL" value="gemini-2.5-flash" />
-              <TickerItem label="STATUS" value={killed ? "halted" : "operational"} />
-              <TickerItem label="LATENCY" value="<200ms" />
-            </div>
-          ))}
         </div>
       </div>
 
@@ -230,9 +220,7 @@ export function DashboardClient() {
 
           {!ready ? (
             <div className="flex justify-center py-10">
-              <div className="arc-reactor" style={{ width: 32, height: 32 }}>
-                <div className="arc-reactor-core" style={{ width: 8, height: 8 }} />
-              </div>
+              <LogoMark size={32} className="animate-pulse" />
             </div>
           ) : open.length === 0 ? (
             <div className="px-5 py-10 text-center">
@@ -307,25 +295,24 @@ export function DashboardClient() {
       </div>
 
       {/* ── Row 3: Capabilities ──────────────────────────────── */}
-      <div className="holo-card rounded-card p-5 hud-frame">
+      <div className="holo-card rounded-card p-5">
         <div className="flex items-center gap-2 mb-4">
           <Activity size={12} className="text-[#4FC3F7]" />
           <span className="hud-label text-[#4FC3F7]">Subsystem Matrix</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: "Streaming AI", active: true },
+            { label: "Streaming AI", active: health?.ai !== "down" },
             { label: "Task Ops", active: true },
-            { label: "Voice I/O", active: true },
-            { label: "Memory Core", active: true },
-            { label: "Knowledge DB", active: true },
-            { label: "Web Recon", active: true },
-            { label: "Comms (Email)", active: true },
-            { label: "Scheduler", active: true },
-            { label: "Finance AI", active: true },
-            { label: "Multi-Agent", active: true },
-            { label: "Automation", active: true },
-            { label: "Digital Twin", active: false },
+            { label: "Voice I/O", active: voiceReady },
+            { label: "Memory Core", active: !!health?.database },
+            { label: "Knowledge DB", active: !!health?.database },
+            { label: "Web Recon", active: health?.ai !== "down" },
+            { label: "Comms (Email)", active: !!health?.google },
+            { label: "Scheduler", active: !!health?.database },
+            { label: "Finance AI", active: health?.ai !== "down" },
+            { label: "Multi-Agent", active: health?.ai !== "down" },
+            { label: "Automation", active: !!health?.database },
           ].map(({ label, active }) => (
             <div key={label} className={cn(
               "flex items-center gap-2 px-3 py-2.5 rounded-input border text-xs transition-all",
@@ -351,63 +338,11 @@ export function DashboardClient() {
 // Plain language on purpose: "Mission Queue" and "Subsystem Matrix" read fine
 // once you know what this app is, but they don't explain it to someone who
 // doesn't yet.
-function StartHere({ agentName }: { agentName: string }) {
-  const steps = [
-    {
-      href: "/assistant",
-      icon: <MessageSquare size={16} />,
-      title: `Talk to ${agentName}`,
-      body: "Ask it anything in plain English — it can search the web, answer questions about your own documents, and create tasks, notes, and reminders for you.",
-    },
-    {
-      href: "/tasks",
-      icon: <CheckSquare size={16} />,
-      title: "Add your first task",
-      body: "Or just tell the assistant to add one — either way, it shows up here on the dashboard and in the Task Tracker.",
-    },
-    {
-      href: "/apps",
-      icon: <Target size={16} />,
-      title: "See what's built in",
-      body: "25 tools you can use right now — Music Studio, financial calculators, a knowledge base, and more.",
-    },
-  ];
-
-  return (
-    <div className="holo-card rounded-card p-5 sm:p-6 border-[#4FC3F7]/20">
-      <h2 className="font-display text-lg font-semibold text-text-primary">
-        Welcome — here&apos;s what this is
-      </h2>
-      <p className="text-text-secondary text-sm mt-1.5 max-w-2xl">
-        The Third Eye is a private AI assistant that keeps your tasks, notes, and knowledge in one
-        place and can act on them for you. Nothing below is real activity yet — pick one of these
-        to get started.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
-        {steps.map((s) => (
-          <Link key={s.href} href={s.href}
-            className="group flex flex-col gap-2 rounded-input border border-border-default bg-background-elevated/40 p-4 hover:border-[#4FC3F7]/40 hover:bg-background-elevated transition-colors">
-            <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-none bg-[#4FC3F7]/10 text-[#4FC3F7]">
-              {s.icon}
-            </span>
-            <span className="text-sm font-medium text-text-primary flex items-center gap-1">
-              {s.title}
-              <ArrowRight size={12} className="text-text-muted group-hover:translate-x-0.5 group-hover:text-[#4FC3F7] transition-all" />
-            </span>
-            <span className="text-xs text-text-muted leading-relaxed">{s.body}</span>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function HUDStat({ icon, label, value, alert }: { icon: React.ReactNode; label: string; value: number | string; alert?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span className={alert ? "text-accent-red" : "text-[#4FC3F7]"}>{icon}</span>
-      <span className={cn("font-mono font-bold text-xl", alert ? "text-accent-red" : "text-[#4FC3F7]")}
-        style={!alert ? { textShadow: '0 0 10px rgba(79,195,247,0.3)' } : undefined}>
+      <span className={cn("font-display font-semibold text-xl tabular-nums", alert ? "text-accent-red" : "text-text-primary")}>
         {value}
       </span>
       <span className="hud-label">{label}</span>
@@ -419,15 +354,15 @@ function StatusRow({ icon, label, value, status }: {
   icon: React.ReactNode; label: string; value: string; status: "online" | "idle" | "pending";
 }) {
   const dotCls = {
-    online: "bg-[#4FC3F7] shadow-[0_0_6px_rgba(79,195,247,0.5)] animate-pulse",
+    online: "bg-success",
     idle: "bg-accent-blue/50",
     pending: "bg-text-muted",
   }[status];
   return (
     <div className="flex items-center gap-3">
       <span className="text-[#4FC3F7]/40 flex-none">{icon}</span>
-      <span className="text-text-secondary text-xs flex-1 font-mono">{label}</span>
-      <span className="text-text-muted text-[10px] font-mono hidden sm:block">{value}</span>
+      <span className="text-text-secondary text-xs flex-1">{label}</span>
+      <span className="text-text-muted text-xs hidden sm:block">{value}</span>
       <span className={cn("w-1.5 h-1.5 rounded-full flex-none", dotCls)} />
     </div>
   );
@@ -448,15 +383,5 @@ function QuickCard({ href, icon, label, sub, glow }: {
       </div>
       <ArrowRight size={13} className="ml-auto text-text-muted flex-none" />
     </Link>
-  );
-}
-
-function TickerItem({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="w-1 h-1 rounded-full bg-[#4FC3F7]/40" />
-      <span className="hud-label text-[#4FC3F7]/60">{label}</span>
-      <span className="text-[10px] font-mono text-text-muted">{value}</span>
-    </span>
   );
 }

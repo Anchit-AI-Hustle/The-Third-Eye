@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useLocalContacts, parseVCard, parseCSVContacts } from "@/hooks/useLocalContacts";
+import { useLocalContacts, parseVCard, parseCSVContacts, hasNativeContactsPicker } from "@/hooks/useLocalContacts";
 
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: { user: { email: "test@example.com" } } }),
@@ -14,6 +14,13 @@ describe("useLocalContacts", () => {
 
   afterEach(() => {
     localStorage.clear();
+  });
+
+  it("reads the whole address book in the native app, without the browser picker", () => {
+    expect(hasNativeContactsPicker()).toBe(false);
+    (window as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
+    expect(hasNativeContactsPicker()).toBe(true);
+    delete (window as { Capacitor?: unknown }).Capacitor;
   });
 
   it("loads empty contacts initially", () => {
@@ -36,9 +43,16 @@ describe("useLocalContacts", () => {
     expect(result.current.contacts[0].phone).toBe("+91 9873945238");
     expect(result.current.contacts[0].relationship).toBe("Mother");
 
-    const saved = JSON.parse(localStorage.getItem("jarvis_contacts_v1") ?? "[]");
+    const saved = JSON.parse(localStorage.getItem("jarvis_contacts_v1:test@example.com") ?? "[]");
     expect(saved.length).toBe(1);
     expect(saved[0].name).toBe("Mom");
+  });
+
+  it("never loads another account's contacts left on this browser", () => {
+    localStorage.setItem("jarvis_contacts_v1", JSON.stringify([{ id: "x", name: "Someone else", phone: "1", updated_at: "" }]));
+    localStorage.setItem("jarvis_contacts_v1:other@example.com", JSON.stringify([{ id: "y", name: "Other user", phone: "2", updated_at: "" }]));
+    const { result } = renderHook(() => useLocalContacts());
+    expect(result.current.contacts).toEqual([]);
   });
 
   it("removes a contact by id", () => {
@@ -61,33 +75,71 @@ describe("useLocalContacts", () => {
   it("parses vCard 3.0 / 4.0 data accurately", () => {
     const vcfSample = `BEGIN:VCARD
 VERSION:3.0
-FN:Aviral Vahdam
-N:Vahdam;Aviral;;;
+FN:Aviral Mehta
+N:Mehta;Aviral;;;
 TEL;TYPE=CELL,VOICE:+91 98111 22334
-EMAIL;TYPE=WORK:aviral@vahdam.com
+EMAIL;TYPE=WORK:aviral@acme.com
 NOTE:Co-founder
 END:VCARD`;
 
     const parsed = parseVCard(vcfSample);
     expect(parsed.length).toBe(1);
-    expect(parsed[0].name).toBe("Aviral Vahdam");
+    expect(parsed[0].name).toBe("Aviral Mehta");
     expect(parsed[0].phone).toBe("+91 98111 22334");
-    expect(parsed[0].email).toBe("aviral@vahdam.com");
+    expect(parsed[0].email).toBe("aviral@acme.com");
     expect(parsed[0].notes).toBe("Co-founder");
     expect(parsed[0].source).toBe("vcf");
   });
 
   it("parses CSV contacts format accurately", () => {
     const csvSample = `Name,Phone,Email,Notes
-Aviral Vahdam,+919811122334,aviral@vahdam.com,Tea Partner
+Aviral Mehta,+919811122334,aviral@acme.com,Tea Partner
 Rohit Sharma,9876543210,,Teammate`;
 
     const parsed = parseCSVContacts(csvSample);
     expect(parsed.length).toBe(2);
-    expect(parsed[0].name).toBe("Aviral Vahdam");
+    expect(parsed[0].name).toBe("Aviral Mehta");
     expect(parsed[0].phone).toBe("+919811122334");
-    expect(parsed[0].email).toBe("aviral@vahdam.com");
+    expect(parsed[0].email).toBe("aviral@acme.com");
     expect(parsed[1].name).toBe("Rohit Sharma");
     expect(parsed[1].phone).toBe("9876543210");
+  });
+
+  describe("in the native app", () => {
+    const plugin = { requestPermissions: vi.fn(), getContacts: vi.fn() };
+    beforeEach(() => {
+      plugin.requestPermissions.mockReset();
+      plugin.getContacts.mockReset();
+      (window as any).Capacitor = { isNativePlatform: () => true, Plugins: { Contacts: plugin } };
+    });
+    afterEach(() => { delete (window as any).Capacitor; });
+
+    it("imports the whole address book once allowed", async () => {
+      plugin.requestPermissions.mockResolvedValue({ contacts: "granted" });
+      plugin.getContacts.mockResolvedValue({ contacts: [
+        { contactId: "1", name: { display: "Priya Sharma" }, phones: [{ number: "+91 98100 00001" }], emails: [{ address: "priya@example.com" }] },
+        { contactId: "2", name: { display: "Ravi" }, phones: [{ number: "+91 98100 00002" }] },
+        { contactId: "3", name: { display: null }, phones: [] },
+      ] });
+      const { result } = renderHook(() => useLocalContacts());
+      let r: { count: number; supported: boolean; error?: string } | undefined;
+      await act(async () => { r = await result.current.syncDeviceContacts(); });
+      expect(plugin.getContacts).toHaveBeenCalledWith({ projection: { name: true, phones: true, emails: true } });
+      expect(r).toEqual({ count: 2, supported: true });
+      expect(result.current.contacts.map((c) => [c.name, c.phone, c.email])).toEqual(expect.arrayContaining([
+        ["Priya Sharma", "+91 98100 00001", "priya@example.com"],
+        ["Ravi", "+91 98100 00002", undefined],
+      ]));
+    });
+
+    it("says so when access is refused, and reads nothing", async () => {
+      plugin.requestPermissions.mockResolvedValue({ contacts: "denied" });
+      const { result } = renderHook(() => useLocalContacts());
+      let r: { count: number; supported: boolean; error?: string } | undefined;
+      await act(async () => { r = await result.current.syncDeviceContacts(); });
+      expect(plugin.getContacts).not.toHaveBeenCalled();
+      expect(r?.count).toBe(0);
+      expect(r?.error).toMatch(/Contacts access is off/);
+    });
   });
 });

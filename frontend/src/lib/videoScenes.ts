@@ -32,18 +32,18 @@ const SYSTEM = `You are a director of photography converting a script into promp
 Return ONLY a JSON array. Each element: { "title": string, "seconds": number, "prompt": string, "narration": string }.
 
 Rules for every "prompt":
-- SELF-CONTAINED. The model renders each clip with no knowledge of the others, so restate the subject's appearance, age, wardrobe, the location, time of day, weather and colour palette in full — every single time. Never write "he", "she", "they", "the same room", "continues", "again", or any other reference to another scene.
+- SELF-CONTAINED. The model renders each clip with no knowledge of the others, so restate the subject's appearance, age, wardrobe, the location, time of day, weather and colour palette in full - every single time. Never write "he", "she", "they", "the same room", "continues", "again", or any other reference to another scene.
 - Describe ONE continuous shot: subject + what they do + camera (angle, lens, movement) + lighting + mood + film-stock/colour grade.
 - Present tense, concrete, visual. No dialogue, no on-screen text, no scene numbers, no cuts, no narration (that goes in "narration").
 - 40-70 words.
-- "seconds" is between 4 and 8 — these models cannot render longer in one take.
+- "seconds" is between 4 and 8 - these models cannot render longer in one take.
 
 Rules for every "narration":
 - The voice-over line heard over that shot in the finished episode, taken from or faithful to the script's dialogue/narration for that beat.
 - At most 2.5 words per second of the shot (a 6-second shot gets 15 words at most). Plain spoken English, no stage directions, no speaker names. Use "" when the shot should play in silence.
 
 Cover the script's beats in order. Prefer 4-6 scenes unless the script clearly needs more.
-No markdown fences, no commentary — the raw JSON array only.`;
+No markdown fences, no commentary - the raw JSON array only.`;
 
 function parseScenes(text: string): Scene[] {
   const start = text.indexOf("[");

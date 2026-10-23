@@ -7,7 +7,9 @@ import { SONG_MODEL as VOCAL_MODEL, SONG_CLIP_MAX as VOCAL_CLIP_MAX } from "@/li
 import type { MusicInput } from "@/lib/music/types";
 import { elevenLabsConfigured, composeElevenLabs, elevenPrompt, clipSecondsFor } from "@/lib/music/elevenlabs";
 import { storeStudioAudio, audioPath } from "@/lib/music/studioAudio";
+import { renderWav } from "@/lib/music/synth";
 import { getDb } from "@/lib/db";
+import { chargedRoute } from "@/lib/credits";
 
 export const runtime = "nodejs";
 // Eleven Music returns the finished song in one call, which can take a few
@@ -48,6 +50,10 @@ const STABLE_AUDIO_VERSION = "9aff84a639f96d0f7e6081cdea002d15133d0043727f849c40
 const INSTRUMENTAL_CLIP_MAX = 60;  // a real mini-composition, not a tiny loop
 const STABLE_AUDIO_CLIP_MAX = 47;  // stable-audio-open's native window
 const MAX_SESSION_SECONDS = 18000; // 5 hours
+// Code-composed fallback: 60s stored, 45s when it has to travel inline (a 45s
+// 22 kHz WAV is about 2.6 MB as base64, inside INLINE_MAX).
+const SYNTH_CLIP_MAX = 60;
+const SYNTH_INLINE_MAX = 45;
 
 async function email() {
   const s = await getServerSession(authOptions);
@@ -101,7 +107,7 @@ async function tryHuggingFaceMusic(promptText: string, seconds: number): Promise
 }
 
 
-export async function POST(req: NextRequest) {
+async function create(req: NextRequest) {
   const startedAt = Date.now();
   const user = await email();
   if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -162,10 +168,22 @@ export async function POST(req: NextRequest) {
     const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
     if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
     const keySet = !!process.env.ELEVENLABS_API_KEY?.trim();
-    const keyNote = keySet && !elevenLabsConfigured()
-      ? "The saved ElevenLabs value is a key id, not the secret. A working key starts with sk_ and is shown once when it is created or rotated. "
-      : "";
-    return Response.json({ configured: false, prompt, tags, lyrics, ...briefMeta, ...elMeta, note: `${keyNote}Music generation needs an sk_ ELEVENLABS_API_KEY or REPLICATE_API_TOKEN (or a free HF_API_TOKEN). Here are the style prompt + lyrics to paste into a music tool.` });
+    if (keySet && !elevenLabsConfigured()) console.warn("ELEVENLABS_API_KEY is a key id, not the sk_ secret; songs fall back to instrumentals");
+    // No music model is reachable: compose the instrumental in code so the
+    // Studio still plays a real track, and say exactly what it is.
+    const db = getDb();
+    const seconds = Math.min(clipSeconds, db ? SYNTH_CLIP_MAX : SYNTH_INLINE_MAX);
+    const wav = Buffer.from(renderWav({ bpm: brief.bpm, seconds, energy: brief.energy, key: brief.key, moods: brief.moods, seed: `${description}|${prompt}` }));
+    let audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
+    if (db) {
+      try { audioUrl = audioPath(await storeStudioAudio(db, user, wav, { audioType: "audio/wav", provider: "code" })); }
+      catch { /* the inline copy still plays */ }
+    }
+    return Response.json({
+      configured: true, done: true, audioUrl, model: "code:synth", provider: "code",
+      prompt, tags, lyrics, sessionSeconds, clipSeconds: seconds, loop: sessionSeconds > seconds, ...briefMeta, ...elMeta,
+      note: `This track is instrumental, with no vocals${sing ? " (the lyrics are below)" : ""}.`,
+    });
   }
 
   // Route to a model that generates from text alone (no reference required).
@@ -236,3 +254,5 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: e instanceof Error ? e.message : "poll failed" }, { status: 502 });
   }
 }
+
+export const POST = chargedRoute("music.generate", create);

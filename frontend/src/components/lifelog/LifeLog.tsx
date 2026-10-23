@@ -6,12 +6,14 @@ import { loadDay, saveDay, listDates, syncFromCloud, deleteDay } from "@/lib/lif
 import { getAudio } from "@/lib/lifelog/audioStore";
 import { emptyDay, localDateKey, type DayLog, type LogSegment, type LogEvent } from "@/lib/lifelog/types";
 import { useDayRecorder } from "@/hooks/useDayRecorder";
+import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const KIND_COLORS: Record<string, string> = {
   meeting: "#4FC3F7", conversation: "#34D399", task: "#F0C94E",
   idea: "#A78BFA", decision: "#F472B6", note: "#94A3B8", other: "#64748B",
 };
 const fmtTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const clock = (ts: number) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 const fmtDayTitle = (date: string) => new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
 export function LifeLog() {
@@ -21,6 +23,7 @@ export function LifeLog() {
   const [dates, setDates] = useState<string[]>([]);
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const [diaryText, setDiaryText] = useState("");
   const newSegsRef = useRef(0);
 
@@ -31,31 +34,35 @@ export function LifeLog() {
 
   // Extraction: turn the day's transcript into a timeline + summary.
   const runExtract = useCallback(async (target: DayLog) => {
-    const transcript = target.segments.filter((s) => s.transcript).map((s) => s.transcript).join("\n");
+    const transcript = target.segments.filter((s) => s.transcript).map((s) => `[${clock(s.startTs)}] ${s.transcript}`).join("\n");
     if (transcript.trim().length < 20) return;
     setExtracting(true);
+    setExtractError(null);
     try {
       const res = await fetch("/api/tools/lifelog/extract", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, date: target.date }),
       });
       const d = await res.json().catch(() => ({}));
-      if (Array.isArray(d.events)) {
-        const base = target.segments[0]?.startTs ?? Date.now();
-        const span = ((target.segments[target.segments.length - 1]?.endTs ?? base) - base) || 1;
-        const fresh: LogEvent[] = d.events.map((e: any, idx: number) => ({
-          id: crypto.randomUUID(),
-          ts: base + Math.round((idx / Math.max(1, d.events.length)) * span),
-          title: e.title, kind: e.kind || "other", detail: e.detail,
-        }));
-        const merged = { ...loadDay(target.date) };
-        merged.events = fresh;               // extraction returns the full timeline
-        if (d.summary) merged.summary = d.summary;
-        saveDay(merged);
-        if (merged.date === selectedDate) setDay(merged);
-        refreshDates();
+      // A failed extraction must never replace the timeline that is already saved.
+      if (!res.ok || d.error || !Array.isArray(d.events)) {
+        setExtractError(d.error ?? "Couldn't build the timeline right now. Your recordings are safe; try again shortly.");
+        return;
       }
-    } catch { /* leave existing timeline */ }
+      const base = target.segments[0]?.startTs ?? Date.now();
+      const span = ((target.segments[target.segments.length - 1]?.endTs ?? base) - base) || 1;
+      const fresh: LogEvent[] = d.events.map((e: any, idx: number) => ({
+        id: crypto.randomUUID(),
+        ts: e.time ? new Date(`${target.date}T${e.time.padStart(5, "0")}:00`).getTime() : base + Math.round((idx / Math.max(1, d.events.length)) * span),
+        title: e.title, kind: e.kind || "other", detail: e.detail,
+      })).sort((a: LogEvent, b: LogEvent) => a.ts - b.ts);
+      const merged = { ...loadDay(target.date) };
+      merged.events = fresh;               // extraction returns the full timeline
+      if (d.summary) merged.summary = d.summary;
+      saveDay(merged);
+      if (merged.date === selectedDate) setDay(merged);
+      refreshDates();
+    } catch { setExtractError("Couldn't reach the server. Your timeline is unchanged."); }
     finally { setExtracting(false); }
   }, [selectedDate, refreshDates]);
 
@@ -126,7 +133,9 @@ export function LifeLog() {
           </button>
           {rec.recording && <p className="text-[11px] font-mono text-text-muted flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-accent-red animate-pulse" /> Listening · {day.segments.length} segment{day.segments.length === 1 ? "" : "s"}{rec.lastAt ? ` · last ${fmtTime(rec.lastAt)}` : ""}</p>}
           {rec.error && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{rec.error}</p>}
-          <p className="text-[10px] text-text-muted leading-relaxed">Records while this screen is open. Phones pause the mic when the app is in the background or the screen is locked — keep it foregrounded for a continuous log.</p>
+          {extractError && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{extractError}</p>}
+          <p className="text-[10px] text-text-muted leading-relaxed">Records while this screen is open. Phones pause the mic when the app is in the background or the screen is locked - keep it foregrounded for a continuous log.</p>
+          <CaptureNote id="life-log" className="text-[10px]">Audio stays on this device. Speech is sent for transcription, and the text is saved to your account.</CaptureNote>
         </div>
 
         <CalendarCard cursor={monthCursor} setCursor={setMonthCursor} selected={selectedDate} today={today} dates={dates} onPick={setSelectedDate} />

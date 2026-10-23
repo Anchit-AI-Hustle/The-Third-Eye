@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   PERIODS,
   TIERS,
@@ -9,16 +9,7 @@ import {
   priceFor,
   costOf,
   pricePer100,
-  matchesTestCode,
-  testUnlockConfigured,
 } from "../plans";
-
-const ORIGINAL_CODE = process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-
-afterEach(() => {
-  if (ORIGINAL_CODE === undefined) delete process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-  else process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = ORIGINAL_CODE;
-});
 
 describe("tier catalogue", () => {
   it("orders tiers by ascending level and price", () => {
@@ -67,7 +58,7 @@ describe("priceFor", () => {
     }
   });
 
-  it("applies charm pricing — never a round multiple of five", () => {
+  it("applies charm pricing - never a round multiple of five", () => {
     for (const tier of ["plus", "pro", "max"] as const) {
       for (const p of PERIODS) {
         expect(priceFor(tier, p.id) % 5).not.toBe(0);
@@ -92,8 +83,8 @@ describe("credit costs", () => {
     expect(costOf("chat.message")).toBe(1);
   });
 
-  it("keeps in-browser video rendering free", () => {
-    expect(costOf("video.render")).toBe(0);
+  it("charges for video renders like any other creation", () => {
+    expect(costOf("video.render")).toBe(50);
   });
 
   it("never prices an action negatively", () => {
@@ -102,7 +93,7 @@ describe("credit costs", () => {
 });
 
 describe("bundles", () => {
-  it("gets cheaper per credit as the pack grows — the loyalty curve", () => {
+  it("gets cheaper per credit as the pack grows - the loyalty curve", () => {
     const rates = BUNDLES.map(pricePer100);
     for (let i = 1; i < rates.length; i++) expect(rates[i]).toBeLessThan(rates[i - 1]);
   });
@@ -128,40 +119,9 @@ describe("bundles", () => {
   });
 });
 
-describe("test unlock code", () => {
-  it("is disabled when no code is configured", () => {
-    delete process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE;
-    expect(testUnlockConfigured()).toBe(false);
-    expect(matchesTestCode("")).toBe(false);
-    expect(matchesTestCode("anything")).toBe(false);
-  });
-
-  it("rejects an empty entry even when a code is configured", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "s3cret";
-    expect(matchesTestCode("")).toBe(false);
-    expect(matchesTestCode("   ")).toBe(false);
-  });
-
-  it("matches the configured code, ignoring surrounding whitespace", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "s3cret";
-    expect(matchesTestCode("s3cret")).toBe(true);
-    expect(matchesTestCode("  s3cret  ")).toBe(true);
-  });
-
-  it("rejects a wrong code", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "s3cret";
-    expect(matchesTestCode("wrong")).toBe(false);
-  });
-
-  it("does not treat a blank configured code as an unlock", () => {
-    process.env.NEXT_PUBLIC_TEST_UNLOCK_CODE = "   ";
-    expect(testUnlockConfigured()).toBe(false);
-    expect(matchesTestCode("   ")).toBe(false);
-  });
-});
-
 describe("welcome grant", () => {
-  it("is a positive one-time grant", () => {
-    expect(WELCOME_CREDITS).toBeGreaterThan(0);
+  it("covers one use of every paid action, and no more", () => {
+    expect(WELCOME_CREDITS).toBe(Object.keys(CREDIT_COSTS).reduce((sum, a) => sum + costOf(a), 0));
+    expect(WELCOME_CREDITS).toBe(106);
   });
 });

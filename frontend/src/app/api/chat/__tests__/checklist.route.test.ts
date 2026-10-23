@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The model is scripted turn by turn; everything it touches outside the
 // checklist is the real route and the real tool handlers.
-type Turn = { text?: string; calls?: { name: string; args: Record<string, unknown> }[] };
+type Turn = { text?: string; calls?: { name: string; args: Record<string, unknown> }[]; fail?: boolean };
 let script: Turn[] = [];
 
 vi.mock("@google/generative-ai", () => ({
@@ -11,6 +11,7 @@ vi.mock("@google/generative-ai", () => ({
       return {
         generateContentStream: async () => {
           const turn = script.shift() ?? { text: "" };
+          if (turn.fail) throw new Error("Request timed out");
           const parts = [
             ...(turn.text ? [{ text: turn.text }] : []),
             ...(turn.calls ?? []).map((c) => ({ functionCall: c })),
@@ -92,7 +93,7 @@ describe("verified checklist in /api/chat", () => {
       { calls: [{ name: "complete_step", args: { step: 1, evidence: "Email sent to a@b.co" } }] },
       { text: "Sent!" },
     ];
-    const r = await chat({ message: "email a@b.co hello" });
+    const r = await chat({ message: "email a@b.co hello", confirmActions: true });
     expect(r.events.some((e) => e.event === "confirm")).toBe(true);
     expect(r.done.checklist[0].status).toBe("awaiting");
     expect(r.text).toContain("Send the email (waiting for your Confirm)");
@@ -123,5 +124,24 @@ describe("verified checklist in /api/chat", () => {
     });
     expect(r.done.checklist.map((s: { status: string }) => s.status)).toEqual(["done", "done"]);
     expect(r.text).toBe("Finished.");
+  });
+
+  it("rejects a call missing a required argument on the primary model too, and says it did not happen", async () => {
+    script = [
+      { calls: [{ name: "manage_tasks", args: { title: "Call bank" } }] },
+      { text: "Added Call bank." },
+    ];
+    const r = await chat({ message: "add call bank" });
+    expect(r.done.sideEffects).toEqual([]);
+    expect(r.done.failed).toEqual(["manage_tasks"]);
+    expect(r.text).toMatch(/Not completed:[\s\S]*missing required argument "action"/);
+  });
+
+  it("does not start the task again on another model when the primary fails after tools ran", async () => {
+    script = [{ calls: [{ name: "manage_tasks", args: { action: "create", title: "Book dentist" } }] }, { fail: true }];
+    const r = await chat({ message: "add book dentist then plan my week" });
+    expect(r.done.stop_reason).toBe("partial");
+    expect(r.done.sideEffects.filter((e: { type: string }) => e.type === "task_create")).toHaveLength(1);
+    expect(r.text).toMatch(/Done so far: manage_tasks/);
   });
 });

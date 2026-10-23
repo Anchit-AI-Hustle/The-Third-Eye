@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Mic, Smartphone, Keyboard, Sparkles, Check } from "lucide-react";
+import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines, ShieldCheck } from "lucide-react";
+import { deviceReducesMotion, motionPref, setMotionPref } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { maybeRequestShake } from "@/hooks/useJarvisTriggers";
@@ -12,6 +13,8 @@ import {
   type GestureId,
   type Hotkey,
 } from "@/lib/activation";
+import { CONFIRM_ACTIONS_KEY, confirmActionsOn } from "@/lib/explicitRequest";
+import { loadNaturalVoice, NATURAL_VOICE_KEY, naturalVoiceOn, naturalVoiceProgress, naturalVoiceSupported } from "@/lib/naturalVoice";
 
 const GESTURES: { id: GestureId; label: string; desc: string }[] = [
   { id: "shake", label: "Device Shake", desc: "Shake your phone firmly twice" },
@@ -71,7 +74,7 @@ export function ActivationSettings() {
             Assistant activation
           </h2>
           <p className="text-xs text-text-muted mt-0.5">
-            Wake word, phone gestures, and a desktop hotkey — from any screen.
+            Wake word, phone gestures, and a desktop hotkey - from any screen.
           </p>
         </div>
         {saved && (
@@ -220,7 +223,7 @@ export function ActivationSettings() {
           </div>
           <div>
             <h3 className="text-sm font-medium text-text-primary">Keyboard shortcut</h3>
-            <p className="text-xs text-text-muted">Quick launch on desktop — Cmd+K is the command palette</p>
+            <p className="text-xs text-text-muted">Quick launch on desktop - Cmd+K is the command palette</p>
           </div>
         </div>
         <div className="flex items-center justify-between pt-1">
@@ -239,7 +242,106 @@ export function ActivationSettings() {
           </button>
         </div>
       </section>
+
+      <NaturalVoice />
+      <Animations />
+      <AskBeforeActing />
     </div>
+  );
+}
+
+// On: animations and 3D effects run even when the device asks for reduced motion.
+function Animations() {
+  const [full, setFull] = useState(false);
+  const [deviceReduces, setDeviceReduces] = useState(false);
+  useEffect(() => { setFull(motionPref() === "full"); setDeviceReduces(deviceReducesMotion()); }, []);
+  const toggle = (v: boolean) => { setFull(v); setMotionPref(v ? "full" : "device"); };
+  return (
+    <section className="bg-background-surface border border-border-default rounded-card p-5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-input bg-accent-blue/10 text-accent-blue">
+            <Sparkles size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Always show animations</h3>
+            <p className="text-xs text-text-muted">
+              Motion, 3D effects and page transitions, even when this device has Reduce Motion on.
+              {deviceReduces ? " Reduce Motion is on here, so they are paused unless this is on." : " Reduce Motion is off here, so they already run."}
+            </p>
+          </div>
+        </div>
+        <Toggle enabled={full} onChange={toggle} />
+      </div>
+    </section>
+  );
+}
+
+// Off: what you ask for directly (send this email, build this app) runs at
+// once. On: every send, post and publish waits for your Confirm.
+function AskBeforeActing() {
+  const [on, setOn] = useState(false);
+  useEffect(() => { setOn(confirmActionsOn()); }, []);
+  const toggle = (v: boolean) => {
+    setOn(v);
+    try { localStorage.setItem(CONFIRM_ACTIONS_KEY, v ? "1" : "0"); } catch { /* private mode */ }
+  };
+  return (
+    <section className="bg-background-surface border border-border-default rounded-card p-5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-input bg-accent-blue/10 text-accent-blue">
+            <ShieldCheck size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Confirm before acting</h3>
+            <p className="text-xs text-text-muted">
+              Off: when you tell JARVIS to send, post or publish something, it does it straight away. On: every one waits for your Confirm.
+              Either way, anything JARVIS decides on its own, or picks up from an email or web page, still asks first.
+            </p>
+          </div>
+        </div>
+        <Toggle enabled={on} onChange={toggle} />
+      </div>
+    </section>
+  );
+}
+
+// Free neural voice that runs in the browser (lib/naturalVoice.ts).
+function NaturalVoice() {
+  const [on, setOn] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => { setOn(naturalVoiceOn()); setSupported(naturalVoiceSupported()); }, []);
+
+  async function toggle(v: boolean) {
+    setOn(v);
+    try { localStorage.setItem(NATURAL_VOICE_KEY, v ? "1" : "0"); } catch { /* private mode: stays off next visit */ }
+    if (!v) { setStatus(null); return; }
+    setStatus("Downloading the voice (about 86 MB, once)…");
+    const tick = setInterval(() => setStatus(`Downloading the voice… ${Math.round(naturalVoiceProgress() * 100)}%`), 500);
+    const ready = await loadNaturalVoice();
+    clearInterval(tick);
+    setStatus(ready ? "Ready. Replies read aloud use the natural voice." : "Couldn't load it here, so the system voice is used.");
+  }
+
+  return (
+    <section className="bg-background-surface border border-border-default rounded-card p-5 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-input bg-accent-blue/10 text-accent-blue">
+            <AudioLines size={16} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Natural voice</h3>
+            <p className="text-xs text-text-muted">A natural, human-sounding voice. It runs on your device, so nothing you hear is sent anywhere</p>
+          </div>
+        </div>
+        <Toggle enabled={on} onChange={(v) => void toggle(v)} />
+      </div>
+      {!supported && <p className="text-xs text-warning">This browser has no WebGPU, so the system voice is used. Recent Chrome or Edge on a computer has it.</p>}
+      {status && <p className="text-xs text-text-secondary">{status}</p>}
+    </section>
   );
 }
 

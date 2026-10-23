@@ -21,7 +21,7 @@ function fail(status: number, what: string): GoogleResult<never> {
       ok: false,
       reauth: true,
       error:
-        `Google rejected the request (HTTP ${status}) — the grant is missing this permission or was revoked. ` +
+        `Google rejected the request (HTTP ${status}) - the grant is missing this permission or was revoked. ` +
         `Reconnect from Settings → Connections → "Reconnect / update permissions".`,
     };
   }

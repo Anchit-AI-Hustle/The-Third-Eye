@@ -15,7 +15,7 @@ async function suggest(body: Record<string, unknown>) {
 }
 const tool = { label: "Trip Planner", purpose: "a day-by-day itinerary" };
 
-describe("/api/tools/suggest — the Studio's AI toolbar for any field", () => {
+describe("/api/tools/suggest - the Studio's AI toolbar for any field", () => {
   it("fills a text field with one clean line, coherent with the rest of the form", async () => {
     reply('"Kyoto, Japan."\nBecause temples.');
     const res = await suggest({ tool, field: { name: "destination", label: "Destination", type: "text" }, action: "suggest", context: { Budget: "Luxury", Interests: "temples, food" } });

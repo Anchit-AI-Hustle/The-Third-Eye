@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { safeHref } from "@/lib/kolab-studio/validation";
 import type { Deal } from "@/lib/kolab-studio/studio";
 
 export function StorefrontGrid({ deals }: { deals: Deal[] }) {
@@ -18,7 +19,7 @@ export function StorefrontGrid({ deals }: { deals: Deal[] }) {
   if (deals.length === 0) {
     return (
       <div className="rounded-xl border border-kolab-line bg-kolab-surface p-6 text-center text-[14px] text-kolab-muted">
-        No live deals yet — add some in Creator Studio → Brand Deals.
+        No live deals yet - add some in Creator Studio → Brand Deals.
       </div>
     );
   }
@@ -50,14 +51,16 @@ export function StorefrontGrid({ deals }: { deals: Deal[] }) {
                 </button>
               </div>
             )}
-            <a
-              className="mt-1.5 inline-flex items-center justify-center rounded-[9px] border border-kolab-lime bg-kolab-lime px-2 py-2 font-mono text-[11px] font-bold uppercase text-kolab-base"
-              href={x.affiliate_url || "#"}
-              target="_blank"
-              rel="noopener nofollow"
-            >
-              Shop ↗
-            </a>
+            {safeHref(x.affiliate_url) && (
+              <a
+                className="mt-1.5 inline-flex items-center justify-center rounded-[9px] border border-kolab-lime bg-kolab-lime px-2 py-2 font-mono text-[11px] font-bold uppercase text-kolab-base"
+                href={safeHref(x.affiliate_url)}
+                target="_blank"
+                rel="noopener nofollow"
+              >
+                Shop ↗
+              </a>
+            )}
           </div>
         </div>
       ))}

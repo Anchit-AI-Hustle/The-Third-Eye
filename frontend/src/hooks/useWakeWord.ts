@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 import { silencePeak } from "@/lib/activation";
 import { useWakeLock } from "./useWakeLock";
+import { speechRecognizer } from "@/lib/speechRecognizer";
 
 type Listener = (trigger: string, transcript: string) => void;
 
@@ -203,9 +204,7 @@ export function useWakeWord({
   // microphone-chunk path that covers hidden tabs listens all the time instead.
   const [chunkOnly, setChunkOnly] = useState(false);
   useEffect(() => {
-    const SR = typeof window !== "undefined"
-      ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
-      : null;
+    const SR = speechRecognizer();
     const canRecord = typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
     setSupported(!!SR || canRecord);
     setChunkOnly(!SR && canRecord);
@@ -319,7 +318,7 @@ export function useWakeWord({
     // Keep the screen awake: a slept/locked screen is what suspends
     // SpeechRecognition, so this is what lets a phone on a desk keep listening.
     wakeLock.acquire();
-    const SRClass = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    const SRClass = speechRecognizer();
     if (!SRClass) return;
 
     const launchInstance = () => {

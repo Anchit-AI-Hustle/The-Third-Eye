@@ -183,7 +183,7 @@ export function expandPrompt(description: string, genre: string, d: GenreDefault
     `${lead}, arranged as ${d.subgenre} around ${tempo} BPM.`,
     `Mood: ${d.mood}. Energy ${d.energy} of 10.`,
     `Instruments: ${d.instruments}.`,
-    `In the vein of ${d.artists} — the groove and the palette, not a copy of any record.`,
+    `In the vein of ${d.artists} - the groove and the palette, not a copy of any record.`,
     d.energy >= 8
       ? "Club form: a tight intro, a long build, a full drop, a breakdown, then a final drop."
       : "Leave space in the arrangement and let the main idea breathe.",

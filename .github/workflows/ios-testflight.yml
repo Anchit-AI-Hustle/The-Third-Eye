@@ -1,0 +1,64 @@
+name: iOS TestFlight
+# Signs the iOS app and uploads it to TestFlight, so iPhones install it from
+# the TestFlight app with one tap. Dormant until the Apple Developer Program
+# secrets below exist; run it from the Actions tab after enrolling.
+#
+# Repo secrets (Settings -> Secrets and variables -> Actions):
+#   APPLE_TEAM_ID                  - Membership details at developer.apple.com
+#   APP_STORE_CONNECT_KEY_ID       - App Store Connect -> Users and Access -> Integrations -> Keys (App Manager role)
+#   APP_STORE_CONNECT_ISSUER_ID    - same page
+#   APP_STORE_CONNECT_KEY          - contents of the downloaded AuthKey_<id>.p8
+# The app record must exist in App Store Connect with the bundle ID in
+# capacitor.config.ts (appId); xcodebuild creates certificates and profiles.
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  testflight:
+    runs-on: macos-latest
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+    steps:
+      - name: Check the Apple secrets
+        id: keys
+        run: |
+          if [ -z "$TEAM_ID" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ] || [ -z "$KEY" ]; then
+            echo "::notice::Apple Developer secrets are not set, so there is nothing to sign with - skipping. See the comment at the top of ios-testflight.yml."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.keys.outputs.ready == 'true'
+        uses: actions/checkout@v7
+      - if: steps.keys.outputs.ready == 'true'
+        uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - if: steps.keys.outputs.ready == 'true'
+        run: npm ci && npx cap sync ios
+      - name: Archive and upload to TestFlight
+        if: steps.keys.outputs.ready == 'true'
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$KEY" > "$KEY_PATH"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" "${AUTH[@]}" archive
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}"
+          rm -f "$KEY_PATH"

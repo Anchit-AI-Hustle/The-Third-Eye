@@ -26,7 +26,7 @@ export const APPS: AppEntry[] = [
   { id: "music-studio", label: "Music Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/music", icon: "Music", selfBuilt: true, blurb: "Generate & play your own tracks" },
   { id: "video-studio", label: "Video Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/video", icon: "Clapperboard", selfBuilt: true, blurb: "Scripts, rendered shots & episode files" },
   { id: "reel-studio", label: "Reel Studio", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/reel", icon: "Film", selfBuilt: true, blurb: "9:16 reels & Shorts, rendered and cut to a track" },
-  { id: "anchor", label: "ANCHOR Autopilot", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/anchor", icon: "AudioLines", selfBuilt: true, blurb: "Daily song robot — drops, queue, YouTube & Reels" },
+  { id: "anchor", label: "ANCHOR Autopilot", category: "Music & Media", modes: [P], kind: "internal", href: "/tools/anchor", icon: "AudioLines", selfBuilt: true, blurb: "Daily song robot - drops, queue, YouTube & Reels" },
   { id: "book-studio", label: "Book Studio", category: "AI Tools", modes: [P], kind: "internal", href: "/tools/book", icon: "BookOpen", selfBuilt: true, blurb: "Write a book chapter by chapter, export EPUB & KDP listing" },
   { id: "youtube", label: "YouTube", category: "Music & Media", modes: [P], kind: "external", href: "https://www.youtube.com", icon: "Play" },
   { id: "spotify", label: "Spotify", category: "Music & Media", modes: [P], kind: "external", href: "https://open.spotify.com", icon: "Music2" },
@@ -65,7 +65,7 @@ export const APPS: AppEntry[] = [
   // ── Personal · Money & Payments ──
   { id: "finance", label: "Finance", category: "Money & Payments", modes: [P, PR, E], kind: "internal", href: "/finance", icon: "BarChart2", selfBuilt: true, blurb: "Track spend, on-device" },
   { id: "budget-studio", label: "Budget Planner", category: "Money & Payments", modes: [P], kind: "internal", href: "/tools/budget", icon: "Wallet", selfBuilt: true },
-  { id: "calculators", label: "Calculators", category: "Money & Payments", modes: [P, PR], kind: "internal", href: "/calculators", icon: "Calculator", selfBuilt: true, blurb: "SIP, EMI, retirement & 24 more — instant, on-device" },
+  { id: "calculators", label: "Calculators", category: "Money & Payments", modes: [P, PR], kind: "internal", href: "/calculators", icon: "Calculator", selfBuilt: true, blurb: "SIP, EMI, retirement & 24 more - instant, on-device" },
   { id: "phonepe", label: "PhonePe", category: "Money & Payments", modes: [P], kind: "external", href: "https://www.phonepe.com", icon: "Smartphone" },
   { id: "gpay", label: "Google Pay", category: "Money & Payments", modes: [P], kind: "external", href: "https://pay.google.com", icon: "CreditCard" },
   { id: "paytm", label: "Paytm", category: "Money & Payments", modes: [P], kind: "external", href: "https://paytm.com", icon: "CreditCard" },
@@ -104,11 +104,11 @@ export const APPS: AppEntry[] = [
 
   // ── Personal · AI Tools (free Google AI tools) ──
   { id: "google-ai-studio", label: "Google AI Studio", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://aistudio.google.com", icon: "Bot", blurb: "Prompt, test & deploy Gemini models" },
-  { id: "notebooklm", label: "NotebookLM", category: "AI Tools", modes: [P, PR, E], kind: "external", href: "https://notebooklm.google", icon: "BookOpen", blurb: "AI research assistant — upload docs, get summaries" },
+  { id: "notebooklm", label: "NotebookLM", category: "AI Tools", modes: [P, PR, E], kind: "external", href: "https://notebooklm.google", icon: "BookOpen", blurb: "AI research assistant - upload docs, get summaries" },
   { id: "stitch", label: "Stitch", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://stitch.withgoogle.com", icon: "Scissors", blurb: "AI-powered UI design from natural language" },
-  { id: "pomelli", label: "Pomelli", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://labs.google.com/pomelli/about/", icon: "Sparkles", blurb: "AI marketing — generate on-brand social content" },
+  { id: "pomelli", label: "Pomelli", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://labs.google.com/pomelli/about/", icon: "Sparkles", blurb: "AI marketing - generate on-brand social content" },
   { id: "gemini-code-assist", label: "Gemini Code Assist", category: "AI Tools", modes: [P, PR], kind: "external", href: "https://cloud.google.com/products/gemini/code-assist", icon: "Code2", blurb: "AI pair programmer for VS Code & Cursor" },
-  { id: "antigravity", label: "Antigravity", category: "AI Tools", modes: [PR], kind: "external", href: "https://antigravity.google/", icon: "Rocket", blurb: "Experimental agentic IDE — multi-agent coding" },
+  { id: "antigravity", label: "Antigravity", category: "AI Tools", modes: [PR], kind: "external", href: "https://antigravity.google/", icon: "Rocket", blurb: "Experimental agentic IDE - multi-agent coding" },
 
   // ── Personal · Entertainment ──
   { id: "netflix", label: "Netflix", category: "Entertainment", modes: [P], kind: "external", href: "https://www.netflix.com", icon: "Film" },
@@ -122,7 +122,7 @@ export const APPS: AppEntry[] = [
   // Internal tool but NOT marked selfBuilt: generation posts the user's inputs to
   // /api/tools/generate → external LLM providers, so it must not carry the App Hub's
   // "on-device" data-locality badge (that's reserved for tools whose data truly stays local).
-  { id: "how-to", label: "How-To Guide", category: "Planning", modes: [P], kind: "internal", href: "/tools/how-to", icon: "BookOpenCheck", blurb: "Step-by-step guide for anything — try \"how to swim\"" },
+  { id: "how-to", label: "How-To Guide", category: "Planning", modes: [P], kind: "internal", href: "/tools/how-to", icon: "BookOpenCheck", blurb: "Step-by-step guide for anything - try \"how to swim\"" },
   { id: "tasks", label: "Task Tracker", category: "Planning", modes: [P, PR, E], kind: "internal", href: "/tasks", icon: "CheckSquare", selfBuilt: true },
   { id: "notes", label: "Notes", category: "Planning", modes: [P, PR, E], kind: "internal", href: "/notes", icon: "FileText", selfBuilt: true },
   { id: "goals", label: "Goals", category: "Planning", modes: [P], kind: "internal", href: "/goals", icon: "Target", selfBuilt: true },
@@ -162,7 +162,7 @@ export const APPS: AppEntry[] = [
 
   // ── Work · Marketing ──
   { id: "kolab", label: "Kolab", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab", icon: "Workflow", selfBuilt: true, blurb: "Brand-adaptable Lifecycle OS & creator campaigns" },
-  { id: "kolab-studio", label: "Kolab Studio", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab/studio/home", icon: "Briefcase", blurb: "Full creator/brand product — calendar, storefront, deals, KYC & billing" },
+  { id: "kolab-studio", label: "Kolab Studio", category: "Marketing", modes: [PR, E], kind: "internal", href: "/kolab/studio/home", icon: "Briefcase", blurb: "Full creator/brand product - calendar, storefront, deals, KYC & billing" },
   { id: "meta-ads", label: "Meta Ads", category: "Marketing", modes: [PR, E], kind: "external", href: "https://business.facebook.com/adsmanager", icon: "Megaphone" },
   { id: "google-ads", label: "Google Ads", category: "Marketing", modes: [PR, E], kind: "external", href: "https://ads.google.com", icon: "Megaphone" },
   { id: "mailchimp", label: "Mailchimp", category: "Marketing", modes: [PR], kind: "external", href: "https://mailchimp.com", icon: "Mail" },

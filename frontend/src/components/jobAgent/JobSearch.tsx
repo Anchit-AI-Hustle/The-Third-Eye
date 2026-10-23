@@ -44,7 +44,7 @@ export function JobSearch() {
       const d = await res.json();
       if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
       setResult(d);
-    } catch { setError("Search failed — check your connection."); }
+    } catch { setError("Search failed - check your connection."); }
     finally { setLoading(false); }
   }
 
@@ -98,7 +98,7 @@ export function JobSearch() {
       {result && (
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           {result.sources.map((s) => {
-            const color = s.state === "complete" ? "#34D399" : s.state === "external-search" ? "#4FC3F7" : s.state === "unconfigured" ? "#7878A8" : "#EF4444";
+            const color = s.state === "complete" ? "#34D399" : s.state === "external-search" ? "#4FC3F7" : s.state === "unconfigured" ? "#8E8EBC" : "#EF4444";
             const label = s.state === "complete" ? `${s.count} results` : s.state === "external-search" ? "open search" : s.state === "unconfigured" ? "not configured" : s.state === "timed_out" ? "timed out" : "unavailable";
             return (
               <span key={s.id} className="flex items-center gap-1.5 px-2 py-1 rounded-full border font-mono" style={{ borderColor: `${color}55`, color }}>
@@ -185,7 +185,7 @@ function JobCard({ job, match, savedState, onSave, onDismiss, onApply }: {
             {job.locationText && <span>{job.locationText}</span>}
             {job.remoteType && <span className="text-[#34D399]">{job.remoteType}</span>}
             {job.employmentType && <span>{job.employmentType}</span>}
-            {(job.salaryMin || job.salaryMax) && <span className="text-[#34D399]">{job.salaryCurrency || ""} {job.salaryMin ?? ""}{job.salaryMax ? `–${job.salaryMax}` : ""}</span>}
+            {(job.salaryMin || job.salaryMax) && <span className="text-[#34D399]">{job.salaryCurrency || ""} {job.salaryMin ?? ""}{job.salaryMax ? `-${job.salaryMax}` : ""}</span>}
             <span className="px-1.5 py-0.5 rounded-full border" style={{ borderColor: `${elig.color}55`, color: elig.color }}>{elig.label}</span>
             <span>· {job.sourceAttribution}</span>
           </div>

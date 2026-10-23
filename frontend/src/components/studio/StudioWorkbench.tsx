@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Loader2, Copy, Check, Download, Sparkles, BookmarkPlus, Eye, Code2, RotateCcw } from "lucide-react";
 import type { StudioTool } from "@/lib/studioTools";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags } from "@/hooks/useModeTags";
-import { dataInsert } from "@/lib/dataClient";
+import { dataSave } from "@/lib/dataClient";
+import { openFileTab } from "@/lib/fileSave";
 import { recordGeneration, fieldsFrom } from "@/lib/generations";
 import { VideoScenes } from "@/components/studio/VideoScenes";
 import { BookWriter } from "@/components/studio/BookWriter";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
+import { localDay } from "@/lib/localDay";
 
 export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const { modeId } = useMode();
@@ -28,6 +30,12 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
   const [view, setView] = useState<"preview" | "code">("preview");
 
   const set = (name: string) => (v: string) => setInputs((p) => ({ ...p, [name]: v }));
+
+  // The chat opens a studio with ?prefill= when it hands an idea over.
+  useEffect(() => {
+    const idea = new URLSearchParams(window.location.search).get("prefill");
+    if (idea) setInputs((p) => ({ ...p, [tool.fields[0].name]: idea.slice(0, 2000) }));
+  }, [tool]);
   // What the rest of the form says, for a field's AI suggestion to fit.
   const contextFor = (name: string) =>
     Object.fromEntries(tool.fields.filter((x) => x.name !== name && inputs[x.name]?.trim()).map((x) => [x.label, inputs[x.name]]));
@@ -52,7 +60,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
         });
       }
     } catch {
-      setError("Network error — please try again.");
+      setError("Network error - please try again.");
     } finally { setLoading(false); }
   }
 
@@ -65,7 +73,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
     const blob = new Blob([output], { type: mime });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${tool.id}-${new Date().toISOString().slice(0, 10)}.${tool.downloadExt}`;
+    a.download = `${tool.id}-${localDay()}.${tool.downloadExt}`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 
@@ -80,7 +88,10 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
       chunk_count: Math.max(1, Math.ceil(output.split(/\s+/).length / 500)),
       processing_status: "ready",
     };
-    await dataInsert("knowledge_docs", doc).catch(() => {});
+    if (await dataSave("knowledge_docs", doc) === "failed") {
+      setError("Couldn't save to Knowledge. Try again.");
+      return;
+    }
     tagItem(id, modeId); // mode-scope the saved doc
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
@@ -141,7 +152,7 @@ export function StudioWorkbench({ tool }: { tool: StudioTool }) {
                 {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />} {copied ? "Copied" : "Copy"}
               </button>
               {tool.format === "html" && (
-                <button onClick={() => { const blob = new Blob([output], { type: "text/html" }); window.open(URL.createObjectURL(blob), "_blank"); }} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
+                <button onClick={() => openFileTab({ filename: `${tool.label}.html`, mime: "text/html", content: output })} className="flex items-center gap-1 px-2 py-1 rounded-input border border-border-default text-[11px] text-text-secondary hover:text-text-primary">
                   <Eye size={11} /> Open
                 </button>
               )}

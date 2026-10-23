@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = { title: "Privacy Policy — The Third Eye" };
+export const metadata = pageMetadata({
+  title: "Privacy Policy - The Third Eye",
+  description: "What The Third Eye collects, how Google user data is used, which providers process it, how it is protected, and how to delete it.",
+  path: "/privacy_policy",
+});
 
 export default function PrivacyPolicyPage() {
   return (
@@ -61,17 +66,17 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc list-inside space-y-1">
               <li>
-                <span className="font-mono text-xs">gmail.readonly</span> — to read messages you
+                <span className="font-mono text-xs">gmail.readonly</span> - to read messages you
                 ask the assistant to summarise, search, or extract tasks from
               </li>
               <li>
-                <span className="font-mono text-xs">gmail.send</span> — to send an email you asked
+                <span className="font-mono text-xs">gmail.send</span> - to send an email you asked
                 the assistant to write, only after you review it and press Confirm, and to email you
                 the reminders and daily briefing you switched on. Sent mail appears in your Gmail Sent
                 folder
               </li>
               <li>
-                <span className="font-mono text-xs">calendar.events.owned.readonly</span> — to list
+                <span className="font-mono text-xs">calendar.events.owned.readonly</span> - to list
                 events on your own primary calendar when you ask about your schedule. We never create,
                 change or delete events
               </li>
@@ -85,6 +90,19 @@ export default function PrivacyPolicyPage() {
               Google user data is not used to train any machine-learning model, is not sold, and is
               not transferred to anyone except the AI providers listed below, and only to the
               extent needed to answer your request.
+            </p>
+          </section>
+
+          <section id="cookies">
+            <h2 className="text-text-primary font-semibold mb-2">Cookies and Local Storage</h2>
+            <p>
+              We set only the cookies the service needs to work: your sign-in session and its
+              security tokens, a short-lived state value while you connect Google or GitHub, and
+              which Kolab organisation you have open. We use no advertising or tracking cookies.
+              Visitor statistics come from Vercel Web Analytics, which uses no cookies and counts
+              visits from an anonymous hash that resets daily. Settings such as voice, motion and
+              this notice&apos;s acknowledgement are kept in your browser&apos;s local storage and
+              never leave your device.
             </p>
           </section>
 
@@ -116,8 +134,8 @@ export default function PrivacyPolicyPage() {
               How We Protect Your Data
             </h2>
             <p className="mb-3">
-              Sensitive data — Google OAuth tokens, message and calendar content, uploaded
-              documents, and the contents of your conversations — is protected by the following
+              Sensitive data - Google OAuth tokens, message and calendar content, uploaded
+              documents, and the contents of your conversations - is protected by the following
               controls:
             </p>
             <ul className="list-disc list-inside space-y-2">
@@ -147,8 +165,8 @@ export default function PrivacyPolicyPage() {
               </li>
               <li>
                 <span className="text-text-primary">Server-enforced identity.</span> The account a
-                request acts for is taken from the verified session or a scoped API credential —
-                never from the request body — so a caller cannot read or write another
+                request acts for is taken from the verified session or a scoped API credential -
+                never from the request body - so a caller cannot read or write another
                 account&apos;s data by naming it.
               </li>
               <li>
@@ -171,15 +189,15 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">Third-Party Services</h2>
             <ul className="list-disc list-inside space-y-1">
-              <li>Google — your name and email to sign in. Gmail and Calendar only if you connect them in Settings</li>
+              <li>Google - your name and email to sign in. Gmail and Calendar only if you connect them in Settings</li>
               <li>
-                AI model providers (Anthropic, OpenAI, Google, Groq, and similar) — to generate
+                AI model providers (Anthropic, OpenAI, Google, Groq, and similar) - to generate
                 responses and transcribe audio. Only the content needed to answer a given request
                 is sent.
               </li>
-              <li>Supabase — database</li>
-              <li>Vercel — application hosting</li>
-              <li>Stripe — subscription payments. Card details are handled by Stripe; we never receive or store them.</li>
+              <li>Supabase - database</li>
+              <li>Vercel - application hosting</li>
+              <li>Stripe - subscription payments. Card details are handled by Stripe; we never receive or store them.</li>
             </ul>
           </section>
 

@@ -23,7 +23,7 @@ export default async function StudioPage() {
         <Eyebrow>Plan · schedule · sell</Eyebrow>
         <h2 className="mb-2 text-[clamp(24px,4vw,36px)]">Creator Studio</h2>
         <p className="text-[15px] text-kolab-muted">
-          Your content calendar, multi-channel scheduler, and coupon deals — all feeding your public
+          Your content calendar, multi-channel scheduler, and coupon deals - all feeding your public
           storefront.
         </p>
       </div>

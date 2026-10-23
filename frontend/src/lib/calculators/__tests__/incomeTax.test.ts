@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { indiaIncomeTax } from "../formulas";
 
 // FY 2025-26 (AY 2026-27) reference points.
-describe("indiaIncomeTax — new regime", () => {
+describe("indiaIncomeTax - new regime", () => {
   it("salaried income up to ₹12.75L is fully tax-free (₹75k std + 87A up to ₹12L)", () => {
     const t = indiaIncomeTax(1275000, { regime: "new", salaried: true });
     expect(t.taxable).toBe(1200000);
@@ -38,7 +38,7 @@ describe("indiaIncomeTax — new regime", () => {
   });
 });
 
-describe("indiaIncomeTax — old regime", () => {
+describe("indiaIncomeTax - old regime", () => {
   it("₹5L taxable is fully rebated (87A up to ₹5L)", () => {
     const t = indiaIncomeTax(550000, { regime: "old", salaried: true });
     expect(t.taxable).toBe(500000);

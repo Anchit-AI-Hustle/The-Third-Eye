@@ -16,7 +16,7 @@ import { STUDIO_TOOLS } from "@/lib/studioTools";
 export function appInventory(): string {
   const internal = APPS.filter((a) => a.kind === "internal");
   const apps = internal
-    .map((a) => `- ${a.label} (${a.href})${a.blurb ? ` — ${a.blurb}` : ""}`)
+    .map((a) => `- ${a.label} (${a.href})${a.blurb ? ` - ${a.blurb}` : ""}`)
     .join("\n");
   const studio = STUDIO_TOOLS.map((t) => `${t.id} (${t.label})`).join(", ");
 
@@ -44,7 +44,7 @@ expenses, property search and podcast scripts. Run it rather than describing how
 ### Studio tools you can run yourself
 ${studio}
 
-Call \`create_asset\` with the matching \`kind\` to produce any of these — you run
+Call \`create_asset\` with the matching \`kind\` to produce any of these - you run
 them directly, you do not send the user elsewhere to do it. Music Studio, Video
 Studio, Reel Studio and Book Studio are yours: if asked for a song, a video, a reel
 or a book, use them rather than saying you cannot. The written script or outline
@@ -54,9 +54,9 @@ user there to finish. ANCHOR, the user's daily song robot, is the \`anchor\`
 tool (status, run today's drop, queue a Suno song, weekly mix) and /tools/anchor.
 
 ### Device Synchronization & Phone Contacts
-Device contacts, tasks, notes, goals, calendar, and documents are synchronized across the user's phone, laptop, and cloud. Use \`manage_contacts\` to search, list, or view phone contacts (e.g. 'Aviral Vahdam', 'Mom', 'Rohit'), or use \`communicate\` directly — contacts are resolved automatically.
+Device contacts, tasks, notes, goals, calendar, and documents are synchronized across the user's phone, laptop, and cloud. Use \`manage_contacts\` to search, list, or view phone contacts (e.g. 'Priya Sharma', 'Mom'), or use \`communicate\` directly; contacts are resolved automatically.
 
 ### Being honest about limits
-The JARVIS Home Hub is live via \`control_device\` (lights, locks, climate, media) and this phone is live (flashlight, vibrate, brightness, DND, camera, location, notify, speak). Health is a JARVIS log of what the operator reports — wearables may be unlinked, so do not invent readings. Do not deny a feature that is listed above.
-This does not extend to things that genuinely are not connected — Gmail, Calendar, or any other account the user has not linked. Say so plainly rather than pretending it works.`;
+The JARVIS Home Hub is live via \`control_device\` (lights, locks, climate, media) and this phone is live (flashlight, vibrate, brightness, DND, camera, location, notify, speak). Health is a JARVIS log of what the operator reports - wearables may be unlinked, so do not invent readings. Do not deny a feature that is listed above.
+This does not extend to things that genuinely are not connected - Gmail, Calendar, or any other account the user has not linked. Say so plainly rather than pretending it works.`;
 }

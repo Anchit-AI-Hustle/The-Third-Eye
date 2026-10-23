@@ -4,8 +4,9 @@ import { Sidebar } from "../Sidebar";
 
 const signOutAndClear = vi.fn();
 
+let pathname = "/activity";
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/activity",
+  usePathname: () => pathname,
 }));
 
 vi.mock("next-auth/react", () => ({
@@ -45,5 +46,17 @@ describe("Sidebar sign out", () => {
   it("lists Settings under Account & System", () => {
     render(<Sidebar mobileOpen onMobileClose={() => {}} />);
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  });
+});
+
+describe("Sidebar sections", () => {
+  it("shows every screen at once, grouped, with no More toggle", () => {
+    pathname = "/dashboard";
+    render(<Sidebar mobileOpen onMobileClose={() => {}} />);
+    for (const name of ["Today", "Assistant", "Tasks", "Notes", "Knowledge", "Goals", "Studio", "Apps", "Agent Activity", "Connectors"]) {
+      expect(screen.getByRole("link", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: "Studio" })).toHaveAttribute("href", "/tools");
+    expect(screen.queryByRole("button", { name: /More/ })).toBeNull();
   });
 });

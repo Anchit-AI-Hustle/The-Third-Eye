@@ -129,7 +129,7 @@ describe("consume", () => {
     expect(res.allowed).toBe(false);
   });
 
-  it("fails open when the counter errors — availability over strict metering", async () => {
+  it("fails open when the counter errors - availability over strict metering", async () => {
     getDb.mockReturnValue(
       fakeSupabase({ profile: null, rpcValue: 9999, rpcError: { message: "boom" } }),
     );

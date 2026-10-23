@@ -79,5 +79,5 @@ export function learnPattern(
 ): string {
   if (!kind || !value) return "I need both a pattern category (kind) and a value to record.";
   store[`${PATTERN_PREFIX}${kind}`] = encodePattern(value, confidence);
-  return `### Pattern Recorded\n\n- **Category**: ${kind}\n- **Value**: ${value}\n- **Confidence**: ${Math.round(confidence * 100)}%\n\nSaved to your profile — it'll be in my context on every future conversation, on any device.`;
+  return `### Pattern Recorded\n\n- **Category**: ${kind}\n- **Value**: ${value}\n- **Confidence**: ${Math.round(confidence * 100)}%\n\nSaved to your profile - it'll be in my context on every future conversation, on any device.`;
 }

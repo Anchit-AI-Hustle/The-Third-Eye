@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       // Real flow (Phase 2): create a Razorpay subscription, redirect to checkout, and let the
       // signature-verified webhook mark the subscription active. Never trust this route to activate.
       return fail(
-        "Checkout isn't wired yet (Phase 2 — Razorpay). Subscription state will be set by the payment webhook.",
+        "Checkout isn't wired yet (Phase 2 - Razorpay). Subscription state will be set by the payment webhook.",
         501,
       );
     }
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       ip: clientIp(req),
       meta: { plan, cycle },
     });
-    return ok({ message: `${plan} activated (DEV_MODE — real billing via Razorpay in Phase 2)` });
+    return ok({ message: `${plan} activated (DEV_MODE - real billing via Razorpay in Phase 2)` });
   } catch (e) {
     return handleError(e);
   }

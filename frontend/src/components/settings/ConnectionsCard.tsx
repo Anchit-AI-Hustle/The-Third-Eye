@@ -13,8 +13,8 @@ interface Status {
 function scopeLabels(scopes: string[]): string[] {
   const out = new Set<string>();
   for (const s of scopes) {
-    if (s.includes("gmail.send")) out.add("Gmail — send");
-    else if (s.includes("gmail")) out.add("Gmail — read");
+    if (s.includes("gmail.send")) out.add("Gmail - send");
+    else if (s.includes("gmail")) out.add("Gmail - read");
     if (s.includes("calendar")) out.add("Calendar");
   }
   return [...out];
@@ -71,10 +71,10 @@ export function ConnectionsCard() {
     <div className="holo-card rounded-card p-5 mt-5">
       <div className="flex items-center gap-2 mb-1">
         <Link2 size={14} className="text-[#4FC3F7]" />
-        <span className="hud-label text-[#4FC3F7]">// Connections</span>
+        <span className="hud-label text-[#4FC3F7]">Connections</span>
       </div>
       <h2 className="font-display text-lg font-semibold text-text-primary">Google account</h2>
-      <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
+      <p className="text-text-muted text-xs mt-1 mb-4">
         Connect Gmail &amp; Calendar so the assistant can read/summarise mail, send email, check your schedule, and turn emails into tasks.
       </p>
 
@@ -90,14 +90,14 @@ export function ConnectionsCard() {
       )}
       {banner === "pending" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-text-muted">
-          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app — it opens to everyone once approved.
+          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app - it opens to everyone once approved.
         </div>
       )}
       {banner === "no_scopes" && (
         <div className="flex items-start gap-2 mb-4 text-xs text-warning">
           <AlertCircle size={13} className="mt-px shrink-0" />
           <span>
-            Nothing was connected — none of the Gmail or Calendar boxes were ticked on
+            Nothing was connected - none of the Gmail or Calendar boxes were ticked on
             Google&apos;s screen. Any access you had already granted is untouched. Try again and
             allow at least one.
           </span>
@@ -105,7 +105,7 @@ export function ConnectionsCard() {
       )}
       {banner === "error" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-accent-red">
-          <AlertCircle size={13} /> Couldn&apos;t connect — the sign-in was cancelled or the app isn&apos;t authorised for these scopes yet.
+          <AlertCircle size={13} /> Couldn&apos;t connect - the sign-in was cancelled or the app isn&apos;t authorised for these scopes yet.
         </div>
       )}
 
@@ -156,7 +156,7 @@ export function ConnectionsCard() {
         )}
       </div>
 
-      <p className="text-text-muted text-[11px] font-mono mt-3 leading-relaxed">
+      <p className="text-text-muted text-[11px] mt-3 leading-relaxed">
         Sign-in does not grant mail. Connect here when you want the assistant to read or send it.
         While Google's review of those permissions is open, only listed accounts can start this step.
         Disconnecting revokes the permission at Google and deletes the token stored here.
@@ -166,7 +166,7 @@ export function ConnectionsCard() {
         <h2 className="font-display text-lg font-semibold text-text-primary flex items-center gap-2">
           <Link2 size={16} /> GitHub
         </h2>
-        <p className="text-text-muted text-xs font-mono mt-1 mb-4 tracking-wider">
+        <p className="text-text-muted text-xs mt-1 mb-4">
           Connect GitHub so the assistant can read your repositories, issues, pull requests and code.
         </p>
         {banner === "github_connected" && (
@@ -187,7 +187,7 @@ export function ConnectionsCard() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {github?.configured === false ? (
-            <p className="text-xs text-text-muted font-mono">GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are not set on this deployment.</p>
+            <p className="text-xs text-text-muted">GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are not set on this deployment.</p>
           ) : (
             <a href="/api/connect/github" className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors">
               <Link2 size={14} /> {github?.connected ? "Reconnect GitHub" : "Connect GitHub"}

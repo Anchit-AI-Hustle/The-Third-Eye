@@ -42,6 +42,7 @@ import {
 } from "@/lib/consent";
 import { CAP_META } from "@/components/permission/PermissionProvider";
 import { cn } from "@/lib/utils";
+import { grantFullDeviceAccess } from "@/lib/fullAccess";
 
 // Detects platform and deep-links directly to native settings when supported, or guides the user safely
 export async function openDeviceAppSettings(): Promise<{ opened: boolean; platform: "capacitor" | "ios" | "android" | "mac" | "windows" | "web" }> {
@@ -95,7 +96,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Documents, Files & Media Vault",
     description: "Access and index offline documents, PDFs, photos, and local assets for JARVIS knowledge.",
     icon: FolderOpen,
-    devicePathHint: "iOS: Settings → JARVIS OS → Photos & Files | Android: Settings → Apps → JARVIS OS → Permissions → Files and media",
+    devicePathHint: "iOS: Settings → The Third Eye → Photos & Files | Android: Settings → Apps → The Third Eye → Permissions → Files and media",
     capabilities: ["files", "photos"],
   },
   {
@@ -103,7 +104,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Camera & Optical Vision",
     description: "Live camera capture, document OCR, visual scene analysis, and screen sharing.",
     icon: Camera,
-    devicePathHint: "iOS: Settings → JARVIS OS → Camera | Android: Settings → Apps → JARVIS OS → Permissions → Camera",
+    devicePathHint: "iOS: Settings → The Third Eye → Camera | Android: Settings → Apps → The Third Eye → Permissions → Camera",
     capabilities: ["camera", "screen"],
   },
   {
@@ -111,7 +112,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Microphone & Voice Intelligence",
     description: "Hands-free wake word detection, voice dictation, and ambient acoustic processing.",
     icon: Mic,
-    devicePathHint: "iOS: Settings → JARVIS OS → Microphone | Android: Settings → Apps → JARVIS OS → Permissions → Microphone",
+    devicePathHint: "iOS: Settings → The Third Eye → Microphone | Android: Settings → Apps → The Third Eye → Permissions → Microphone",
     capabilities: ["microphone"],
   },
   {
@@ -119,7 +120,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Location & Spatial Navigation",
     description: "GPS geofencing, precise location, local weather, commute alerts, and ambient context.",
     icon: MapPin,
-    devicePathHint: "iOS: Settings → JARVIS OS → Location | Android: Settings → Apps → JARVIS OS → Permissions → Location",
+    devicePathHint: "iOS: Settings → The Third Eye → Location | Android: Settings → Apps → The Third Eye → Permissions → Location",
     capabilities: ["location"],
   },
   {
@@ -127,7 +128,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Contacts & Direct Outreach",
     description: "Phonebook lookup for instant dialing, automated WhatsApp dispatch, and SMS messages.",
     icon: Users,
-    devicePathHint: "iOS: Settings → JARVIS OS → Contacts | Android: Settings → Apps → JARVIS OS → Permissions → Contacts",
+    devicePathHint: "iOS: Settings → The Third Eye → Contacts | Android: Settings → Apps → The Third Eye → Permissions → Contacts",
     capabilities: ["contacts"],
   },
   {
@@ -135,7 +136,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Alerts, Briefings & Clipboard",
     description: "Push notifications for reminders, daily executive briefings, and clipboard integration.",
     icon: Bell,
-    devicePathHint: "iOS: Settings → JARVIS OS → Notifications | Android: Settings → Apps → JARVIS OS → Notifications",
+    devicePathHint: "iOS: Settings → The Third Eye → Notifications | Android: Settings → Apps → The Third Eye → Notifications",
     capabilities: ["notifications", "clipboard"],
   },
   {
@@ -143,7 +144,7 @@ const PERMISSION_CATEGORIES: PermissionCategory[] = [
     title: "Hardware & Physical Controls",
     description: "Bluetooth IoT hubs, shake-to-activate motion gestures, haptics, wake lock, and power.",
     icon: Radio,
-    devicePathHint: "iOS: Settings → JARVIS OS → Bluetooth & Motion | Android: Settings → Apps → JARVIS OS → Permissions → Nearby devices",
+    devicePathHint: "iOS: Settings → The Third Eye → Bluetooth & Motion | Android: Settings → Apps → The Third Eye → Permissions → Nearby devices",
     capabilities: ["bluetooth", "motion", "wakeLock", "vibration", "battery"],
   },
 ];
@@ -236,55 +237,19 @@ export function PermissionsCard() {
   // Prompt and verify all core hardware permissions in one tap
   const handlePromptAllPermissions = async () => {
     setPromptingAll(true);
-    setPromptStep("Initializing hardware test...");
-
-    // 1. Microphone
-    setPromptStep("1/4: Requesting Microphone access...");
-    try {
-      if (typeof navigator.mediaDevices?.getUserMedia === "function") {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    } catch {}
-
-    // 2. Camera
-    setPromptStep("2/4: Requesting Camera access...");
-    try {
-      if (typeof navigator.mediaDevices?.getUserMedia === "function") {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280 } });
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    } catch {}
-
-    // 3. Location
-    setPromptStep("3/4: Requesting Location access...");
-    try {
-      if (navigator.geolocation) {
-        await new Promise<void>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            () => resolve(),
-            () => resolve(),
-            { timeout: 8000 }
-          );
-        });
-      }
-    } catch {}
-
-    // 4. Notifications
-    setPromptStep("4/4: Requesting Notifications permission...");
-    try {
-      if (typeof Notification !== "undefined") {
-        await Notification.requestPermission();
-      }
-    } catch {}
-
-    setPromptStep("Probe complete! System permissions saved in your device & browser settings.");
+    await grantFullDeviceAccess(setPromptStep);
     setPromptingAll(false);
     await refreshSystemStatuses();
   };
 
+  const pickedTest = (cap: PermissionCapability, files: FileList | null) => {
+    const n = files?.length ?? 0;
+    setTestResults((prev) => ({ ...prev, [cap]: n ? { status: "success", message: `Read ${files![0].name} (${Math.round(files![0].size / 1024)} KB).` } : { status: "error", message: "Nothing was picked." } }));
+  };
+
   // Test / prompt device access directly from settings
   const handleTestCapability = async (cap: PermissionCapability) => {
+    const native = (window as any).Capacitor?.isNativePlatform?.() ? (window as any).Capacitor : null;
     setTestResults((prev) => ({
       ...prev,
       [cap]: { status: "testing", message: "Connecting to hardware..." },
@@ -323,6 +288,14 @@ export function PermissionsCard() {
           { timeout: 8000 }
         );
       } else if (cap === "notifications") {
+        // Inside the Android or iPhone app the WebView has no Notification API;
+        // the native prompt (Android 13+ POST_NOTIFICATIONS) comes from the plugin.
+        const push = native?.Plugins?.PushNotifications;
+        if (push) {
+          const r = await push.requestPermissions();
+          setTestResults((prev) => ({ ...prev, [cap]: { status: r.receive === "granted" ? "success" : "error", message: `Notification permission: ${r.receive}.` } }));
+          return;
+        }
         if (typeof Notification === "undefined") throw new Error("Notifications not supported");
         const res = await Notification.requestPermission();
         setTestResults((prev) => ({
@@ -331,36 +304,39 @@ export function PermissionsCard() {
         }));
         refreshSystemStatuses();
       } else if (cap === "files") {
-        if (fileTestInputRef.current) {
-          fileTestInputRef.current.click();
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Document picker launched." } }));
-        }
+        // Passes only once a file is actually picked (see the input's onChange).
+        fileTestInputRef.current?.click();
+        setTestResults((prev) => ({ ...prev, [cap]: { status: "testing", message: "Pick a file to confirm access." } }));
       } else if (cap === "photos") {
-        if (photoTestInputRef.current) {
-          photoTestInputRef.current.click();
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Photos gallery picker launched." } }));
-        }
+        photoTestInputRef.current?.click();
+        setTestResults((prev) => ({ ...prev, [cap]: { status: "testing", message: "Pick a photo to confirm access." } }));
       } else if (cap === "contacts") {
         const nav = navigator as any;
-        if ("contacts" in nav && "ContactsManager" in window) {
+        const book = native?.Plugins?.Contacts;
+        if (book) {
+          const r = await book.requestPermissions();
+          const yes = r.contacts === "granted" || r.contacts === "limited";
+          setTestResults((prev) => ({ ...prev, [cap]: { status: yes ? "success" : "error", message: yes ? "Address book access allowed." : "Contacts access is off. Turn it on in the phone's Settings." } }));
+        } else if ("contacts" in nav && "ContactsManager" in window) {
           const c = await nav.contacts.select(["name"], { multiple: false });
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: `Contacts picker verified (${c?.length || 0} selected).` } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: c?.length ? "success" : "error", message: c?.length ? "Contacts picker works." : "No contact was picked." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Contacts address book ready (supported in device & browser)." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser can't read contacts. Use the JARVIS phone app, or import a .vcf file." } }));
         }
       } else if (cap === "bluetooth") {
         const nav = navigator as any;
         if (nav.bluetooth?.requestDevice) {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Web Bluetooth API ready for smart hub & peripherals." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Web Bluetooth is available in this browser." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Bluetooth hardware bridge declared in native manifest." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser has no Bluetooth access." } }));
         }
       } else if (cap === "motion") {
         if (typeof (DeviceOrientationEvent as any)?.requestPermission === "function") {
           const res = await (DeviceOrientationEvent as any).requestPermission();
           setTestResults((prev) => ({ ...prev, [cap]: { status: res === "granted" ? "success" : "error", message: `Motion permission: ${res}.` } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Motion & gyroscope sensors active for shake gestures." } }));
+          const has = typeof window !== "undefined" && "DeviceMotionEvent" in window;
+          setTestResults((prev) => ({ ...prev, [cap]: { status: has ? "success" : "error", message: has ? "Motion sensors are available." : "This device reports no motion sensors." } }));
         }
       } else if (cap === "wakeLock") {
         if ("wakeLock" in navigator) {
@@ -368,14 +344,14 @@ export function PermissionsCard() {
           await lock.release();
           setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Screen stay awake lock verified." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Wake Lock native capability active." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser can't keep the screen awake." } }));
         }
       } else if (cap === "vibration") {
         if (typeof navigator.vibrate === "function") {
           navigator.vibrate([40, 30, 40]);
           setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Haptic vibration pulse triggered." } }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Haptic alerts active on supported hardware." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser can't vibrate (iPhone browsers have no vibration API)." } }));
         }
       } else if (cap === "clipboard") {
         if (navigator.clipboard) {
@@ -392,7 +368,7 @@ export function PermissionsCard() {
             [cap]: { status: "success", message: `Battery diagnostic active (${Math.round(b.level * 100)}% remaining).` },
           }));
         } else {
-          setTestResults((prev) => ({ ...prev, [cap]: { status: "success", message: "Power diagnostics supported." } }));
+          setTestResults((prev) => ({ ...prev, [cap]: { status: "error", message: "This browser doesn't report battery level." } }));
         }
       } else if (cap === "screen") {
         if (typeof navigator.mediaDevices?.getDisplayMedia === "function") {
@@ -414,8 +390,8 @@ export function PermissionsCard() {
   return (
     <div className="mt-6 rounded-card border border-border-default bg-background-surface/40 p-5 space-y-6">
       {/* Test inputs */}
-      <input ref={fileTestInputRef} type="file" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
-      <input ref={photoTestInputRef} type="file" accept="image/*" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={() => {}} />
+      <input ref={fileTestInputRef} type="file" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={(e) => pickedTest("files", e.target.files)} />
+      <input ref={photoTestInputRef} type="file" accept="image/*" className="sr-only opacity-0 absolute w-px h-px pointer-events-none -z-10" aria-hidden="true" onChange={(e) => pickedTest("photos", e.target.files)} />
 
       {/* Header with App Settings & Cross-Platform Link */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border-default">
@@ -454,10 +430,10 @@ export function PermissionsCard() {
         <Info size={14} className="text-[#4FC3F7] flex-none" />
         <span className="font-medium text-text-primary">Where to find these in your phone or laptop:</span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
-          iOS: Settings → JARVIS OS
+          iOS: Settings → The Third Eye
         </span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
-          Android: Settings → Apps → JARVIS OS → Permissions
+          Android: Settings → Apps → The Third Eye → Permissions
         </span>
         <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px]">
           Laptop: Browser Address Bar 🔒 / 🎛️ → Permissions
@@ -503,10 +479,10 @@ export function PermissionsCard() {
             <div>
               <div className="font-medium text-text-primary text-xs flex items-center gap-1.5">
                 <Sparkles size={13} className="text-[#4FC3F7]" />
-                <span>Grant &amp; Test All Device Permissions</span>
+                <span>Allow full device access</span>
               </div>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Triggers native browser prompts for Camera, Microphone, Location &amp; Alerts in sequence. Once allowed, your device permanently saves them.
+                Sets every capability below to Allow always, then asks your device for microphone, camera, location, notifications, motion, storage and, in the Android app, SMS and calls. Whatever you allow stays allowed.
               </p>
               {promptStep && (
                 <div className="mt-1.5 text-[11px] text-[#4FC3F7] font-mono flex items-center gap-1.5">
@@ -523,7 +499,7 @@ export function PermissionsCard() {
               className="px-3 py-1.5 rounded-input bg-[#4FC3F7] text-[#07070F] text-xs font-semibold hover:bg-[#38b6f0] transition-colors flex-none flex items-center gap-1.5 disabled:opacity-50"
             >
               {promptingAll ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              <span>{promptingAll ? "Prompting..." : "Prompt All Now"}</span>
+              <span>{promptingAll ? "Asking..." : "Allow everything"}</span>
             </button>
           </div>
 
@@ -543,7 +519,7 @@ export function PermissionsCard() {
                 <li>Tap <strong>aA</strong> in the Safari address bar (left or bottom).</li>
                 <li>Tap <strong>Website Settings</strong>.</li>
                 <li>Set <strong>Camera</strong>, <strong>Microphone</strong> &amp; <strong>Location</strong> to <strong>Allow</strong>.</li>
-                <li>Or open iPhone <strong>Settings → JARVIS OS</strong> (or Safari) to toggle access.</li>
+                <li>Or open iPhone <strong>Settings → The Third Eye</strong> (or Safari) to toggle access.</li>
               </ol>
             </div>
 
@@ -595,7 +571,7 @@ export function PermissionsCard() {
               <ol className="list-decimal list-inside text-text-muted space-y-1 text-[11px] leading-relaxed">
                 <li>Tap the <strong>Padlock 🔒 or Tune icon</strong> next to the URL.</li>
                 <li>Tap <strong>Permissions</strong> → Enable <strong>Camera, Microphone &amp; Location</strong>.</li>
-                <li>Or open <strong>Settings → Apps → JARVIS OS → Permissions</strong>.</li>
+                <li>Or open <strong>Settings → Apps → The Third Eye → Permissions</strong>.</li>
               </ol>
             </div>
           </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { subscribeTilt } from "@/lib/deviceTilt";
 
 export type Card3DProps = {
   children: React.ReactNode;
@@ -64,8 +65,7 @@ export function Card3D({
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      // Coarse pointers have no hover state — a "tilt" would only fire on tap
-      // and read as a glitch.
+      // A touch drag is a scroll; touch leans the card on press instead.
       if (reduced || e.pointerType === "touch") return;
       pending.current = { x: e.clientX, y: e.clientY };
       ref.current?.setAttribute("data-tracking", "true");
@@ -73,6 +73,41 @@ export function Card3D({
     },
     [reduced, flush],
   );
+
+  // Touch: the card presses in and leans toward the finger.
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (reduced || e.pointerType !== "touch") return;
+      pending.current = { x: e.clientX, y: e.clientY };
+      flush();
+      ref.current?.setAttribute("data-pressed", "");
+      ref.current?.style.setProperty("--lift", "-6px");
+    },
+    [reduced, flush],
+  );
+
+  // Phones have no hover, so the card follows how the phone is tilted, and
+  // swings into place as it scrolls into view.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || reduced) return;
+    const io = new IntersectionObserver(([entry]) => {
+      el.setAttribute("data-inview", String(entry.isIntersecting || entry.boundingClientRect.top < 0));
+    }, { threshold: 0.15 });
+    io.observe(el);
+    if (!matchMedia("(hover: none)").matches) return () => io.disconnect();
+    const off = subscribeTilt(({ x, y }) => {
+      if (el.hasAttribute("data-pressed")) return;
+      el.style.setProperty("--ry", `${x * intensity * 2}deg`);
+      el.style.setProperty("--rx", `${-y * intensity * 2}deg`);
+      if (glare) {
+        el.style.setProperty("--gx", `${(x + 0.5) * 100}%`);
+        el.style.setProperty("--gy", `${(y + 0.5) * 100}%`);
+        el.style.setProperty("--glare", String(Math.min(1, (Math.abs(x) + Math.abs(y)) * 2)));
+      }
+    });
+    return () => { io.disconnect(); off(); };
+  }, [reduced, intensity, glare]);
 
   const reset = useCallback(() => {
     if (frame.current) {
@@ -83,6 +118,7 @@ export function Card3D({
     const el = ref.current;
     if (!el) return;
     el.removeAttribute("data-tracking");
+    el.removeAttribute("data-pressed");
     el.style.setProperty("--rx", "0deg");
     el.style.setProperty("--ry", "0deg");
     el.style.setProperty("--lift", "0px");
@@ -94,6 +130,8 @@ export function Card3D({
       ref={ref}
       className={cn("card-3d", className)}
       onPointerMove={onPointerMove}
+      onPointerDown={onPointerDown}
+      onPointerUp={reset}
       onPointerLeave={reset}
       onPointerCancel={reset}
       onBlur={reset}

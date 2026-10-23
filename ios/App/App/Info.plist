@@ -7,7 +7,16 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>JARVIS OS</string>
+        <string>The Third Eye</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Jarvis</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>jar-viss</string>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -29,37 +38,42 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>JARVIS listens for your wake word, dictation, and voice commands. Recording only runs while you have it switched on.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>JARVIS uses the camera to inspect objects, scan documents, and provide visual assistance.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>JARVIS accesses your photos and documents vault when you ask to inspect, analyze, or attach media.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>JARVIS saves generated visual reports, charts, and media directly to your Photos library.</string>
+	<string>The Third Eye listens for your wake word, dictation, and voice commands. Recording only runs while you have it switched on.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>JARVIS accesses your contacts for instant phone dialing, WhatsApp messaging, and SMS outreach.</string>
+	<string>The Third Eye syncs your contacts so it can call, message or email the people you name.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The Third Eye uses the camera to inspect objects, scan documents, and provide visual assistance.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>The Third Eye syncs your photo library so you can find and ask about your photos without picking them one by one.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>The Third Eye saves generated visual reports, charts, and media directly to your Photos library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>JARVIS uses your location to answer questions about where you are and provide local weather and navigation.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>JARVIS uses continuous background location to provide ambient spatial context, commute alerts, and geofenced automations.</string>
+	<string>The Third Eye uses your location to answer questions about where you are and provide local weather and navigation.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>JARVIS converts what you say into text so it can respond to spoken requests.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>JARVIS connects to local Bluetooth accessories, wearables, and smart home IoT hubs.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>JARVIS communicates with smart home hardware and Bluetooth peripherals.</string>
+	<string>The Third Eye converts what you say into text so it can respond to spoken requests.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>JARVIS detects physical movement and gestures like shake-to-activate and device orientation.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>JARVIS uses Face ID for biometric authentication to unlock private vaults and secure configurations.</string>
+	<string>The Third Eye detects physical movement and gestures like shake-to-activate and device orientation.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>JARVIS discovers and interacts with local smart devices and media hubs on your network.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
+	<string>The Third Eye discovers and interacts with local smart devices and media hubs on your network.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

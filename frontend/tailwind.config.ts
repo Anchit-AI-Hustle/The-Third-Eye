@@ -44,11 +44,12 @@ const config: Config = {
         text: {
           primary:   "#FFFFFF",
           secondary: "#B0B8C8",
-          muted:     "#6B7394",
+          muted:     "#7F87A8",
         },
         accent: {
           blue:   "#4FC3F7",   // Arc Blue — primary brand
           violet: "#7B5CF0",
+          amber:  "#FFB547",   // rare telemetry marker only
           red:    "#EF4444",
         },
         success: "#10B981",

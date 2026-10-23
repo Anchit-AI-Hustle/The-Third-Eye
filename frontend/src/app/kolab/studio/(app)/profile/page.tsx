@@ -1,5 +1,6 @@
 // web/app/(app)/profile/page.tsx — the public-facing profile as brands/followers see it.
 import { Card, Eyebrow, Pill } from "@/components/kolab-studio/ui";
+import { safeHref } from "@/lib/kolab-studio/validation";
 import { getMyProfile, getEntitlementContext } from "@/lib/kolab-studio/db";
 import { getChannels } from "@/lib/kolab-studio/studio";
 import { CHANNELS } from "@/lib/kolab-studio/content";
@@ -31,12 +32,12 @@ export default async function ProfilePage() {
         <div>
           <h2 className="text-[26px]">{name}</h2>
           <div className="my-2.5 font-kolab-mono text-[12px] text-kolab-muted">
-            {p?.handle || "@—"}
-            {p?.website_url && (
+            {p?.handle || "@-"}
+            {safeHref(p?.website_url) && (
               <>
                 {" · "}
-                <a href={p.website_url} target="_blank" rel="noopener" className="text-kolab-lime">
-                  {p.website_url}
+                <a href={safeHref(p?.website_url)} target="_blank" rel="noopener" className="text-kolab-lime">
+                  {p?.website_url}
                 </a>
               </>
             )}
@@ -56,10 +57,10 @@ export default async function ProfilePage() {
 
       <Card className="mt-4 p-[22px]">
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
-          <Field k="Age" v={age !== null ? `${age} yrs` : "—"} />
-          <Field k="DOB" v={p?.dob || "—"} />
-          <Field k="Location" v={[p?.city, p?.state, p?.country].filter(Boolean).join(", ") || "—"} />
-          <Field k="Pincode" v={p?.pincode || "—"} />
+          <Field k="Age" v={age !== null ? `${age} yrs` : "-"} />
+          <Field k="DOB" v={p?.dob || "-"} />
+          <Field k="Location" v={[p?.city, p?.state, p?.country].filter(Boolean).join(", ") || "-"} />
+          <Field k="Pincode" v={p?.pincode || "-"} />
         </div>
         <div className="mt-4">
           <div className="mb-2 font-kolab-mono text-[10px] uppercase text-kolab-muted">Channels</div>

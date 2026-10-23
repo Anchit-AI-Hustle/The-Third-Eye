@@ -14,6 +14,7 @@ import { audioUrlFrom, createPrediction, getPrediction, replicateConfigured } fr
 import { planSong } from "./agents";
 import { SONG_CLIP_MAX, SONG_MODEL } from "./models";
 import type { MusicInput } from "./types";
+import { renderWav } from "./synth";
 
 export const CHUNK = 1024 * 1024;
 // Just past a function's 60s lifetime: a holder can't still be working after
@@ -59,7 +60,7 @@ export async function variation(preset: MusicInput, refs: string, recent: string
           `Style: ${preset.description ?? ""}`,
           `Genre: ${preset.genre ?? ""}${preset.subgenre ? ` / ${preset.subgenre}` : ""}, ${preset.tempo ?? ""} BPM, mood ${preset.mood ?? ""}`,
           refs ? `The producer's own tracks this should sound like: ${refs}` : "",
-          recent.length ? `Titles already used — do not reuse: ${recent.join(", ")}` : "",
+          recent.length ? `Titles already used - do not reuse: ${recent.join(", ")}` : "",
         ].filter(Boolean).join("\n"),
       }],
       jsonMode: true, maxTokens: 300, temperature: 0.95, stage: "music:daily",
@@ -87,7 +88,9 @@ export type RunResult = "started" | "exists" | "no-preset" | "unconfigured" | "f
 
 export async function runDaily(db: Db, userId: string, day = today()): Promise<RunResult> {
   const base = baseUrl();
-  if (!replicateConfigured() || !base) return "unconfigured";
+  // Without a music model the track is composed in code, which needs no webhook.
+  const inCode = !replicateConfigured();
+  if (!inCode && !base) return "unconfigured";
 
   const { data: saved } = await db.from("music_daily").select("preset, refs").eq("user_id", userId).maybeSingle();
   if (!saved) return "no-preset";
@@ -114,11 +117,22 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
   // each other produce one track, not two paid renders.
   const { data: row, error } = await db.from("music_daily_tracks").insert({
     user_id: userId, day, title: concept.title, theme: concept.description,
-    tags: plan.tags, lyrics: plan.lyrics, bpm: brief.bpm, token,
+    tags: inCode ? `${plan.tags}, instrumental` : plan.tags, lyrics: plan.lyrics, bpm: brief.bpm, token,
   }).select("id").single();
   if (error) return error.code === "23505" ? "exists" : "failed";
 
-  try {
+  if (inCode) {
+    const wav = Buffer.from(renderWav({
+      bpm: brief.bpm, seconds: Math.min(Math.max(Number(preset.duration) || 60, 15), 60),
+      energy: brief.energy, key: brief.key, moods: brief.moods, seed: `${day}|${concept.title}`,
+    }));
+    const stored = await storeTrackAudio(db, row.id, wav, "audio/wav");
+    if (stored) {
+      await db.from("music_daily_tracks").update({ status: "failed", error: stored, finished_at: new Date().toISOString() }).eq("id", row.id);
+      return "failed";
+    }
+    await sendPush(userId, "Today's track is ready", concept.title, "/tools/music").catch(() => false);
+  } else try {
     const p = await createPrediction(
       SONG_MODEL,
       { tags: plan.tags, lyrics: sing ? plan.lyrics : "[instrumental]", duration: Math.min(Math.max(Number(preset.duration) || SONG_CLIP_MAX, 60), SONG_CLIP_MAX) },
@@ -149,6 +163,18 @@ function isReplicateDelivery(url: string): boolean {
   }
 }
 
+/** Store a track's audio and mark it done. Returns the error, or null. */
+async function storeTrackAudio(db: Db, trackId: string, bytes: Buffer, audioType: string): Promise<string | null> {
+  // A claim whose holder died may have left some chunks behind.
+  await db.from("music_daily_chunks").delete().eq("track_id", trackId);
+  for (let n = 0; n * CHUNK < bytes.length; n++) {
+    const { error } = await db.from("music_daily_chunks").insert({ track_id: trackId, n, data: bytes.subarray(n * CHUNK, (n + 1) * CHUNK) });
+    if (error) return `Could not store the audio: ${error.message}`;
+  }
+  await db.from("music_daily_tracks").update({ status: "done", size: bytes.length, audio_type: audioType, finished_at: new Date().toISOString() }).eq("id", trackId);
+  return null;
+}
+
 /** Settle a pending track from Replicate's own record of the prediction. */
 export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["status"]> {
   if (track.status !== "pending" || !track.prediction_id) return track.status;
@@ -177,18 +203,8 @@ export async function finalize(db: Db, track: DailyTrack): Promise<DailyTrack["s
   const bytes = Buffer.from(await res.arrayBuffer());
   if (!bytes.length || bytes.length > MAX_AUDIO) return fail("The render's audio file was empty or too large.");
 
-  // A claim whose holder died may have left some chunks behind.
-  await db.from("music_daily_chunks").delete().eq("track_id", track.id);
-  const rows = [];
-  for (let n = 0; n * CHUNK < bytes.length; n++) rows.push({ track_id: track.id, n, data: bytes.subarray(n * CHUNK, (n + 1) * CHUNK) });
-  for (const r of rows) {
-    const { error } = await db.from("music_daily_chunks").insert(r);
-    if (error) return fail(`Could not store the audio: ${error.message}`);
-  }
-  await db.from("music_daily_tracks").update({
-    status: "done", size: bytes.length, audio_type: res.headers.get("content-type")?.split(";")[0] || "audio/mpeg",
-    finished_at: new Date().toISOString(),
-  }).eq("id", track.id);
+  const stored = await storeTrackAudio(db, track.id, bytes, res.headers.get("content-type")?.split(";")[0] || "audio/mpeg");
+  if (stored) return fail(stored);
   await sendPush(track.user_id, "Today's track is ready", track.title, "/tools/music").catch(() => false);
   return "done";
 }

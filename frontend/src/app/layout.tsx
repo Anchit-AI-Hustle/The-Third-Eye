@@ -10,6 +10,7 @@ import {
   BING_SITE_VERIFICATION,
 } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/react";
+import { CookieNotice } from "@/components/layout/CookieNotice";
 
 
 // Build the verification block, omitting any token that isn't set so we never
@@ -34,13 +35,18 @@ export const metadata: Metadata = {
     title: "The Third Eye",
   },
   icons: {
-    icon: "/logo.png",
+    icon: "/favicon.png",
     apple: "/logo.png",
   },
   openGraph: {
     type: "website",
     url: SITE_URL,
     siteName: "The Third Eye",
+    title: "The Third Eye",
+    description: "Your Personal AI Operating System",
+  },
+  twitter: {
+    card: "summary_large_image",
     title: "The Third Eye",
     description: "Your Personal AI Operating System",
   },
@@ -66,12 +72,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <head />
+      <head>
+        {/* Before first paint, so a Reduce Motion device that chose "animations on" never flashes static (lib/motion.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem('jarvis_motion')==='full')document.documentElement.setAttribute('data-motion-full','')}catch(e){}` }} />
+      </head>
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} bg-background-base text-text-primary font-sans antialiased`}
       >
         <a href="#main-content" className="skip-link">Skip to main content</a>
         <Providers>{children}</Providers>
+        <CookieNotice />
         <Analytics />
         <script
           dangerouslySetInnerHTML={{

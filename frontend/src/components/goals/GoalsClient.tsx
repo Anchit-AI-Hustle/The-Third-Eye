@@ -7,6 +7,7 @@ import { useLocalGoals, Goal } from "@/hooks/useLocalGoals";
 import { useMode } from "@/hooks/useMode";
 import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
+import { localDay } from "@/lib/localDay";
 
 const CATEGORIES = ["Career", "Health", "Finance", "Learning", "Personal", "Business"];
 
@@ -42,7 +43,7 @@ export function GoalsClient() {
     );
     const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `thirdeye-goals-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `thirdeye-goals-${localDay()}.csv`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 
@@ -72,7 +73,7 @@ export function GoalsClient() {
             </button>
           )}
           <button onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-2 px-4 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-input bg-accent-blue text-background-base text-sm font-medium hover:bg-accent-blue/90 transition-colors">
             {showForm ? <X size={14} /> : <Plus size={14} />}
             {showForm ? "Cancel" : "New Goal"}
           </button>
@@ -111,7 +112,7 @@ export function GoalsClient() {
             </div>
           </div>
           <div className="flex justify-end">
-            <button type="submit" className="flex items-center gap-2 px-4 py-2 rounded-input bg-accent-blue text-white text-sm font-medium hover:bg-accent-blue/90 transition-colors">
+            <button type="submit" className="flex items-center gap-2 px-4 py-2 rounded-input bg-accent-blue text-background-base text-sm font-medium hover:bg-accent-blue/90 transition-colors">
               <Check size={14} /> Create Goal
             </button>
           </div>

@@ -9,7 +9,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const routes: Array<{ path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] }> = [
     { path: "/", priority: 1.0, changeFrequency: "weekly" },
     { path: "/upgrade", priority: 0.7, changeFrequency: "monthly" },
+    { path: "/demo", priority: 0.9, changeFrequency: "monthly" },
+    { path: "/install", priority: 0.8, changeFrequency: "monthly" },
     { path: "/calculators", priority: 0.9, changeFrequency: "weekly" },
+    { path: "/privacy", priority: 0.5, changeFrequency: "monthly" },
     { path: "/privacy_policy", priority: 0.3, changeFrequency: "yearly" },
     { path: "/terms_of_service", priority: 0.3, changeFrequency: "yearly" },
     // Every calculator page — the SEO surface of the section.

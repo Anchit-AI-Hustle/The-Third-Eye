@@ -52,7 +52,7 @@ describe("keyless search sources", () => {
       return new Response(JSON.stringify([{ name: "Blue Tokai", display_name: "Blue Tokai, Connaught Place, Delhi", lat: "28.6", lon: "77.2" }]));
     }));
     const out = await freeNearby("cafe", { latitude: 28.6, longitude: 77.2 });
-    expect(out).toContain("**Blue Tokai** — Blue Tokai, Connaught Place, Delhi");
+    expect(out).toContain("**Blue Tokai** - Blue Tokai, Connaught Place, Delhi");
   });
 
   it("drops results that never mention what was searched for", () => {

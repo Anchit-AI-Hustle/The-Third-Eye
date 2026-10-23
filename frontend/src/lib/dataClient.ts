@@ -40,10 +40,25 @@ export async function dataList<T>(entity: string): Promise<ListResult<T>> {
   return { remote: true, rows: (json.rows as T[]) ?? [] };
 }
 
+/** The server's rows, or null when they couldn't be read (offline, signed out, an error). */
+export async function dataRead<T>(entity: string): Promise<T[] | null> {
+  const res = await req(entity, { method: "GET" });
+  if (!res?.ok) return null;
+  const json = await res.json().catch(() => null);
+  return Array.isArray(json?.rows) ? (json.rows as T[]) : null;
+}
+
 /** Insert one or many rows. Returns whether the server handled it. */
 export async function dataInsert(entity: string, rows: unknown | unknown[]): Promise<boolean> {
   const res = await req(entity, { method: "POST", body: JSON.stringify(rows) });
   return !isLocalOnly(res);
+}
+
+/** Insert and say whether it was stored: "local" means there is no database to store it in. */
+export async function dataSave(entity: string, rows: unknown | unknown[]): Promise<"saved" | "local" | "failed"> {
+  const res = await req(entity, { method: "POST", body: JSON.stringify(rows) });
+  if (isLocalOnly(res)) return res ? "local" : "failed";
+  return res!.ok ? "saved" : "failed";
 }
 
 export async function dataUpdate(entity: string, id: string, patch: Record<string, unknown>): Promise<boolean> {

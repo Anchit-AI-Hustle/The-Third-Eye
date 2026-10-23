@@ -7,18 +7,23 @@ import { LandingHero } from "@/components/landing/LandingHero";
 import { FeatureGrid, type Feature } from "@/components/landing/FeatureGrid";
 import { Reveal } from "@/components/hud/Reveal";
 import { HoloFrame } from "@/components/hud/HoloFrame";
+import { LogoMark } from "@/components/layout/LogoMark";
+import { AppStartRedirect } from "@/components/landing/AppStartRedirect";
+import { SiteFooter } from "@/components/landing/SiteFooter";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata = {
-  title: "The Third Eye — Your Personal AI Operating System",
+export const metadata = pageMetadata({
+  title: "The Third Eye - Your Personal AI Operating System",
   description:
-    "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you — capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
-};
+    "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you - capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
+  path: "/",
+});
 
 const FEATURES: Feature[] = [
   {
     tag: "// assistant",
     title: "AI Assistant",
-    body: "Chat with an assistant that can search the web, look things up in your own data, and take actions — creating tasks, notes, and reminders on your behalf.",
+    body: "Chat with an assistant that can search the web, look things up in your own data, and take actions - creating tasks, notes, and reminders on your behalf.",
   },
   {
     tag: "// tasks",
@@ -33,7 +38,7 @@ const FEATURES: Feature[] = [
   {
     tag: "// notes",
     title: "Notes",
-    body: "Quickly capture thoughts and meeting notes — organized, searchable, and always private to your account.",
+    body: "Quickly capture thoughts and meeting notes - organized, searchable, and always private to your account.",
   },
   {
     tag: "// reminders",
@@ -74,6 +79,7 @@ export default async function Home() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background-base text-text-primary">
+      <AppStartRedirect />
       {/* Ambient background glow */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
         <div className="absolute left-1/2 top-0 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-accent-blue/5 blur-3xl" />
@@ -83,12 +89,7 @@ export default async function Home() {
       <div className="relative z-10 mx-auto w-full max-w-5xl px-5">
         <header className="flex items-center justify-between py-5">
           <Link href="/" className="flex items-center gap-3" aria-label="The Third Eye home">
-            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-accent-blue/20 bg-accent-blue/10">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a 36px
-                  mark; next/image would add a request and a wrapper for no
-                  measurable gain at this size. */}
-              <img src="/logo.png" alt="" className="h-full w-full object-cover" />
-            </div>
+            <LogoMark size={36} />
 
             <span className="font-display font-bold tracking-tight">The Third Eye</span>
           </Link>
@@ -151,8 +152,8 @@ export default async function Home() {
                 <p className="text-sm leading-relaxed text-text-secondary">
                   The Third Eye uses your Google account solely to sign you in and identify your
                   private workspace. We request your basic profile, including your name and email
-                  address, for authentication only. Anything you create in the app — including
-                  tasks, notes, and documents — is stored so it remains available across your
+                  address, for authentication only. Anything you create in the app - including
+                  tasks, notes, and documents - is stored so it remains available across your
                   devices and is visible only to you. We never sell your data or share it with third
                   parties for advertising. Additional access for optional integrations is requested
                   explicitly and used only for features you enable. Full details are available in
@@ -192,31 +193,7 @@ export default async function Home() {
           </Reveal>
         </main>
 
-        <footer className="flex flex-col items-center justify-between gap-4 border-t border-border-default py-8 text-xs text-text-muted sm:flex-row">
-          <span>© {new Date().getFullYear()} The Third Eye</span>
-
-          <nav className="flex items-center gap-4 font-mono" aria-label="Legal and product links">
-            <Link href="/capabilities" className="transition-colors hover:text-text-secondary">
-              Capabilities
-            </Link>
-
-            <span className="text-border-default" aria-hidden="true">
-              ·
-            </span>
-
-            <Link href="/privacy_policy" className="transition-colors hover:text-text-secondary">
-              Privacy Policy
-            </Link>
-
-            <span className="text-border-default" aria-hidden="true">
-              ·
-            </span>
-
-            <Link href="/terms_of_service" className="transition-colors hover:text-text-secondary">
-              Terms of Service
-            </Link>
-          </nav>
-        </footer>
+        <SiteFooter />
       </div>
     </div>
   );

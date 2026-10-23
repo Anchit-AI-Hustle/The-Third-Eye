@@ -3,11 +3,18 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { firstQueryValue, safeCallbackPath } from "@/lib/authRedirect";
 import { SignInClient } from "./SignInClient";
+import { pageMetadata } from "@/lib/site";
 
 // Next 16 hands searchParams over as a Promise. Reading it synchronously made
 // `error` always undefined, so a failed Google return rendered a clean sign-in
 // page and looked like a loop.
 export const dynamic = "force-dynamic";
+
+export const metadata = pageMetadata({
+  title: "Sign in - The Third Eye",
+  description: "Sign in with Google to open your personal AI workspace.",
+  path: "/auth/signin",
+});
 
 export default async function SignInPage({
   searchParams,

@@ -119,7 +119,7 @@ export function phoneError(cc?: unknown): string {
   const r = PHONE_CC[key];
   if (!r) return "That does not look like a valid number for that country code";
   const len = r.min === r.max ? `${r.min} digits` : `${r.min}-${r.max} digits`;
-  return `A ${r.name} number has ${len} after the country code — please check it`;
+  return `A ${r.name} number has ${len} after the country code - please check it`;
 }
 
 // ---- the PIN ------------------------------------------------------------

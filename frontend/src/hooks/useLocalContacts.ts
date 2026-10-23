@@ -14,22 +14,27 @@ export interface DeviceContact {
   updated_at: string;
 }
 
+// The device cache is per account, so a shared browser never hands one
+// person's contacts to the next (who would then upload them as their own).
 const STORAGE_KEY = "jarvis_contacts_v1";
+let activeUser: string | null = null;
+const storageKey = () => (activeUser ? `${STORAGE_KEY}:${activeUser}` : STORAGE_KEY);
+const useStorageUser = (u: string | null) => { activeUser = u; };
 
-function loadLocalContacts(): DeviceContact[] {
+export function loadLocalContacts(): DeviceContact[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveLocalContacts(contacts: DeviceContact[]) {
+export function saveLocalContacts(contacts: DeviceContact[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));
+    localStorage.setItem(storageKey(), JSON.stringify(contacts));
     window.dispatchEvent(new CustomEvent("jarvis:contacts", { detail: contacts }));
   } catch {}
 }
@@ -130,6 +135,7 @@ export function parseCSVContacts(csvText: string): Omit<DeviceContact, "id" | "u
 
 export function hasNativeContactsPicker(): boolean {
   if (typeof window === "undefined") return false;
+  if ((window as any).Capacitor?.isNativePlatform?.()) return true;
   const nav = navigator as any;
   return !!("contacts" in nav && "ContactsManager" in window);
 }
@@ -137,18 +143,19 @@ export function hasNativeContactsPicker(): boolean {
 export function useLocalContacts() {
   const { data: session } = useSession();
   const userId = session?.user?.email ?? null;
+  useStorageUser(userId);
 
   const [contacts, setContacts] = useState<DeviceContact[]>([]);
   const [syncing, setSyncing] = useState(false);
 
   // Sync to remote cloud API
-  const pushToCloud = useCallback(async (list: DeviceContact[]) => {
+  const pushToCloud = useCallback(async (list: DeviceContact[], removed: string[] = []) => {
     if (!userId) return;
     try {
       await fetch("/api/user/sync/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacts: list }),
+        body: JSON.stringify({ contacts: list, removed }),
       });
     } catch {}
   }, [userId]);
@@ -215,7 +222,7 @@ export function useLocalContacts() {
     setContacts((prev) => {
       const next = prev.filter((c) => c.id !== id);
       saveLocalContacts(next);
-      pushToCloud(next);
+      pushToCloud(next, [id]);
       return next;
     });
   }, [pushToCloud]);
@@ -288,6 +295,23 @@ export function useLocalContacts() {
   const syncDeviceContacts = useCallback(async (): Promise<{ count: number; supported: boolean; error?: string }> => {
     setSyncing(true);
     try {
+      // The Android and iOS apps read the whole address book through the
+      // native Contacts plugin, once the user allows it.
+      const C = (window as any).Capacitor;
+      const native = C?.isNativePlatform?.() ? C.Plugins?.Contacts : null;
+      if (native) {
+        const perm = await native.requestPermissions();
+        if (perm.contacts !== "granted" && perm.contacts !== "limited") {
+          return { count: 0, supported: true, error: "Contacts access is off. Turn it on in your phone's Settings for The Third Eye, then sync again." };
+        }
+        const { contacts: book } = await native.getContacts({ projection: { name: true, phones: true, emails: true } });
+        const imported: Omit<DeviceContact, "id" | "updated_at">[] = (book ?? []).flatMap((c: any) => {
+          const name = c.name?.display?.trim();
+          if (!name) return [];
+          return [{ name, phone: c.phones?.[0]?.number ?? undefined, email: c.emails?.[0]?.address ?? undefined, source: "device" }];
+        });
+        return { count: importBatch(imported), supported: true };
+      }
       const nav = navigator as any;
       if ("contacts" in nav && "ContactsManager" in window) {
         const props = ["name", "email", "tel"];
@@ -306,11 +330,10 @@ export function useLocalContacts() {
         return { count: 0, supported: true };
       }
 
-      // Not supported natively on this browser (e.g. iOS Safari, Firefox, Mac Safari)
       return {
         count: 0,
         supported: false,
-        error: "Native Contacts Picker is available in Chrome/Android. On iOS / Mac / Safari, use the 'Import Contacts (.vcf / iCloud)' button below.",
+        error: "The Third Eye app for Android and iPhone syncs your whole address book. In a browser, Chrome on Android lets you pick contacts; anywhere else, import a .vcf or CSV file below.",
       };
     } catch (err: any) {
       return { count: 0, supported: true, error: err?.message || "Sync cancelled or not allowed." };
@@ -371,17 +394,6 @@ export function useLocalContacts() {
     }
   }, [userId, pushToCloud]);
 
-  const seedEssentialContacts = useCallback(() => {
-    const essentials: Omit<DeviceContact, "id" | "updated_at">[] = [
-      { name: "Mom", phone: "+91 98765 43210", relationship: "Family", notes: "Primary emergency contact", source: "manual" },
-      { name: "Dad", phone: "+91 98765 43211", relationship: "Family", notes: "Family contact", source: "manual" },
-      { name: "Rohit Sharma", phone: "+91 98739 45238", relationship: "Work / Friend", notes: "WhatsApp contact", source: "manual" },
-      { name: "Aviral Vahdam", phone: "+91 98111 22334", relationship: "Colleague", notes: "Work & messaging", source: "manual" },
-      { name: "Emergency Dispatch", phone: "112", relationship: "Emergency", notes: "National emergency line", source: "manual" },
-    ];
-    return importBatch(essentials);
-  }, [importBatch]);
-
   return {
     contacts,
     syncing,
@@ -391,7 +403,6 @@ export function useLocalContacts() {
     importContactsFromFile,
     syncDeviceContacts,
     refreshFromCloud,
-    seedEssentialContacts,
     hasNativePicker: hasNativeContactsPicker(),
   };
 }

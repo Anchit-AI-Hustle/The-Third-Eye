@@ -16,7 +16,7 @@ export function resolveAuthSecret(): string {
   if (process.env.NODE_ENV === "production" && !isBuildPhase) {
     throw new Error(
       "NEXTAUTH_SECRET is not set. Refusing to start with an insecure fallback " +
-        "secret in production — set NEXTAUTH_SECRET in the environment.",
+        "secret in production - set NEXTAUTH_SECRET in the environment.",
     );
   }
   return DEV_FALLBACK;

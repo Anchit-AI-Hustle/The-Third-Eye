@@ -6,6 +6,7 @@ import {
   AGENT_EVENT, getAgentLog, isAgentKilled, setAgentKilled, clearAgentLog,
   type AgentLogEntry,
 } from "@/lib/agentControl";
+import { localDay } from "@/lib/localDay";
 
 export function ActivityClient() {
   const [killed, setKilled] = useState(false);
@@ -25,7 +26,7 @@ export function ActivityClient() {
   function exportLog() {
     const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `third-eye-agent-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `third-eye-agent-audit-${localDay()}.json`;
     a.click(); URL.revokeObjectURL(a.href);
   }
 
@@ -47,7 +48,7 @@ export function ActivityClient() {
               </div>
               <div className="text-xs text-text-muted">
                 {killed
-                  ? "The kill switch is engaged — the assistant will apply no actions. Requests are logged as blocked."
+                  ? "The kill switch is engaged - the assistant will apply no actions. Requests are logged as blocked."
                   : "The assistant can apply actions (create/update/delete tasks, notes, goals) with your approval."}
               </div>
             </div>
@@ -83,7 +84,7 @@ export function ActivityClient() {
         </div>
         {log.length === 0 ? (
           <p className="text-sm text-text-muted py-6 text-center">
-            No activity yet. Assistant actions, generations (Studio / Music / Kolab), voice captures and system events all appear here — and anything blocked by the kill switch.
+            No activity yet. Assistant actions, generations (Studio / Music / Kolab), voice captures and system events all appear here - and anything blocked by the kill switch.
           </p>
         ) : (
           <div className="divide-y divide-border-default">

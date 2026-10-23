@@ -12,10 +12,12 @@ describe("DeviceSyncCard", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders Device Data & Media Sync header and cloud active indicator", () => {
+  it("shows the cloud sync state the server reports, not a fixed 'active'", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => new Response(JSON.stringify(u === "/api/health" ? { llm_available: true, llm: { status: "ok", providers: { groq: "ok" } }, services: { database: false } } : {}))));
     render(<DeviceSyncCard />);
     expect(screen.getByText("Device Data & Media Sync")).toBeInTheDocument();
-    expect(screen.getByText(/Mobile & Laptop Cloud Sync Active/i)).toBeInTheDocument();
+    expect(await screen.findByText(/This device only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Cloud Sync Active/i)).toBeNull();
     expect(screen.getByText("Device Contacts")).toBeInTheDocument();
     expect(screen.getByText("Device Files & Photos Vault")).toBeInTheDocument();
   });
@@ -50,7 +52,7 @@ describe("DeviceSyncCard", () => {
     const addBtn = screen.getByRole("button", { name: /Add Contact/i });
     fireEvent.click(addBtn);
 
-    const nameInput = screen.getByPlaceholderText(/Name \(e\.g\. Rohit Sharma/i);
+    const nameInput = screen.getByPlaceholderText(/Name \(e\.g\. Priya Sharma/i);
     const phoneInput = screen.getByPlaceholderText(/Phone \(e\.g\. \+91/i);
 
     fireEvent.change(nameInput, { target: { value: "Rohit Sharma" } });
@@ -70,10 +72,10 @@ describe("DeviceSyncCard", () => {
     const pasteBtn = screen.getByRole("button", { name: /Paste/i });
     fireEvent.click(pasteBtn);
 
-    const textarea = screen.getByPlaceholderText(/Aviral Vahdam/i);
+    const textarea = screen.getByPlaceholderText(/Priya Sharma, \+91/i);
     fireEvent.change(textarea, {
       target: {
-        value: "Aviral Vahdam, +91 9811122334\nMom, +1 555 123 4567",
+        value: "Aviral Mehta, +91 9811122334\nMom, +1 555 123 4567",
       },
     });
 
@@ -91,5 +93,34 @@ describe("DeviceSyncCard", () => {
     expect(screen.getByText("Upload Photos")).toBeInTheDocument();
     expect(screen.getByText("Upload Documents")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Sync Folder/i })).toBeInTheDocument();
+  });
+
+  it("in the iPhone app, syncs the whole photo library and a chosen folder without file pickers", async () => {
+    const DeviceSync = {
+      photoAccess: async () => ({ status: "full" }),
+      listPhotos: vi.fn(async ({ before }: { before?: string }) => ({ photos: before ? [] : [
+        { id: "p1", takenAt: "2026-10-02T00:00:00.000Z", width: 1, height: 1, favorite: false, thumb: "x" },
+        { id: "p2", takenAt: "2026-10-01T00:00:00.000Z", width: 1, height: 1, favorite: false, thumb: "x" },
+      ] })),
+      chooseFolder: vi.fn(async () => ({ name: "iCloud Drive" })),
+      folderStatus: async () => ({ name: "iCloud Drive" }),
+      listFolderFiles: async () => ({ files: [{ path: "plan.md", size: 4, modified: "2026-10-01T00:00:00.000Z" }] }),
+      readFolderFile: async () => ({ data: btoa("plan") }),
+    };
+    (window as { Capacitor?: unknown }).Capacitor = { getPlatform: () => "ios", isNativePlatform: () => true, Plugins: { DeviceSync } };
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === "POST" ? { rows: [] } : {}))));
+    const click = vi.spyOn(HTMLInputElement.prototype, "click");
+
+    render(<DeviceSyncCard />);
+    fireEvent.click(await screen.findByRole("button", { name: /Sync All Photos/i }));
+    expect(await screen.findByText(/Synced 2 photos/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Sync Folder/i }));
+    expect(await screen.findByText(/iCloud Drive: 1 file synced/i)).toBeInTheDocument();
+    expect(DeviceSync.chooseFolder).toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+
+    delete (window as { Capacitor?: unknown }).Capacitor;
+    vi.unstubAllGlobals();
   });
 });

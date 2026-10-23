@@ -32,6 +32,13 @@ describe("past chats on the Assistant's welcome screen", () => {
     expect(onShowAll).toHaveBeenCalled();
   });
 
+  it("shows a raw tool call title as plain words", () => {
+    const raw = [{ id: "t", title: 'CALL manage_tasks {"action":"create","title":"x"}', project_id: null, updated_at: "2026-10-14T09:00:00Z" }];
+    render(<RecentChats chats={raw} now={now} onOpen={() => {}} onShowAll={() => {}} />);
+    expect(screen.getByText("Manage tasks")).toBeTruthy();
+    expect(screen.queryByText(/CALL/)).toBeNull();
+  });
+
   it("shows nothing before the first chat", () => {
     const { container } = render(<RecentChats chats={[]} now={now} onOpen={() => {}} onShowAll={() => {}} />);
     expect(container.textContent).toBe("");

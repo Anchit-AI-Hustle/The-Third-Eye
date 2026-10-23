@@ -41,9 +41,9 @@ export function SetupForm({
       if (po) {
         setF((p) => ({ ...p, city: po.District, state: po.State, country: po.Country || "India" }));
         setLoc(`✓ ${po.District}, ${po.State}`);
-      } else setLoc("Pincode not found — enter city/state manually");
+      } else setLoc("Pincode not found - enter city/state manually");
     } catch {
-      setLoc("Offline — enter city/state manually");
+      setLoc("Offline - enter city/state manually");
     }
   }
 
@@ -159,7 +159,7 @@ function KycCard({ verified, onDone }: { verified: boolean; onDone: () => void }
       if (!res.ok || !body.ok) throw new Error(body.error || "KYC unavailable");
       if (action === "initiate") {
         setRef(body.data.reference_id);
-        setMsg("OTP sent to your Aadhaar-linked mobile (provider).");
+        setMsg("OTP sent to your Aadhaar-linked mobile.");
       } else {
         setMsg("Aadhaar verified.");
         onDone();
@@ -204,7 +204,7 @@ function KycCard({ verified, onDone }: { verified: boolean; onDone: () => void }
           </div>
           <p className="mt-2.5 font-kolab-mono text-[10px] leading-relaxed text-kolab-faint">
             Real Aadhaar eKYC runs only through a UIDAI-licensed provider with your consent. We never
-            store your Aadhaar number or biometrics — only verification status and a masked reference.
+            store your Aadhaar number or biometrics - only verification status and a masked reference.
           </p>
         </>
       )}

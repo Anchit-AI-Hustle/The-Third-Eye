@@ -41,7 +41,7 @@ export function SystemsOnline() {
 
     if (isAgentKilled()) {
       setPhases(Object.fromEntries(list.map((s) => [s.id, "halted" as Phase])));
-      try { logAgentAction({ type: "systems.status", label: "Status check blocked — kill switch engaged", outcome: "blocked" }); } catch { /* noop */ }
+      try { logAgentAction({ type: "systems.status", label: "Status check blocked - kill switch engaged", outcome: "blocked" }); } catch { /* noop */ }
       running.current = false;
       closeTimer.current = setTimeout(() => setOpen(false), 2600);
       return;
@@ -87,12 +87,12 @@ export function SystemsOnline() {
         <div className="p-6">
           <div className="flex items-center gap-2.5 mb-1">
             <Radio size={16} className={halted ? "text-[#EF4444]" : "text-[#4FC3F7] animate-pulse"} />
-            <span className={`hud-label ${halted ? "text-[#EF4444]" : "text-[#4FC3F7]"}`}>// Systems status</span>
+            <span className={`hud-label ${halted ? "text-[#EF4444]" : "text-[#4FC3F7]"}`}>Systems status</span>
           </div>
           <h2 className="font-display text-lg font-semibold text-text-primary mb-4">
             {halted
               ? "Kill switch engaged"
-              : `${total === 1 ? systems[0].name : "All Systems"} — ${done}/${total} online`}
+              : `${total === 1 ? systems[0].name : "All Systems"} - ${done}/${total} online`}
           </h2>
 
           <div className="space-y-2">

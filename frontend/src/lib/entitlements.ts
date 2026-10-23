@@ -70,4 +70,4 @@ export function isUnlimited(n: number): boolean {
 }
 
 export const PAYWALL_MESSAGE =
-  "That's a JARVIS Premium capability. Sending email and deep multi-agent analysis need an upgrade — tell the user they can enable it from Settings → Upgrade, and offer to draft the email instead.";
+  "That's a JARVIS Premium capability. Sending email and deep multi-agent analysis need an upgrade - tell the user they can enable it from Settings → Upgrade, and offer to draft the email instead.";

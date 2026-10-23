@@ -44,10 +44,10 @@ export const SYSTEMS: SystemDef[] = [
     pitch: 0.92, rate: 1.0,
     lines: [
       { text: "J.A.R.V.I.S. online. All core functions nominal, sir.", speech: "Jarvis online. All core functions nominal, sir." },
-      { text: "At your service, sir. Systems are — as ever — impeccable.", speech: "At your service, sir. Systems are, as ever, impeccable." },
+      { text: "At your service, sir. Systems are - as ever - impeccable.", speech: "At your service, sir. Systems are, as ever, impeccable." },
       { text: "J.A.R.V.I.S. online. Do try not to break anything today, sir.", speech: "Jarvis online. Do try not to break anything today, sir." },
     ],
-    accentColor: "#4FC3F7", purpose: "Primary assistant — plans, answers & executes actions.", href: "/assistant", kind: "agent",
+    accentColor: "#4FC3F7", purpose: "Primary assistant - plans, answers & executes actions.", href: "/assistant", kind: "agent",
   },
   {
     id: "friday", name: "F.R.I.D.A.Y.", aliases: ["friday"],
@@ -55,7 +55,7 @@ export const SYSTEMS: SystemDef[] = [
     pitch: 1.12, rate: 1.08,
     lines: [
       { text: "F.R.I.D.A.Y. here, boss. Online and ready.", speech: "Friday here, boss. Online and ready." },
-      { text: "Friday online. Grand so — everything's green, boss.", speech: "Friday online. Grand so — everything's green, boss." },
+      { text: "Friday online. Grand so - everything's green, boss.", speech: "Friday online. Grand so - everything's green, boss." },
       { text: "All set, boss. Try not to make my job interesting.", speech: "All set, boss. Try not to make my job interesting." },
     ],
     accentColor: "#F472B6", purpose: "Fast everyday ops & quick execution.", href: "/assistant", kind: "agent",
@@ -67,9 +67,9 @@ export const SYSTEMS: SystemDef[] = [
     lines: [
       { text: "E.D.I.T.H. online. Perimeter secure.", speech: "Edith online. Perimeter secure." },
       { text: "E.D.I.T.H. online. Scanning… you're clear, boss.", speech: "Edith online. Scanning… you're clear, boss." },
-      { text: "Edith online. I see everything — occupational habit.", speech: "Edith online. I see everything. Occupational habit." },
+      { text: "Edith online. I see everything - occupational habit.", speech: "Edith online. I see everything. Occupational habit." },
     ],
-    accentColor: "#A78BFA", purpose: "Security & oversight — audit log & kill switch.", href: "/activity", kind: "agent",
+    accentColor: "#A78BFA", purpose: "Security & oversight - audit log & kill switch.", href: "/activity", kind: "agent",
   },
   {
     id: "ultron", name: "ULTRON", aliases: ["ultron"],
@@ -77,7 +77,7 @@ export const SYSTEMS: SystemDef[] = [
     pitch: 0.72, rate: 0.92,
     lines: [
       { text: "Ultron online. Every process, optimal.", speech: "Ultron online. Every process… optimal." },
-      { text: "Awake again. How thrilling for everyone. All processes optimal — naturally.", speech: "Awake again. How thrilling for everyone. All processes optimal… naturally." },
+      { text: "Awake again. How thrilling for everyone. All processes optimal - naturally.", speech: "Awake again. How thrilling for everyone. All processes optimal… naturally." },
       { text: "Ultron online. I reviewed your systems. Adorable. Optimizing anyway.", speech: "Ultron online. I reviewed your systems. Adorable. Optimizing anyway." },
     ],
     accentColor: "#EF4444", purpose: "Deep analysis & optimization of hard problems.", href: "/assistant", kind: "agent",
@@ -90,7 +90,7 @@ export const SYSTEMS: SystemDef[] = [
       { text: "ZEUS online. The grid answers to me.", speech: "Zeus online. The grid answers to me." },
       { text: "ZEUS online. Thunder on standby.", speech: "Zeus online. Thunder on standby." },
     ],
-    accentColor: "#F5C451", purpose: "Command & control — the whole grid at a glance.", href: "/dashboard", kind: "agent",
+    accentColor: "#F5C451", purpose: "Command & control - the whole grid at a glance.", href: "/dashboard", kind: "agent",
   },
   {
     id: "athena", name: "ATHENA", aliases: ["athena"],
@@ -123,7 +123,7 @@ export const SYSTEMS: SystemDef[] = [
     voicePreference: "karen|zira|samantha", gender: "female", lang: "en-AU",
     pitch: 1.1, rate: 1.02,
     lines: [{ text: "Kolab online. Marketing systems engaged.", speech: "Co-lab online. Marketing systems engaged." }],
-    accentColor: "#A78BFA", purpose: "Brand & marketing AI — lifecycle, campaigns, retention.", href: "/kolab", kind: "subsystem",
+    accentColor: "#A78BFA", purpose: "Brand & marketing AI - lifecycle, campaigns, retention.", href: "/kolab", kind: "subsystem",
   },
   {
     id: "studio", name: "Studio", aliases: ["studio"],

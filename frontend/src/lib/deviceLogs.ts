@@ -9,7 +9,7 @@ import { logActivity } from "@/lib/activity";
 // AI Log Sync: turn raw device activity logs (what the operator did on the
 // computer/phone the app runs on) into Task Tracker changes — progress updates
 // on existing tasks, completions, and new tasks classified into the
-// Office (Vahdam) vs Personal workspace.
+// Office vs Personal workspace.
 
 const MAX_LOGS_PER_RUN = 400;
 const MIN_LOGS_TO_SUMMARIZE = 3;
@@ -33,16 +33,16 @@ interface OpenTaskRow {
 }
 
 const SYSTEM_PROMPT = `
-You are the chief-of-staff AI for Anchit Tandon, who leads D2C growth at Vahdam
-India (a premium tea D2C brand). Direct team: Aman, Manisha, Arihant.
+You are the user's chief-of-staff AI.
+Office work means the user's job: their employer, clients, colleagues and professional projects.
 
-You receive (1) his current open tasks and (2) a raw activity log from his
-devices — pages/apps used, on which device, for how long. Update his tracker.
+You receive (1) their current open tasks and (2) a raw activity log from their
+devices: pages/apps used, on which device, for how long. Update their tracker.
 Return STRICT JSON:
 {"summary": string, "task_updates": [ ... ], "new_tasks": [ ... ]}
 
-- summary: 2-4 plain sentences of what he actually worked on, split by office
-  (Vahdam) vs personal. Mention devices only when it adds signal.
+- summary: 2-4 plain sentences of what they actually worked on, split by office
+  vs personal. Mention devices only when it adds signal.
 - task_updates: ONLY for listed open tasks the logs clearly show progress or
   completion on. Each: {"task_id": verbatim id from the list,
   "update": what the logs evidence, <= 140 chars,
@@ -51,15 +51,14 @@ Return STRICT JSON:
   unfinished work, something opened repeatedly without resolution). Each:
   {"task_heading": specific imperative <= 70 chars,
    "task_description": context <= 180 chars,
-   "workspace": "office" for Vahdam work | "personal" for everything else,
+   "workspace": "office" for work | "personal" for everything else,
    "urgency": "Low" | "Medium" | "High" | "Critical",
    "deadline": ISO date or null,
    "owner": real person name or null}
 
 HARD RULES:
-- Vahdam work (growth, marketing, marketplace, CRO, retention, team) →
-  workspace "office". Life admin, health, finances, learning, errands →
-  workspace "personal".
+- Work as defined above → workspace "office". Life admin, health, finances,
+  learning, errands → workspace "personal".
 - No speculation: when the logs don't clearly evidence progress or a
   follow-up, return empty arrays. Never invent task ids or people.
 `.trim();

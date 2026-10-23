@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
 import { computeTargets } from "@/lib/health/calc";
 import type { HealthInput } from "@/lib/health/types";
+import { chargedRoute, refundable } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ function req(i: Partial<HealthInput>): string | null {
   return null;
 }
 
-export async function POST(reqObj: NextRequest) {
+async function create(reqObj: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
@@ -48,13 +49,13 @@ export async function POST(reqObj: NextRequest) {
   }).filter(([, v]) => v !== undefined && v !== "" && v !== null).map(([k, v]) => `${k}: ${v}`).join("\n");
 
   const system = `You are a careful, evidence-based fitness coach and registered-dietitian-style planner.
-You are given EXACT daily targets that are already correct — you MUST NOT change or recompute them; build the plan to hit them.
+You are given EXACT daily targets that are already correct - you MUST NOT change or recompute them; build the plan to hit them.
 Rules: never exceed a safe deficit; respect all dietary preferences, allergies, injuries, and medical conditions; if a condition makes a plan unsafe, say so and recommend a professional; never promise medical outcomes; be specific and practical. Return clean Markdown only.`;
 
   const ask = `Goal: ${body.goal}. Focus: ${body.focus}.
 EXACT DAILY TARGETS (do not change): ${targets.goalCalories} kcal · protein ${targets.macros.proteinG} g · fat ${targets.macros.fatG} g · carbs ${targets.macros.carbsG} g · water ~${Math.round(targets.waterMl / 1000 * 10) / 10} L.
 Context: ${body.sex}, ${body.age}y, ${body.heightCm} cm, ${body.weightKg} kg, activity ${body.activity}, BMI ${targets.bmi} (${targets.bmiCategory}).
-${optional ? `Optional details:\n${optional}` : "No optional details provided — use sensible defaults and keep it simple."}
+${optional ? `Optional details:\n${optional}` : "No optional details provided - use sensible defaults and keep it simple."}
 ${body.personalization ? `\n${body.personalization}` : ""}
 
 Produce Markdown:
@@ -72,6 +73,8 @@ ${wantsExercise ? `## Training\n- A weekly plan for ${body.trainingDaysPerWeek |
     return Response.json({ targets, plan: out.text.trim(), provider: out.provider });
   } catch (e) {
     // Targets are still valuable without the AI plan — degrade gracefully.
-    return Response.json({ targets, plan: null, warning: "AI plan unavailable right now — your targets above are still accurate.", error: e instanceof Error ? e.message : "ai_unavailable" });
+    return refundable(Response.json({ targets, plan: null, warning: "AI plan unavailable right now - your targets above are still accurate.", error: e instanceof Error ? e.message : "ai_unavailable" }));
   }
 }
+
+export const POST = chargedRoute("health.plan", create);

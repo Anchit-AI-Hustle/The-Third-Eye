@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { onMediaChange } from "@/hooks/useReducedMotion";
+import { reducedMotion } from "@/lib/motion";
 
 // The "third eye": a layered WebGL scene built from four depth planes — an
 // outer particle nebula, three counter-rotating iris rings, a faceted core,
@@ -32,12 +33,18 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
     let disposed = false;
     let cleanup = () => {};
 
-    import("three")
+    // Built once the page is idle, so loading three.js and compiling the scene
+    // never compete with first paint and the hero text being usable.
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1200));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    const idleId = idle(() => { if (!disposed) build(); }, { timeout: 2500 });
+
+    const build = () => import("three")
       .then((THREE) => {
         if (disposed || !mount) return;
 
         const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-        let reduce = motionQuery.matches;
+        let reduce = reducedMotion();
         const w = () => mount.clientWidth || window.innerWidth;
         const h = () => mount.clientHeight || 560;
 
@@ -276,12 +283,20 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
           renderer.render(scene, camera);
         };
 
-        const loop = () => {
+        // Phones draw at 30 fps and at most 1.5x density: the scene reads the
+        // same, and it halves the GPU (or, without one, CPU) work per second.
+        const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+        const frameMs = coarse ? 1000 / 30 : 0;
+        if (coarse) renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        let lastFrame = 0;
+        const loop = (now = 0) => {
           if (!running()) {
             raf = 0;
             return;
           }
           raf = requestAnimationFrame(loop);
+          if (now - lastFrame < frameMs) return;
+          lastFrame = now;
           draw(clock.getElapsedTime());
         };
 
@@ -295,8 +310,8 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
         // while the page is open is usually reacting to this canvas. Handled
         // here instead of by re-running the effect, which would tear down and
         // rebuild the WebGL context for a preference change.
-        const offMotionChange = onMediaChange(motionQuery, (e) => {
-          reduce = e.matches;
+        const offMotionChange = onMediaChange(motionQuery, () => {
+          reduce = reducedMotion();
           if (reduce) {
             cancelAnimationFrame(raf);
             raf = 0;
@@ -319,6 +334,7 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
 
     return () => {
       disposed = true;
+      cancelIdle(idleId);
       cleanup();
     };
   }, []);

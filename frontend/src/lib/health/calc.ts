@@ -53,7 +53,7 @@ export function computeTargets(i: HealthInput): HealthTargets {
   const weightKg = Math.max(25, Math.min(400, i.weightKg));
   const heightCm = Math.max(90, Math.min(260, i.heightCm));
   const age = Math.max(13, Math.min(100, i.age));
-  if (age < 18) warnings.push("Under 18 — targets are indicative only; consult a pediatric professional.");
+  if (age < 18) warnings.push("Under 18 - targets are indicative only; consult a pediatric professional.");
 
   const b = bmr(i.sex, weightKg, heightCm, age);
   const factor = ACTIVITY_FACTOR[i.activity];
@@ -77,7 +77,7 @@ export function computeTargets(i: HealthInput): HealthTargets {
   const floor = MIN_CALORIES[i.sex];
   if (goalCalories < floor) {
     goalCalories = floor;
-    warnings.push(`Calorie target was raised to a safe floor of ${floor} kcal — a faster deficit isn't advisable.`);
+    warnings.push(`Calorie target was raised to a safe floor of ${floor} kcal - a faster deficit isn't advisable.`);
     dailyDelta = goalCalories - maintenance;
   }
 
@@ -91,7 +91,7 @@ export function computeTargets(i: HealthInput): HealthTargets {
     if (directionOk && estWeeklyChangeKg !== 0) {
       etaWeeks = Math.max(1, Math.round(Math.abs(diff / estWeeklyChangeKg)));
     } else if (i.goal !== "maintain") {
-      warnings.push("Your target weight doesn't match your goal direction — double-check goal vs target.");
+      warnings.push("Your target weight doesn't match your goal direction - double-check goal vs target.");
     }
   }
 
@@ -102,7 +102,7 @@ export function computeTargets(i: HealthInput): HealthTargets {
   assumptions.push(`Activity factor ${factor} (${i.activity.replace("_", " ")}).`);
   if (i.goal !== "maintain") assumptions.push(`~${Math.abs(estWeeklyChangeKg)} kg/${estWeeklyChangeKg < 0 ? "week loss" : "week gain"} at ${pace} pace.`);
   assumptions.push(`Protein ${m.proteinG} g (${(m.proteinG / weightKg).toFixed(1)} g/kg), fat ${m.fatG} g; carbs fill the rest.`);
-  warnings.push("Estimates for a healthy adult — not medical advice. Check with a professional for conditions, pregnancy, or eating disorders.");
+  warnings.push("Estimates for a healthy adult - not medical advice. Check with a professional for conditions, pregnancy, or eating disorders.");
 
   return {
     bmr: b, tdee, maintenanceCalories: maintenance, goalCalories, dailyDeltaKcal: dailyDelta,
