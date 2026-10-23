@@ -109,6 +109,5 @@ struct RouteView: View {
         WebScreen(path: path)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .ignoresSafeArea(edges: .bottom)
     }
 }

@@ -82,7 +82,6 @@ struct StudioToolRoute: View {
         WebScreen(path: path)
             .navigationTitle(Router.title(path))
             .navigationBarTitleDisplayMode(.inline)
-            .ignoresSafeArea(edges: .bottom)
     }
 }
 
