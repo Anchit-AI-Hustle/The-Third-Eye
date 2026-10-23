@@ -214,7 +214,7 @@ export const CONNECT_SCOPES = [...BASIC_SCOPE_LIST, ...INGESTION_SCOPE_LIST].joi
  */
 export function canConnectGoogle(email: string): boolean {
   const list = process.env.GOOGLE_CONNECT_USERS?.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return !list?.length || list.includes(email.toLowerCase());
+  return !list?.length || list.includes(email.toLowerCase()) || list.includes("*");
 }
 
 /**
@@ -265,14 +265,23 @@ export function appBaseUrl(): string {
  * falls back to localhost and breaks the Google callback).
  */
 export function originFromRequest(req: Request): string {
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
-  const proto = req.headers.get("x-forwarded-proto") || "https";
-  // Only trust the forwarded Host when it matches a configured host — otherwise
-  // an attacker-controlled Host header could steer the OAuth redirect off-site.
-  // When no host is configured (e.g. local dev), fall back to trusting it.
-  const allowed = allowedHosts();
-  if (host && (allowed.length === 0 || allowed.includes(host.toLowerCase()))) {
-    return `${proto}://${host}`;
+  const rawHost = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  const host = rawHost?.split(",")[0]?.trim();
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || (host?.includes("localhost") ? "http" : "https");
+
+  if (host) {
+    const hostName = host.split(":")[0].toLowerCase();
+    const allowed = allowedHosts();
+    if (
+      allowed.length === 0 ||
+      allowed.includes(host.toLowerCase()) ||
+      allowed.includes(hostName) ||
+      hostName === "localhost" ||
+      hostName === "127.0.0.1" ||
+      hostName.endsWith(".vercel.app")
+    ) {
+      return `${proto}://${host}`;
+    }
   }
   return appBaseUrl();
 }
@@ -280,7 +289,12 @@ export function originFromRequest(req: Request): string {
 // Hosts we're willing to build redirect origins for, from configured env URLs.
 function allowedHosts(): string[] {
   const hosts = new Set<string>();
-  for (const v of [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL]) {
+  for (const v of [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined,
+  ]) {
     if (!v) continue;
     try { hosts.add(new URL(v).host.toLowerCase()); } catch { /* ignore */ }
   }

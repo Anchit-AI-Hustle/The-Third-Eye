@@ -25,16 +25,11 @@ export async function GET(req: Request) {
     client_id: clientId,
     redirect_uri: `${originFromRequest(req)}/api/connect/google/callback`,
     response_type: "code",
-    // Feature scopes plus identity — see CONNECT_SCOPES for why identity is in
-    // there and why it does not change what "connected" means.
     scope: CONNECT_SCOPES,
     access_type: "offline",
     prompt: "consent",
-    // No incremental auth: it would fold in scopes granted before the narrowing
-    // (calendar.readonly, the Chat scopes), so the stored grant would outgrow
-    // the three under verification.
-    login_hint: email,
     state,
+    ...(email.includes("@") ? { login_hint: email } : {}),
   });
 
   const res = NextResponse.redirect(
@@ -42,7 +37,7 @@ export async function GET(req: Request) {
   );
   res.cookies.set("g_connect_state", state, {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 600,
     path: "/",
