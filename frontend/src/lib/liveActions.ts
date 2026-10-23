@@ -128,6 +128,8 @@ function parseOpen(text: string): DirectTurn | null {
   };
 }
 
+const PROSE_INSTRUCTION = /^(?:explain|describ|write|draft|compos|summariz|tell|ask|pitch|updat|request|invit|apologiz|congratulat|introduc|inquir|guid|outlin|how\s+to|walk\s+through)\b/i;
+
 function parseEmail(text: string): DirectTurn | null {
   if (!EMAIL_CMD.test(text)) return null;
   let rest = text
@@ -161,6 +163,14 @@ function parseEmail(text: string): DirectTurn | null {
     body = saying ? saying[1].trim() : rest.replace(/^[:-]\s*/, "").trim();
   }
   if (!subject && !body) return null;
+
+  // If the body, subject, or trailing instruction asks to explain, describe, draft, or guide,
+  // leave it to the LLM model to compose the substantive email instead of copying the prompt verbatim.
+  const rawInstruction = rest.replace(/^[:-]\s*/, "").trim();
+  if (PROSE_INSTRUCTION.test(body) || PROSE_INSTRUCTION.test(subject) || PROSE_INSTRUCTION.test(rawInstruction)) {
+    return null;
+  }
+
   if (!subject) subject = body.slice(0, 80);
   if (!body) body = subject;
   return {
