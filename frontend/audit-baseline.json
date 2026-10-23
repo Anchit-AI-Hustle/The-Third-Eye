@@ -5,6 +5,6 @@
     { "id": "GHSA-5gmw-xhrv-c9v3", "package": "tinypool (via vitest)", "fix": "vitest 5 (major)" },
     { "id": "GHSA-85c8-ppgw-ccpr", "package": "tinypool (via vitest)", "fix": "vitest 5 (major)" },
     { "id": "GHSA-fx2h-pf6j-xcff", "package": "vite (via vitest)", "fix": "vitest 5 (major)" },
-    { "id": "GHSA-vfj7-8cjw-p6xm", "package": "braces (via tailwindcss 3, eslint-config-next)", "fix": "tailwindcss 4 (major)" }
+    { "id": "GHSA-587h-7wmj-h5pm", "package": "vite (via vitest), launch-editor on Windows", "fix": "vitest 5 (major)" }
   ]
 }
