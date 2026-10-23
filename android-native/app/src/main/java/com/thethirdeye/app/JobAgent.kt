@@ -155,6 +155,7 @@ class JobAgentModel(private val email: String?) {
     var facts by mutableStateOf<List<JsonObject>>(emptyList())
     private var profile: JsonObject? = null
     private var unsavedFacts = emptyList<JsonObject>()
+    private var savedRows = emptyList<SavedRow>()
     val unsaved get() = unsavedFacts.isNotEmpty() || profileEdited
     private var profileEdited by mutableStateOf(false)
 
@@ -173,7 +174,8 @@ class JobAgentModel(private val email: String?) {
 
     suspend fun load() {
         guarded {
-            saved = DataStore.rows<SavedRow>("saved_jobs").filter { it.state == "saved" }
+            savedRows = DataStore.rows<SavedRow>("saved_jobs")
+            saved = savedRows.filter { it.state == "saved" }
             applications = DataStore.rows<ApplicationRow>("applications")
             val row = DataStore.list("job_agent_profiles").firstOrNull { (it as? JsonObject)?.text("id") == profileId } as? JsonObject
             if (!profileEdited) {
@@ -207,7 +209,9 @@ class JobAgentModel(private val email: String?) {
 
     suspend fun save(listing: JobListing) {
         guarded {
-            DataStore.insert("saved_jobs", buildJsonObject {
+            val existing = savedRows.firstOrNull { it.job_id == listing.job.id }
+            if (existing != null) DataStore.update("saved_jobs", existing.id, buildJsonObject { put("state", "saved") })
+            else DataStore.insert("saved_jobs", buildJsonObject {
                 put("id", "sj_${newId()}"); put("job_id", listing.job.id); put("job_json", listing.raw); put("state", "saved"); put("created_at", now())
             })
             load()
@@ -220,6 +224,7 @@ class JobAgentModel(private val email: String?) {
 
     suspend fun track(listing: JobListing) {
         guarded {
+            if (isTracked(listing.job)) return@guarded
             val at = now()
             DataStore.insert("applications", buildJsonObject {
                 put("id", "app_${newId()}"); put("job_id", listing.job.id); put("job_json", listing.raw); put("status", "preparing")
@@ -243,7 +248,7 @@ class JobAgentModel(private val email: String?) {
             profile = mergeProfile(profile, reply.profile)
             headline = profile?.text("headline").orEmpty()
             summary = profile?.text("summary").orEmpty()
-            unsavedFacts = reply.facts
+            unsavedFacts = unsavedFacts + reply.facts
             facts = reply.facts + facts
             profileEdited = true
             notice = "Imported ${reply.facts.size} facts. Review them, then save."

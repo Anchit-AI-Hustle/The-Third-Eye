@@ -98,7 +98,7 @@ struct JobFact: Decodable, Identifiable {
 
 struct ProfileImport: Decodable {
     let profile: JSONValue
-    let facts: [JobFact]
+    var facts: [JobFact]
 
     var headline: String? { profile["headline"]?.text }
     var summary: String? { profile["summary"]?.text }
@@ -133,6 +133,7 @@ final class JobModel: ObservableObject {
     @Published var searched = false
     @Published var searching = false
     @Published var saved: [SavedJobRow] = []
+    private var savedRows: [SavedJobRow] = []
     @Published var applications: [ApplicationRow] = []
     @Published var savedProfile: ProfileRow?
     @Published var imported: ProfileImport?
@@ -147,7 +148,8 @@ final class JobModel: ObservableObject {
 
     func loadLists() async {
         do {
-            saved = try await DataStore.list("saved_jobs", as: SavedJobRow.self).filter { ($0.state ?? "saved") == "saved" }
+            savedRows = try await DataStore.list("saved_jobs", as: SavedJobRow.self)
+            saved = savedRows.filter { ($0.state ?? "saved") == "saved" }
             applications = try await DataStore.list("applications", as: ApplicationRow.self)
             error = nil
         } catch {
@@ -185,8 +187,12 @@ final class JobModel: ObservableObject {
             return
         }
         do {
-            try await DataStore.insert("saved_jobs", ["id": "sj_\(UUID().uuidString.lowercased())", "job_id": job.id,
-                                                      "job_json": job.jsonObject, "state": "saved", "created_at": Fmt.now()])
+            if let existing = savedRows.first(where: { $0.job_id == job.id }) {
+                try await DataStore.update("saved_jobs", id: existing.id, ["state": "saved"])
+            } else {
+                try await DataStore.insert("saved_jobs", ["id": "sj_\(UUID().uuidString.lowercased())", "job_id": job.id,
+                                                          "job_json": job.jsonObject, "state": "saved", "created_at": Fmt.now()])
+            }
             notice = "Saved."
             await loadLists()
         } catch {
@@ -212,6 +218,7 @@ final class JobModel: ObservableObject {
 
     func removeSaved(_ row: SavedJobRow) async {
         saved.removeAll { $0.id == row.id }
+        savedRows.removeAll { $0.id == row.id }
         do { try await DataStore.delete("saved_jobs", id: row.id) } catch {
             self.error = error.localizedDescription
             await loadLists()
@@ -231,7 +238,9 @@ final class JobModel: ObservableObject {
         error = nil
         defer { working = false }
         do {
-            imported = try await API.call("POST", "/api/job-agent/profile/import", json: ["text": text], as: ProfileImport.self)
+            var batch = try await API.call("POST", "/api/job-agent/profile/import", json: ["text": text], as: ProfileImport.self)
+            batch.facts = (imported?.facts ?? []) + batch.facts
+            imported = batch
         } catch {
             report(error)
         }

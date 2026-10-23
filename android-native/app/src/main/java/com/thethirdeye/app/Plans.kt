@@ -25,13 +25,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 @Serializable
 data class Wallet(val unlimited: Boolean = false, val balance: Flex? = null, val used: Flex = 0.0, val ledger: List<Entry> = emptyList()) {
     @Serializable data class Entry(val delta: Flex = 0.0, val reason: String = "", val balance_after: Flex? = null, val created_at: String = "")
 }
+
+fun unlockSucceeded(body: String): Boolean =
+    runCatching { (json.parseToJsonElement(body) as? JsonObject)?.get("ok")?.jsonPrimitive?.booleanOrNull == true }.getOrDefault(false)
 
 class PlansModel {
     var wallet by mutableStateOf<Wallet?>(null)
@@ -51,9 +57,11 @@ class PlansModel {
 
     suspend fun unlock(code: String) {
         unlockNote = try {
-            Api.backend.send("POST", "/api/billing/unlock", buildJsonObject { put("code", code.trim()) })
-            load()
-            "Unlocked"
+            val reply = Api.backend.send("POST", "/api/billing/unlock", buildJsonObject { put("code", code.trim()) })
+            if (unlockSucceeded(reply)) {
+                load()
+                "Unlocked"
+            } else "That code didn't work."
         } catch (e: ApiError) {
             if (e.status == 429) "Too many tries, wait 15 minutes." else e.message
         }

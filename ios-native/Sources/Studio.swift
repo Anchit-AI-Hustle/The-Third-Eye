@@ -229,7 +229,7 @@ struct ToolFormView: View {
 
     private func generate() {
         let trimmed = values.mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        Task {
+        Task { @MainActor in
             await runner.run(trimmed)
             if runner.error == nil, runner.output != nil { showResult = true }
         }

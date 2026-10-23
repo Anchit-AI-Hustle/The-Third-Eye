@@ -54,7 +54,7 @@ struct AuditView: View {
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(Theme.secondary)
                 Button {
-                    if expanded { open.remove(audit.id) } else { open.insert(audit.id) }
+                    open.formSymmetricDifference([audit.id])
                 } label: {
                     Image(systemName: expanded ? "chevron.up" : "chevron.down").frame(width: 28, height: 28)
                 }

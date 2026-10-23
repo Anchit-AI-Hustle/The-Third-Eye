@@ -308,7 +308,7 @@ struct AccountSection: View {
             Button("Delete account", role: .destructive) { confirming = true }
                 .disabled(deleting)
                 .confirmationDialog("Delete your account?", isPresented: $confirming, titleVisibility: .visible) {
-                    Button("Delete everything", role: .destructive) { Task { await deleteAccount() } }
+                    Button("Delete everything", role: .destructive) { Task { @MainActor in await deleteAccount() } }
                 } message: {
                     Text("This permanently deletes your tasks, notes, goals, documents, chats and every other record, and your sign-in. It can't be undone.")
                 }
@@ -381,7 +381,7 @@ struct ConnectionsSection: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     Button("Connect GitHub") {
-                        Task { if await model.connectGitHub(token: token.trimmingCharacters(in: .whitespacesAndNewlines)) { token = "" } }
+                        Task { @MainActor in if await model.connectGitHub(token: token.trimmingCharacters(in: .whitespacesAndNewlines)) { token = "" } }
                     }
                     .buttonStyle(.borderless)
                     .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.busy)
@@ -517,7 +517,7 @@ struct ProvidersSection: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             Button("Save key") {
-                Task { if await model.addKey(provider: provider, value: value.trimmingCharacters(in: .whitespacesAndNewlines)) { value = "" } }
+                Task { @MainActor in if await model.addKey(provider: provider, value: value.trimmingCharacters(in: .whitespacesAndNewlines)) { value = "" } }
             }
             .disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
