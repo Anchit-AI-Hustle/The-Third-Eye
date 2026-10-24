@@ -34,6 +34,38 @@ Minimum env vars to get a working dev session: `GEMINI_API_KEY`,
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Full list and
 what each one gates: [DEVELOPMENT.md §13](DEVELOPMENT.md#13-build--deploy--ci).
 
+## Buying credits (Razorpay, India)
+
+Credit packs (`BUNDLES` in `frontend/src/lib/billing/plans.ts`, priced in INR)
+are sold with Razorpay Standard Checkout as one-time orders. Visitors whose
+`x-vercel-ip-country` is `IN` (or with no country header, i.e. local
+development) get Razorpay on **Plans → Credit packs**; elsewhere packs stay
+unavailable for now. Stripe still runs the subscription checkout.
+
+Flow: `POST /api/billing/razorpay/order` creates the order with the amount in
+paise from the catalog (never from the browser) and stores a pending row in
+`razorpay_purchases` → the page loads `checkout.js` on tap and opens it in
+redirect mode → Razorpay posts the result to `/api/billing/razorpay/callback`,
+which checks HMAC-SHA256(`order_id|payment_id`) with the key secret, then
+`GET /v1/payments/{id}` (same order, same amount, captured; it captures an
+authorized payment) and credits the wallet → 303 to `/plans#paid` or
+`#unpaid`. `/api/billing/razorpay/verify` does the same for the in-page
+handler, and `/api/billing/razorpay/webhook` (`order.paid`,
+`payment.captured`, signed with `X-Razorpay-Signature`) catches payments whose
+browser never came back. All three credit through `grant_razorpay_purchase`,
+which credits each order once and each payment id once.
+
+| Env var | What it is |
+| --- | --- |
+| `RAZORPAY_KEY_ID` | Key id (`rzp_test_…` / `rzp_live_…`); sent to the browser to open checkout |
+| `RAZORPAY_KEY_SECRET` | Key secret; server only, signs API calls and checks payment signatures |
+| `RAZORPAY_WEBHOOK_SECRET` | Secret of the webhook pointing at `https://<host>/api/billing/razorpay/webhook` |
+
+Without the key pair, packs fall back to the old behaviour (owner accounts buy
+for free, everyone else is told payments are not live). Test with card
+`4100 2800 0000 1007`, any future expiry, CVV `123`, contact `9000090000`, then
+**Success** on the demo bank page.
+
 ## Prerequisites
 
 - Node 22, npm

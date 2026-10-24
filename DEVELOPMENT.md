@@ -365,7 +365,9 @@ to the database.
   (session pooler, port 5432 — migrations take an advisory lock, which needs a
   session; the direct `db.<ref>.supabase.co` host is IPv6-only and unreachable
   from Vercel),
-  `TOKEN_ENCRYPTION_KEY`, `SERPER_API_KEY`.
+  `TOKEN_ENCRYPTION_KEY`, `SERPER_API_KEY`; credit packs in India need
+  `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` (flow in
+  README "Buying credits").
 - **OAuth redirect URIs** to whitelist in Google Console:
   `…/api/auth/callback/google` (sign-in) and `…/api/connect/google/callback`
   (Gmail/Chat connect).
