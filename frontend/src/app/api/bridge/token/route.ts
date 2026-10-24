@@ -20,9 +20,13 @@ async function ctx(): Promise<{ error: Response } | Ctx> {
   return { email, db };
 }
 
-const revoke = (c: Ctx, before?: string) => {
+const revoke = (c: Ctx, keep?: { hash: string; createdAt: string }) => {
   const q = c.db.from("gateway_tokens").update({ revoked_at: new Date().toISOString() }).eq("user_id", c.email).eq("name", NAME).is("revoked_at", null);
-  return before ? q.lt("created_at", before) : q;
+  if (!keep) return q;
+  // created_at comes back at millisecond precision; everything up to the end
+  // of that millisecond but this token goes, so a same-millisecond pair can
+  // leave none active, never two.
+  return q.lt("created_at", new Date(Date.parse(keep.createdAt) + 1).toISOString()).neq("token_hash", keep.hash);
 };
 
 export async function GET() {
@@ -39,7 +43,7 @@ export async function POST() {
   const { token, hash } = mintToken();
   const { data, error } = await c.db.from("gateway_tokens").insert({ user_id: c.email, name: NAME, token_hash: hash, scopes: ["chat"] }).select("created_at").single();
   if (error || !data) return Response.json({ error: "Couldn't create the token." }, { status: 500 });
-  if ((await revoke(c, data.created_at as string)).error) {
+  if ((await revoke(c, { hash, createdAt: data.created_at as string })).error) {
     await c.db.from("gateway_tokens").delete().eq("token_hash", hash);
     return Response.json({ error: "Couldn't replace the old token." }, { status: 500 });
   }
