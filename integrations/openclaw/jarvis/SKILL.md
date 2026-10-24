@@ -6,15 +6,10 @@ metadata: { "openclaw": { "requires": { "bins": ["curl", "jq"], "env": ["JARVIS_
 
 # JARVIS bridge
 
-For each message the user sends, pass it to JARVIS unchanged and reply with exactly what comes back. Do not answer it yourself, summarise it, or add anything.
+For each message the user sends, pass it to JARVIS unchanged and reply with exactly what the script prints. Do not answer it yourself, summarise it, or add anything.
 
-Run this with the message text between the two `JARVIS_MSG_END` lines, as-is:
-
-```bash
-jq -Rs '{text: .}' <<'JARVIS_MSG_END' | curl -sS --max-time 300 -X POST "${JARVIS_URL:-https://the-third-eye.anchit-tandon.com}/api/bridge/message" -H "Authorization: Bearer $JARVIS_TOKEN" -H "Content-Type: application/json" --data @- | jq -r '.reply // .error'
-<the user's message>
-JARVIS_MSG_END
-```
+1. Use the `write` tool to save the message text, exactly as received, to `{baseDir}/inbox.txt`.
+2. Use the `exec` tool to run `sh {baseDir}/ask.sh` (no arguments; never put the message in the command).
 
 - If JARVIS asks to confirm an action, the user's next "YES" or "NO" goes through the same way.
 - `Invalid token` means the token was revoked: tell the user to make a new one in The Third Eye → Settings → WhatsApp → OpenClaw.
