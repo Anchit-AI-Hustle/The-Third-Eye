@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -75,7 +76,8 @@ class FakeBackend : Backend {
         "/api/providers" to """{"providers":[
             {"provider":"gemini","status":"ok","model":"gemini-2.5-flash","reason":null,"benchedUntil":null,"checkedAt":"${today}T08:00:00Z"},
             {"provider":"groq","status":"rate_limited","model":null,"reason":"rate limited until 09:40 UTC","benchedUntil":"${today}T09:40:00Z","checkedAt":null}]}""",
-        "/api/user/provider-keys" to """{"keys":[{"provider":"openrouter","hint":"…x9f2"}]}""",
+        "/api/user/provider-keys" to """{"keys":[{"provider":"openrouter","hint":"…x9f2"},{"provider":"ollama","hint":"…ngrok.app"}]}""",
+        "/api/user/local-model" to """{"connected":true,"host":"my-mac.ngrok.app","localFirst":true,"model":"qwen2.5:14b","assistantModels":{"jarvis":"llama3.1:8b","ultron":"qwen2.5:14b"},"hasToken":true}""",
         "/api/status" to """{"ai":true,"openai":true,"database":true,"google_oauth":true,"serper":false,"cascade":{"gemini":true}}""",
         "/api/data/saved_jobs" to """{"rows":[{"id":"sj_1","job_id":"job_1","job_json":${Fixtures.job},"state":"saved","created_at":"${today}T08:00:00Z"}]}""",
         "/api/data/applications" to """{"rows":[{"id":"app_1","job_id":"job_1","job_json":${Fixtures.job},"status":"interview","created_at":"${today}T08:00:00Z","updated_at":"${today}T09:00:00Z"}]}""",
@@ -88,6 +90,7 @@ class FakeBackend : Backend {
     private val replies = mapOf(
         "/api/tools/generate" to """{"output":"## Monsoon Evenings\n\n**Verse 1**\n- Rain on the tin roof, *slow* and steady\n- Chai going cold on the sill\n\nSee [the playlist](https://example.com).","format":"markdown","provider":"gemini"}""",
         "/api/kolab/generate" to """{"output":"## Objective\nGrow repeat purchases by **20%** in 90 days.\n\n## Segments\n1. New buyers\n2. Lapsed buyers\n\n| Stage | Channel | KPI |\n|---|---|---|\n| Activation | Email | Open rate |","provider":"gemini"}""",
+        "/api/user/local-model" to """{"ok":true,"models":["llama3.1:8b","qwen2.5:14b","mistral:7b"],"ms":123}""",
         "/api/job-agent/search" to """{"jobs":[${Fixtures.job}],"sources":[{"id":"remotive","displayName":"Remotive","state":"complete","count":1},{"id":"linkedin","displayName":"LinkedIn","state":"external-search","url":"https://www.linkedin.com/jobs"}]}""",
         "/api/job-agent/profile/import" to """{"profile":{"headline":"Growth Marketer","summary":"Lifecycle and paid acquisition."},"facts":[{"id":"n1","factType":"skill","value":"Paid acquisition","confidence":0.9,"verified":"unverified","sensitivity":"normal","updatedAt":"${today}T00:00:00Z"}]}""",
     )
@@ -316,6 +319,17 @@ abstract class ScreensTest {
         shoot("26-settings") { SettingsScreen(session, Nav()) }
         scrollTo("AI providers")
         capture("26-settings-providers")
+        scrollTo("Sign in with OpenRouter")
+        capture("26-settings-openrouter")
+        scrollTo("Per assistant")
+        capture("26-settings-your-computer")
+        rule.onNodeWithText("Test connection").performClick()
+        rule.waitForIdle()
+        scrollTo("Per assistant")
+        capture("26-settings-your-computer-tested")
+        scrollTo("Only if your tunnel")
+        capture("26-settings-tunnel-password")
+        assertTrue(fake.sent.contains("POST" to "/api/user/local-model"))
         scrollTo("About")
         capture("26-settings-about")
     }
