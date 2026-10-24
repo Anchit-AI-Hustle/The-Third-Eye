@@ -76,6 +76,8 @@ describe("SignInClient", () => {
     // Opened before any network wait: iOS blocks a window opened after the tap's moment has passed.
     expect(open.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]);
     expect(screen.getByText(code.slice(0, 4).toUpperCase())).toBeTruthy();
+    // If iOS swallowed the window, there is still something to tap.
+    expect(screen.getByRole("link", { name: /Open Safari to sign in/i })).toHaveAttribute("href", `/auth/handoff?code=${code}`);
 
     approved = true;
     await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
