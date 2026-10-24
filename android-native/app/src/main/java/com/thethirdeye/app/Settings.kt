@@ -137,14 +137,17 @@ class SettingsModel {
         loaded = true
     }
 
-    private suspend fun act(block: suspend () -> Unit) {
-        try {
+    private suspend fun act(block: suspend () -> Unit): Boolean {
+        val ok = try {
             block()
             error = null
+            true
         } catch (e: Exception) {
             error = e.message
+            false
         }
         load()
+        return ok
     }
 
     suspend fun disconnectGoogle() = act { Api.backend.send("DELETE", "/api/connect/google") }
@@ -435,7 +438,7 @@ fun SettingsScreen(session: Session, nav: Nav, model: SettingsModel = remember {
                         }
                     } else {
                         Field("Tunnel password", tunnelPassword, { tunnelPassword = it }, secret = true)
-                        GlowButton("Save password", enabled = tunnelPassword.isNotBlank()) { scope.launch { model.setTunnelPassword(tunnelPassword); tunnelPassword = "" } }
+                        GlowButton("Save password", enabled = tunnelPassword.isNotBlank()) { scope.launch { if (model.setTunnelPassword(tunnelPassword)) tunnelPassword = "" } }
                     }
                     Hint("Only if your tunnel asks for one. user:password is sent as Basic auth, anything else as a bearer token.")
                 }

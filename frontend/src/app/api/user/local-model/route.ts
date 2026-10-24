@@ -83,7 +83,8 @@ export async function POST() {
   if (!r) return Response.json({ ok: false, error: "No answer. Check that Ollama and the tunnel are running and the computer is awake." });
   if (r.status === 401 || r.status === 403) return Response.json({ ok: false, error: "The tunnel refused the password." });
   if (!r.ok) return Response.json({ ok: false, error: `The tunnel answered ${r.status}. Check that Ollama and the tunnel are running and the computer is awake.` });
-  const data = (await r.json().catch(() => ({}))) as { data?: { id?: unknown }[] };
-  const models = (data.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === "string");
+  const data = (await r.json().catch(() => null)) as { data?: unknown } | null;
+  if (!Array.isArray(data?.data)) return Response.json({ ok: false, error: "Something answered, but it isn't Ollama. Check the tunnel points at Ollama's port (11434)." });
+  const models = (data.data as { id?: unknown }[]).map((m) => m?.id).filter((id): id is string => typeof id === "string");
   return Response.json({ ok: true, models, ms: Date.now() - started });
 }
