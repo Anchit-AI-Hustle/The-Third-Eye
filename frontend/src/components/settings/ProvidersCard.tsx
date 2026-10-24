@@ -10,7 +10,7 @@ const LABEL: Record<string, string> = {
   ok: "Working", unknown: "Not checked yet", rate_limited: "Rate limited", quota: "Daily quota used up", credit: "Out of credit", misconfigured: "Key or model rejected", error: "Error",
 };
 const NAME: Record<string, string> = {
-  openai: "OpenAI", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter", mistral: "Mistral",
+  openai: "OpenAI", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter (free models)", "openrouter-paid": "OpenRouter (paid credit)", anthropic: "Anthropic Claude (paid credit)", mistral: "Mistral",
 };
 
 // Free keys a user can get themselves, so their requests don't share the
