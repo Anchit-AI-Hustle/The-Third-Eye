@@ -232,6 +232,76 @@ final class ProvidersModel: ObservableObject {
     }
 }
 
+struct LocalModelState: Decodable {
+    let connected: Bool
+    let host: String?
+    let localFirst: Bool
+    let model: String?
+    let assistantModels: [String: String]
+    let hasToken: Bool
+}
+
+struct LocalModelTest: Decodable {
+    let ok: Bool
+    let models: [String]?
+    let ms: Int?
+    let error: String?
+}
+
+@MainActor
+final class LocalComputerModel: ObservableObject {
+    @Published var state: LocalModelState?
+    @Published var models: [String]?
+    @Published var testLine: String?
+    @Published var testOK = false
+    @Published var error: String?
+    @Published var busy = false
+
+    func load() async {
+        do {
+            state = try await API.call("GET", "/api/user/local-model", as: LocalModelState.self)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func save(_ body: [String: Any]) async -> Bool {
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            try await API.fetch("PUT", "/api/user/local-model", json: body)
+            await load()
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
+    func test() async {
+        busy = true
+        error = nil
+        testLine = nil
+        defer { busy = false }
+        do {
+            let result = try await API.call("POST", "/api/user/local-model", as: LocalModelTest.self)
+            testOK = result.ok
+            if result.ok {
+                let found = result.models ?? []
+                models = found
+                testLine = "Connected — \(found.count) \(found.count == 1 ? "model" : "models"), \(result.ms ?? 0) ms"
+            } else {
+                testLine = result.error ?? "No answer."
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
 struct SystemStatus: Decodable {
     let ai: Bool?
     let openai: Bool?
@@ -482,6 +552,7 @@ struct ProvidersSection: View {
     @ObservedObject var model: ProvidersModel
     @State private var provider = ProviderKeys.all[0]
     @State private var value = ""
+    @State private var connectingOpenRouter = false
 
     var body: some View {
         Section("AI providers") {
@@ -520,8 +591,22 @@ struct ProvidersSection: View {
                 Task { @MainActor in if await model.addKey(provider: provider, value: value.trimmingCharacters(in: .whitespacesAndNewlines)) { value = "" } }
             }
             .disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            VStack(alignment: .leading, spacing: 4) {
+                Button("Sign in with OpenRouter") { connectingOpenRouter = true }
+                Text("Uses your own OpenRouter account — free models, or your credit for paid ones.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+            }
+            .sheet(isPresented: $connectingOpenRouter, onDismiss: { Task { await model.load() } }) {
+                NavigationStack {
+                    WebScreen(path: "/api/connect/openrouter")
+                        .navigationTitle("Sign in with OpenRouter")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connectingOpenRouter = false } } }
+                }
+            }
         }
         .listRowBackground(Theme.surface.opacity(0.7))
+        if model.keys.contains(where: { $0.provider == "ollama" }) { ComputerSection() }
     }
 
     private func color(_ status: String) -> Color {
@@ -530,6 +615,151 @@ struct ProvidersSection: View {
         case "unknown": return Theme.muted
         default: return Theme.amber
         }
+    }
+}
+
+struct ComputerSection: View {
+    private struct Assistant: Identifiable { let id: String; let name: String }
+    private static let assistants = [Assistant(id: "jarvis", name: "JARVIS"), Assistant(id: "friday", name: "FRIDAY"),
+                                     Assistant(id: "edith", name: "E.D.I.T.H."), Assistant(id: "ultron", name: "ULTRON")]
+
+    @StateObject private var model = LocalComputerModel()
+    @State private var modelChoice = ""
+    @State private var perAssistant: [String: String] = [:]
+    @State private var token = ""
+
+    var body: some View {
+        Section("Your computer") {
+            if let error = model.error { Text(error).font(.system(size: 13)).foregroundStyle(Theme.red) }
+            if let state = model.state {
+                header(state)
+                localFirstRow(state)
+                testRow
+                modelRow
+                assistantRows
+                tokenRows(state)
+            } else if model.error == nil {
+                ProgressView()
+            }
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
+        .task {
+            await model.load()
+            syncDrafts()
+        }
+    }
+
+    private func syncDrafts() {
+        modelChoice = model.state?.model ?? ""
+        perAssistant = model.state?.assistantModels ?? [:]
+    }
+
+    private func options(including selected: String) -> [String] {
+        var list = model.models ?? []
+        if !selected.isEmpty && !list.contains(selected) { list.insert(selected, at: 0) }
+        return list
+    }
+
+    private func header(_ state: LocalModelState) -> some View {
+        Label(state.host ?? "Your computer", systemImage: "desktopcomputer")
+            .font(.system(size: 15, weight: .medium))
+    }
+
+    private func localFirstRow(_ state: LocalModelState) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Answer from my computer first (free)", isOn: Binding(get: { state.localFirst }, set: { on in Task { await model.save(["localFirst": on]) } }))
+                .tint(Theme.blue)
+                .disabled(model.busy)
+            Text("Your computer answers first; the free cloud models take over when it's asleep or busy.")
+                .font(.system(size: 12)).foregroundStyle(Theme.muted)
+        }
+    }
+
+    private var testRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(model.busy ? "Testing…" : "Test connection") { Task { await model.test() } }
+                .disabled(model.busy)
+            if let line = model.testLine {
+                Text(line).font(.system(size: 12)).foregroundStyle(model.testOK ? Theme.green : Theme.red)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var modelRow: some View {
+        if model.models == nil {
+            TextField("Model, e.g. llama3.1:8b", text: $modelChoice)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        } else {
+            Picker("Model", selection: $modelChoice) {
+                Text("Default (llama3.1:8b)").tag("")
+                ForEach(options(including: modelChoice), id: \.self) { Text($0).tag($0) }
+            }
+        }
+        Button("Save model") {
+            Task { @MainActor in
+                if await model.save(["model": modelChoice.trimmingCharacters(in: .whitespacesAndNewlines)]) { syncDrafts() }
+            }
+        }
+        .disabled(model.busy)
+    }
+
+    @ViewBuilder
+    private var assistantRows: some View {
+        ForEach(Self.assistants) { assistant in
+            let name = assistant.name
+            let binding = Binding(get: { perAssistant[assistant.id] ?? "" }, set: { perAssistant[assistant.id] = $0 })
+            if model.models == nil {
+                HStack {
+                    Text(name).font(.system(size: 15, weight: .medium))
+                    TextField("Same as above", text: binding)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            } else {
+                Picker(name, selection: binding) {
+                    Text("Same as above").tag("")
+                    ForEach(options(including: binding.wrappedValue), id: \.self) { Text($0).tag($0) }
+                }
+            }
+        }
+        Button("Save assistant models") {
+            let map = perAssistant.compactMapValues { value -> String? in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            Task { @MainActor in
+                if await model.save(["assistantModels": map]) { syncDrafts() }
+            }
+        }
+        .disabled(model.busy)
+    }
+
+    @ViewBuilder
+    private func tokenRows(_ state: LocalModelState) -> some View {
+        if state.hasToken {
+            HStack {
+                Text("Password saved").font(.system(size: 15))
+                Spacer()
+                Button("Remove", role: .destructive) { Task { await model.save(["token": ""]) } }
+                    .buttonStyle(.borderless)
+                    .disabled(model.busy)
+            }
+        } else {
+            SecureField("Tunnel password", text: $token)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Save password") {
+                Task { @MainActor in
+                    if await model.save(["token": token.trimmingCharacters(in: .whitespacesAndNewlines)]) { token = "" }
+                }
+            }
+            .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.busy)
+        }
+        Text("Only if your tunnel asks for one. user:password is sent as Basic auth, anything else as a bearer token.")
+            .font(.system(size: 12)).foregroundStyle(Theme.muted)
     }
 }
 

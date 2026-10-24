@@ -109,7 +109,10 @@ enum PreviewMode {
             return #"{"automations":[{"id":"r1","name":"Weekly review","action":"Summarise my week and plan the next one","fireAt":"2026-10-25T04:30:00.000Z","recurrence":"weekly","status":"pending","lastRun":{"channel":"push","status":"sent","at":"2026-10-18T04:30:00.000Z"}},{"id":"r2","name":"Water plants","action":"Remind me to water the plants","fireAt":"2026-10-24T13:00:00.000Z","recurrence":"daily","status":"paused","lastRun":null}]}"#
         case ("GET", "/api/providers"):
             return #"{"providers":[{"provider":"gemini","status":"ok","model":"gemini-2.5-flash","reason":null,"benchedUntil":null,"checkedAt":null},{"provider":"groq","status":"ok","model":"llama-3.3-70b","reason":null,"benchedUntil":null,"checkedAt":null},{"provider":"mistral","status":"rate_limited","model":null,"reason":"Rate limited until 10:40","benchedUntil":null,"checkedAt":null}]}"#
-        case ("GET", "/api/user/provider-keys"): return #"{"keys":[{"provider":"groq","hint":"…a1b2"}]}"#
+        case ("GET", "/api/user/provider-keys"): return #"{"keys":[{"provider":"groq","hint":"…a1b2"},{"provider":"ollama","hint":"…ngrok"}]}"#
+        case ("GET", "/api/user/local-model"):
+            return #"{"connected":true,"host":"studio.ngrok.app","localFirst":true,"model":"llama3.1:8b","assistantModels":{"jarvis":"qwen2.5:14b"},"hasToken":true}"#
+        case ("POST", "/api/user/local-model"): return #"{"ok":true,"models":["llama3.1:8b","qwen2.5:14b","mistral:7b"],"ms":142}"#
         case ("GET", "/api/status"):
             return #"{"ai":true,"openai":true,"database":true,"google_oauth":true,"serper":false,"cascade":{"gemini":true,"grok":false,"groq":true,"cerebras":false,"openrouter":true,"mistral":true}}"#
         case ("POST", "/api/tools/generate"), ("POST", "/api/kolab/generate"): return #"{"output":"Preview\n\n- A sample result","format":"markdown"}"#

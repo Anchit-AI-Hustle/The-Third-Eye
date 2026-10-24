@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, KeyRound, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Activity, KeyRound, Laptop, Loader2, LogIn, RefreshCw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Row { provider: string; status: string; model: string | null; reason: string | null; benchedUntil: string | null; checkedAt: string | null }
@@ -25,6 +25,108 @@ const OWN: { id: string; name: string; placeholder: string; url?: string }[] = [
   { id: "ollama", name: "Ollama on your computer", placeholder: "https://your-tunnel.example.com" },
 ];
 
+const ASSISTANTS = [
+  { id: "jarvis", name: "JARVIS" }, { id: "friday", name: "FRIDAY" }, { id: "edith", name: "E.D.I.T.H." }, { id: "ultron", name: "ULTRON" },
+];
+
+interface LocalModel { localFirst: boolean; model: string | null; assistantModels: Record<string, string>; hasToken: boolean }
+
+const field = "rounded-input border border-border-default bg-background-base px-2 py-1.5 text-sm text-text-primary";
+const button = "px-3 py-1.5 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary disabled:opacity-50";
+
+// The user's own computer (Ollama through a tunnel): answers first unless
+// turned off, runs the model they pick, optionally one per assistant.
+function YourComputer() {
+  const [s, setS] = useState<LocalModel | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [test, setTest] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [model, setModel] = useState("");
+  const [perAssistant, setPerAssistant] = useState<Record<string, string>>({});
+  const [token, setToken] = useState("");
+
+  const load = () => fetch("/api/user/local-model").then((r) => r.json()).then((j: LocalModel) => {
+    setS(j); setModel(j.model ?? ""); setPerAssistant(j.assistantModels ?? {});
+  }).catch(() => {});
+  useEffect(() => { void load(); }, []);
+
+  async function save(body: Record<string, unknown>, done: string) {
+    setBusy(true); setNote(null);
+    const r = await fetch("/api/user/local-model", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    const j = await r?.json().catch(() => ({}));
+    setBusy(false);
+    setNote(r?.ok ? done : j?.error ?? "Couldn't save it.");
+    if (r?.ok) void load();
+  }
+
+  async function runTest() {
+    setBusy(true); setTest(null);
+    const r = await fetch("/api/user/local-model", { method: "POST" }).catch(() => null);
+    const j = await r?.json().catch(() => ({}));
+    setBusy(false);
+    if (j?.ok) { setModels(j.models ?? []); setTest(`Connected - ${j.models?.length ?? 0} models, ${j.ms} ms`); }
+    else setTest(j?.error ?? "Couldn't reach it.");
+  }
+
+  if (!s) return null;
+  const options = Array.from(new Set([...models, ...(model ? [model] : []), ...Object.values(perAssistant)]));
+  const picker = (value: string, onChange: (v: string) => void, empty: string, label: string) => options.length ? (
+    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label} className={`${field} flex-1 min-w-0`}>
+      <option value="">{empty}</option>
+      {options.map((m) => <option key={m} value={m}>{m}</option>)}
+    </select>
+  ) : (
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={empty} aria-label={label} className={`${field} flex-1 min-w-0`} />
+  );
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border-default space-y-3">
+      <div className="flex items-center gap-2">
+        <Laptop size={13} className="text-[#4FC3F7]" />
+        <h3 className="text-sm font-medium text-text-primary flex-1">Your computer</h3>
+        <button type="button" onClick={() => void runTest()} disabled={busy} className={button}>Test connection</button>
+      </div>
+      {test && <p className="text-xs text-text-secondary">{test}</p>}
+      <label className="flex items-start gap-2 text-sm text-text-primary">
+        <input type="checkbox" checked={s.localFirst} disabled={busy} onChange={(e) => void save({ localFirst: e.target.checked }, e.target.checked ? "Your computer answers first." : "The cloud answers first now.")} className="mt-1" />
+        <span>Answer from my computer first (free)
+          <span className="block text-xs text-text-muted">Your computer answers first; the free cloud models take over when it&apos;s asleep or busy.</span>
+        </span>
+      </label>
+      <div>
+        <p className="text-xs text-text-muted mb-1">Model {models.length === 0 && "(Test connection to pick from your computer's models)"}</p>
+        <div className="flex gap-2">
+          {picker(model, setModel, "Default (llama3.1:8b)", "Model")}
+          <button type="button" onClick={() => void save({ model }, "Model saved.")} disabled={busy} className={button}>Save</button>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs text-text-muted mb-1">Per assistant</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {ASSISTANTS.map((a) => (
+            <div key={a.id} className="flex items-center gap-2">
+              <span className="w-20 text-xs text-text-secondary flex-none">{a.name}</span>
+              {picker(perAssistant[a.id] ?? "", (v) => setPerAssistant((p) => ({ ...p, [a.id]: v })), "Same as above", `${a.name} model`)}
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={() => void save({ assistantModels: perAssistant }, "Assistant models saved.")} disabled={busy} className={`${button} mt-2`}>Save assistant models</button>
+      </div>
+      <div>
+        <p className="text-xs text-text-muted mb-1">Tunnel password {s.hasToken && <span className="text-text-secondary">· saved</span>}</p>
+        <div className="flex gap-2">
+          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Only if your tunnel asks for one" autoComplete="off" aria-label="Tunnel password" className={`${field} flex-1 min-w-0`} />
+          <button type="button" onClick={() => void save({ token }, "Password saved.").then(() => setToken(""))} disabled={busy || !token.trim()} className={button}>Save</button>
+          {s.hasToken && <button type="button" onClick={() => void save({ token: "" }, "Password removed.")} disabled={busy} className={button}>Remove</button>}
+        </div>
+        <p className="mt-1 text-[11px] text-text-muted">user:password is sent as Basic auth, anything else as a bearer token.</p>
+      </div>
+      {note && <p className="text-xs text-text-secondary">{note}</p>}
+    </div>
+  );
+}
+
 function OwnKeys() {
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [provider, setProvider] = useState(OWN[0].id);
@@ -34,7 +136,12 @@ function OwnKeys() {
 
   const load = () => fetch("/api/user/provider-keys").then((r) => r.json())
     .then((j) => setSaved(Object.fromEntries((j.keys ?? []).map((k: { provider: string; hint: string }) => [k.provider, k.hint])))).catch(() => {});
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const c = new URLSearchParams(window.location.search).get("connect");
+    if (c === "openrouter_connected") setNote("Signed in with OpenRouter. Your chats now use your own OpenRouter account.");
+    else if (c === "openrouter_error") setNote("OpenRouter sign-in didn't finish. Try again.");
+  }, []);
 
   async function save() {
     setBusy(true); setNote(null);
@@ -74,6 +181,10 @@ function OwnKeys() {
           {busy ? <Loader2 size={12} className="animate-spin" /> : "Save"}
         </button>
       </div>
+      <a href="/api/connect/openrouter" className={`${button} mt-2 inline-flex items-center gap-1.5`}>
+        <LogIn size={12} /> Sign in with OpenRouter
+      </a>
+      <p className="mt-1 text-[11px] text-text-muted">Uses your own OpenRouter account: its free models, or your credit for paid ones.</p>
       {pick.url && <a href={pick.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#4FC3F7] hover:underline">Get a {pick.name} key</a>}
       {note && <p className="mt-2 text-xs text-text-secondary">{note}</p>}
       {Object.keys(saved).length > 0 && (
@@ -86,6 +197,7 @@ function OwnKeys() {
           ))}
         </ul>
       )}
+      {saved.ollama && <YourComputer />}
     </div>
   );
 }
