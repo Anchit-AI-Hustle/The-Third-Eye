@@ -7,7 +7,7 @@ import { signOutAndClear } from "@/lib/signOutClean";
 import {
   LayoutDashboard, MessageSquare, CheckSquare, BookOpen,
   BarChart2, Settings, LogOut, Plug, PanelLeftClose, PanelLeftOpen,
-  FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio,
+  FileText, Target, Sparkles, ShieldCheck, Activity, Wand2, Briefcase, LayoutGrid, Workflow, Gem, History, Bot, Radio, Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -71,6 +71,7 @@ const MORE_GROUPS: NavGroup[] = [
       { label: "Capabilities", href: "/capabilities", icon: Sparkles },
       { label: "Agent Activity", href: "/activity", icon: Activity },
       { label: "App Audit", href: "/audit", icon: ShieldCheck },
+      { label: "AI Models", href: "/models", icon: Cpu },
       { label: "Connectors", href: "/connectors", icon: Plug },
     ],
   },

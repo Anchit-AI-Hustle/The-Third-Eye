@@ -12,7 +12,7 @@ vi.mock("@/lib/music/agents", () => ({
   })),
 }));
 
-import { runDaily } from "@/lib/music/daily";
+import { runDaily, today } from "@/lib/music/daily";
 import { createPrediction } from "@/lib/replicate";
 
 type Row = Record<string, unknown>;
@@ -44,7 +44,7 @@ function fakeDb(tables: Record<string, Row[]>) {
 describe("Daily Drop without a music model", () => {
   it("composes today's track in code, stores it and marks it done", async () => {
     const tables: Record<string, Row[]> = { music_daily: [{ user_id: "u", preset: { description: "lofi", duration: 30 }, refs: "" }] };
-    const r = await runDaily(fakeDb(tables) as never, "u", "2026-10-17");
+    const r = await runDaily(fakeDb(tables) as never, "u", today());
     expect(r).toBe("started");
     expect(createPrediction).not.toHaveBeenCalled();
     const track = tables.music_daily_tracks[0];
