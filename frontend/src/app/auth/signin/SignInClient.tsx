@@ -159,6 +159,10 @@ export function SignInClient({
                 <p className="text-text-primary text-sm">Finish signing in with Google in Safari, approve code</p>
                 <p className="font-display text-2xl font-semibold tracking-widest text-accent-blue">{handoff.slice(0, 4).toUpperCase()}</p>
                 <p className="text-text-muted text-xs">then come back here. This screen opens your workspace by itself.</p>
+                {/* iOS sometimes swallows window.open from a home-screen app; a tap on a link always opens. */}
+                <a href={`/auth/handoff?code=${handoff}`} target="_blank" rel="noopener" className="inline-block pt-2 text-sm text-accent-blue underline">
+                  Open Safari to sign in
+                </a>
               </div>
             ) : (
               <button
