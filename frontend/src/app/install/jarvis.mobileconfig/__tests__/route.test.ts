@@ -10,6 +10,6 @@ describe("/install/jarvis.mobileconfig", () => {
     expect(res.headers.get("content-type")).toBe("application/x-apple-aspen-config");
     const body = await res.text();
     expect(body).toContain("<key>Icon</key><data>AQID</data>");
-    expect(body).toContain("<string>https://app.test/dashboard</string>");
+    expect(body).toContain("<string>https://app.test/dashboard?app=webclip</string>");
   });
 });
