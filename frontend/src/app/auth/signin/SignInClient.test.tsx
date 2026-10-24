@@ -13,6 +13,7 @@ describe("SignInClient", () => {
     getCsrfToken.mockReset();
     getCsrfToken.mockResolvedValue("csrf-test");
     localStorage.setItem("te_welcome_seen", "1");
+    localStorage.removeItem("te_webclip");
     // jsdom has no matchMedia; the welcome and sign-in backdrop reads reduced motion.
     window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
   });
@@ -85,6 +86,19 @@ describe("SignInClient", () => {
 
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    open.mockRestore();
+    delete (window.navigator as { standalone?: boolean }).standalone;
+  });
+
+  it("in the installed iPhone web clip, signs in with Google right inside the app", async () => {
+    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<SignInClient callbackUrl="/dashboard?app=webclip" initialError={null} />);
+    const button = await screen.findByRole("button", { name: "Continue with Google" });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(button.closest("form")).toHaveAttribute("action", "/api/auth/signin/google");
+    fireEvent.click(button);
+    expect(open).not.toHaveBeenCalled();
     open.mockRestore();
     delete (window.navigator as { standalone?: boolean }).standalone;
   });

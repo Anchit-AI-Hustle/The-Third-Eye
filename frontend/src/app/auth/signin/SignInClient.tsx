@@ -18,6 +18,19 @@ const ERROR_TEXT: Record<string, string> = {
 
 type CapacitorApp = { addListener(e: "appUrlOpen", cb: (e: { url: string }) => void): Promise<{ remove(): void }> };
 
+const WEB_CLIP = "te_webclip";
+
+// The install profile's web clip opens /dashboard?app=webclip and can show
+// Google inside itself, so it signs in directly. Remembered, since later
+// launches can reach sign-in without the marker.
+function inWebClip(callbackUrl: string): boolean {
+  if (/[?&]app=webclip\b/.test(window.location.search + "&" + callbackUrl)) {
+    try { localStorage.setItem(WEB_CLIP, "1"); } catch { /* still true for this visit */ }
+    return true;
+  }
+  try { return localStorage.getItem(WEB_CLIP) === "1"; } catch { return false; }
+}
+
 function androidApp(): CapacitorApp | undefined {
   const cap = (window as { Capacitor?: { getPlatform?: () => string; Plugins?: { App?: CapacitorApp } } }).Capacitor;
   return cap?.getPlatform?.() === "android" ? cap.Plugins?.App : undefined;
@@ -38,11 +51,11 @@ export function SignInClient({
 
   const [welcome, setWelcome] = useState(false);
   useEffect(() => {
-    setStandalone(inInstalledApp());
+    setStandalone(inInstalledApp() && !inWebClip(callbackUrl));
     let seen = false;
     try { seen = localStorage.getItem(WELCOME_SEEN) === "1"; } catch { /* treat as unseen */ }
     setWelcome(!seen);
-  }, []);
+  }, [callbackUrl]);
 
   useEffect(() => {
     if (!handoff) return;
