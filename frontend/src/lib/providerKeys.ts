@@ -7,14 +7,18 @@ import { decrypt, encrypt } from "@/lib/crypto";
 // doesn't stop them. "ollama" holds a URL (their own machine, usually through
 // a tunnel) instead of a key.
 
-export const OWN_KEY_PROVIDERS = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "ollama"] as const;
+export const OWN_KEY_PROVIDERS = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "huggingface", "ollama"] as const;
 export type OwnKeyProvider = (typeof OWN_KEY_PROVIDERS)[number];
 // How that Ollama is used, stored alongside it: its tunnel password, the model
 // to run (one for everyone, or one per assistant as JSON), and "off" in
 // local_first when the user wants the cloud tried before their own machine.
 export const LOCAL_SETTINGS = ["ollama_token", "ollama_model", "ollama_models", "local_first"] as const;
+// A Hugging Face sign-in keeps what it needs to renew its short-lived token:
+// JSON { refresh, client, expires }.
+export const HF_OAUTH = "huggingface_oauth";
 export type LocalSetting = (typeof LOCAL_SETTINGS)[number];
-export type OwnKeys = Partial<Record<OwnKeyProvider | LocalSetting, string>> & { userId: string };
+type Stored = OwnKeyProvider | LocalSetting | typeof HF_OAUTH;
+export type OwnKeys = Partial<Record<Stored, string>> & { userId: string };
 
 const store = new AsyncLocalStorage<OwnKeys>();
 const persona = new AsyncLocalStorage<string>();
@@ -28,11 +32,13 @@ export async function loadOwnKeys(userId: string): Promise<OwnKeys> {
   const db = getDb();
   if (db) {
     const { data } = await db.from("user_provider_keys").select("provider, key_enc").eq("user_id", userId);
-    for (const row of (data ?? []) as { provider: OwnKeyProvider | LocalSetting; key_enc: string }[]) {
+    for (const row of (data ?? []) as { provider: Stored; key_enc: string }[]) {
       const plain = decrypt(row.key_enc);
       if (plain) keys[row.provider] = plain;
     }
   }
+  const renewed = await renewHuggingFace(userId, keys[HF_OAUTH]);
+  if (renewed) keys.huggingface = renewed;
   cache.set(userId, { at: Date.now(), keys });
   return keys;
 }
@@ -102,7 +108,37 @@ export function ollamaUrlProblem(raw: string): string | null {
   return null;
 }
 
-export async function saveOwnKey(userId: string, provider: OwnKeyProvider | LocalSetting, value: string): Promise<boolean> {
+export const HF_TOKEN_URL = "https://huggingface.co/oauth/token";
+export const HF_SCOPES = "openid inference-api";
+
+/** Saves a Hugging Face sign-in: the access token as the user's key, plus what renews it. */
+export async function saveHuggingFace(userId: string, client: string, t: { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown }): Promise<boolean> {
+  if (typeof t.access_token !== "string" || !t.access_token) return false;
+  if (!(await saveOwnKey(userId, "huggingface", t.access_token))) return false;
+  if (typeof t.refresh_token !== "string") { await deleteOwnKey(userId, HF_OAUTH); return true; }
+  const expires = Date.now() + (typeof t.expires_in === "number" ? t.expires_in : 3600) * 1000;
+  return saveOwnKey(userId, HF_OAUTH, JSON.stringify({ refresh: t.refresh_token, client, expires }));
+}
+
+// Renews the token a few minutes before it lapses; a failed renewal leaves the
+// old token, which the cascade then benches like any rejected key.
+async function renewHuggingFace(userId: string, stored: string | undefined): Promise<string | undefined> {
+  if (!stored) return undefined;
+  let s: { refresh?: string; client?: string; expires?: number };
+  try { s = JSON.parse(stored); } catch { return undefined; }
+  if (!s.refresh || !s.client || (s.expires ?? 0) - Date.now() > 5 * 60_000) return undefined;
+  const r = await fetch(HF_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: s.refresh, client_id: s.client }),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => null);
+  const t = r?.ok ? await r.json().catch(() => null) : null;
+  if (!t || !(await saveHuggingFace(userId, s.client, t))) return undefined;
+  return t.access_token as string;
+}
+
+export async function saveOwnKey(userId: string, provider: Stored, value: string): Promise<boolean> {
   const db = getDb();
   const enc = encrypt(value);
   if (!db || !enc) return false;
@@ -111,7 +147,7 @@ export async function saveOwnKey(userId: string, provider: OwnKeyProvider | Loca
   return !error;
 }
 
-export async function deleteOwnKey(userId: string, provider: OwnKeyProvider | LocalSetting): Promise<void> {
+export async function deleteOwnKey(userId: string, provider: Stored): Promise<void> {
   await getDb()?.from("user_provider_keys").delete().eq("user_id", userId).eq("provider", provider);
   cache.delete(userId);
 }

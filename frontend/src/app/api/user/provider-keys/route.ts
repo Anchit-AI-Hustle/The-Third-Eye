@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { deleteOwnKey, loadOwnKeys, ollamaUrlProblem, OWN_KEY_PROVIDERS, saveOwnKey, type OwnKeyProvider } from "@/lib/providerKeys";
+import { deleteOwnKey, HF_OAUTH, loadOwnKeys, ollamaUrlProblem, OWN_KEY_PROVIDERS, saveOwnKey, type OwnKeyProvider } from "@/lib/providerKeys";
 
 export const runtime = "nodejs";
 
@@ -41,5 +41,6 @@ export async function DELETE(req: Request) {
   const provider = new URL(req.url).searchParams.get("provider");
   if (!isProvider(provider)) return Response.json({ error: "Unknown provider" }, { status: 400 });
   await deleteOwnKey(email, provider);
+  if (provider === "huggingface") await deleteOwnKey(email, HF_OAUTH);
   return Response.json({ ok: true });
 }

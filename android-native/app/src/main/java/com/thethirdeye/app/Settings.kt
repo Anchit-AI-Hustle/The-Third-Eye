@@ -91,7 +91,18 @@ data class ServerStatus(val ai: Boolean = false, val openai: Boolean = false, va
 @Serializable
 private data class Connected(val login: String? = null)
 
-val keyProviders = listOf("gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "ollama")
+val keyProviders = listOf("gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "huggingface", "ollama")
+val keyPages = mapOf(
+    "gemini" to "https://aistudio.google.com/apikey", "groq" to "https://console.groq.com/keys", "openrouter" to "https://openrouter.ai/keys",
+    "mistral" to "https://console.mistral.ai/api-keys", "cerebras" to "https://cloud.cerebras.ai", "openai" to "https://platform.openai.com/api-keys",
+    "huggingface" to "https://huggingface.co/settings/tokens",
+)
+
+/** Providers that let other apps sign in to the user's own account: name, sign-in path, what it uses. */
+val providerSignIns = listOf(
+    Triple("OpenRouter", "/api/connect/openrouter", "Uses your own OpenRouter account — free models, or your credit for paid ones."),
+    Triple("Hugging Face", "/api/connect/huggingface", "Uses your own Hugging Face account's inference credit for open models."),
+)
 
 const val DEFAULT_LOCAL_MODEL = "llama3.1:8b"
 const val SAME_AS_ABOVE = "Same as above"
@@ -396,12 +407,15 @@ fun SettingsScreen(session: Session, nav: Nav, model: SettingsModel = remember {
                 Choice("Provider", keyProviders, keyProvider) { keyProvider = it }
                 Field("API key", keyValue, { keyValue = it }, secret = true)
                 GlowButton("Add key", enabled = keyValue.isNotBlank()) { scope.launch { model.addKey(keyProvider, keyValue); keyValue = "" } }
+                keyPages[keyProvider]?.let { page -> TextButton(onClick = { openInBrowser(context, page) }) { Text("Get a ${keyProvider.replaceFirstChar { it.uppercase() }} key") } }
             }
         }
-        item("openrouter") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { nav.push(Dest.Web("Sign in with OpenRouter", "/api/connect/openrouter")) }) { Text("Sign in with OpenRouter") }
-                Hint("Uses your own OpenRouter account — free models, or your credit for paid ones.")
+        providerSignIns.forEach { (name, path, note) ->
+            item("sign-in-$path") {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { nav.push(Dest.Web("Sign in with $name", path)) }) { Text("Sign in with $name") }
+                    Hint(note)
+                }
             }
         }
 

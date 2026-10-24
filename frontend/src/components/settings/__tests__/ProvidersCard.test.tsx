@@ -18,10 +18,38 @@ function server(local: Record<string, unknown>, putStatus = 200) {
 }
 
 describe("AI providers in Settings", () => {
-  it("offers Sign in with OpenRouter", async () => {
+  it("offers each provider its own way in: a sign-in where it has one, otherwise its own key page", async () => {
     server({ connected: false, localFirst: false, model: null, assistantModels: {}, hasToken: false });
     render(<ProvidersCard />);
     expect(await screen.findByRole("link", { name: /Sign in with OpenRouter/ })).toHaveAttribute("href", "/api/connect/openrouter");
+    expect(screen.getByRole("link", { name: /Sign in with Hugging Face/ })).toHaveAttribute("href", "/api/connect/huggingface");
+    const keyPages = screen.getAllByRole("link", { name: "Get a key" }).map((a) => a.getAttribute("href"));
+    expect(keyPages).toEqual(expect.arrayContaining(["https://console.groq.com/keys", "https://aistudio.google.com/apikey", "https://console.mistral.ai/api-keys", "https://platform.openai.com/api-keys"]));
+    expect(screen.getByRole("button", { name: "Disconnect Ollama on your computer" })).toBeInTheDocument();
+  });
+
+  it("says which provider a sign-in just connected", async () => {
+    server({ connected: false, localFirst: false, model: null, assistantModels: {}, hasToken: false });
+    window.history.pushState({}, "", "/settings?tab=agent&connect=huggingface_connected");
+    render(<ProvidersCard />);
+    expect(await screen.findByText("Signed in with Hugging Face. Your chats now use your own Hugging Face account.")).toBeInTheDocument();
+    window.history.pushState({}, "", "/");
+  });
+
+  it("saves a pasted key for the provider whose row it was pasted in", async () => {
+    const keys: unknown[] = [];
+    server({ connected: false, localFirst: false, model: null, assistantModels: {}, hasToken: false });
+    const base = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (url === "/api/user/provider-keys" && init?.method === "PUT") { keys.push(JSON.parse(String(init.body))); return Response.json({ ok: true }); }
+      return base(url, init);
+    });
+    render(<ProvidersCard />);
+    const groq = (await screen.findByText("Groq")).closest("li")!;
+    fireEvent.click(within(groq).getByRole("button", { name: "Paste key" }));
+    fireEvent.change(within(groq).getByLabelText("Groq key"), { target: { value: "gsk_mine" } });
+    fireEvent.click(within(groq).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(keys).toEqual([{ provider: "groq", value: "gsk_mine" }]));
   });
 
   it("shows your computer answering first, lists its models and saves a model per assistant", async () => {

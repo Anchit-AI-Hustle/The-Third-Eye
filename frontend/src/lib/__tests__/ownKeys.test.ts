@@ -6,7 +6,7 @@ import { llmCascade, resetCooldowns, toolCallCascade } from "@/lib/llmCascade";
 import { enterPersona, ollamaUrlProblem, withKeys } from "@/lib/providerKeys";
 
 const ENV = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY", "GROQ_API_KEY",
-  "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "OLLAMA_ENABLED", "OLLAMA_BASE", "LLM_PRIMARY_PROVIDER"];
+  "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "HF_TOKEN", "OLLAMA_ENABLED", "OLLAMA_BASE", "LLM_PRIMARY_PROVIDER"];
 const clear = () => { for (const k of ENV) delete process.env[k]; };
 const host = (u: string) => new URL(u).hostname;
 
@@ -38,6 +38,13 @@ describe("a user's own provider keys", () => {
     const r = await withKeys({ userId: "a@x.com", mistral: "own-mistral" }, () => llmCascade({ messages: [{ role: "user", content: "hi" }] }));
     expect(r.provider).toBe("mistral");
     expect(seen.every((s) => host(s.url) === "api.mistral.ai")).toBe(true);
+  });
+
+  it("a Hugging Face sign-in runs chats on the user's own Hugging Face account", async () => {
+    const seen = stub(() => ok("from hf"));
+    const r = await withKeys({ userId: "a@x.com", huggingface: "hf_oauth_own" }, () => llmCascade({ messages: [{ role: "user", content: "hi" }] }));
+    expect(r.provider).toBe("huggingface");
+    expect(seen[0]).toEqual({ url: "https://router.huggingface.co/v1/chat/completions", auth: "Bearer hf_oauth_own" });
   });
 
   it("do not leak to another user's request", async () => {
