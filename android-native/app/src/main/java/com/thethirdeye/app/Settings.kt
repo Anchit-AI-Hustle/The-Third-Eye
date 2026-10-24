@@ -202,9 +202,11 @@ class SettingsModel {
 
     suspend fun setLocalModel(name: String) = putLocal(buildJsonObject { put("model", name.trim()) })
 
-    suspend fun setAssistantModel(assistant: String, model: String) = putLocal(buildJsonObject {
-        put("assistantModels", buildJsonObject { withAssistantModel(local?.assistantModels.orEmpty(), assistant, model).forEach { (k, v) -> put(k, v) } })
-    })
+    suspend fun setAssistantModel(assistant: String, model: String): Boolean {
+        val map = withAssistantModel(local?.assistantModels.orEmpty(), assistant, model)
+        local = local?.copy(assistantModels = map)
+        return putLocal(buildJsonObject { put("assistantModels", buildJsonObject { map.forEach { (k, v) -> put(k, v) } }) })
+    }
 
     suspend fun setTunnelPassword(token: String) = putLocal(buildJsonObject { put("token", token.trim()) })
 
