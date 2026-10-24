@@ -93,11 +93,20 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
     return;
   }
 
+  await sendWhatsAppText(msg.from, await answer(link, token, body));
+}
+
+/**
+ * One reply from JARVIS as the link's user, over any chat transport (Meta's
+ * webhook or a bridge like OpenClaw). Keeps the shared history and holds a
+ * confirm-before-act action until a YES or NO.
+ */
+export async function answer(link: WhatsAppLink, token: string, body: string): Promise<string> {
+  const db = getDb()!;
   if (link.pending && (YES.test(body) || NO.test(body))) {
     const reply = YES.test(body) ? await act(token, link.pending) : "Cancelled - nothing was done.";
     await db.from("whatsapp_links").update({ pending: null }).eq("user_id", link.user_id);
-    await sendWhatsAppText(msg.from, reply);
-    return;
+    return reply;
   }
 
   const turn = await chatTurn(token, body, link);
@@ -111,5 +120,5 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
     pending: turn.confirm,
     history: [...link.history, { role: "user", content: body }, { role: "assistant", content: reply }].slice(-HISTORY_TURNS),
   }).eq("user_id", link.user_id);
-  await sendWhatsAppText(msg.from, reply);
+  return reply;
 }
