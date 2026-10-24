@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.net.URLEncoder
@@ -70,12 +71,35 @@ data class OwnKey(val provider: String, val hint: String = "")
 private data class OwnKeys(val keys: List<OwnKey> = emptyList())
 
 @Serializable
+data class LocalModel(
+    val connected: Boolean = false,
+    val host: String? = null,
+    val localFirst: Boolean = true,
+    val model: String? = null,
+    val assistantModels: Map<String, String> = emptyMap(),
+    val hasToken: Boolean = false,
+)
+
+@Serializable
+data class LocalTest(val ok: Boolean = false, val models: List<String> = emptyList(), val ms: Int = 0, val error: String? = null) {
+    val summary get() = if (ok) "Connected — ${models.size} ${if (models.size == 1) "model" else "models"}, $ms ms" else error ?: "No answer."
+}
+
+@Serializable
 data class ServerStatus(val ai: Boolean = false, val openai: Boolean = false, val database: Boolean = false, val google_oauth: Boolean = false, val serper: Boolean = false)
 
 @Serializable
 private data class Connected(val login: String? = null)
 
 val keyProviders = listOf("gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "ollama")
+
+const val DEFAULT_LOCAL_MODEL = "llama3.1:8b"
+const val SAME_AS_ABOVE = "Same as above"
+val localAssistants = listOf("jarvis" to "JARVIS", "friday" to "FRIDAY", "edith" to "E.D.I.T.H.", "ultron" to "ULTRON")
+
+/** The whole per-assistant map, with one assistant changed; blank or "Same as above" removes it. */
+fun withAssistantModel(current: Map<String, String>, assistant: String, model: String): Map<String, String> =
+    current.filterKeys { it != assistant } + listOfNotNull(model.trim().takeIf { it.isNotEmpty() && it != SAME_AS_ABOVE }?.let { assistant to it })
 
 /** +919876543210 as +91•••••••3210. */
 fun maskPhone(phone: String): String = if (phone.length <= 7) phone else phone.take(3) + "•".repeat(phone.length - 7) + phone.takeLast(4)
@@ -88,6 +112,8 @@ class SettingsModel {
     var providers by mutableStateOf<List<ProviderHealth>?>(null)
     var ownKeys by mutableStateOf<List<OwnKey>?>(null)
     var status by mutableStateOf<ServerStatus?>(null)
+    var local by mutableStateOf<LocalModel?>(null)
+    var localTest by mutableStateOf<LocalTest?>(null)
     var error by mutableStateOf<String?>(null)
     var notice by mutableStateOf<String?>(null)
     var linkCode by mutableStateOf<String?>(null)
@@ -107,6 +133,7 @@ class SettingsModel {
         providers = fetch<Providers>("/api/providers")?.providers
         ownKeys = fetch<OwnKeys>("/api/user/provider-keys")?.keys
         status = fetch("/api/status")
+        local = if (ownKeys?.any { it.provider == "ollama" } == true) fetch("/api/user/local-model") else null
         loaded = true
     }
 
@@ -166,6 +193,28 @@ class SettingsModel {
 
     suspend fun removeKey(provider: String) = act { Api.backend.send("DELETE", "/api/user/provider-keys?provider=${URLEncoder.encode(provider, "UTF-8")}") }
 
+    private suspend fun putLocal(body: JsonObject) = act { Api.backend.send("PUT", "/api/user/local-model", body) }
+
+    suspend fun setLocalFirst(on: Boolean) = putLocal(buildJsonObject { put("localFirst", on) })
+
+    suspend fun setLocalModel(name: String) = putLocal(buildJsonObject { put("model", name.trim()) })
+
+    suspend fun setAssistantModel(assistant: String, model: String) = putLocal(buildJsonObject {
+        put("assistantModels", buildJsonObject { withAssistantModel(local?.assistantModels.orEmpty(), assistant, model).forEach { (k, v) -> put(k, v) } })
+    })
+
+    suspend fun setTunnelPassword(token: String) = putLocal(buildJsonObject { put("token", token.trim()) })
+
+    suspend fun testLocal() {
+        localTest = null
+        try {
+            localTest = json.decodeFromString(LocalTest.serializer(), Api.backend.send("POST", "/api/user/local-model"))
+            error = null
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
+
     /** True once the account is gone and the person is signed out. */
     suspend fun deleteAccount(session: Session): Boolean = try {
         Api.backend.send("POST", "/api/account/delete")
@@ -206,6 +255,7 @@ fun SettingsScreen(session: Session, nav: Nav, model: SettingsModel = remember {
     var githubToken by remember { mutableStateOf("") }
     var keyProvider by remember { mutableStateOf(keyProviders.first()) }
     var keyValue by remember { mutableStateOf("") }
+    var tunnelPassword by remember { mutableStateOf("") }
     var deletingAccount by remember { mutableStateOf(false) }
     var deletingAutomation by remember { mutableStateOf<Automation?>(null) }
     LaunchedEffect(Unit) { model.load() }
@@ -341,6 +391,54 @@ fun SettingsScreen(session: Session, nav: Nav, model: SettingsModel = remember {
                 Choice("Provider", keyProviders, keyProvider) { keyProvider = it }
                 Field("API key", keyValue, { keyValue = it }, secret = true)
                 GlowButton("Add key", enabled = keyValue.isNotBlank()) { scope.launch { model.addKey(keyProvider, keyValue); keyValue = "" } }
+            }
+        }
+        item("openrouter") {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { nav.push(Dest.Web("Sign in with OpenRouter", "/api/connect/openrouter")) }) { Text("Sign in with OpenRouter") }
+                Hint("Uses your own OpenRouter account — free models, or your credit for paid ones.")
+            }
+        }
+
+        model.local?.let { l ->
+            item { SectionLabel("Your computer") }
+            item("local-model") {
+                val tested = model.localTest?.takeIf { it.ok }?.models.orEmpty()
+                val known = (tested + listOfNotNull(l.model) + l.assistantModels.values).distinct()
+                val defaultLabel = "Default ($DEFAULT_LOCAL_MODEL)"
+                Panel {
+                    ConnectionRow(l.host ?: "Your computer", "Ollama through your tunnel", l.connected)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Answer from my computer first (free)", Modifier.weight(1f), fontSize = 14.sp)
+                        Switch(l.localFirst, { scope.launch { model.setLocalFirst(it) } }, colors = SwitchDefaults.colors(checkedTrackColor = Palette.blue))
+                    }
+                    Hint("Your computer answers first; the free cloud models take over when it's asleep or busy.")
+                    TextButton(onClick = { scope.launch { model.testLocal() } }) { Text("Test connection") }
+                    model.localTest?.let { Text(it.summary, fontSize = 13.sp, color = if (it.ok) Palette.success else Palette.warning) }
+                    if (tested.isEmpty()) {
+                        var draft by remember(l.model) { mutableStateOf(l.model.orEmpty()) }
+                        Field("Model", draft, { draft = it }, placeholder = DEFAULT_LOCAL_MODEL)
+                        GlowButton("Save model", enabled = draft.trim() != l.model.orEmpty()) { scope.launch { model.setLocalModel(draft) } }
+                    } else {
+                        Choice("Model", listOf(defaultLabel) + known, l.model ?: defaultLabel) { scope.launch { model.setLocalModel(it.takeIf { m -> m != defaultLabel }.orEmpty()) } }
+                    }
+                    if (known.isNotEmpty()) {
+                        Text("Per assistant", fontSize = 13.sp, color = Palette.muted)
+                        localAssistants.forEach { (id, name) ->
+                            Choice(name, listOf(SAME_AS_ABOVE) + known, l.assistantModels[id] ?: SAME_AS_ABOVE) { scope.launch { model.setAssistantModel(id, it) } }
+                        }
+                    }
+                    if (l.hasToken) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Password saved", Modifier.weight(1f), fontSize = 14.sp)
+                            TextButton(onClick = { scope.launch { model.setTunnelPassword("") } }) { Text("Remove", color = Palette.red) }
+                        }
+                    } else {
+                        Field("Tunnel password", tunnelPassword, { tunnelPassword = it }, secret = true)
+                        GlowButton("Save password", enabled = tunnelPassword.isNotBlank()) { scope.launch { model.setTunnelPassword(tunnelPassword); tunnelPassword = "" } }
+                    }
+                    Hint("Only if your tunnel asks for one. user:password is sent as Basic auth, anything else as a bearer token.")
+                }
             }
         }
 

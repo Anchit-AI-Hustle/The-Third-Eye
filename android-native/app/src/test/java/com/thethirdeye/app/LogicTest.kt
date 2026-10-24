@@ -261,6 +261,16 @@ class LogicTest {
         )
     }
 
+    @Test fun `per-assistant models are sent as the whole map`() {
+        val current = mapOf("jarvis" to "llama3.1:8b")
+        assertEquals(mapOf("jarvis" to "llama3.1:8b", "edith" to "qwen2.5:14b"), withAssistantModel(current, "edith", " qwen2.5:14b "))
+        assertEquals(mapOf("jarvis" to "mistral:7b"), withAssistantModel(current, "jarvis", "mistral:7b"))
+        assertEquals(emptyMap<String, String>(), withAssistantModel(current, "jarvis", SAME_AS_ABOVE))
+        assertEquals(current, withAssistantModel(current, "friday", ""))
+        assertEquals("Connected — 1 model, 80 ms", LocalTest(true, listOf("a"), 80).summary)
+        assertEquals("No answer.", LocalTest().summary)
+    }
+
     @Test fun `phone numbers are masked and salaries read as the board wrote them`() {
         assertEquals("+91••••••3210", maskPhone("+919876543210"))
         assertEquals("12345", maskPhone("12345"))
