@@ -82,10 +82,22 @@ describe("Sign in with Hugging Face", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("reports a failed exchange", async () => {
+  it("says why when Hugging Face refuses the code", async () => {
     const { cookie, state } = await begin();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("bad", { status: 400 })));
-    const res = await callback(req(`/api/connect/huggingface/callback?code=abc&state=${state}`, cookie));
-    expect(res.headers.get("location")).toContain("huggingface_error");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "invalid_grant", error_description: "Invalid code" }, { status: 400 })));
+    const where = new URL((await callback(req(`/api/connect/huggingface/callback?code=abc&state=${state}`, cookie))).headers.get("location")!);
+    expect(where.searchParams.get("connect")).toBe("huggingface_error");
+    expect(where.searchParams.get("why")).toBe("Hugging Face refused the sign-in (400: Invalid code).");
+  });
+
+  it("passes on what Hugging Face said when the user or Hugging Face stops the sign-in", async () => {
+    const { cookie, state } = await begin();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const where = new URL((await callback(req(`/api/connect/huggingface/callback?error=access_denied&error_description=User+denied&state=${state}`, cookie))).headers.get("location")!);
+    expect(where.searchParams.get("why")).toBe("Hugging Face said: User denied");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

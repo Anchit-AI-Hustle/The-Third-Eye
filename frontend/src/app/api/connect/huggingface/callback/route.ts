@@ -15,13 +15,16 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const [state, verifier] = (req.headers.get("cookie") ?? "").split(";").map((c) => c.trim())
     .find((c) => c.startsWith("hf_connect="))?.slice("hf_connect=".length).split(".") ?? [];
-  const finish = (result: string) => {
-    const r = NextResponse.redirect(`${base}/settings?tab=agent&connect=${result}`);
+  const finish = (result: string, why?: string) => {
+    if (why) console.error(`[connect/huggingface] ${why}`);
+    const r = NextResponse.redirect(`${base}/settings?tab=agent&connect=${result}${why ? `&why=${encodeURIComponent(why.slice(0, 120))}` : ""}`);
     r.cookies.set("hf_connect", "", { maxAge: 0, path: "/api/connect/huggingface" });
     return r;
   };
+  const denied = url.searchParams.get("error");
+  if (denied) return finish("huggingface_error", `Hugging Face said: ${url.searchParams.get("error_description") ?? denied}`);
   // The state must come back exactly as this browser sent it, so a code from someone else's sign-in can't be attached here.
-  if (!code || !state || !verifier || url.searchParams.get("state") !== state) return finish("huggingface_error");
+  if (!code || !state || !verifier || url.searchParams.get("state") !== state) return finish("huggingface_error", "The sign-in expired or was started in another browser.");
 
   const client = `${base}/.well-known/oauth-cimd`;
   const res = await fetch(HF_TOKEN_URL, {
@@ -29,6 +32,11 @@ export async function GET(req: Request) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: `${base}/api/connect/huggingface/callback`, client_id: client, code_verifier: verifier }),
   }).catch(() => null);
-  const tokens = res?.ok ? await res.json().catch(() => ({})) : {};
-  return finish((await saveHuggingFace(email, client, tokens)) ? "huggingface_connected" : "huggingface_error");
+  if (!res?.ok) {
+    const body = (await res?.json().catch(() => null)) as { error?: string; error_description?: string } | null;
+    return finish("huggingface_error", `Hugging Face refused the sign-in (${res?.status ?? "no answer"}${body?.error_description ? `: ${body.error_description}` : body?.error ? `: ${body.error}` : ""}).`);
+  }
+  const tokens = await res.json().catch(() => ({}));
+  if (!(await saveHuggingFace(email, client, tokens))) return finish("huggingface_error", "Signed in, but the token couldn't be saved.");
+  return finish("huggingface_connected");
 }
