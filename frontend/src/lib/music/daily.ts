@@ -15,6 +15,7 @@ import { planSong } from "./agents";
 import { SONG_CLIP_MAX, SONG_MODEL } from "./models";
 import type { MusicInput } from "./types";
 import { renderWav } from "./synth";
+import { coinedTitle, titleTaken } from "./originality";
 
 export const CHUNK = 1024 * 1024;
 // Just past a function's 60s lifetime: a holder can't still be working after
@@ -44,34 +45,62 @@ function baseUrl(): string | null {
   return prod ? `https://${prod}` : null;
 }
 
-/** Today's concept: a new title and theme in the saved style, never one used recently. */
-export async function variation(preset: MusicInput, refs: string, recent: string[]): Promise<{ title: string; description: string }> {
-  const fallback = { title: `${preset.title || "Daily"} · ${today()}`, description: preset.description || "" };
-  try {
-    const out = await llmCascade({
-      system: [
-        "You write the concept for today's new track in a producer's signature style.",
-        "Keep the genre, tempo, instrumentation, vocal approach and languages exactly as given; change the story, imagery and hook so it is clearly a new song.",
-        'Return ONLY JSON: {"title": "2-4 word title", "description": "2 vivid sentences: the sound and the story"}.',
-      ].join("\n"),
-      messages: [{
-        role: "user",
-        content: [
-          `Style: ${preset.description ?? ""}`,
-          `Genre: ${preset.genre ?? ""}${preset.subgenre ? ` / ${preset.subgenre}` : ""}, ${preset.tempo ?? ""} BPM, mood ${preset.mood ?? ""}`,
-          refs ? `The producer's own tracks this should sound like: ${refs}` : "",
-          recent.length ? `Titles already used - do not reuse: ${recent.join(", ")}` : "",
-        ].filter(Boolean).join("\n"),
-      }],
-      jsonMode: true, maxTokens: 300, temperature: 0.95, stage: "music:daily",
-    });
-    const j = JSON.parse(out.text.slice(out.text.indexOf("{"), out.text.lastIndexOf("}") + 1)) as { title?: string; description?: string };
-    const title = j.title?.trim();
-    const description = j.description?.trim();
-    return title && description ? { title: title.slice(0, 80), description: description.slice(0, 600) } : fallback;
-  } catch {
-    return fallback;
+// The daily drop rotates through these and their blends, one a day.
+export const DAILY_GENRES = [
+  "Hard Techno", "Psytrance", "Rap", "Hip-Hop",
+  "Hard Techno + Psytrance", "Psytrance + Rap", "Hard Techno + Rap", "Hip-Hop + Psytrance",
+  "Hardtek + Hip-Hop", "Dark Psytrance + Hard Techno", "Hi-Tech Psytrance + Rap", "Hard Techno + Hip-Hop",
+  "Acid Rave + Rap", "Full-On Psytrance + Hip-Hop", "Psycore + Hard Techno", "Boom Bap + Acid Rave",
+];
+
+export function dailyGenre(day: string): string {
+  const n = Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
+  return DAILY_GENRES[((n % DAILY_GENRES.length) + DAILY_GENRES.length) % DAILY_GENRES.length];
+}
+
+/** The saved preset with today's genre; fields tied to the saved genre are left for the brief to fill. */
+export function presetForDay(preset: MusicInput, day: string): MusicInput {
+  const { subgenre: _s, tempo: _t, instruments: _i, vocalStyle: _v, structure: _st, ...rest } = preset;
+  return { ...rest, genre: dailyGenre(day) };
+}
+
+/** Today's concept: a new title and theme in the saved style. The title is checked against released songs. */
+export async function variation(preset: MusicInput, refs: string, recent: string[], day = today()): Promise<{ title: string; description: string }> {
+  const fallback = { title: coinedTitle(`${day}|${preset.genre}`, preset.genre), description: preset.description || "" };
+  const rejected: string[] = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const out = await llmCascade({
+        system: [
+          "You write the concept for today's new track in a producer's signature style.",
+          "Keep the genre, tempo, instrumentation, vocal approach and languages exactly as given; change the story, imagery and hook so it is clearly a new song.",
+          "Everything must be wholly original: never borrow, echo or allude to an existing song's title, hook, lyrics, melody or concept.",
+          "The title must not be a common phrase, idiom or any existing song's title. Prefer a coined or unexpected word pairing that nothing else is called.",
+          'Return ONLY JSON: {"title": "2-4 word title", "description": "2 vivid sentences: the sound and the story"}.',
+        ].join("\n"),
+        messages: [{
+          role: "user",
+          content: [
+            `Style: ${preset.description ?? ""}`,
+            `Genre: ${preset.genre ?? ""}${preset.subgenre ? ` / ${preset.subgenre}` : ""}${preset.tempo ? `, ${preset.tempo} BPM` : ""}${preset.mood ? `, mood ${preset.mood}` : ""}`,
+            refs ? `The producer's own tracks this should sound like: ${refs}` : "",
+            recent.length || rejected.length ? `Titles already used or taken - do not use: ${[...recent, ...rejected].join(", ")}` : "",
+          ].filter(Boolean).join("\n"),
+        }],
+        jsonMode: true, maxTokens: 300, temperature: 0.95, stage: "music:daily",
+      });
+      const j = JSON.parse(out.text.slice(out.text.indexOf("{"), out.text.lastIndexOf("}") + 1)) as { title?: string; description?: string };
+      const title = j.title?.trim().slice(0, 80);
+      const description = j.description?.trim().slice(0, 600);
+      if (!title || !description) return fallback;
+      if (!recent.some((r) => r.toLowerCase() === title.toLowerCase()) && !(await titleTaken(title))) return { title, description };
+      rejected.push(title);
+      fallback.description = description;
+    } catch {
+      return fallback;
+    }
   }
+  return fallback;
 }
 
 /**
@@ -100,10 +129,10 @@ export async function runDaily(db: Db, userId: string, day = today()): Promise<R
   if (already && !(already.status === "failed" && already.retryable)) return "exists";
   if (already) await db.from("music_daily_tracks").delete().eq("id", already.id);
 
-  const preset = saved.preset as MusicInput;
+  const preset = presetForDay(saved.preset as MusicInput, day);
   const refs = String(saved.refs ?? "");
   const { data: recentRows } = await db.from("music_daily_tracks").select("title").eq("user_id", userId).order("day", { ascending: false }).limit(14);
-  const concept = await variation(preset, refs, (recentRows ?? []).map((r) => r.title as string));
+  const concept = await variation(preset, refs, (recentRows ?? []).map((r) => r.title as string), day);
 
   const input: MusicInput = {
     ...preset,

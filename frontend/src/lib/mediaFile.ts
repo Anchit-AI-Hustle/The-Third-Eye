@@ -82,10 +82,41 @@ export async function saveMedia(url: string, title = "download"): Promise<void> 
   if (!res.ok) throw new Error("Could not download this file.");
   const blob = await res.blob();
   const named = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1];
-  const filename = named || mediaFilename(title, blob.type || res.headers.get("content-type"), url);
+  await saveBlob(blob, named || mediaFilename(title, blob.type || res.headers.get("content-type"), url));
+}
+
+const onIos = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+/**
+ * Save a file without leaving the page. On iPhone a download link swaps the
+ * whole app for a file preview with no way back, so the share sheet (Save to
+ * Files, Save Video) takes it instead.
+ */
+export async function saveBlob(blob: Blob, filename: string): Promise<void> {
+  const file = new File([blob], filename, { type: blob.type });
+  if (onIos() && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+    } catch (e) {
+      // The tap's permission ran out while a large file downloaded: one more tap shares it.
+      if (e instanceof Error && e.name === "NotAllowedError") await tapToSave(file);
+    }
+    return;
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+}
+
+function tapToSave(file: File): Promise<void> {
+  return new Promise((resolve) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = `Save ${file.name}`;
+    b.style.cssText = "position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:9999;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:12px 20px;border-radius:12px;border:0;background:var(--color-accent-blue);color:var(--color-bg-base);font:600 14px system-ui;box-shadow:0 0 30px rgba(var(--accent-rgb),0.35)";
+    b.onclick = () => { b.remove(); navigator.share({ files: [file] }).catch(() => undefined).finally(resolve); };
+    document.body.appendChild(b);
+  });
 }

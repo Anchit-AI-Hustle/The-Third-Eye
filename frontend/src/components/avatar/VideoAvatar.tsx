@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { recordGeneration } from "@/lib/generations";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
 import { localDay } from "@/lib/localDay";
+import { saveBlob } from "@/lib/mediaFile";
 
 interface AvatarState {
   phase: "idle" | "recording" | "generating" | "playing" | "error";
@@ -338,11 +339,7 @@ export function VideoAvatar({ script = "", style = "professional" }: { script?: 
 
   const download = useCallback(() => {
     if (!state.videoBlob) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(state.videoBlob);
-    a.download = `avatar-${localDay()}.webm`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    void saveBlob(state.videoBlob, `avatar-${localDay()}.webm`);
   }, [state.videoBlob]);
 
   const reset = useCallback(() => {

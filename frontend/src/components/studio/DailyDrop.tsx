@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, Download, Loader2, RefreshCw, Save, Sparkles } from "lucide-react";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
+import { mediaFilename, saveBlob } from "@/lib/mediaFile";
 
 // The daily drop: save the current Music Studio form as a style, and the daily
 // cron makes a new song in it every morning (lib/music/daily.ts).
@@ -131,12 +132,7 @@ export async function fetchDailyAudio(id: string): Promise<Blob> {
 
 async function download(t: Track) {
   const blob = await fetchDailyAudio(t.id);
-  const type = blob.type;
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${t.title}.${type.includes("wav") ? "wav" : type.includes("flac") ? "flac" : "mp3"}`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  await saveBlob(blob, mediaFilename(t.title, blob.type));
 }
 
 export function DailyTracks() {
