@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next-auth", () => ({ getServerSession: () => Promise.resolve({ user: { email: "+919999999999" } }) }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/llmCascade", () => ({ llmCascade: vi.fn() }));
-vi.mock("@/lib/music/originality", async (orig) => ({ ...(await orig<typeof import("@/lib/music/originality")>()), titleTaken: vi.fn(async () => false) }));
+vi.mock("@/lib/music/originality", async (orig) => ({ ...(await orig<typeof import("@/lib/music/originality")>()), titleTaken: vi.fn(async () => false), originalTitle: vi.fn(async (t: string) => t) }));
 import { llmCascade } from "@/lib/llmCascade";
 
 const cascade = vi.mocked(llmCascade);
