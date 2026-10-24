@@ -70,6 +70,16 @@ describe("saving a file without leaving the page", () => {
     expect(document.querySelector("button")).toBeNull();
   });
 
+  it("reports a share failure so the caller can show it, but not a cancel", async () => {
+    setUa("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)");
+    const share = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error("bad file"), { name: "DataError" }))
+      .mockRejectedValueOnce(Object.assign(new Error("cancelled"), { name: "AbortError" }));
+    Object.assign(navigator, { share, canShare: () => true });
+    await expect(saveBlob(new Blob(["x"]), "a.mp3")).rejects.toThrow("bad file");
+    await expect(saveBlob(new Blob(["x"]), "a.mp3")).resolves.toBeUndefined();
+  });
+
   it("elsewhere, downloads through a link", async () => {
     setUa("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);

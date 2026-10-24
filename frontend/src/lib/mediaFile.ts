@@ -99,7 +99,8 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
       await navigator.share({ files: [file] });
     } catch (e) {
       // The tap's permission ran out while a large file downloaded: one more tap shares it.
-      if (e instanceof Error && e.name === "NotAllowedError") await tapToSave(file);
+      if (errName(e) === "NotAllowedError") await tapToSave(file);
+      else if (errName(e) !== "AbortError") throw e;
     }
     return;
   }
@@ -110,13 +111,18 @@ export async function saveBlob(blob: Blob, filename: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
 }
 
+const errName = (e: unknown) => (e instanceof Error ? e.name : "");
+
 function tapToSave(file: File): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = `Save ${file.name}`;
     b.style.cssText = "position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:9999;max-width:90vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:12px 20px;border-radius:12px;border:0;background:var(--color-accent-blue);color:var(--color-bg-base);font:600 14px system-ui;box-shadow:0 0 30px rgba(var(--accent-rgb),0.35)";
-    b.onclick = () => { b.remove(); navigator.share({ files: [file] }).catch(() => undefined).finally(resolve); };
+    b.onclick = () => {
+      b.remove();
+      navigator.share({ files: [file] }).then(resolve, (e) => (errName(e) === "AbortError" ? resolve() : reject(e)));
+    };
     document.body.appendChild(b);
   });
 }
