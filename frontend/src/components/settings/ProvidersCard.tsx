@@ -140,7 +140,7 @@ function OwnKeys() {
     const c = new URLSearchParams(window.location.search).get("connect");
     const who = OWN.find((o) => c?.startsWith(`${o.id}_`))?.name;
     if (who && c?.endsWith("_connected")) setNote(`Signed in with ${who}. Your chats now use your own ${who} account.`);
-    else if (who && c?.endsWith("_error")) setNote(`${who} sign-in didn't finish. Try again.`);
+    else if (who && c?.endsWith("_error")) setNote(`${who} sign-in didn't finish. ${new URLSearchParams(window.location.search).get("why") ?? "Try again."}`);
   }, []);
 
   async function save(id: string) {
