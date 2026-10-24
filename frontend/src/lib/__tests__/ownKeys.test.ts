@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ getDb: () => null }));
 
 import { llmCascade, resetCooldowns, toolCallCascade } from "@/lib/llmCascade";
-import { ollamaUrlProblem, withKeys } from "@/lib/providerKeys";
+import { enterPersona, ollamaUrlProblem, withKeys } from "@/lib/providerKeys";
 
 const ENV = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY", "GROQ_API_KEY",
   "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "OLLAMA_ENABLED", "OLLAMA_BASE", "LLM_PRIMARY_PROVIDER"];
@@ -77,9 +77,10 @@ describe("a user's own provider keys", () => {
     const seen = stub((url) => host(url) === "api.groq.com"
       ? { status: 429, body: { error: { message: "rate limit" } } }
       : { status: 200, body: { choices: [{ message: { content: null, tool_calls: [{ id: "1", type: "function", function: { name: "manage_tasks", arguments: "{}" } }] } }] } });
-    const r = await withKeys({ userId: "a@x.com", ollama: "https://my-mac.example.com" }, () => toolCallCascade({ messages: [{ role: "user", content: "add a task" }], tools: [] }));
+    const r = await withKeys({ userId: "a@x.com", ollama: "https://my-mac.example.com", local_first: "off" }, () => toolCallCascade({ messages: [{ role: "user", content: "add a task" }], tools: [] }));
     expect(r.provider).toBe("ollama");
     expect(r.tool_calls?.[0].function.name).toBe("manage_tasks");
+    expect(host(seen[0].url)).toBe("api.groq.com");
     expect(seen.at(-1)?.url).toBe("https://my-mac.example.com/v1/chat/completions");
   });
 
@@ -100,6 +101,67 @@ describe("a user's own provider keys", () => {
     expect(seen[0].url).toBe("https://their-mac.example.com/v1/chat/completions");
     expect(seen[0].auth).toBe("Bearer ollama");
     delete process.env.OLLAMA_API_KEY;
+  });
+});
+
+describe("the user's own computer, answering first", () => {
+  const mac = { userId: "a@x.com", ollama: "https://my-mac.example.com" };
+  const chat = () => llmCascade({ messages: [{ role: "user", content: "hi" }] });
+  const body = (init: RequestInit) => JSON.parse(String(init.body)) as { model: string };
+
+  it("is tried before the free cloud tiers by default", async () => {
+    process.env.GROQ_API_KEY = "shared-groq";
+    const seen = stub(() => ok("local"));
+    const r = await withKeys(mac, chat);
+    expect(r.provider).toBe("ollama");
+    expect(seen.map((s) => host(s.url))).toEqual(["my-mac.example.com"]);
+  });
+
+  it("goes back to last when the user turns local-first off", async () => {
+    process.env.GROQ_API_KEY = "shared-groq";
+    stub(() => ok("cloud"));
+    expect((await withKeys({ ...mac, local_first: "off" }, chat)).provider).toBe("groq");
+  });
+
+  it("calls tools on the computer first too", async () => {
+    process.env.GROQ_API_KEY = "shared-groq";
+    const seen = stub(() => ({ status: 200, body: { choices: [{ message: { content: "done", tool_calls: [] } }] } }));
+    const r = await withKeys(mac, () => toolCallCascade({ messages: [{ role: "user", content: "hi" }], tools: [] }));
+    expect(r.provider).toBe("ollama");
+    expect(host(seen[0].url)).toBe("my-mac.example.com");
+  });
+
+  it("falls through to the cloud when the computer is asleep, then skips it for a while", async () => {
+    process.env.GROQ_API_KEY = "shared-groq";
+    const seen = stub((url) => host(url) === "my-mac.example.com" ? { status: 530, body: "tunnel down" } : ok("cloud"));
+    expect((await withKeys(mac, chat)).provider).toBe("groq");
+    seen.length = 0;
+    expect((await withKeys(mac, chat)).provider).toBe("groq");
+    expect(seen.some((s) => host(s.url) === "my-mac.example.com")).toBe(false);
+  });
+
+  it("runs the model the user chose, and an assistant's own model over it", async () => {
+    const models: string[] = [];
+    stub((_u, init) => { models.push(body(init).model); return ok("x"); });
+    const keys = { ...mac, ollama_model: "qwen2.5:14b", ollama_models: JSON.stringify({ friday: "llama3.2:3b" }) };
+    await withKeys(keys, chat);
+    await withKeys(keys, async () => { enterPersona("friday"); await chat(); });
+    await withKeys(keys, async () => { enterPersona("jarvis"); await chat(); });
+    expect(models).toEqual(["qwen2.5:14b", "llama3.2:3b", "qwen2.5:14b"]);
+  });
+
+  it("sends the tunnel password: user:password as Basic auth, anything else as a bearer token", async () => {
+    const seen = stub(() => ok("x"));
+    await withKeys({ ...mac, ollama_token: "me:s3cret" }, chat);
+    await withKeys({ ...mac, ollama_token: "tok123" }, chat);
+    expect(seen.map((s) => s.auth)).toEqual([`Basic ${Buffer.from("me:s3cret").toString("base64")}`, "Bearer tok123"]);
+  });
+
+  it("ignores an assistant id that isn't a plain name", async () => {
+    const models: string[] = [];
+    stub((_u, init) => { models.push(body(init).model); return ok("x"); });
+    await withKeys({ ...mac, ollama_model: "qwen2.5:14b", ollama_models: JSON.stringify({ "a b": "evil" }) }, async () => { enterPersona("a b"); await chat(); });
+    expect(models).toEqual(["qwen2.5:14b"]);
   });
 });
 

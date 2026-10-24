@@ -4,7 +4,7 @@ import { explicitlyRequested } from "@/lib/explicitRequest";
 import { drawSvg } from "@/lib/svgArt";
 import { runConfirmedAction } from "@/lib/confirmedActions";
 import { AUTOPILOT_PREFIX } from "@/lib/taskAutopilot";
-import { currentOwnKeys, withOwnKeys } from "@/lib/providerKeys";
+import { currentOwnKeys, enterPersona, withOwnKeys } from "@/lib/providerKeys";
 import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart, type CartItem } from "@/lib/shopping";
 import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
@@ -2015,6 +2015,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
     tasks = [], docs = [], goals = [], notes = [], expenses = [], contacts = [], location, deviceInfo,
     agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist, confirmActions, native,
   } = body;
+  enterPersona(agentId);
   // Autopilot works unattended, so what it would send waits for the user.
   const actsOnRequest = !confirmActions && !body.message?.startsWith(AUTOPILOT_PREFIX);
   const attachments = cleanAttachments(body.attachments);
