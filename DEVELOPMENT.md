@@ -43,9 +43,11 @@ otherwise undocumented outside this file and the code itself.
 - **Data:** Supabase Postgres (project `hlcjghpzxzatgjfwcoav`) with **pgvector** for
   memory/RAG, reached server-side through `lib/db.ts` (`pg`). The browser never talks
   to the database, and Supabase's Data API is locked out of it (see §4).
-- **LLM:** a server-side cascade (`lib/llmCascade.ts`), free tiers first: groq,
-  gemini-lite, gemini, cerebras, openrouter, mistral, then the paid openai,
-  anthropic and grok, then ollama. Each provider is benched for as long as its
+- **LLM:** a server-side cascade (`lib/llmCascade.ts`), free first, paid credit
+  as backup: groq, cerebras, openrouter (:free), mistral, gemini-lite, gemini, then
+  openrouter-paid (`OPENROUTER_PAID_MODEL` on the same key), anthropic
+  (`ANTHROPIC_MODEL`, Anthropic SDK, also in the tool loop), openai and grok, then
+  ollama. Unattended work never uses the paid tiers. Each provider is benched for as long as its
   429 or retry-after says; `LLM_PRIMARY_PROVIDER` moves one to the front. Chat
   runs its tool loop on the first tool-capable provider (Groq by default) and
   uses native Gemini function-calling first only for images and other media,

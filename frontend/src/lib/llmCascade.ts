@@ -13,6 +13,7 @@
 // function calling — this cascade is for translate / multi-agent reasoning /
 // other plain-text generations where any model will do.
 
+import Anthropic from "@anthropic-ai/sdk";
 import { usableGeminiKey } from "@/lib/providerReady";
 import { backgroundBlocked, benchedReason, classifyFailure, healthMap, noteFailure, noteSuccess } from "@/lib/providerHealth";
 import { currentOwnKeys } from "@/lib/providerKeys";
@@ -77,6 +78,7 @@ function loadKeys() {
     cerebras:  clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY),
     openrouter: clean(own?.openrouter) || clean(process.env.OPENROUTER_API_KEY),
     mistral:   clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY),
+    anthropic: clean(process.env.ANTHROPIC_API_KEY),
     ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
 }
@@ -85,7 +87,7 @@ function loadKeys() {
 // deployment's key for the same provider.
 function healthName(provider: string): string {
   const own = currentOwnKeys();
-  const base = provider === "gemini-lite" ? "gemini" : provider;
+  const base = provider === "gemini-lite" ? "gemini" : provider === "openrouter-paid" ? "openrouter" : provider;
   return own?.[base as keyof typeof own] ? `${provider}@${own.userId}` : provider;
 }
 
@@ -102,12 +104,16 @@ const DEFAULT_MODELS = {
   cerebras: "gpt-oss-120b",
   mistral: "mistral-small-latest",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
+  // The paid backups, used once the free tiers are spent.
+  openrouterPaid: "openai/gpt-oss-120b",
+  anthropic: "claude-opus-5-5",
   ollama: "llama3.1:8b",
 } as const;
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
   openai: "OPENAI_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
   groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
+  openrouterPaid: "OPENROUTER_PAID_MODEL", anthropic: "ANTHROPIC_MODEL",
 };
 export function modelFor(provider: ModelProvider): string {
   return process.env[MODEL_ENV[provider]]?.trim() || DEFAULT_MODELS[provider];
@@ -215,16 +221,16 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"] as const;
+const CLOUD_PROVIDERS = ["groq", "cerebras", "openrouter", "mistral", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
-// Free tiers first, ordered by daily headroom: Groq's free plan serves
-// gpt-oss-120b with per-model quotas (withLiveModel rotates models on a 429);
-// Flash-Lite goes before Flash so Flash's small daily quota stays free for
-// images, which only the native Gemini path can read; Cerebras' trial and
-// OpenRouter's :free models (50 requests a day) and Mistral follow. Paid
-// providers come last, so a key without credit costs nothing until the free
-// ones are exhausted. LLM_PRIMARY_PROVIDER moves one provider to the front.
+// Free first, credits as backup. The free tiers in order of daily headroom:
+// Groq's free gpt-oss-120b (withLiveModel rotates models on a 429), Cerebras'
+// trial, OpenRouter's :free models and Mistral. Gemini follows them, since a
+// key with billing on is charged for every call; Flash-Lite goes before Flash
+// so Flash's quota stays free for images, which only native Gemini reads. Then
+// the providers holding paid credit: an OpenRouter paid model on the same key,
+// Claude, OpenAI and Grok. LLM_PRIMARY_PROVIDER moves one provider to the front.
 export function cascadeOrder(): CloudProvider[] {
   const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
   return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
@@ -238,7 +244,7 @@ export function nativeGeminiFirst(hasMedia: boolean): boolean {
 /** Providers with a key on this deployment. */
 export function configuredProviders(): string[] {
   const keys = loadKeys();
-  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : !!keys[p]));
+  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : p === "openrouter-paid" ? !!keys.openrouter : !!keys[p]));
 }
 
 export type LlmProviderState = "ok" | "quota" | "misconfigured";
@@ -519,8 +525,115 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
 
 // ─── Cascade entrypoint ──────────────────────────────────────────────────
 
+// ─── Claude (paid credit, a backup) ───────────────────────────────────────
+// Thinking is always on for current Claude models, so max_tokens leaves room
+// for it, and sampling parameters are not sent (they 400).
+const CLAUDE_MIN_TOKENS = 4000;
+
+function claudeClient(key: string, timeoutMs: number) {
+  return new Anthropic({ apiKey: key, timeout: timeoutMs, maxRetries: 0 });
+}
+
+function claudeFailure(e: unknown) {
+  const status = e instanceof Anthropic.APIError ? e.status ?? 0 : 0;
+  const err = e instanceof Error ? e.message : String(e);
+  return { ok: false as const, status, err, quota: isQuotaError(status, err), retryAfterMs: undefined as number | undefined };
+}
+
+// A refusal, or a turn that spent its budget thinking and said nothing, is not
+// an answer: report it as a failure so the next provider still gets the turn.
+function claudeNoAnswer(msg: Anthropic.Message) {
+  const said = msg.content.some((b) => (b.type === "text" && b.text.trim()) || b.type === "tool_use");
+  if (msg.stop_reason !== "refusal" && said) return null;
+  const err = msg.stop_reason === "refusal" ? "Claude declined this request" : `Claude returned no answer (${msg.stop_reason})`;
+  return { ok: false as const, status: 200, err, quota: false, retryAfterMs: undefined as number | undefined };
+}
+
+async function callClaude(key: string, model: string, opts: LlmCascadeOptions) {
+  const system = [opts.system, ...opts.messages.filter((m) => m.role === "system").map((m) => m.content), opts.jsonMode ? "Reply with JSON only." : ""].filter(Boolean).join("\n\n");
+  const turns = opts.messages.filter((m) => m.role !== "system");
+  const first = turns.findIndex((m) => m.role === "user");
+  try {
+    const msg = await claudeClient(key, opts.timeoutMs ?? 60_000).messages.create({
+      model,
+      max_tokens: Math.max(opts.maxTokens ?? 2000, CLAUDE_MIN_TOKENS),
+      ...(system ? { system } : {}),
+      messages: turns.slice(Math.max(first, 0)).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      output_config: { effort: "low" },
+    });
+    const none = claudeNoAnswer(msg);
+    if (none) return none;
+    return { ok: true as const, text: msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(""), model };
+  } catch (e) {
+    return claudeFailure(e);
+  }
+}
+
+// Claude's tool turns carry thinking blocks that must be replayed unchanged on
+// the next call of the same loop; the chat route keeps OpenAI-shaped history,
+// so each turn's original content is kept here under its first tool call id.
+const claudeTurns = new Map<string, Anthropic.ContentBlock[]>();
+const CLAUDE_TURNS_KEPT = 200;
+
+function toClaude(messages: OpenAIChatMessage[]): { system: string; messages: Anthropic.MessageParam[] } {
+  const system: string[] = [];
+  const out: Anthropic.MessageParam[] = [];
+  const add = (role: "user" | "assistant", blocks: Anthropic.ContentBlockParam[]) => {
+    const last = out.at(-1);
+    if (last?.role === role && Array.isArray(last.content)) last.content.push(...blocks);
+    else out.push({ role, content: blocks });
+  };
+  for (const m of messages) {
+    if (m.role === "system") system.push(m.content);
+    else if (m.role === "user") { if (m.content) add("user", [{ type: "text", text: m.content }]); }
+    else if (m.role === "assistant") {
+      const kept = m.tool_calls?.[0] && claudeTurns.get(m.tool_calls[0].id);
+      if (kept) { add("assistant", kept as Anthropic.ContentBlockParam[]); continue; }
+      const blocks: Anthropic.ContentBlockParam[] = m.content ? [{ type: "text", text: m.content }] : [];
+      for (const c of m.tool_calls ?? []) {
+        let input: unknown = {};
+        try { input = JSON.parse(c.function.arguments || "{}"); } catch { /* empty input */ }
+        blocks.push({ type: "tool_use", id: c.id, name: c.function.name, input });
+      }
+      if (blocks.length) add("assistant", blocks);
+    } else if (m.role === "tool") add("user", [{ type: "tool_result", tool_use_id: m.tool_call_id, content: m.content }]);
+  }
+  while (out[0]?.role === "assistant") out.shift();
+  return { system: system.join("\n\n"), messages: out };
+}
+
+async function callClaudeTools(key: string, model: string, opts: ToolCallCascadeOptions) {
+  const { system, messages } = toClaude(opts.messages);
+  try {
+    const msg = await claudeClient(key, opts.timeoutMs ?? 60_000).messages.create({
+      model,
+      max_tokens: Math.max(opts.maxTokens ?? 2000, CLAUDE_MIN_TOKENS),
+      ...(system ? { system } : {}),
+      messages,
+      tools: opts.tools.map((t) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters ?? { type: "object", properties: {} } })),
+      output_config: { effort: "low" },
+    });
+    const none = claudeNoAnswer(msg);
+    if (none) return none;
+    const calls = msg.content.flatMap((b) => (b.type === "tool_use" ? [b] : []));
+    if (calls.length) {
+      claudeTurns.set(calls[0].id, msg.content);
+      if (claudeTurns.size > CLAUDE_TURNS_KEPT) claudeTurns.delete(claudeTurns.keys().next().value!);
+    }
+    const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    return {
+      ok: true as const,
+      content: text || null,
+      tool_calls: calls.length ? calls.map((b) => ({ id: b.id, type: "function" as const, function: { name: b.name, arguments: JSON.stringify(b.input) } })) : undefined,
+      model,
+    };
+  } catch (e) {
+    return claudeFailure(e);
+  }
+}
+
 // Unattended work (Gmail scan, log sync) never spends paid credit.
-const PAID = new Set<CloudProvider>(["openai", "grok"]);
+const PAID = new Set<CloudProvider>(["openrouter-paid", "anthropic", "openai", "grok"]);
 
 export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeResult> {
   const keys = loadKeys();
@@ -588,6 +701,18 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       attempts.push(attempt("openrouter", model, res));
       if (res.ok) { await noteSuccess(healthName("openrouter"), model); return { text: res.text, provider: "openrouter", model, attempts }; }
       if (res.quota) startCooldown(healthName("openrouter"), res.retryAfterMs);
+    } else if (provider === "openrouter-paid" && keys.openrouter) {
+      const model = modelFor("openrouterPaid");
+      const res = await callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, model, opts);
+      attempts.push(attempt("openrouter-paid", model, res));
+      if (res.ok) { await noteSuccess(healthName("openrouter-paid"), model); return { text: res.text, provider: "openrouter-paid", model, attempts }; }
+      if (res.quota) startCooldown(healthName("openrouter-paid"), res.retryAfterMs);
+    } else if (provider === "anthropic" && keys.anthropic) {
+      const model = modelFor("anthropic");
+      const res = await callClaude(keys.anthropic, model, opts);
+      attempts.push(attempt("anthropic", model, res));
+      if (res.ok) { await noteSuccess(healthName("anthropic"), model); return { text: res.text, provider: "anthropic", model, attempts }; }
+      if (res.quota) startCooldown(healthName("anthropic"), res.retryAfterMs);
     } else if (provider === "mistral" && keys.mistral) {
       const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
       attempts.push(attempt("mistral", model, res));
@@ -759,6 +884,8 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
   if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
+  if (keys.openrouter) rows.push({ provider: "openrouter-paid", base: OPENROUTER_BASE, model: modelFor("openrouterPaid"), key: keys.openrouter });
+  if (keys.anthropic) rows.push({ provider: "anthropic", base: "", model: modelFor("anthropic"), key: keys.anthropic });
   const rank = cascadeOrder();
   rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
   // Last, as in the text cascade: slowest, but never out of quota.
@@ -773,7 +900,9 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
     const hp = healthName(provider);
     const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : await benchedReason(hp);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
-    const { res, model: used } = await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
+    const { res, model: used } = provider === "anthropic"
+      ? { res: await callClaudeTools(key, model, opts), model }
+      : await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
     if (res.ok) {
       await noteSuccess(hp, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
