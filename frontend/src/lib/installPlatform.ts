@@ -7,6 +7,8 @@ export const ANDROID_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Ey
 // The Jetpack Compose app (android-native.yml), the counterpart of the native iPhone app.
 export const ANDROID_NATIVE_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-native-latest/the-third-eye-native.apk";
 export const IOS_IPA_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/ios-latest/the-third-eye.ipa";
+// Apple's TestFlight app, needed before a TestFlight public link will open.
+export const TESTFLIGHT_APP_URL = "https://apps.apple.com/app/testflight/id899247664";
 
 export type InstallPlatform = "android" | "ios-safari" | "ios-other" | "desktop" | "installed";
 

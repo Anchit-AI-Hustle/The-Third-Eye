@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Download, Smartphone } from "lucide-react";
 import { LogoMark } from "@/components/layout/LogoMark";
-import { ANDROID_APK_URL, ANDROID_NATIVE_APK_URL, IOS_IPA_URL } from "@/lib/installPlatform";
+import { ANDROID_APK_URL, ANDROID_NATIVE_APK_URL, IOS_IPA_URL, TESTFLIGHT_APP_URL } from "@/lib/installPlatform";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata = pageMetadata({
@@ -26,6 +26,8 @@ async function published(url: string) {
 // The one link to send to a phone: every download on one page.
 export default async function GetPage() {
   const native = await published(ANDROID_NATIVE_APK_URL);
+  // The TestFlight public link (ios-testflight.yml), set once the app is on TestFlight.
+  const testflight = process.env.IOS_TESTFLIGHT_URL?.trim();
   return (
     <main className="min-h-screen bg-background-base px-4 py-12">
       <div className="mx-auto max-w-md space-y-6">
@@ -57,7 +59,19 @@ export default async function GetPage() {
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-text-primary">
             <Smartphone size={18} className="text-accent-blue" /> iPhone and iPad
           </h2>
-          <a href="/install/jarvis.mobileconfig" className={button}>
+          {testflight && (
+            <>
+              <a href={testflight} className={button}>
+                <Download size={16} /> Install the iPhone app
+              </a>
+              <p className="text-xs text-text-muted">
+                The native app, through Apple&apos;s TestFlight. Get{" "}
+                <a href={TESTFLIGHT_APP_URL} className="text-accent-blue hover:underline">TestFlight from the App Store</a>{" "}
+                first, then tap the button above.
+              </p>
+            </>
+          )}
+          <a href="/install/jarvis.mobileconfig" className={testflight ? secondary : button}>
             <Download size={16} /> Install on iPhone
           </a>
           <p className="text-xs text-text-muted">Open this page in Safari, tap Allow, then Settings → Profile Downloaded → Install.</p>
