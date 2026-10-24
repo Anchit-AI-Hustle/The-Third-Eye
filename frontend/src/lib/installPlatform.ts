@@ -1,12 +1,16 @@
 // Which install path the /install page offers. Android gets the native APK
 // from the android-latest release (android-apk.yml). iOS installs only signed
-// apps, so iPhones get Safari's Add to Home Screen, with the native .ipa from
-// the ios-latest release (ios-app.yml) for signing with a sideloader.
+// apps, so iPhones get Safari's Add to Home Screen, TestFlight once it is set
+// up, and unsigned .ipa files for signing with a sideloader.
 
 export const ANDROID_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-latest/the-third-eye.apk";
 // The Jetpack Compose app (android-native.yml), the counterpart of the native iPhone app.
 export const ANDROID_NATIVE_APK_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/android-native-latest/the-third-eye-native.apk";
 export const IOS_IPA_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/ios-latest/the-third-eye.ipa";
+// The native SwiftUI app (ios-native.yml), unsigned, for a sideloader.
+export const IOS_NATIVE_IPA_URL = "https://github.com/Anchit-AI-Hustle/The-Third-Eye/releases/download/ios-native-latest/the-third-eye-native.ipa";
+// Apple's TestFlight app, needed before a TestFlight public link will open.
+export const TESTFLIGHT_APP_URL = "https://apps.apple.com/app/testflight/id899247664";
 
 export type InstallPlatform = "android" | "ios-safari" | "ios-other" | "desktop" | "installed";
 
