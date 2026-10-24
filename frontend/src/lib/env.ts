@@ -7,7 +7,7 @@ type EnvVar = { name: string; required: boolean; purpose: string; valid?: Rule; 
 
 const url: Rule = (v) => { try { return /^https?:$/.test(new URL(v).protocol); } catch { return false; } };
 const postgres: Rule = (v) => { try { return /^postgres(ql)?:$/.test(new URL(v).protocol); } catch { return false; } };
-const PROVIDERS = ["openai", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "openrouter-paid", "anthropic", "mistral"];
+const PROVIDERS = ["openai", "gemini", "gemini-lite", "grok", "groq", "cerebras", "openrouter", "openrouter-paid", "anthropic", "mistral", "huggingface"];
 
 const llm = (name: string, provider: string): EnvVar => ({ name, required: false, purpose: `${provider} in the AI cascade`, llm: true });
 
@@ -25,6 +25,7 @@ export const ENV_SCHEMA: EnvVar[] = [
   llm("OPENROUTER_API_KEY", "OpenRouter"),
   llm("ANTHROPIC_API_KEY", "Anthropic Claude"),
   llm("MISTRAL_API_KEY", "Mistral"),
+  llm("HF_TOKEN", "Hugging Face Inference Providers"),
   { name: "LLM_PRIMARY_PROVIDER", required: false, purpose: "provider tried first; free tiers lead by default", valid: (v) => PROVIDERS.includes(v.toLowerCase()) },
   { name: "GOOGLE_CLIENT_ID", required: false, purpose: "Google sign-in and Gmail/Calendar connect" },
   { name: "GOOGLE_CLIENT_SECRET", required: false, purpose: "Google sign-in and Gmail/Calendar connect" },

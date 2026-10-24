@@ -178,7 +178,24 @@ struct OwnKey: Decodable, Identifiable {
 }
 
 enum ProviderKeys {
-    static let all = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "ollama"]
+    static let all = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "huggingface", "ollama"]
+    static let keyPages: [String: String] = [
+        "gemini": "https://aistudio.google.com/apikey", "groq": "https://console.groq.com/keys", "openrouter": "https://openrouter.ai/keys",
+        "mistral": "https://console.mistral.ai/api-keys", "cerebras": "https://cloud.cerebras.ai", "openai": "https://platform.openai.com/api-keys",
+        "huggingface": "https://huggingface.co/settings/tokens",
+    ]
+}
+
+/** A provider that lets other apps sign in to the user's own account. */
+struct ProviderSignIn: Identifiable {
+    let name: String
+    let path: String
+    let note: String
+    var id: String { path }
+    static let all = [
+        ProviderSignIn(name: "OpenRouter", path: "/api/connect/openrouter", note: "Uses your own OpenRouter account — free models, or your credit for paid ones."),
+        ProviderSignIn(name: "Hugging Face", path: "/api/connect/huggingface", note: "Uses your own Hugging Face account's inference credit for open models."),
+    ]
 }
 
 @MainActor
@@ -552,7 +569,7 @@ struct ProvidersSection: View {
     @ObservedObject var model: ProvidersModel
     @State private var provider = ProviderKeys.all[0]
     @State private var value = ""
-    @State private var connectingOpenRouter = false
+    @State private var signingIn: ProviderSignIn?
 
     var body: some View {
         Section("AI providers") {
@@ -591,21 +608,25 @@ struct ProvidersSection: View {
                 Task { @MainActor in if await model.addKey(provider: provider, value: value.trimmingCharacters(in: .whitespacesAndNewlines)) { value = "" } }
             }
             .disabled(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            VStack(alignment: .leading, spacing: 4) {
-                Button("Sign in with OpenRouter") { connectingOpenRouter = true }
-                Text("Uses your own OpenRouter account — free models, or your credit for paid ones.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+            if let page = ProviderKeys.keyPages[provider], let url = URL(string: page) {
+                Link("Get a \(provider.capitalized) key", destination: url).font(.system(size: 13))
             }
-            .sheet(isPresented: $connectingOpenRouter, onDismiss: { Task { await model.load() } }) {
-                NavigationStack {
-                    WebScreen(path: "/api/connect/openrouter")
-                        .navigationTitle("Sign in with OpenRouter")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { connectingOpenRouter = false } } }
+            ForEach(ProviderSignIn.all) { option in
+                VStack(alignment: .leading, spacing: 4) {
+                    Button("Sign in with \(option.name)") { signingIn = option }
+                    Text(option.note).font(.system(size: 12)).foregroundStyle(Theme.muted)
                 }
             }
         }
         .listRowBackground(Theme.surface.opacity(0.7))
+        .sheet(item: $signingIn, onDismiss: { Task { await model.load() } }) { option in
+            NavigationStack {
+                WebScreen(path: option.path)
+                    .navigationTitle("Sign in with \(option.name)")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { signingIn = nil } } }
+            }
+        }
         if model.keys.contains(where: { $0.provider == "ollama" }) { ComputerSection() }
     }
 

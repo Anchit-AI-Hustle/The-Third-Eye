@@ -10,19 +10,21 @@ const LABEL: Record<string, string> = {
   ok: "Working", unknown: "Not checked yet", rate_limited: "Rate limited", quota: "Daily quota used up", credit: "Out of credit", misconfigured: "Key or model rejected", error: "Error",
 };
 const NAME: Record<string, string> = {
-  openai: "OpenAI", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter (free models)", "openrouter-paid": "OpenRouter (paid credit)", anthropic: "Anthropic Claude (paid credit)", mistral: "Mistral",
+  openai: "OpenAI", gemini: "Google Gemini", "gemini-lite": "Google Gemini Flash-Lite", grok: "xAI Grok", groq: "Groq", cerebras: "Cerebras", openrouter: "OpenRouter (free models)", "openrouter-paid": "OpenRouter (paid credit)", anthropic: "Anthropic Claude (paid credit)", mistral: "Mistral", huggingface: "Hugging Face",
 };
 
-// Free keys a user can get themselves, so their requests don't share the
-// deployment's quota. Ollama takes the https URL of their own machine.
-const OWN: { id: string; name: string; placeholder: string; url?: string }[] = [
-  { id: "groq", name: "Groq", placeholder: "gsk_...", url: "https://console.groq.com/keys" },
-  { id: "gemini", name: "Google Gemini", placeholder: "AIza...", url: "https://aistudio.google.com/apikey" },
-  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", url: "https://openrouter.ai/keys" },
-  { id: "mistral", name: "Mistral", placeholder: "Mistral API key", url: "https://console.mistral.ai/api-keys" },
-  { id: "cerebras", name: "Cerebras", placeholder: "csk-...", url: "https://cloud.cerebras.ai" },
-  { id: "openai", name: "OpenAI", placeholder: "sk-..." },
-  { id: "ollama", name: "Ollama on your computer", placeholder: "https://your-tunnel.example.com" },
+// Each provider's own way in: a sign-in where the provider offers one to other
+// apps (OpenRouter, Hugging Face), otherwise a key from its console. Ollama
+// takes the https URL of the user's own machine.
+const OWN: { id: string; name: string; placeholder: string; note: string; url?: string; signIn?: string }[] = [
+  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", note: "Free models, or your credit for paid ones", signIn: "/api/connect/openrouter" },
+  { id: "huggingface", name: "Hugging Face", placeholder: "hf_...", note: "Open models on your Hugging Face inference credit", signIn: "/api/connect/huggingface" },
+  { id: "groq", name: "Groq", placeholder: "gsk_...", note: "Free key from the Groq console", url: "https://console.groq.com/keys" },
+  { id: "gemini", name: "Google Gemini", placeholder: "AIza...", note: "Free key from Google AI Studio", url: "https://aistudio.google.com/apikey" },
+  { id: "mistral", name: "Mistral", placeholder: "Mistral API key", note: "Free key from the Mistral console", url: "https://console.mistral.ai/api-keys" },
+  { id: "cerebras", name: "Cerebras", placeholder: "csk-...", note: "Free key from Cerebras Cloud", url: "https://cloud.cerebras.ai" },
+  { id: "openai", name: "OpenAI", placeholder: "sk-...", note: "API key from the OpenAI platform (billed to you)", url: "https://platform.openai.com/api-keys" },
+  { id: "ollama", name: "Ollama on your computer", placeholder: "https://your-tunnel.example.com", note: "Expose Ollama through an https tunnel (Cloudflare Tunnel or ngrok)" },
 ];
 
 const ASSISTANTS = [
@@ -126,7 +128,7 @@ function YourComputer() {
 
 function OwnKeys() {
   const [saved, setSaved] = useState<Record<string, string>>({});
-  const [provider, setProvider] = useState(OWN[0].id);
+  const [adding, setAdding] = useState<string | null>(null);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -136,16 +138,17 @@ function OwnKeys() {
   useEffect(() => {
     void load();
     const c = new URLSearchParams(window.location.search).get("connect");
-    if (c === "openrouter_connected") setNote("Signed in with OpenRouter. Your chats now use your own OpenRouter account.");
-    else if (c === "openrouter_error") setNote("OpenRouter sign-in didn't finish. Try again.");
+    const who = OWN.find((o) => c?.startsWith(`${o.id}_`))?.name;
+    if (who && c?.endsWith("_connected")) setNote(`Signed in with ${who}. Your chats now use your own ${who} account.`);
+    else if (who && c?.endsWith("_error")) setNote(`${who} sign-in didn't finish. Try again.`);
   }, []);
 
-  async function save() {
+  async function save(id: string) {
     setBusy(true); setNote(null);
-    const r = await fetch("/api/user/provider-keys", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, value }) }).catch(() => null);
+    const r = await fetch("/api/user/provider-keys", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: id, value }) }).catch(() => null);
     const j = await r?.json().catch(() => ({}));
     setBusy(false);
-    if (r?.ok) { setValue(""); setNote("Saved. Your requests use it first."); void load(); }
+    if (r?.ok) { setValue(""); setAdding(null); setNote("Saved. Your requests use it first."); void load(); }
     else setNote(j?.error ?? "Couldn't save it.");
   }
 
@@ -154,46 +157,48 @@ function OwnKeys() {
     void load();
   }
 
-  const pick = OWN.find((o) => o.id === provider)!;
   return (
     <div className="mt-4 pt-4 border-t border-border-default">
       <div className="flex items-center gap-2 mb-1">
         <KeyRound size={13} className="text-[#4FC3F7]" />
-        <h3 className="text-sm font-medium text-text-primary">Your own keys</h3>
+        <h3 className="text-sm font-medium text-text-primary">Your own accounts</h3>
       </div>
       <p className="text-xs text-text-muted mb-3">
-        Add your own free key so your chats run on your quota first and fall back to the shared ones. Keys are stored encrypted and never shown again.
-        {pick.id === "ollama" && " For Ollama, run it on your computer and expose it through an https tunnel (Cloudflare Tunnel or ngrok)."}
+        Connect your own account with each provider so your chats run on your quota first and fall back to the shared ones. Keys are stored encrypted and never shown again.
       </p>
-      <div className="flex flex-col sm:flex-row gap-2">
-        <select value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="Provider"
-          className="rounded-input border border-border-default bg-background-base px-2 py-1.5 text-sm text-text-primary">
-          {OWN.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-        </select>
-        <input type={provider === "ollama" ? "url" : "password"} value={value} onChange={(e) => setValue(e.target.value)} placeholder={pick.placeholder}
-          autoComplete="off" aria-label={`${pick.name} key`}
-          className="flex-1 min-w-0 rounded-input border border-border-default bg-background-base px-2 py-1.5 text-sm text-text-primary" />
-        <button type="button" onClick={() => void save()} disabled={busy || !value.trim()}
-          className="px-3 py-1.5 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary disabled:opacity-50">
-          {busy ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-        </button>
-      </div>
-      <a href="/api/connect/openrouter" className={`${button} mt-2 inline-flex items-center gap-1.5`}>
-        <LogIn size={12} /> Sign in with OpenRouter
-      </a>
-      <p className="mt-1 text-[11px] text-text-muted">Uses your own OpenRouter account: its free models, or your credit for paid ones.</p>
-      {pick.url && <a href={pick.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] text-[#4FC3F7] hover:underline">Get a {pick.name} key</a>}
+      <ul className="space-y-1.5">
+        {OWN.map((o) => (
+          <li key={o.id} className="rounded-input border border-border-default bg-background-base/40 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-[12rem] flex-1">
+                <p className="text-sm text-text-primary">{o.name}</p>
+                <p className="text-[11px] text-text-muted">{saved[o.id] ? <>Connected <span className="font-mono">{saved[o.id]}</span></> : o.note}</p>
+              </div>
+              {saved[o.id] ? (
+                <button type="button" onClick={() => void remove(o.id)} aria-label={`Disconnect ${o.name}`} className={`${button} inline-flex items-center gap-1`}><Trash2 size={12} /> Disconnect</button>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {o.signIn && <a href={o.signIn} className={`${button} inline-flex items-center gap-1.5`}><LogIn size={12} /> Sign in with {o.name}</a>}
+                  {o.url && !o.signIn && <a href={o.url} target="_blank" rel="noreferrer" className={button}>Get a key</a>}
+                  <button type="button" onClick={() => { setAdding(adding === o.id ? null : o.id); setValue(""); }} aria-expanded={adding === o.id} className={button}>
+                    {o.id === "ollama" ? "Add address" : "Paste key"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {adding === o.id && (
+              <div className="mt-2 flex gap-2">
+                <input type={o.id === "ollama" ? "url" : "password"} value={value} onChange={(e) => setValue(e.target.value)} placeholder={o.placeholder}
+                  autoComplete="off" aria-label={`${o.name} key`} className={`${field} flex-1 min-w-0`} />
+                <button type="button" onClick={() => void save(o.id)} disabled={busy || !value.trim()} className={button}>
+                  {busy ? <Loader2 size={12} className="animate-spin" /> : "Save"}
+                </button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
       {note && <p className="mt-2 text-xs text-text-secondary">{note}</p>}
-      {Object.keys(saved).length > 0 && (
-        <ul className="mt-3 space-y-1">
-          {OWN.filter((o) => saved[o.id]).map((o) => (
-            <li key={o.id} className="flex items-center gap-2 text-xs text-text-secondary">
-              <span className="flex-1">{o.name} <span className="font-mono text-text-muted">{saved[o.id]}</span></span>
-              <button type="button" onClick={() => void remove(o.id)} aria-label={`Remove ${o.name} key`} className="text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
-            </li>
-          ))}
-        </ul>
-      )}
       {saved.ollama && <YourComputer />}
     </div>
   );

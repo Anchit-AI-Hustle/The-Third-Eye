@@ -53,6 +53,7 @@ const GROQ_BASE      = "https://api.groq.com/openai/v1";
 const CEREBRAS_BASE  = "https://api.cerebras.ai/v1";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MISTRAL_BASE   = "https://api.mistral.ai/v1";
+const HF_BASE        = "https://router.huggingface.co/v1";
 // A user's own Ollama (their Mac, through a tunnel) wins over the deployment's.
 // Spoken to through its OpenAI-compatible /v1, so any local server with that
 // API (OpenJarvis `jarvis serve`, llama.cpp, vLLM) works the same way.
@@ -89,6 +90,7 @@ function loadKeys() {
     cerebras:  clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY),
     openrouter: clean(own?.openrouter) || clean(process.env.OPENROUTER_API_KEY),
     mistral:   clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY),
+    huggingface: clean(own?.huggingface) || clean(process.env.HF_TOKEN),
     anthropic: clean(process.env.ANTHROPIC_API_KEY),
     ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
@@ -114,6 +116,7 @@ const DEFAULT_MODELS = {
   groq: "openai/gpt-oss-120b",
   cerebras: "gpt-oss-120b",
   mistral: "mistral-small-latest",
+  huggingface: "openai/gpt-oss-120b",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
   // The paid backups, used once the free tiers are spent.
   openrouterPaid: "openai/gpt-oss-120b",
@@ -123,7 +126,7 @@ const DEFAULT_MODELS = {
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
   openai: "OPENAI_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
-  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
+  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", huggingface: "HF_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
   openrouterPaid: "OPENROUTER_PAID_MODEL", anthropic: "ANTHROPIC_MODEL",
 };
 export function modelFor(provider: ModelProvider): string {
@@ -139,6 +142,7 @@ const MODEL_PREFS: Record<string, RegExp[]> = {
   cerebras: [/gpt-oss-120b/, /qwen-3/, /zai-glm/],
   openrouter: [/nemotron-3-super.*:free$/, /gemma-4-31b.*:free$/, /nemotron-3-ultra.*:free$/, /gpt-oss.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /:free$/],
   "gemini-lite": [/^gemini-[\d.]+-flash-lite$/, /^gemini-flash-lite-latest$/, /flash-lite/],
+  huggingface: [/^openai\/gpt-oss-120b$/, /Llama-3\.3-70B-Instruct$/, /Qwen3-235B-A22B-Instruct/, /DeepSeek-V3/],
   mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^mistral-large-latest$/],
   grok: [/^grok-3-mini$/, /^grok-3$/, /^grok-4/, /grok/],
 };
@@ -232,12 +236,12 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["groq", "cerebras", "openrouter", "mistral", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"] as const;
+const CLOUD_PROVIDERS = ["groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
 // Free first, credits as backup. The free tiers in order of daily headroom:
 // Groq's free gpt-oss-120b (withLiveModel rotates models on a 429), Cerebras'
-// trial, OpenRouter's :free models and Mistral. Gemini follows them, since a
+// trial, OpenRouter's :free models, Mistral and Hugging Face's monthly credit. Gemini follows them, since a
 // key with billing on is charged for every call; Flash-Lite goes before Flash
 // so Flash's quota stays free for images, which only native Gemini reads. Then
 // the providers holding paid credit: an OpenRouter paid model on the same key,
@@ -725,6 +729,11 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       attempts.push(attempt("anthropic", model, res));
       if (res.ok) { await noteSuccess(healthName("anthropic"), model); return { text: res.text, provider: "anthropic", model, attempts }; }
       if (res.quota) startCooldown(healthName("anthropic"), res.retryAfterMs);
+    } else if (provider === "huggingface" && keys.huggingface) {
+      const { res, model } = await withLiveModel("huggingface", HF_BASE, keys.huggingface, modelFor("huggingface"), (m) => callOpenAICompatible(HF_BASE, keys.huggingface, m, opts));
+      attempts.push(attempt("huggingface", model, res));
+      if (res.ok) { await noteSuccess(healthName("huggingface"), model); return { text: res.text, provider: "huggingface", model, attempts }; }
+      if (res.quota) startCooldown(healthName("huggingface"), res.retryAfterMs);
     } else if (provider === "mistral" && keys.mistral) {
       const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
       attempts.push(attempt("mistral", model, res));
@@ -896,6 +905,7 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.groq) rows.push({ provider: "groq", base: GROQ_BASE, model: modelFor("groq"), key: keys.groq });
   if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
+  if (keys.huggingface) rows.push({ provider: "huggingface", base: HF_BASE, model: modelFor("huggingface"), key: keys.huggingface });
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
   if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
   if (keys.openrouter) rows.push({ provider: "openrouter-paid", base: OPENROUTER_BASE, model: modelFor("openrouterPaid"), key: keys.openrouter });

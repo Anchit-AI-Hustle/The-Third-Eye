@@ -58,4 +58,11 @@ describe("own provider keys API", () => {
     expect((await DELETE(new Request("https://x.test?provider=groq", { method: "DELETE" }) as never)).status).toBe(200);
     expect(saved.has("groq")).toBe(false);
   });
+
+  it("disconnecting Hugging Face also forgets what renewed its sign-in", async () => {
+    saved.set("huggingface", "hf_oauth_x");
+    saved.set("huggingface_oauth", "{}");
+    await DELETE(new Request("https://x.test/api/user/provider-keys?provider=huggingface", { method: "DELETE" }) as never);
+    expect(saved.size).toBe(0);
+  });
 });

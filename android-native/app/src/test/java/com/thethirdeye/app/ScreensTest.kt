@@ -319,8 +319,8 @@ abstract class ScreensTest {
         shoot("26-settings") { SettingsScreen(session, Nav()) }
         scrollTo("AI providers")
         capture("26-settings-providers")
-        scrollTo("Sign in with OpenRouter")
-        capture("26-settings-openrouter")
+        scrollTo("Sign in with Hugging Face")
+        capture("26-settings-sign-ins")
         scrollTo("Per assistant")
         capture("26-settings-your-computer")
         rule.onNodeWithText("Test connection").performClick()

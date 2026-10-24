@@ -164,7 +164,7 @@ describe("JSON mode reaches every OpenAI-compatible provider", () => {
 describe("free tiers first by default", () => {
   it("orders free providers by daily headroom, paid ones last", async () => {
     const { cascadeOrder } = await import("@/lib/llmCascade");
-    expect(cascadeOrder()).toEqual(["groq", "cerebras", "openrouter", "mistral", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"]);
+    expect(cascadeOrder()).toEqual(["groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"]);
   });
 
   it("sends tool calls to Groq before any paid key, with no env var set", async () => {
@@ -237,7 +237,7 @@ describe("a provider chosen by env goes first", () => {
   it("LLM_PRIMARY_PROVIDER moves that provider to the front, the free order follows", async () => {
     process.env.LLM_PRIMARY_PROVIDER = "openai";
     const { cascadeOrder } = await import("@/lib/llmCascade");
-    expect(cascadeOrder()).toEqual(["openai", "groq", "cerebras", "openrouter", "mistral", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "grok"]);
+    expect(cascadeOrder()).toEqual(["openai", "groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "grok"]);
   });
 
   it("puts the primary first for tool calls too", async () => {
