@@ -43,6 +43,8 @@ const NAV: Cmd[] = [
   { id: "nav-capabilities",label: "Capabilities",    group: "Go to", href: "/capabilities" },
   { id: "nav-activity",    label: "Agent Activity",  group: "Go to", href: "/activity" },
   { id: "nav-audit",       label: "App Audit",       group: "Go to", href: "/audit" },
+  { id: "nav-models",      label: "AI Models",       group: "Go to", href: "/models", keywords: "providers keys openrouter hugging face ollama" },
+  { id: "nav-connectors",  label: "Connectors",      group: "Go to", href: "/connectors", keywords: "google gmail calendar github integrations" },
   { id: "nav-settings",    label: "Settings",        group: "Go to", href: "/settings", keywords: "permissions preferences account" },
 ];
 

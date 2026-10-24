@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { Sidebar } from "../Sidebar";
 
 const signOutAndClear = vi.fn();
@@ -41,6 +41,13 @@ describe("Sidebar sign out", () => {
 
     fireEvent.click(button);
     expect(signOutAndClear).toHaveBeenCalledWith({ callbackUrl: "/auth/signin" });
+  });
+
+  it("lists AI Models and Connectors under Account & System", () => {
+    render(<Sidebar mobileOpen onMobileClose={() => {}} />);
+    const group = screen.getByText("Account & System").parentElement!;
+    expect(within(group).getByRole("link", { name: "AI Models" })).toHaveAttribute("href", "/models");
+    expect(within(group).getByRole("link", { name: "Connectors" })).toHaveAttribute("href", "/connectors");
   });
 
   it("lists Settings under Account & System", () => {
