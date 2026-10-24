@@ -7,6 +7,7 @@ import { structuresFor } from "@/lib/music/structures";
 import { cleanList, cleanNumber, cleanTempo, cleanValue } from "@/lib/music/normalize";
 import { correctSpelling } from "@/lib/textPolish";
 import { backfill, echoesBrief, evocativeTitle, inferGenre, lyricTheme, preferGenre, snapMoods } from "@/lib/music/fieldAssist";
+import { originalTitle } from "@/lib/music/originality";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
 
   const fields = {
     description: spelled,
-    title: modelTitle && !echoesBrief(modelTitle, spelled) ? modelTitle : evocativeTitle(spelled, genre),
+    title: modelTitle && !echoesBrief(modelTitle, spelled) ? await originalTitle(modelTitle, spelled, genre) : evocativeTitle(spelled, genre),
     genre,
     subgenre: cleanList(parsed.subgenre, 2).join(", ") || bf.subgenre,
     mood: snapMoods(cleanList(parsed.mood, 2).join(", ")) || snapMoods(bf.mood),

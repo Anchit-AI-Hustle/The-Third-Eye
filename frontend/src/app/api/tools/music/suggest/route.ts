@@ -10,6 +10,7 @@ import { fallbackLyrics, stripPromptLines } from "@/lib/music/agents";
 import {
   backfill, briefOf, echoesBrief, evocativeTitle, expandPrompt, inferGenre, preferGenre, snapMoods, tooClose,
 } from "@/lib/music/fieldAssist";
+import { originalTitle } from "@/lib/music/originality";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -99,7 +100,8 @@ ${anchor} Generate dynamically - never return template/placeholder text. Output 
       temperature: action === "enhance" ? 0.5 : action === "new" ? 0.95 : 0.7,
       stage: `music:suggest:${field}`,
     });
-    const suggestion = finishSuggestion(field, action, value, brief, genre, normalizeSuggestion(field, out.text));
+    let suggestion = finishSuggestion(field, action, value, brief, genre, normalizeSuggestion(field, out.text));
+    if (field === "title" && suggestion) suggestion = await originalTitle(suggestion, `${brief || value}|${suggestion}`, genre);
     if (!suggestion) return Response.json({ error: "The suggestion came back empty - try again." }, { status: 502 });
     return Response.json({ field, action, suggestion });
   } catch {

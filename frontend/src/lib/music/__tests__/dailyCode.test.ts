@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/replicate", () => ({ replicateConfigured: () => false, createPrediction: vi.fn(), getPrediction: vi.fn(), audioUrlFrom: vi.fn() }));
 vi.mock("@/lib/push", () => ({ sendPush: vi.fn(async () => true) }));
 vi.mock("@/lib/llmCascade", () => ({ llmCascade: vi.fn(async () => ({ text: '{"title":"Monsoon Drive","description":"warm night rain"}' })) }));
+vi.mock("@/lib/music/originality", async (orig) => ({ ...(await orig<typeof import("@/lib/music/originality")>()), titleTaken: vi.fn(async () => false) }));
 vi.mock("@/lib/music/agents", () => ({
   planSong: vi.fn(async () => ({
     brief: { bpm: 92, energy: 4, moods: ["warm"] },
