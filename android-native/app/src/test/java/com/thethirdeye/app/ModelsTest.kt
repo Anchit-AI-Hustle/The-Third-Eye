@@ -1,6 +1,8 @@
 package com.thethirdeye.app
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -27,6 +29,25 @@ class ModelsTest {
 
     private fun obj(s: String) = json.parseToJsonElement(s).jsonObject
     private val job = """{"id":"job_1","title":"Growth Marketer","company":"Northwind"}"""
+
+    @Test fun `two assistant models picked before the first save returns are both kept`() {
+        val gate = CompletableDeferred<Unit>()
+        val puts = mutableListOf<JsonElement?>()
+        Api.backend = object : Backend {
+            override suspend fun send(method: String, path: String, body: JsonElement?): String {
+                if (method == "PUT") { puts += body; gate.await() }
+                return if (path == "/api/user/local-model") """{"assistantModels":{}}""" else """{"rows":[]}"""
+            }
+            override fun stream(path: String, body: JsonElement): Flow<Pair<String, JsonObject>> = error("unused")
+        }
+        val model = SettingsModel().apply { local = LocalModel() }
+        runBlocking {
+            launch { model.setAssistantModel("jarvis", "llama3.1:8b") }
+            launch { model.setAssistantModel("friday", "qwen2.5:14b") }
+            launch { gate.complete(Unit) }
+        }
+        assertEquals(obj("""{"assistantModels":{"jarvis":"llama3.1:8b","friday":"qwen2.5:14b"}}"""), puts.last())
+    }
 
     @Test fun `an unlock reply with ok false is not an unlock`() {
         assertTrue(unlockSucceeded("""{"ok":true}"""))

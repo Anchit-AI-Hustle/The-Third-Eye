@@ -71,5 +71,7 @@ describe("local model settings", () => {
     expect(await (await POST()).json()).toMatchObject({ ok: false, error: expect.stringMatching(/No answer/) });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("no", { status: 401 })));
     expect(await (await POST()).json()).toMatchObject({ ok: false, error: expect.stringMatching(/password/) });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>Sign in</html>")));
+    expect(await (await POST()).json()).toMatchObject({ ok: false, error: expect.stringMatching(/isn't Ollama/) });
   });
 });

@@ -46,10 +46,10 @@ function YourComputer() {
   const [perAssistant, setPerAssistant] = useState<Record<string, string>>({});
   const [token, setToken] = useState("");
 
-  const load = () => fetch("/api/user/local-model").then((r) => r.json()).then((j: LocalModel) => {
-    setS(j); setModel(j.model ?? ""); setPerAssistant(j.assistantModels ?? {});
-  }).catch(() => {});
-  useEffect(() => { void load(); }, []);
+  const load = () => fetch("/api/user/local-model").then((r) => r.json() as Promise<LocalModel>);
+  useEffect(() => {
+    load().then((j) => { setS(j); setModel(j.model ?? ""); setPerAssistant(j.assistantModels ?? {}); }).catch(() => {});
+  }, []);
 
   async function save(body: Record<string, unknown>, done: string) {
     setBusy(true); setNote(null);
@@ -57,7 +57,8 @@ function YourComputer() {
     const j = await r?.json().catch(() => ({}));
     setBusy(false);
     setNote(r?.ok ? done : j?.error ?? "Couldn't save it.");
-    if (r?.ok) void load();
+    if (r?.ok) load().then(setS).catch(() => {});
+    return !!r?.ok;
   }
 
   async function runTest() {
@@ -71,17 +72,13 @@ function YourComputer() {
 
   if (!s) return null;
   const options = Array.from(new Set([...models, ...(model ? [model] : []), ...Object.values(perAssistant)]));
-  const picker = (value: string, onChange: (v: string) => void, empty: string, label: string) => options.length ? (
-    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label} className={`${field} flex-1 min-w-0`}>
-      <option value="">{empty}</option>
-      {options.map((m) => <option key={m} value={m}>{m}</option>)}
-    </select>
-  ) : (
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={empty} aria-label={label} className={`${field} flex-1 min-w-0`} />
+  const picker = (value: string, onChange: (v: string) => void, empty: string, label: string) => (
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={empty} aria-label={label} list="local-models" autoComplete="off" className={`${field} flex-1 min-w-0`} />
   );
 
   return (
     <div className="mt-4 pt-4 border-t border-border-default space-y-3">
+      <datalist id="local-models">{options.map((m) => <option key={m} value={m} />)}</datalist>
       <div className="flex items-center gap-2">
         <Laptop size={13} className="text-[#4FC3F7]" />
         <h3 className="text-sm font-medium text-text-primary flex-1">Your computer</h3>
@@ -117,7 +114,7 @@ function YourComputer() {
         <p className="text-xs text-text-muted mb-1">Tunnel password {s.hasToken && <span className="text-text-secondary">· saved</span>}</p>
         <div className="flex gap-2">
           <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Only if your tunnel asks for one" autoComplete="off" aria-label="Tunnel password" className={`${field} flex-1 min-w-0`} />
-          <button type="button" onClick={() => void save({ token }, "Password saved.").then(() => setToken(""))} disabled={busy || !token.trim()} className={button}>Save</button>
+          <button type="button" onClick={() => void save({ token }, "Password saved.").then((ok) => ok && setToken(""))} disabled={busy || !token.trim()} className={button}>Save</button>
           {s.hasToken && <button type="button" onClick={() => void save({ token: "" }, "Password removed.")} disabled={busy} className={button}>Remove</button>}
         </div>
         <p className="mt-1 text-[11px] text-text-muted">user:password is sent as Basic auth, anything else as a bearer token.</p>
