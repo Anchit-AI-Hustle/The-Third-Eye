@@ -6,13 +6,13 @@
 // `Content-Security-Policy` header once the violation reports are clean.
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  // Next.js needs inline/eval; Stripe loads externally.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.vercel-scripts.com",
+  // Next.js needs inline/eval; Stripe and Razorpay load externally.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://checkout.razorpay.com https://*.vercel-scripts.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https: wss:",
-  "frame-src 'self' https://js.stripe.com https://checkout.stripe.com",
+  "frame-src 'self' https://js.stripe.com https://checkout.stripe.com https://api.razorpay.com https://checkout.razorpay.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   // Chrome applies form-action to the 302 after the Google sign-in POST.
