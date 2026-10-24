@@ -540,8 +540,13 @@ function claudeFailure(e: unknown) {
   return { ok: false as const, status, err, quota: isQuotaError(status, err), retryAfterMs: undefined as number | undefined };
 }
 
-function claudeRefused(msg: Anthropic.Message) {
-  return msg.stop_reason === "refusal" ? { ok: false as const, status: 200, err: "Claude declined this request", quota: false, retryAfterMs: undefined as number | undefined } : null;
+// A refusal, or a turn that spent its budget thinking and said nothing, is not
+// an answer: report it as a failure so the next provider still gets the turn.
+function claudeNoAnswer(msg: Anthropic.Message) {
+  const said = msg.content.some((b) => (b.type === "text" && b.text.trim()) || b.type === "tool_use");
+  if (msg.stop_reason !== "refusal" && said) return null;
+  const err = msg.stop_reason === "refusal" ? "Claude declined this request" : `Claude returned no answer (${msg.stop_reason})`;
+  return { ok: false as const, status: 200, err, quota: false, retryAfterMs: undefined as number | undefined };
 }
 
 async function callClaude(key: string, model: string, opts: LlmCascadeOptions) {
@@ -556,8 +561,8 @@ async function callClaude(key: string, model: string, opts: LlmCascadeOptions) {
       messages: turns.slice(Math.max(first, 0)).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
       output_config: { effort: "low" },
     });
-    const refused = claudeRefused(msg);
-    if (refused) return refused;
+    const none = claudeNoAnswer(msg);
+    if (none) return none;
     return { ok: true as const, text: msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(""), model };
   } catch (e) {
     return claudeFailure(e);
@@ -608,8 +613,8 @@ async function callClaudeTools(key: string, model: string, opts: ToolCallCascade
       tools: opts.tools.map((t) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters ?? { type: "object", properties: {} } })),
       output_config: { effort: "low" },
     });
-    const refused = claudeRefused(msg);
-    if (refused) return refused;
+    const none = claudeNoAnswer(msg);
+    if (none) return none;
     const calls = msg.content.flatMap((b) => (b.type === "tool_use" ? [b] : []));
     if (calls.length) {
       claudeTurns.set(calls[0].id, msg.content);

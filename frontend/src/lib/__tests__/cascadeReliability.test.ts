@@ -88,6 +88,14 @@ describe("free first, paid credit as backup", () => {
     expect(claudeBodies[0]).not.toHaveProperty("temperature");
   });
 
+  it("treats an empty Claude reply as a failure, so the next provider still answers", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENAI_API_KEY = "sk-oai";
+    stubWithClaude({ "api.openai.com": okChat }, [claude([{ type: "thinking", thinking: "", signature: "s" }], "max_tokens"), claude([{ type: "thinking", thinking: "", signature: "s" }], "max_tokens")]);
+    const { llmCascade, toolCallCascade } = await import("@/lib/llmCascade");
+    expect((await llmCascade({ messages: [{ role: "user", content: "x" }] })).provider).toBe("openai");
+    expect((await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] })).provider).toBe("openai");
+  });
+
   it("tries OpenRouter's paid model on the same key once its free model is spent", async () => {
     process.env.OPENROUTER_API_KEY = "o";
     stubWithClaude({}, []);
