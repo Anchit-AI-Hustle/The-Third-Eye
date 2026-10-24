@@ -9,9 +9,15 @@ import { decrypt, encrypt } from "@/lib/crypto";
 
 export const OWN_KEY_PROVIDERS = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "ollama"] as const;
 export type OwnKeyProvider = (typeof OWN_KEY_PROVIDERS)[number];
-export type OwnKeys = Partial<Record<OwnKeyProvider, string>> & { userId: string };
+// How that Ollama is used, stored alongside it: its tunnel password, the model
+// to run (one for everyone, or one per assistant as JSON), and "off" in
+// local_first when the user wants the cloud tried before their own machine.
+export const LOCAL_SETTINGS = ["ollama_token", "ollama_model", "ollama_models", "local_first"] as const;
+export type LocalSetting = (typeof LOCAL_SETTINGS)[number];
+export type OwnKeys = Partial<Record<OwnKeyProvider | LocalSetting, string>> & { userId: string };
 
 const store = new AsyncLocalStorage<OwnKeys>();
+const persona = new AsyncLocalStorage<string>();
 const CACHE_MS = 60_000;
 const cache = new Map<string, { at: number; keys: OwnKeys }>();
 
@@ -22,7 +28,7 @@ export async function loadOwnKeys(userId: string): Promise<OwnKeys> {
   const db = getDb();
   if (db) {
     const { data } = await db.from("user_provider_keys").select("provider, key_enc").eq("user_id", userId);
-    for (const row of (data ?? []) as { provider: OwnKeyProvider; key_enc: string }[]) {
+    for (const row of (data ?? []) as { provider: OwnKeyProvider | LocalSetting; key_enc: string }[]) {
       const plain = decrypt(row.key_enc);
       if (plain) keys[row.provider] = plain;
     }
@@ -44,6 +50,39 @@ export function currentOwnKeys(): OwnKeys | undefined {
   return store.getStore();
 }
 
+/** Marks the rest of this request as answered by one assistant (jarvis, friday…), for its own local model. */
+export function enterPersona(id: unknown): void {
+  if (typeof id === "string" && /^[\w-]{1,40}$/.test(id)) persona.enterWith(id);
+}
+
+export function currentPersona(): string | undefined {
+  return persona.getStore();
+}
+
+/** The user's own Ollama answers first unless they turned that off. */
+export function localFirst(keys = currentOwnKeys()): boolean {
+  return !!keys?.ollama && keys.local_first !== "off";
+}
+
+/** The model this user's Ollama runs for the current assistant, if they chose one. */
+export function ownOllamaModel(keys = currentOwnKeys(), assistant = currentPersona()): string | undefined {
+  if (!keys?.ollama) return undefined;
+  if (assistant && keys.ollama_models) {
+    try {
+      const m = (JSON.parse(keys.ollama_models) as Record<string, unknown>)[assistant];
+      if (typeof m === "string" && m) return m;
+    } catch { /* unreadable map: fall back to the one model */ }
+  }
+  return keys.ollama_model || undefined;
+}
+
+/** The Authorization header for the user's tunnel: user:password is Basic auth, anything else a bearer token. */
+export function tunnelAuth(token: string): string {
+  return token.includes(":") ? `Basic ${Buffer.from(token).toString("base64")}` : `Bearer ${token}`;
+}
+
+export const isModelName = (m: string) => /^[\w.:/-]{1,100}$/.test(m);
+
 // The server fetches this URL, so it must not reach the deployment's own
 // network: public https hosts only.
 export function ollamaUrlProblem(raw: string): string | null {
@@ -63,7 +102,7 @@ export function ollamaUrlProblem(raw: string): string | null {
   return null;
 }
 
-export async function saveOwnKey(userId: string, provider: OwnKeyProvider, value: string): Promise<boolean> {
+export async function saveOwnKey(userId: string, provider: OwnKeyProvider | LocalSetting, value: string): Promise<boolean> {
   const db = getDb();
   const enc = encrypt(value);
   if (!db || !enc) return false;
@@ -72,7 +111,7 @@ export async function saveOwnKey(userId: string, provider: OwnKeyProvider, value
   return !error;
 }
 
-export async function deleteOwnKey(userId: string, provider: OwnKeyProvider): Promise<void> {
+export async function deleteOwnKey(userId: string, provider: OwnKeyProvider | LocalSetting): Promise<void> {
   await getDb()?.from("user_provider_keys").delete().eq("user_id", userId).eq("provider", provider);
   cache.delete(userId);
 }

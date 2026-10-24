@@ -16,7 +16,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { usableGeminiKey } from "@/lib/providerReady";
 import { backgroundBlocked, benchedReason, classifyFailure, healthMap, noteFailure, noteSuccess } from "@/lib/providerHealth";
-import { currentOwnKeys } from "@/lib/providerKeys";
+import { currentOwnKeys, localFirst, ownOllamaModel, tunnelAuth } from "@/lib/providerKeys";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -58,8 +58,19 @@ const MISTRAL_BASE   = "https://api.mistral.ai/v1";
 // API (OpenJarvis `jarvis serve`, llama.cpp, vLLM) works the same way.
 const ollamaBase = () => `${(currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "")}/v1`;
 // Ollama ignores the key; a server behind an authenticated tunnel needs one.
-// The deployment's key is only for the deployment's URL, never a user's own.
-const ollamaKey = () => (currentOwnKeys()?.ollama ? "" : (process.env.OLLAMA_API_KEY ?? "").trim()) || "ollama";
+// The deployment's key is only for the deployment's URL, never a user's own:
+// theirs carries the tunnel password they saved, as a full Authorization value.
+const ollamaKey = () => {
+  const own = currentOwnKeys();
+  if (own?.ollama) return own.ollama_token ? tunnelAuth(own.ollama_token) : "ollama";
+  return (process.env.OLLAMA_API_KEY ?? "").trim() || "ollama";
+};
+const ollamaModel = () => ownOllamaModel() ?? modelFor("ollama");
+// A tunnel to a sleeping or closed laptop fails fast (Cloudflare answers 530);
+// skip it for a while rather than wait on it before every reply.
+const OLLAMA_AWAY_MS = 2 * 60_000;
+const ollamaAway = (status?: number) => !status || status === 502 || status === 503 || status === 504 || status === 530;
+const authorization = (key: string) => (/^(Basic|Bearer) /.test(key) ? key : `Bearer ${key}`);
 
 // Vercel env-var names are case-sensitive; we also strip BOM/zero-width chars
 // because Powershell-piped values sometimes inject them.
@@ -236,9 +247,9 @@ export function cascadeOrder(): CloudProvider[] {
   return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
 }
 
-/** Chat starts on native Gemini only when it is the primary or the message has media only Gemini can read. */
+/** Chat starts on native Gemini only when it is the primary (and the user's own computer isn't set to answer first) or the message has media only Gemini can read. */
 export function nativeGeminiFirst(hasMedia: boolean): boolean {
-  return hasMedia || cascadeOrder()[0].startsWith("gemini");
+  return hasMedia || (!localFirst() && cascadeOrder()[0].startsWith("gemini"));
 }
 
 /** Providers with a key on this deployment. */
@@ -439,7 +450,7 @@ async function callOpenAI(key: string, model: string, opts: LlmCascadeOptions) {
     ];
     const r = await fetch(`${OPENAI_BASE}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model,
         messages,
@@ -503,7 +514,7 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
     ];
     const r = await fetch(`${base}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model, messages,
         max_tokens: opts.maxTokens ?? 2000,
@@ -641,7 +652,8 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const pref = opts.preferProvider;
 
   const order: (CloudProvider | "ollama")[] = pref ? [pref]
-    : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))] : [...cascadeOrder(), "ollama"];
+    : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))]
+    : localFirst() ? ["ollama", ...cascadeOrder()] : [...cascadeOrder(), "ollama"];
   const tokens = estimateTokens([opts.system, opts.messages]);
 
   for (const provider of order) {
@@ -654,7 +666,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     // hang-and-timeout) entirely rather than pay for a call we already know
     // the answer to.
     const hp = healthName(provider);
-    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(hp) ? "cooling down after a recent quota error"
+    const benched = opts.ignoreBench ? null : provider === "ollama" ? (inCooldown(hp) ? "your computer didn't answer a moment ago" : null) : inCooldown(hp) ? "cooling down after a recent quota error"
       : (await benchedReason(hp)) ?? (opts.background ? await backgroundBlocked(hp) : null);
     if (benched) {
       attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
@@ -719,10 +731,12 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       if (res.ok) { await noteSuccess(healthName("mistral"), model); return { text: res.text, provider: "mistral", model, attempts }; }
       if (res.quota) startCooldown(healthName("mistral"), res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
-      const model = modelFor("ollama");
+      const model = ollamaModel();
       const res = await callOpenAICompatible(ollamaBase(), ollamaKey(), model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 });
       attempts.push(attempt("ollama", model, res));
       if (res.ok) { await noteSuccess(healthName("ollama"), model); return { text: res.text, provider: "ollama", model, attempts }; }
+      if (ollamaAway(res.status)) startCooldown(hp, OLLAMA_AWAY_MS);
+      continue;
     }
     for (const a of attempts.slice(before)) {
       if (a.ok || !a.status) continue;
@@ -771,7 +785,7 @@ async function visionOpenAICompatible(base: string, key: string, model: string, 
   const { signal, clear } = withTimeout(o.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal,
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: authorization(key) }, signal,
       body: JSON.stringify({
         model, max_tokens: o.maxTokens ?? 1200,
         messages: [
@@ -848,7 +862,7 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
   try {
     const r = await fetch(`${base}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model,
         messages: opts.messages,
@@ -888,8 +902,12 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.anthropic) rows.push({ provider: "anthropic", base: "", model: modelFor("anthropic"), key: keys.anthropic });
   const rank = cascadeOrder();
   rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
-  // Last, as in the text cascade: slowest, but never out of quota.
-  if (keys.ollama) rows.push({ provider: "ollama", base: ollamaBase(), model: modelFor("ollama"), key: ollamaKey() });
+  // Last, as in the text cascade: slowest, but never out of quota. First when
+  // the user's own computer is set to answer first.
+  if (keys.ollama) {
+    const local = { provider: "ollama", base: ollamaBase(), model: ollamaModel(), key: ollamaKey() };
+    if (localFirst()) rows.unshift(local); else rows.push(local);
+  }
   return rows;
 }
 
@@ -898,10 +916,13 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
   const tokens = estimateTokens([opts.messages, opts.tools]);
   for (const { provider, base, model, key } of toolCapableOrder()) {
     const hp = healthName(provider);
-    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : await benchedReason(hp);
+    const local = provider === "ollama";
+    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : local ? null : await benchedReason(hp);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
+    // The user's own model is theirs to choose, so a missing one is reported, not swapped.
     const { res, model: used } = provider === "anthropic"
       ? { res: await callClaudeTools(key, model, opts), model }
+      : local ? { res: await callOpenAICompatibleTools(base, key, model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 }), model }
       : await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
     if (res.ok) {
       await noteSuccess(hp, used);
@@ -912,6 +933,7 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
     await noteFailure(hp, used, res.status, res.err, res.retryAfterMs);
     attempts.push(`${provider}:${res.status}`);
     if (res.quota) startCooldown(hp, res.retryAfterMs);
+    if (local && ollamaAway(res.status)) startCooldown(hp, OLLAMA_AWAY_MS);
   }
   throw new Error(`All tool-capable fallback providers failed. Attempts: ${attempts.join(", ") || "no keys configured"}`);
 }
