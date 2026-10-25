@@ -77,9 +77,9 @@ final class BookModel: ObservableObject {
     private let markdown: String
     private let key: String
 
-    @Published var texts: [Int: String] = [:] { didSet { persist() } }
-    @Published var author = "" { didSet { persist() } }
-    @Published private(set) var listing: BookListing? { didSet { persist() } }
+    @Published var texts: [Int: String] = [:] { didSet { changed() } }
+    @Published var author = "" { didSet { changed() } }
+    @Published private(set) var listing: BookListing? { didSet { changed() } }
     @Published private(set) var busy: Set<Int> = []
     @Published private(set) var progress: [Int: String] = [:]
     @Published private(set) var failures: [Int: String] = [:]
@@ -100,6 +100,12 @@ final class BookModel: ObservableObject {
             author = draft.author
             listing = draft.listing
         }
+    }
+
+    /// An edit is kept, and the exported EPUB no longer matches it.
+    private func changed() {
+        epub = nil
+        persist()
     }
 
     private func persist() {
@@ -140,7 +146,6 @@ final class BookModel: ObservableObject {
                 text = text.isEmpty ? piece : text + "\n\n" + piece
             }
             texts[chapter.n] = text
-            epub = nil
             return true
         } catch {
             failures[chapter.n] = error.localizedDescription
