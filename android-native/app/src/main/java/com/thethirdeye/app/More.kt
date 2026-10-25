@@ -114,6 +114,7 @@ sealed interface Dest {
     data class Tool(val id: String) : Dest
     data class Document(val doc: KnowledgeDoc) : Dest
     data class Day(val day: LifeLogDay) : Dest
+    data object Today : Dest
 }
 
 class Nav {
@@ -158,6 +159,7 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
         is Dest.Tool -> ToolScreen(top.id, nav::back)
         is Dest.Document -> DocumentScreen(top.doc, nav::back)
         is Dest.Day -> LifeLogDayScreen(top.day, nav::back)
+        Dest.Today -> LifeLogTodayScreen(nav::back)
     }
 }
 

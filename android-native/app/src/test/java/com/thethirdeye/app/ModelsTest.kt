@@ -133,4 +133,23 @@ class ModelsTest {
         val posted = backend.calls.last { it.second == "/api/data/candidate_facts" && it.first == "POST" }.third as kotlinx.serialization.json.JsonArray
         assertEquals(listOf("a", "b"), posted.map { it.jsonObject["id"]!!.jsonPrimitive.content })
     }
+
+    @Test fun `uploaded documents are added, and an unreadable one says why`() {
+        val sent = mutableListOf<Pair<String, List<UploadFile>>>()
+        Api.backend = object : Backend {
+            override suspend fun send(method: String, path: String, body: JsonElement?): String = error("unused")
+            override fun stream(path: String, body: JsonElement): Flow<Pair<String, JsonObject>> = error("unused")
+            override suspend fun upload(path: String, field: String, files: List<UploadFile>): String {
+                sent += path to files
+                return """{"docs":[{"id":"1","title":"plan.pdf","processing_status":"ready"},{"id":"2","title":"song.mp3","processing_status":"failed","error":"Cannot read .MP3 files."}]}"""
+            }
+        }
+        val model = KnowledgeModel()
+        runBlocking { model.upload(listOf(UploadFile("plan.pdf", "application/pdf", byteArrayOf(1)), UploadFile("song.mp3", "audio/mpeg", byteArrayOf(2)))) }
+        assertEquals("/api/knowledge/upload", sent.single().first)
+        assertEquals(listOf("plan.pdf", "song.mp3"), sent.single().second.map { it.name })
+        assertEquals(listOf("1", "2"), model.items.map { it.id })
+        assertEquals("song.mp3: Cannot read .MP3 files.", model.error)
+        assertFalse(model.uploading)
+    }
 }

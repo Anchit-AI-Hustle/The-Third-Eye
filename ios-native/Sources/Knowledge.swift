@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct KnowledgeDoc: Codable, Identifiable, Equatable {
     let id: String
@@ -27,6 +28,30 @@ final class KnowledgeModel: ObservableObject {
         loaded = true
     }
 
+    @Published var uploading = false
+
+    /// Reads the chosen files and sends them to the server, which extracts their text as the website does.
+    func upload(_ urls: [URL]) async {
+        uploading = true
+        defer { uploading = false }
+        do {
+            let files = try urls.map { url -> (name: String, mime: String, data: Data) in
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                return (url.lastPathComponent, mime, try Data(contentsOf: url))
+            }
+            struct Uploaded: Decodable { let docs: [KnowledgeDoc] }
+            let created = try JSONDecoder().decode(Uploaded.self, from: try await API.upload("/api/knowledge/upload", field: "file", files: files)).docs
+            docs.insert(contentsOf: created, at: 0)
+            let failed = created.filter { $0.processing_status == "failed" }
+            error = failed.isEmpty ? nil : failed.map { "\($0.title): \($0.error ?? "couldn't be read")" }.joined(separator: "\n")
+            DataStore.changed()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     func delete(_ doc: KnowledgeDoc) async {
         docs.removeAll { $0.id == doc.id }
         do { try await DataStore.delete("knowledge_docs", id: doc.id) } catch {
@@ -52,7 +77,11 @@ struct KnowledgeView: View {
                 Button { app.ask("What's in my knowledge base? Give me a short overview.") } label: {
                     Label("Ask about my documents", systemImage: "bubble.left.and.text.bubble.right")
                 }
-                Button { upload = true } label: { Label("Upload a document", systemImage: "arrow.up.doc") }
+                Button { upload = true } label: {
+                    if model.uploading { Label("Reading the document…", systemImage: "hourglass") }
+                    else { Label("Upload a document", systemImage: "arrow.up.doc") }
+                }
+                .disabled(model.uploading)
             }
             .listRowBackground(Theme.surface.opacity(0.7))
 
@@ -82,14 +111,9 @@ struct KnowledgeView: View {
         .task { await model.load() }
         .reloadsOnDataChange { await model.load() }
         .overlay { if !model.loaded { ProgressView() } }
-        // Uploading and text extraction stay on the website's tested pipeline.
-        .sheet(isPresented: $upload, onDismiss: { Task { await model.load() } }) {
-            NavigationStack {
-                WebScreen(path: "/knowledge")
-                    .navigationTitle("Upload")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { upload = false } } }
-            }
+        // PDF, Word and text files are read on the server (lib/knowledgeFile, as on the website).
+        .fileImporter(isPresented: $upload, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result, !urls.isEmpty { Task { await model.upload(urls) } }
         }
     }
 

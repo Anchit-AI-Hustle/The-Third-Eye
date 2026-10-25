@@ -1,6 +1,10 @@
 package com.thethirdeye.app
 
 import kotlinx.serialization.json.Json
+import org.junit.Assert.assertTrue
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -318,5 +322,33 @@ class LogicTest {
         assertEquals(true, ApiError(403, """{"error":"Job Agent is disabled","disabled":true}""").disabled)
         assertEquals(false, ApiError(403, """{"error":"nope"}""").disabled)
         assertEquals(listOf("goals", "notes"), ApiError(500, """{"error":"x","failed":["goals","notes"]}""").failed)
+    }
+
+    @Test fun `a Life Log day saves the row the website reads, with no audio`() {
+        val day = LifeLogDay.empty("2026-10-25").copy(
+            segments = listOf(LifeLogDay.Segment("1", 1.0, 2.0, "hello", false, "groq", false)),
+        )
+        val row = day.row()
+        assertEquals("2026-10-25", row["id"]!!.jsonPrimitive.content)
+        assertEquals("2026-10-25", row["date"]!!.jsonPrimitive.content)
+        assertEquals("false", row["segments"]!!.jsonArray[0].jsonObject["hasAudio"]!!.jsonPrimitive.content)
+        assertEquals(0, row["events"]!!.jsonArray.size)
+        assertEquals("", row["summary"]!!.jsonPrimitive.content)
+        assertTrue(row.containsKey("updated_at"))
+    }
+
+    @Test fun `extracted events are timed by their HH-MM, else spread across the recording`() {
+        val zone = ZoneId.systemDefault()
+        val start = java.time.LocalDate.parse("2026-10-25").atTime(9, 0).atZone(zone).toInstant().toEpochMilli().toDouble()
+        val day = LifeLogDay.empty("2026-10-25").copy(segments = listOf(LifeLogDay.Segment("1", start, start + 3_600_000)))
+        val events = timeline(day, listOf(
+            Json.parseToJsonElement("""{"title":"Standup","kind":"meeting","time":"09:45"}""").jsonObject,
+            Json.parseToJsonElement("""{"title":"An idea"}""").jsonObject,
+        ))
+        assertEquals(listOf("An idea", "Standup"), events.map { it.title })
+        assertEquals(start + 45 * 60_000, events[1].ts!!, 0.0)
+        assertEquals(start + 30 * 60_000, events[0].ts!!, 0.0)
+        assertEquals("other", events[0].kind)
+        assertEquals("09:00", clock24(start))
     }
 }

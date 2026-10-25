@@ -62,6 +62,26 @@ enum API {
     static func get<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
         try JSONDecoder().decode(T.self, from: try await send("GET", path))
     }
+
+    /// Sends files as multipart form fields named `field`, keeping the server's own error text.
+    static func upload(_ path: String, field: String, files: [(name: String, mime: String, data: Data)]) async throws -> Data {
+        let boundary = "TheThirdEye-\(UUID().uuidString)"
+        var body = Data()
+        for file in files {
+            let name = file.name.replacingOccurrences(of: "\"", with: "'")
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(field)\"; filename=\"\(name)\"\r\nContent-Type: \(file.mime)\r\n\r\n".utf8))
+            body.append(file.data)
+            body.append(Data("\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)--\r\n".utf8))
+        var req = request("POST", path)
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        let (data, response) = try await session.upload(for: req, from: body)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { NotificationCenter.default.post(name: .sessionExpired, object: nil) }
+        guard (200..<300).contains(status) else { throw ServerError(status: status, body: data) }
+        return data
+    }
 }
 
 struct APIError: LocalizedError {
