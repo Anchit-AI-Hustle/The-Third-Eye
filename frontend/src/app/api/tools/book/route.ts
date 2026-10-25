@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { llmCascade } from "@/lib/llmCascade";
-import { PART_WORDS } from "@/lib/book";
+import { PART_WORDS, buildEpub } from "@/lib/book";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,6 +12,7 @@ export const maxDuration = 60;
 // fits a function's lifetime), then drafts the store listing to publish it.
 //   POST { action: "chapter", book, chapter, part, of, words, before, sofar } → { text }
 //   POST { action: "listing", book, sample }                                  → { listing }
+//   POST { action: "epub", meta, chapters: [{ title, text }] }                 → the EPUB file (the phone apps)
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -32,6 +33,19 @@ export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body || typeof body !== "object") return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  if (body.action === "epub") {
+    const meta = (body.meta && typeof body.meta === "object" ? body.meta : {}) as Record<string, unknown>;
+    const chapters = (Array.isArray(body.chapters) ? body.chapters : [])
+      .map((c: { title?: unknown; text?: unknown }) => ({ title: str(c?.title, 200), text: str(c?.text, 200_000) }))
+      .filter((c) => c.title && c.text)
+      .slice(0, 200);
+    if (!chapters.length) return Response.json({ error: "Write at least one chapter first." }, { status: 400 });
+    const epub = buildEpub(
+      { title: str(meta.title, 200) || "Untitled", subtitle: str(meta.subtitle, 300), author: str(meta.author, 120) || "Anonymous", language: "en" },
+      chapters, `urn:uuid:${crypto.randomUUID()}`,
+    );
+    return new Response(epub.slice().buffer, { headers: { "Content-Type": "application/epub+zip" } });
+  }
   const book = (body.book && typeof body.book === "object" ? body.book : {}) as Book;
   if (!str(book.outline, 12_000)) return Response.json({ error: "Plan the book first - the outline is missing." }, { status: 400 });
 
