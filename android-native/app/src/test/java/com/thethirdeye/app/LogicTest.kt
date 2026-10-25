@@ -415,4 +415,25 @@ class LogicTest {
         assertEquals("That isn't a Suno song link.", ApiError(400, """{"ok":false,"message":"That isn't a Suno song link."}""").message)
         assertEquals("Not allowed", ApiError(400, """{"error":"Not allowed","message":"other"}""").message)
     }
+
+    @Test fun `a tailored kit reads its match and approves into the website's rows`() {
+        val reply = Json.parseToJsonElement("""{"kit":{"match":{"overallScore":82,"recommendedAction":"apply_now","confidence":0.7,"eligibility":"likely_eligible"},
+            "warnings":["Check dates"],"needsInformation":[],"screeningAnswers":[{"question":"Notice?","answer":"","requiresUserInput":true}],
+            "resume":{"templateId":"technical","unsupportedKeywords":["Rust"]},"coverLetter":{"greeting":"Hi"},"generatedAt":"2026-10-25T00:00:00Z"},
+            "documents":{"resumeHtml":"<h1>A</h1>","resumeMarkdown":"# A","coverHtml":"<p>Hi</p>","coverText":"Hi","resumeName":"A_Resume","coverName":"A_Cover_Letter"}}""").jsonObject
+        val kit = TailorKit.from(reply)!!
+        assertEquals(82, kit.score)
+        assertEquals("apply now", kit.recommended)
+        assertEquals(listOf("Rust"), kit.unsupportedKeywords)
+        assertTrue(kit.answers.single().requiresUserInput)
+        val listing = jobListing(Json.parseToJsonElement("""{"id":"j1","title":"Backend Engineer","company":"Acme Pay","applyUrl":"https://acme.example/1"}""").jsonObject)!!
+        val (resume, cover, app) = approvalRows(kit, listing, "abc", "2026-10-25T10:00:00Z")
+        assertEquals("resume_abc", resume["id"]!!.jsonPrimitive.content)
+        assertEquals("technical", resume["template_id"]!!.jsonPrimitive.content)
+        assertEquals("Acme Pay - Backend Engineer", cover["title"]!!.jsonPrimitive.content)
+        assertEquals("ready_to_apply", app["status"]!!.jsonPrimitive.content)
+        assertEquals("cover_abc", app["submitted_cover_letter_id"]!!.jsonPrimitive.content)
+        assertEquals("https://acme.example/1", app["submission_url"]!!.jsonPrimitive.content)
+        assertNull(TailorKit.from(Json.parseToJsonElement("""{"kit":{}}""").jsonObject))
+    }
 }

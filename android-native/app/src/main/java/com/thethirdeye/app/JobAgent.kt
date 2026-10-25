@@ -295,7 +295,11 @@ fun JobAgentScreen(session: Session, nav: Nav) {
     ReloadOnDataChange { model.load() }
     BackHandler(opened != null) { opened = null }
 
-    opened?.let { return JobDetail(model, it, onBack = { opened = null }, tailor = { nav.push(Dest.Web("Job Agent", "/job-agent/search")) }) }
+    var tailoring by remember { mutableStateOf<JobListing?>(null) }
+    BackHandler(tailoring != null) { tailoring = null }
+
+    tailoring?.let { return JobTailorScreen(model, it) { tailoring = null } }
+    opened?.let { return JobDetail(model, it, onBack = { opened = null }, tailor = { tailoring = it }) }
 
     ListScreen("Job Agent", model.loaded, refresh = { model.load() }, onBack = nav::back) {
         if (model.disabled) {
@@ -311,7 +315,7 @@ fun JobAgentScreen(session: Session, nav: Nav) {
         when (section) {
             Section.Search -> searchItems(model) { opened = it }
             Section.Saved -> savedItems(model) { opened = it }
-            Section.Applications -> applicationItems(model, onOpen = { opened = it }, tailor = { nav.push(Dest.Web("Job Agent", "/job-agent/search")) })
+            Section.Applications -> applicationItems(model, onOpen = { opened = it }, tailor = { tailoring = it })
             Section.Profile -> profileItems(model)
         }
     }
@@ -355,8 +359,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.savedItems(model: Job
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.applicationItems(model: JobAgentModel, onOpen: (JobListing) -> Unit, tailor: () -> Unit) {
-    item { TextButton(onClick = tailor) { Text("Tailor resume & cover letter") } }
+private fun androidx.compose.foundation.lazy.LazyListScope.applicationItems(model: JobAgentModel, onOpen: (JobListing) -> Unit, tailor: (JobListing) -> Unit) {
     if (model.loaded && model.applications.isEmpty()) item { Hint("No applications tracked yet. Open a job and tap Track application.") }
     model.applications.forEach { row ->
         val listing = row.job_json?.let(::jobListing) ?: return@forEach
@@ -370,7 +373,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.applicationItems(mode
                 Choice("Status", applicationStatuses.map(::titleCase), titleCase(row.status)) { label ->
                     scope.launch { model.setStatus(row, applicationStatuses.first { titleCase(it) == label }) }
                 }
-                TextButton(onClick = { onOpen(listing) }) { Text("View job") }
+                Row {
+                    TextButton(onClick = { onOpen(listing) }) { Text("View job") }
+                    TextButton(onClick = { tailor(listing) }) { Text("Tailor resume & cover letter") }
+                }
             }
         }
     }
@@ -422,7 +428,7 @@ private fun JobRow(job: Job, onClick: () -> Unit) {
 }
 
 @Composable
-private fun JobDetail(model: JobAgentModel, listing: JobListing, onBack: () -> Unit, tailor: () -> Unit) {
+private fun JobDetail(model: JobAgentModel, listing: JobListing, onBack: () -> Unit, tailor: (JobListing) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val job = listing.job
@@ -442,7 +448,7 @@ private fun JobDetail(model: JobAgentModel, listing: JobListing, onBack: () -> U
                     TextButton(onClick = { scope.launch { model.save(listing) } }, enabled = !model.isSaved(job)) { Text(if (model.isSaved(job)) "Saved" else "Save") }
                     TextButton(onClick = { scope.launch { model.track(listing) } }, enabled = !model.isTracked(job)) { Text(if (model.isTracked(job)) "Tracking" else "Track application") }
                 }
-                TextButton(onClick = tailor) { Text("Tailor resume & cover letter") }
+                TextButton(onClick = { tailor(listing) }) { Text("Tailor resume & cover letter") }
             }
         }
         item("description") { Panel { SectionLabel("Description"); androidx.compose.foundation.text.selection.SelectionContainer { Text(job.descriptionText.ifBlank { "No description." }, fontSize = 13.sp) } } }
