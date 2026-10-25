@@ -1,7 +1,9 @@
 package com.thethirdeye.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -115,9 +117,23 @@ fun Root(session: Session, app: AppState) {
                 scope.launch { Reminders.sync(context) }
                 onPauseOrDispose {}
             }
+            LaunchedEffect(session.email) {
+                welcomeLine(context.getSharedPreferences("welcome", Context.MODE_PRIVATE), session.email, session.name)?.let { line ->
+                    val voice = Voice(context)
+                    voice.speakWhenReady(line) { voice.release() }
+                }
+            }
             MainTabs(session, app)
         }
     }
+}
+
+/** The assistant greets each account aloud the first time it signs in on this device; marks it welcomed. */
+fun welcomeLine(prefs: SharedPreferences, email: String?, name: String?, agent: String = "JARVIS"): String? {
+    if (email == null || prefs.getBoolean("welcomed:$email", false)) return null
+    prefs.edit().putBoolean("welcomed:$email", true).apply()
+    val first = name?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.takeIf { it.isNotEmpty() }
+    return "Welcome to The Third Eye${first?.let { ", $it" } ?: ""}. I'm $agent, your assistant. Ask me anything, any time."
 }
 
 // The same five tabs as the website's phone layout.

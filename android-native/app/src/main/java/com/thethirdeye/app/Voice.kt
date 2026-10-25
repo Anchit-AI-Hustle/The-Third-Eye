@@ -31,11 +31,19 @@ class Voice(private val context: Context) : RecognitionListener {
     private var recognizer: SpeechRecognizer? = null
     private var onFinal: ((String) -> Unit)? = null
     private var onSpoken: (() -> Unit)? = null
+    private var isReady = false
+    private var queued: Pair<String, (() -> Unit)?>? = null
     private val tts: TextToSpeech = TextToSpeech(context) { status ->
         if (status == TextToSpeech.SUCCESS) ready()
     }
 
+    /** Speaks as soon as the engine has started, for a line said the moment a screen opens. */
+    fun speakWhenReady(text: String, then: (() -> Unit)? = null) {
+        if (isReady) speak(text, then = then) else queued = text to then
+    }
+
     private fun ready() {
+        isReady = true
         tts.language = Locale.getDefault()
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
@@ -43,6 +51,7 @@ class Voice(private val context: Context) : RecognitionListener {
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) { main.post { spoken() } }
         })
+        queued?.let { (text, then) -> queued = null; speak(text, then = then) }
     }
 
     private fun spoken() {
