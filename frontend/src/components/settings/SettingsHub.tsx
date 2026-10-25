@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Settings as SettingsIcon, Bot, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SettingsClient } from "@/components/settings/SettingsClient";
@@ -19,15 +20,12 @@ interface Props {
 
 export function SettingsHub({ user }: Props) {
   const [tab, setTab] = useState<"device" | "account" | "agent">("device");
-
+  // Follows the link, so the menu's "Account & Connections" opens that tab even
+  // when Settings is already showing.
+  const q = useSearchParams()?.get("tab");
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const q = new URLSearchParams(window.location.search).get("tab");
-      if (q === "device" || q === "account" || q === "agent") {
-        setTab(q);
-      }
-    }
-  }, []);
+    if (q === "device" || q === "account" || q === "agent") setTab(q);
+  }, [q]);
 
   return (
     <>

@@ -37,6 +37,17 @@ class DeviceTest {
     @Before fun fake() { Api.backend = backend }
     @After fun restore() { Api.backend = real }
 
+    @Test fun `each account is welcomed aloud once on this phone`() {
+        val prefs = app.getSharedPreferences("welcome-test", Context.MODE_PRIVATE)
+        assertEquals("Welcome to The Third Eye, Anchit. I'm JARVIS, your assistant. Ask me anything, any time.", welcomeLine(prefs, "a@x.com", "Anchit Tandon"))
+        // Not heard yet (the speech engine may have failed): offered again.
+        assertEquals("Welcome to The Third Eye, Anchit. I'm JARVIS, your assistant. Ask me anything, any time.", welcomeLine(prefs, "a@x.com", "Anchit Tandon"))
+        markWelcomed(prefs, "a@x.com")
+        assertEquals(null, welcomeLine(prefs, "a@x.com", "Anchit Tandon"))
+        assertEquals("Welcome to The Third Eye. I'm JARVIS, your assistant. Ask me anything, any time.", welcomeLine(prefs, "p@x.com", null))
+        assertEquals(null, welcomeLine(prefs, null, "Nobody"))
+    }
+
     @Test fun `a sign-in link this app did not ask for is ignored`() {
         val session = Session(app)
         ShadowLooper.idleMainLooper()

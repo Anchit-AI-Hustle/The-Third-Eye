@@ -9,6 +9,7 @@ vi.mock("../AiStatusBanner", () => ({ AiStatusBanner: () => null }));
 vi.mock("../../hud/AmbientScene", () => ({ AmbientScene: () => null }));
 vi.mock("../../hud/MotionNotice", () => ({ MotionNotice: () => null }));
 vi.mock("../NativeAutoSync", () => ({ NativeAutoSync: () => null }));
+vi.mock("../WelcomeVoice", () => ({ WelcomeVoice: () => null }));
 vi.mock("@/hooks/useJarvisTriggers", () => ({ useJarvisTriggers: () => {} }));
 
 import { MainLayout } from "../MainLayout";

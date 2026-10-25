@@ -10,6 +10,7 @@ import { AiStatusBanner } from "./AiStatusBanner";
 import { AmbientScene } from "../hud/AmbientScene";
 import { MotionNotice } from "../hud/MotionNotice";
 import { NativeAutoSync } from "./NativeAutoSync";
+import { WelcomeVoice } from "./WelcomeVoice";
 import { useJarvisTriggers } from "@/hooks/useJarvisTriggers";
 import { activateAssistant } from "@/lib/activation";
 import { cn } from "@/lib/utils";
@@ -73,6 +74,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
       {!embedded && <>
         <BottomNav onMore={() => setMobileMenuOpen(true)} />
         <VoiceOverlay />
+        <WelcomeVoice />
       </>}
     </div>
   );

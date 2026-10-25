@@ -43,9 +43,10 @@ describe("Sidebar sign out", () => {
     expect(signOutAndClear).toHaveBeenCalledWith({ callbackUrl: "/auth/signin" });
   });
 
-  it("lists AI Models and Connectors under Account & System", () => {
+  it("lists Account & Connections, AI Models and Connectors under Account & System", () => {
     render(<Sidebar mobileOpen onMobileClose={() => {}} />);
     const group = screen.getByText("Account & System").parentElement!;
+    expect(within(group).getByRole("link", { name: "Account & Connections" })).toHaveAttribute("href", "/settings?tab=account");
     expect(within(group).getByRole("link", { name: "AI Models" })).toHaveAttribute("href", "/models");
     expect(within(group).getByRole("link", { name: "Connectors" })).toHaveAttribute("href", "/connectors");
   });

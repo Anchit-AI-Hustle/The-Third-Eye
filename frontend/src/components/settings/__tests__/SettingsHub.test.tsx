@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SettingsHub } from "../SettingsHub";
 
+let query = "";
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(query) }));
+
 vi.mock("@/components/settings/SettingsClient", () => ({
   SettingsClient: () => <div>Account body</div>,
 }));
@@ -27,7 +30,16 @@ vi.mock("@/hooks/useAgentProfile", () => ({
 }));
 
 describe("SettingsHub", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => { localStorage.clear(); query = ""; });
+
+  it("opens the tab the menu link names, and follows it when the link changes", () => {
+    query = "tab=account";
+    const { rerender } = render(<SettingsHub user={{ name: "A", email: "a@b.c" }} />);
+    expect(screen.getByText("Account body")).toBeInTheDocument();
+    query = "tab=device";
+    rerender(<SettingsHub user={{ name: "A", email: "a@b.c" }} />);
+    expect(screen.getByText("Device permissions")).toBeInTheDocument();
+  });
 
   it("opens Device & App Settings by default and allows switching tabs", () => {
     render(<SettingsHub user={{ name: "A", email: "a@b.c" }} />);
