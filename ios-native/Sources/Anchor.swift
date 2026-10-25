@@ -89,10 +89,13 @@ final class AnchorModel: ObservableObject {
         message = nil
         defer { busy = nil }
         do {
+            // Read directly: a refused run answers 400 with its reason in the body.
             let (body, response) = try await API.session.data(for: API.request("POST", "/api/tools/anchor", json: action.body))
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 401 { NotificationCenter.default.post(name: .sessionExpired, object: nil) }
             let reply = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
             let ok = reply["ok"] as? Bool == true
-            message = (ok, reply["message"] as? String ?? reply["error"] as? String ?? "The server said \((response as? HTTPURLResponse)?.statusCode ?? 0).")
+            message = (ok, reply["message"] as? String ?? reply["error"] as? String ?? APIError(status: status).localizedDescription)
             if ok {
                 try? await Task.sleep(for: .seconds(4))
                 await load()
