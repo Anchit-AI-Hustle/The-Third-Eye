@@ -147,7 +147,7 @@ class HealthModel(context: Context, private val local: Local) {
         private set
     var error by mutableStateOf<String?>(null)
 
-    fun setEvents(list: List<HealthEvent>) {
+    fun saveEvents(list: List<HealthEvent>) {
         events = list
         prefs.edit().putString("events", json.encodeToString(ListSerializer(HealthEvent.serializer()), list)).apply()
     }
@@ -218,7 +218,7 @@ fun HealthScreen(onBack: () -> Unit) {
     }
 
     draft?.let { d ->
-        return AddHealthEventScreen(d, labels, onCancel = { draft = null }) { model.setEvents(listOf(it) + model.events); draft = null }
+        return AddHealthEventScreen(d, labels, onCancel = { draft = null }) { model.saveEvents(listOf(it) + model.events); draft = null }
     }
 
     ListScreen("Health Engine", loaded = true, refresh = { Catalog.load(context, refresh = true) }, onBack = onBack) {
@@ -322,7 +322,7 @@ fun HealthScreen(onBack: () -> Unit) {
                             Text(e.schedule, fontSize = 12.sp, color = Palette.secondary)
                             if (e.url.isNotBlank()) TextButton(onClick = { openInBrowser(context, e.url) }) { Text("Open booking link", fontSize = 12.sp) }
                         }
-                        IconButton(onClick = { model.setEvents(model.events.filter { it.id != e.id }) }) { Icon(Icons.Outlined.Delete, "Delete", tint = Palette.muted) }
+                        IconButton(onClick = { model.saveEvents(model.events.filter { it.id != e.id }) }) { Icon(Icons.Outlined.Delete, "Delete", tint = Palette.muted) }
                     }
                 }
             }
