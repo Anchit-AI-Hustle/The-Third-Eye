@@ -410,4 +410,9 @@ class LogicTest {
         assertEquals("", mmss(null))
         assertEquals("-", anchorWhen(null))
     }
+
+    @Test fun `a refusal that explains itself in message reaches the screen`() {
+        assertEquals("That isn't a Suno song link.", ApiError(400, """{"ok":false,"message":"That isn't a Suno song link."}""").message)
+        assertEquals("Not allowed", ApiError(400, """{"error":"Not allowed","message":"other"}""").message)
+    }
 }
