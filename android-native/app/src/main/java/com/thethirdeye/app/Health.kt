@@ -156,6 +156,7 @@ class HealthModel(context: Context, private val local: Local) {
         loading = true
         error = null
         plan = null
+        targets = null
         prefs.edit().putString("lastInput", json.encodeToString(HealthInput.serializer(), input)).apply()
         try {
             val reply = json.decodeFromString(HealthReply.serializer(), Api.backend.send("POST", "/api/tools/health", input.body()))

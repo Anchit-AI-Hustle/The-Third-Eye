@@ -129,6 +129,7 @@ final class HealthModel: ObservableObject {
         loading = true
         error = nil
         plan = nil
+        targets = nil
         defer { loading = false }
         Self.save(input, Self.inputKey)
         struct Reply: Decodable { let targets: HealthTargets; let plan: String?; let provider: String?; let warning: String? }
