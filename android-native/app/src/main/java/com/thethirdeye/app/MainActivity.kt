@@ -118,9 +118,10 @@ fun Root(session: Session, app: AppState) {
                 onPauseOrDispose {}
             }
             LaunchedEffect(session.email) {
-                welcomeLine(context.getSharedPreferences("welcome", Context.MODE_PRIVATE), session.email, session.name)?.let { line ->
+                val prefs = context.getSharedPreferences("welcome", Context.MODE_PRIVATE)
+                welcomeLine(prefs, session.email, session.name)?.let { line ->
                     val voice = Voice(context)
-                    voice.speakWhenReady(line) { voice.release() }
+                    voice.speakWhenReady(line, started = { markWelcomed(prefs, session.email) }) { voice.release() }
                 }
             }
             MainTabs(session, app)
@@ -128,12 +129,16 @@ fun Root(session: Session, app: AppState) {
     }
 }
 
-/** The assistant greets each account aloud the first time it signs in on this device; marks it welcomed. */
+/** The assistant greets each account aloud the first time it signs in on this device. */
 fun welcomeLine(prefs: SharedPreferences, email: String?, name: String?, agent: String = "JARVIS"): String? {
     if (email == null || prefs.getBoolean("welcomed:$email", false)) return null
-    prefs.edit().putBoolean("welcomed:$email", true).apply()
     val first = name?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.takeIf { it.isNotEmpty() }
     return "Welcome to The Third Eye${first?.let { ", $it" } ?: ""}. I'm $agent, your assistant. Ask me anything, any time."
+}
+
+/** Recorded once the welcome is heard, so a phone whose speech engine failed tries again next time. */
+fun markWelcomed(prefs: SharedPreferences, email: String?) {
+    if (email != null) prefs.edit().putBoolean("welcomed:$email", true).apply()
 }
 
 // The same five tabs as the website's phone layout.

@@ -38,11 +38,15 @@ enum Welcome {
         return greeting + ". I'm " + agent + ", your assistant. Ask me anything, any time."
     }
 
-    /// The line to say now, if this account hasn't been welcomed on this device; marks it welcomed.
+    /// The line to say now, if this account hasn't been welcomed on this device.
     static func due(email: String?, name: String?, defaults: UserDefaults = .standard) -> String? {
         guard let email, defaults.string(forKey: "preview-tab") == nil, !defaults.bool(forKey: "welcomed:\(email)") else { return nil }
-        defaults.set(true, forKey: "welcomed:\(email)")
         return line(name: name)
+    }
+
+    /// Recorded once it has been heard, so a welcome that never played is offered again.
+    static func heard(email: String?, defaults: UserDefaults = .standard) {
+        if let email { defaults.set(true, forKey: "welcomed:\(email)") }
     }
 }
 
@@ -70,7 +74,9 @@ struct RootView: View {
             if state == .signedIn { Task { await Reminders.sync() } }
         }
         .onChange(of: session.email) { _, email in
-            if session.state == .signedIn, let line = Welcome.due(email: email, name: session.name) { welcome.speak(line) }
+            if session.state == .signedIn, let line = Welcome.due(email: email, name: session.name) {
+                welcome.speak(line) { Welcome.heard(email: email) }
+            }
         }
         .onChange(of: phase) { _, phase in
             if phase == .active, session.state == .signedIn { Task { await Reminders.sync() } }

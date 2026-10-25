@@ -21,7 +21,7 @@ export function WelcomeVoice() {
   const { data: session, status } = useSession();
   const email = session?.user?.email;
   const { active } = useAgentProfile();
-  const { speak, speaking, supported } = useTTS();
+  const { speak, stop, speaking, supported } = useTTS();
   const [blocked, setBlocked] = useState(false);
   const pending = useRef<string | null>(null);
   const say = useRef(speak);
@@ -34,7 +34,9 @@ export function WelcomeVoice() {
     pending.current = line;
     void say.current(line, undefined, true);
     const wait = setTimeout(() => { if (pending.current) setBlocked(true); }, START_WAIT_MS);
-    const onTap = () => { if (pending.current) void say.current(pending.current, undefined, true); };
+    const onTap = (e: Event) => {
+      if (pending.current && !(e.target as Element | null)?.closest?.("[data-welcome-skip]")) void say.current(pending.current, undefined, true);
+    };
     window.addEventListener("pointerdown", onTap);
     window.addEventListener("keydown", onTap);
     return () => {
@@ -59,7 +61,7 @@ export function WelcomeVoice() {
         className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-[#4FC3F7] hover:bg-[#4FC3F7]/10">
         <Volume2 size={16} /> Hear your welcome from {active.name}
       </button>
-      <button type="button" aria-label="Skip the welcome" onClick={() => { localStorage.setItem(KEY + email, "1"); pending.current = null; setBlocked(false); }}
+      <button type="button" data-welcome-skip aria-label="Skip the welcome" onClick={() => { localStorage.setItem(KEY + email, "1"); pending.current = null; stop(); setBlocked(false); }}
         className="p-1.5 rounded-full text-text-muted hover:text-text-primary">
         <X size={14} />
       </button>

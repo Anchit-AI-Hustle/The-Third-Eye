@@ -7,6 +7,7 @@ vi.mock("next-auth/react", () => ({ useSession: () => (user ? { data: { user }, 
 
 // Speech starts only when the browser allows it; a test flips that.
 let allowed = true;
+let stopped = 0;
 const spoken: string[] = [];
 vi.mock("@/hooks/useVoice", () => ({
   useTTS: () => {
@@ -15,6 +16,7 @@ vi.mock("@/hooks/useVoice", () => ({
       supported: true,
       speaking,
       speak: async (text: string) => { spoken.push(text); if (allowed) setSpeaking(true); },
+      stop: () => { stopped++; },
     };
   },
 }));
@@ -64,7 +66,13 @@ describe("the welcome on a new device", () => {
     allowed = false;
     render(<WelcomeVoice />);
     await act(async () => { vi.advanceTimersByTime(1600); });
-    fireEvent.click(screen.getByRole("button", { name: "Skip the welcome" }));
+    allowed = true;
+    const skip = screen.getByRole("button", { name: "Skip the welcome" });
+    fireEvent.pointerDown(skip);
+    fireEvent.keyDown(skip, { key: "Enter" });
+    fireEvent.click(skip);
+    expect(spoken).toHaveLength(1);
+    expect(stopped).toBe(1);
     expect(localStorage.getItem("te_welcomed_v1:a@x.com")).toBe("1");
     expect(screen.queryByRole("button", { name: /Hear your welcome/ })).toBeNull();
   });
