@@ -95,8 +95,9 @@ fun AnchorScreen(onBack: () -> Unit) {
         }
         val ok = (reply["ok"] as? JsonPrimitive)?.booleanOrNull == true
         message = ok to ((reply["message"] ?: reply["error"]) as? JsonPrimitive)?.content.orEmpty()
-        busy = null
+        // Locked until the refresh shows the new run, so a second tap can't start a duplicate.
         if (ok) { delay(4000); load() }
+        busy = null
     }
 
     LaunchedEffect(Unit) { load() }
