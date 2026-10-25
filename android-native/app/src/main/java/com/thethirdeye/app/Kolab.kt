@@ -94,7 +94,7 @@ fun KolabScreen(nav: Nav) {
 
     ListScreen("Kolab", loaded = true, refresh = {}, onBack = nav::back) {
         item { Text("Describe your brand once, then ask for a program. Your brand is kept on this phone.", fontSize = 13.sp, color = Palette.secondary) }
-        item { TextButton(onClick = { nav.push(Dest.Web("Kolab Studio", "/kolab/studio")) }) { Text("Kolab Studio (creator tools)") } }
+        item { TextButton(onClick = { nav.push(Dest.KolabStudio) }) { Text("Kolab Studio (creator tools)") } }
         item { SectionLabel("Your brand") }
         item("name") { Field("Brand name *", brand.name, { local.saveBrand(brand.copy(name = it)) }) }
         item("industry") { Field("Industry", brand.industry, { local.saveBrand(brand.copy(industry = it)) }) }

@@ -436,4 +436,25 @@ class LogicTest {
         assertEquals("https://acme.example/1", app["submission_url"]!!.jsonPrimitive.content)
         assertNull(TailorKit.from(Json.parseToJsonElement("""{"kit":{}}""").jsonObject))
     }
+
+    @Test fun `the creator studio reads the server payload and saves pillars in its shape`() {
+        val d = KolabStudioData.parse("""{"ok":true,"data":{"org":{"name":"Anchit Studio","type":"creator"},"unlocked":true,"reason":null,
+            "pillars":[{"id":"p1","name":"Real talk","role":"Builds trust","color":"#c2f04a","sort_order":0}],
+            "plan":[{"id":"x1","pillar_id":"p1","format":"Reel · 30s","asset_type":"video","date":"2026-10-26","time":"19:30:00","hook":"Hi","caption":null,"status":"posted","done":false,"notes":null}],
+            "deals":[],"schedule":[{"id":"s1","title":"Launch","scheduled_at":"2026-10-26T14:00:00Z","channels":["instagram"],"publish_status":"queued"}],
+            "channels":[{"id":"c1","platform":"instagram","handle":"@a","connected":true}],
+            "assetMix":{"counts":{"video":1,"carousel":0,"photo":0,"loop":0},"total":1},"tracker":{"posted":1,"total":1,"pct":100},"csv":"Date",
+            "reference":{"statuses":["to_shoot","posted"],"statusLabels":{"to_shoot":"To shoot","posted":"Posted"},"assetMeta":{"video":{"c":"#E8604A","l":"Video"}},
+            "channels":[{"k":"instagram","n":"Instagram","c":"#E1306C","ini":"IG"}],"blueprints":[],"autoSteps":[],"defaultPillars":[{"name":"Motivation","role":"Drives shares"}]}}}""")
+        assertEquals("Anchit Studio", d.org!!.name)
+        assertEquals("posted", d.plan.single().status)
+        assertEquals(100, d.tracker.pct)
+        assertEquals(1, d.assetMix.counts["video"])
+        assertEquals(listOf("instagram"), d.schedule.single().channels)
+        val body = kolabPillarsBody(kolabPillarRows(d) + Triple(null, " ", ""))
+        assertEquals("""{"pillars":[{"id":"p1","name":"Real talk","role":"Builds trust"}]}""", body.toString())
+        val fresh = kolabPillarRows(d.copy(pillars = emptyList()))
+        assertEquals(listOf(Triple(null, "Motivation", "Drives shares")), fresh)
+        assertNull(KolabStudioData.parse("""{"ok":true,"data":{"org":null,"unlocked":false,"reason":"Create an organization"}}""").org)
+    }
 }

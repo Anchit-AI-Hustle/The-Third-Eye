@@ -163,7 +163,7 @@ struct KolabView: View {
             }
             .listRowBackground(Color.clear)
             Section {
-                NavigationLink { RouteView(path: "/kolab/studio", title: "Kolab Studio") } label: {
+                NavigationLink { KolabStudioView() } label: {
                     Label("Kolab Studio (creator tools)", systemImage: "person.3")
                 }
             }
