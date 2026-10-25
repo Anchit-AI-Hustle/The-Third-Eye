@@ -4,7 +4,7 @@ import SwiftUI
 // modules over GET /api/kolab-studio/studio and its mutation routes. Onboarding, KYC and the
 // subscription stay on the website.
 struct KolabStudioData: Decodable {
-    struct Pillar: Decodable, Identifiable { let id: String; let name: String; let role: String?; let color: String? }
+    struct Pillar: Decodable, Identifiable, Equatable { let id: String; let name: String; let role: String?; let color: String? }
     struct PlanItem: Decodable, Identifiable {
         let id: String
         let pillar_id: String?
@@ -262,7 +262,7 @@ private struct KolabStrategy: View {
         } header: { Text("Content strategy") }
         .listRowBackground(Theme.surface.opacity(0.7))
         .onAppear { reset() }
-        .onChange(of: data.pillars.map(\.id)) { _, _ in reset() }
+        .onChange(of: data.pillars) { _, _ in reset() }
     }
 
     private func reset() {
