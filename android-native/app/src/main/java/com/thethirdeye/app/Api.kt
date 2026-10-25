@@ -21,6 +21,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -67,7 +68,11 @@ interface Backend {
     suspend fun send(method: String, path: String, body: JsonElement? = null): String
     /** Server-sent events: (event, data) pairs. */
     fun stream(path: String, body: JsonElement): Flow<Pair<String, JsonObject>>
+    /** Files as multipart form fields named [field]. */
+    suspend fun upload(path: String, field: String, files: List<UploadFile>): String = throw ApiError(0)
 }
+
+class UploadFile(val name: String, val mime: String, val bytes: ByteArray)
 
 object Api {
     var backend: Backend = HttpBackend
@@ -110,6 +115,23 @@ object HttpBackend : Backend {
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 client.newCall(request(method, path, body)).execute().use { r ->
+                    val text = r.body.string()
+                    check(r.code, text)
+                    text
+                }
+            } catch (e: ApiError) {
+                throw e
+            } catch (e: IOException) {
+                throw ApiError(0)
+            }
+        }
+
+    override suspend fun upload(path: String, field: String, files: List<UploadFile>): String =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+            for (f in files) form.addFormDataPart(field, f.name, f.bytes.toRequestBody(f.mime.toMediaType()))
+            try {
+                client.newCall(Request.Builder().url(Api.url(path)).post(form.build()).build()).execute().use { r ->
                     val text = r.body.string()
                     check(r.code, text)
                     text

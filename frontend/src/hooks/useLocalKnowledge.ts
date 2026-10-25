@@ -3,25 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { dataList, dataInsert, dataDelete } from "@/lib/dataClient";
+import { chunkText, DOC_TYPES, getExt, IMAGE_TYPES, knowledgeDocFrom, TEXT_TYPES, type KnowledgeDoc } from "@/lib/knowledgeFile";
 
-export interface KnowledgeDoc {
-  id: string;
-  title: string;
-  content: string;
-  file_type: string;
-  file_size_bytes: number;
-  created_at: string;
-  chunk_count: number;
-  processing_status: "ready" | "failed";
-  error?: string;
-}
+export type { KnowledgeDoc };
 
 // Per-account device cache; the database is the source of truth when there is one.
 const KEY = "jarvis_knowledge_v1";
 let activeUser: string | null = null;
 const storageKey = () => (activeUser ? `${KEY}:${activeUser}` : KEY);
 const useStorageUser = (u: string | null) => { activeUser = u; };
-const CHUNK_SIZE = 500;
 
 function ls(): KnowledgeDoc[] {
   if (typeof window === "undefined") return [];
@@ -35,42 +25,6 @@ function lsSet(v: KnowledgeDoc[]) {
   } catch (err) {
     console.warn("Failed to persist knowledge docs in localStorage:", err);
   }
-}
-
-function chunkText(text: string): string[] {
-  const words = text.split(/\s+/);
-  const chunks: string[] = [];
-  for (let i = 0; i < words.length; i += CHUNK_SIZE) {
-    chunks.push(words.slice(i, i + CHUNK_SIZE).join(" "));
-  }
-  return chunks.length > 0 ? chunks : [text];
-}
-
-const TEXT_TYPES = new Set([".txt", ".md", ".markdown", ".csv", ".json", ".js", ".ts", ".py", ".html", ".xml", ".yaml", ".yml", ".sh", ".env", ".sql", ".rtf", ".log"]);
-const IMAGE_TYPES = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", ".heic", ".heif"]);
-const DOC_TYPES = new Set([".pdf", ".doc", ".docx"]);
-
-function getExt(name: string): string {
-  const i = name.lastIndexOf(".");
-  return i >= 0 ? name.slice(i).toLowerCase() : "";
-}
-
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve((e.target?.result as string) ?? "");
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
-  });
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve((e.target?.result as string) ?? "");
-    reader.onerror = () => reject(new Error("Failed to read photo/image"));
-    reader.readAsDataURL(file);
-  });
 }
 
 export interface SearchResult {
@@ -143,72 +97,11 @@ export function useLocalKnowledge() {
     const newDocs: KnowledgeDoc[] = [];
 
     for (const file of arr) {
-      const ext = getExt(file.name);
-      const id = crypto.randomUUID();
-      const title = file.name;
-
-      if (IMAGE_TYPES.has(ext)) {
-        try {
-          const dataUrl = await readFileAsDataUrl(file);
-          const sizeKb = Math.round(file.size / 1024);
-          const description = `[Photo/Image: ${title} (${sizeKb} KB, ${file.type || "image"})]\nEmbedded image data: ${dataUrl.slice(0, 150)}...`;
-          newDocs.push({
-            id, title, content: description, file_type: ext.replace(".", "") || "image",
-            file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: 1, processing_status: "ready",
-          });
-        } catch {
-          newDocs.push({
-            id, title, content: "", file_type: ext.replace(".", ""),
-            file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: 0, processing_status: "failed", error: "Failed to read photo.",
-          });
-        }
-        continue;
-      }
-
-      if (DOC_TYPES.has(ext)) {
-        // Real text out of the PDF or Word file; one that can't be read is
-        // marked failed with the reason, never stored as "ready" binary junk.
-        try {
-          const { extractDocText } = await import("@/lib/docText");
-          const content = await extractDocText(title, new Uint8Array(await file.arrayBuffer()));
-          newDocs.push({
-            id, title, content, file_type: ext.replace(".", ""),
-            file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: chunkText(content).length, processing_status: "ready",
-          });
-        } catch (err) {
-          newDocs.push({
-            id, title, content: "", file_type: ext.replace(".", ""),
-            file_size_bytes: file.size, created_at: new Date().toISOString(),
-            chunk_count: 0, processing_status: "failed", error: err instanceof Error ? err.message : "Couldn't read this document.",
-          });
-        }
-        continue;
-      }
-
-      if (!TEXT_TYPES.has(ext) && ext !== "") {
-        newDocs.push({
-          id, title, content: "", file_type: ext.replace(".", ""),
-          file_size_bytes: file.size, created_at: new Date().toISOString(),
-          chunk_count: 0, processing_status: "failed",
-          error: `Cannot read ${ext.toUpperCase()} files in browser mode. Please convert to TXT or MD.`,
-        });
-        continue;
-      }
-
       try {
-        const content = await readFileAsText(file);
-        const chunks = chunkText(content);
-        newDocs.push({
-          id, title, content, file_type: ext.replace(".", "") || "txt",
-          file_size_bytes: file.size, created_at: new Date().toISOString(),
-          chunk_count: chunks.length, processing_status: "ready",
-        });
+        newDocs.push(await knowledgeDocFrom(file.name, new Uint8Array(await file.arrayBuffer()), file.type));
       } catch {
         newDocs.push({
-          id, title, content: "", file_type: ext.replace(".", ""),
+          id: crypto.randomUUID(), title: file.name, content: "", file_type: getExt(file.name).replace(".", ""),
           file_size_bytes: file.size, created_at: new Date().toISOString(),
           chunk_count: 0, processing_status: "failed", error: "Failed to read file.",
         });
