@@ -5,7 +5,8 @@ let email: string | null = "u@x.com";
 vi.mock("next-auth", () => ({ getServerSession: async () => (email ? { user: { email } } : null) }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 const saved = new Map<string, string>();
-vi.mock("@/lib/providerKeys", () => ({ saveOwnKey: async (_u: string, p: string, v: string) => { saved.set(p, v); return true; } }));
+let canSave = true;
+vi.mock("@/lib/providerKeys", () => ({ saveOwnKey: async (_u: string, p: string, v: string) => { if (!canSave) return false; saved.set(p, v); return true; } }));
 
 import { GET as start } from "@/app/api/connect/openrouter/route";
 import { GET as callback } from "@/app/api/connect/openrouter/callback/route";
@@ -13,7 +14,7 @@ import { GET as callback } from "@/app/api/connect/openrouter/callback/route";
 const base = "https://the-third-eye.example.com";
 const req = (path: string, cookie?: string) => new Request(`${base}${path}`, { headers: { host: "the-third-eye.example.com", ...(cookie ? { cookie } : {}) } });
 
-beforeEach(() => { email = "u@x.com"; saved.clear(); });
+beforeEach(() => { email = "u@x.com"; saved.clear(); canSave = true; vi.spyOn(console, "error").mockImplementation(() => {}); });
 afterEach(() => vi.unstubAllGlobals());
 
 async function begin() {
@@ -67,5 +68,14 @@ describe("Sign in with OpenRouter", () => {
     const res = await callback(req(`/api/connect/openrouter/callback?code=abc&state=${state}`, cookie));
     expect(res.headers.get("location")).toContain("openrouter_error");
     expect(saved.size).toBe(0);
+  });
+
+  it("says the key couldn't be saved when the database refuses it", async () => {
+    const { cookie, state } = await begin();
+    canSave = false;
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ key: "sk-or-v1-own" })));
+    const where = new URL((await callback(req(`/api/connect/openrouter/callback?code=abc&state=${state}`, cookie))).headers.get("location")!);
+    expect(where.searchParams.get("connect")).toBe("openrouter_error");
+    expect(where.searchParams.get("why")).toMatch(/couldn't be saved/);
   });
 });
