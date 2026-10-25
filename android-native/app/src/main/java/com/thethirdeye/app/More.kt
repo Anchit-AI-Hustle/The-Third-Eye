@@ -159,6 +159,7 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
         is Dest.Tool -> when (top.id) {
             "music" -> MusicScreen(nav::back)
             "health" -> HealthScreen(nav::back)
+            "anchor" -> AnchorScreen(nav::back)
             else -> ToolScreen(top.id, nav::back)
         }
         is Dest.Document -> DocumentScreen(top.doc, nav::back)

@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Studio {
     /// Tools that need browser tech (audio/video/camera editors) open the website page.
-    static let browserOnly: Set<String> = ["avatar", "video", "reel", "anchor"]
+    static let browserOnly: Set<String> = ["avatar", "video", "reel"]
 }
 
 struct StudioView: View {
@@ -68,6 +68,8 @@ struct StudioToolRoute: View {
             MusicStudioView()
         } else if id == "health" {
             HealthStudioView()
+        } else if id == "anchor" {
+            AnchorView()
         } else if Studio.browserOnly.contains(id) {
             web
         } else if let tool = catalog.data?.studioTools.first(where: { $0.id == id }) {

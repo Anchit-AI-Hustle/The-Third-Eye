@@ -16,7 +16,10 @@ sealed interface Route {
 private val legalPaths = setOf("/privacy", "/privacy_policy", "/terms_of_service")
 
 // Tools that need the browser's own tech (audio, camera, video, files).
-val webTools = setOf("avatar", "video", "reel", "anchor")
+val webTools = setOf("avatar", "video", "reel")
+
+/** Native tool screens that are not Studio tools in the catalog. */
+private val nativeTools = setOf("anchor")
 
 private val tabPaths = mapOf(
     "/assistant" to AppState.Tab.Assistant,
@@ -34,7 +37,7 @@ fun routeOf(href: String, studioTools: Set<String>): Route {
     tabPaths[path]?.let { return Route.Tab(it) }
     moreMenu.flatMap { it.second }.firstOrNull { it.path == path && it.path !in legalPaths }?.let { return Route.Screen(it) }
     val tool = path.removePrefix("/tools/")
-    if (path.startsWith("/tools/") && tool !in webTools && tool in studioTools) return Route.Tool(tool)
+    if (path.startsWith("/tools/") && tool !in webTools && (tool in studioTools || tool in nativeTools)) return Route.Tool(tool)
     return Route.Web(href)
 }
 
