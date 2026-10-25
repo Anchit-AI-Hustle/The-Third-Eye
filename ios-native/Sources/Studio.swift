@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Studio {
     /// Tools that need browser tech (audio/video/camera editors) open the website page.
-    static let browserOnly: Set<String> = ["health", "avatar", "video", "reel", "book", "anchor"]
+    static let browserOnly: Set<String> = ["health", "avatar", "video", "reel", "anchor"]
 }
 
 struct StudioView: View {
@@ -100,7 +100,7 @@ final class StudioRunner: ObservableObject {
     @Published var error: String?
 
     let tool: StudioTool
-    private var values: [String: String] = [:]
+    private(set) var values: [String: String] = [:]
 
     private struct Reply: Decodable {
         let output: String
@@ -260,6 +260,15 @@ struct ToolResultView: View {
             .padding(.top, 8)
             if let error = runner.error {
                 Text(error).font(.system(size: 13)).foregroundStyle(Theme.red).padding(.horizontal, 16)
+            }
+            if runner.tool.id == "book", !text.isEmpty, !runner.running {
+                NavigationLink {
+                    BookWriterView(markdown: text, inputs: runner.values)
+                } label: {
+                    Label("Write the book", systemImage: "book")
+                }
+                .buttonStyle(GlowButtonStyle())
+                .padding(.horizontal, 16)
             }
             OutputBody(text: text, format: runner.output?.format ?? runner.tool.format)
                 .overlay {

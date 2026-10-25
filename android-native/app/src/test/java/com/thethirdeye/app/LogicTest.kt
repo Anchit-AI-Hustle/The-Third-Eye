@@ -374,4 +374,17 @@ class LogicTest {
         assertEquals("wav", ext)
         assertNull(Music.decodeDataUrl("/api/tools/music/audio/abc"))
     }
+
+    @Test fun `a book outline reads into its title, subtitle and chapters with their beats`() {
+        val md = "# The Last Signal\n*A thriller*\n\n## Outline\n### Chapter 1: Static\n- She hears it.\n- Nobody else does.\n\n### Chapter 2 - Dead Air\n- The tower goes dark.\n## Notes\n- not a beat"
+        val outline = BookOutline.parse(md)
+        assertEquals("The Last Signal", outline.title)
+        assertEquals("A thriller", outline.subtitle)
+        assertEquals(listOf(1, 2), outline.chapters.map { it.n })
+        assertEquals("Dead Air", outline.chapters[1].title)
+        assertEquals("- She hears it.\n- Nobody else does.", outline.chapters[0].beats)
+        assertEquals("- The tower goes dark.", outline.chapters[1].beats)
+        assertEquals(2, BookOutline.parts(5000))
+        assertEquals(1, BookOutline.parts(1500))
+    }
 }

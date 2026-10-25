@@ -145,6 +145,8 @@ fun ToolScreen(id: String, onBack: () -> Unit) {
     val tool = Catalog.data?.studioTools?.firstOrNull { it.id == id } ?: return WebScreen("Studio", "/tools/$id", onBack)
     val run = remember(id) { ToolRun(tool, Local.get(context)) }
     val scope = rememberCoroutineScope()
+    var writing by remember(id) { mutableStateOf(false) }
+    run.output?.takeIf { writing }?.let { return BookScreen(it, run.values.toMap()) { writing = false } }
 
     ListScreen(tool.label, loaded = true, refresh = {}, onBack = onBack) {
         item { Text(tool.blurb, fontSize = 13.sp, color = Palette.secondary) }
@@ -180,6 +182,7 @@ fun ToolScreen(id: String, onBack: () -> Unit) {
                         Icon(Icons.Outlined.LibraryAdd, null, Modifier.size(18.dp)); Text(if (run.saved) "  Saved to Knowledge" else "  Save to Knowledge")
                     }
                     if (!run.busy) RegenerateButton { scope.launch { run.generate() } }
+                    if (tool.id == "book" && !run.busy) TextButton(onClick = { writing = true }) { Text("Write the book") }
                 }
             }
         }

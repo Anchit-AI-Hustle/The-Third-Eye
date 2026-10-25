@@ -70,8 +70,8 @@ interface Backend {
     fun stream(path: String, body: JsonElement): Flow<Pair<String, JsonObject>>
     /** Files as multipart form fields named [field]. */
     suspend fun upload(path: String, field: String, files: List<UploadFile>): String = throw ApiError(0)
-    /** A file's raw bytes, with the session cookie for this server's own paths. */
-    suspend fun bytes(path: String): ByteArray = throw ApiError(0)
+    /** A file's raw bytes, with the session cookie for this server's own paths; POSTed when there is a body. */
+    suspend fun bytes(path: String, body: JsonElement? = null): ByteArray = throw ApiError(0)
 }
 
 class UploadFile(val name: String, val mime: String, val bytes: ByteArray)
@@ -145,11 +145,11 @@ object HttpBackend : Backend {
             }
         }
 
-    override suspend fun bytes(path: String): ByteArray =
+    override suspend fun bytes(path: String, body: JsonElement?): ByteArray =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
-                client.newCall(Request.Builder().url(Api.url(path)).build()).execute().use { r ->
-                    check(r.code)
+                client.newCall(request(if (body == null) "GET" else "POST", path, body)).execute().use { r ->
+                    if (r.code !in 200..299) check(r.code, r.body.string())
                     r.body.bytes()
                 }
             } catch (e: ApiError) {
