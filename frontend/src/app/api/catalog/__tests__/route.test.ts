@@ -10,6 +10,7 @@ import { APPS } from "@/lib/apps/registry";
 import { CAPS } from "@/lib/capabilities";
 import { AUDITS } from "@/lib/audits";
 import { SYSTEMS } from "@/lib/systems";
+import { EVENT_PLATFORMS } from "@/lib/health/events";
 import { priceFor } from "@/lib/billing/plans";
 
 beforeEach(() => { email = "u@x.com"; });
@@ -29,6 +30,8 @@ describe("catalog API for the native apps", () => {
     expect(body.capabilities.every((c: Record<string, unknown>) => !("icon" in c))).toBe(true);
     expect(body.audits).toHaveLength(AUDITS.length);
     expect(body.systems).toHaveLength(SYSTEMS.length);
+    expect(body.health.platforms).toHaveLength(EVENT_PLATFORMS.length);
+    expect(body.health.activities.yoga).toBe("Yoga");
     expect(body.systems[0].lines.every((l: unknown) => typeof l === "string")).toBe(true);
     expect(body.systems[0]).toMatchObject({ id: "jarvis", lang: "en-GB", gender: "male" });
     expect(body.plans.tiers.map((t: { id: string }) => t.id)).toEqual(["basic", "plus", "pro", "max"]);

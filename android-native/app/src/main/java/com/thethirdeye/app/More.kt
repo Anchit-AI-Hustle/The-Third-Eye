@@ -156,7 +156,11 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
             else -> WebScreen(top.item.title, top.item.path, nav::back)
         }
         is Dest.Web -> WebScreen(top.title, top.path, nav::back)
-        is Dest.Tool -> if (top.id == "music") MusicScreen(nav::back) else ToolScreen(top.id, nav::back)
+        is Dest.Tool -> when (top.id) {
+            "music" -> MusicScreen(nav::back)
+            "health" -> HealthScreen(nav::back)
+            else -> ToolScreen(top.id, nav::back)
+        }
         is Dest.Document -> DocumentScreen(top.doc, nav::back)
         is Dest.Day -> LifeLogDayScreen(top.day, nav::back)
         Dest.Today -> LifeLogTodayScreen(nav::back)

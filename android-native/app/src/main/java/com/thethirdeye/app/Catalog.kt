@@ -19,7 +19,14 @@ data class CatalogData(
     val systems: List<AgentSystem> = emptyList(),
     val audits: List<Audit> = emptyList(),
     val plans: Plans = Plans(),
+    val health: Health = Health(),
 ) {
+    @Serializable
+    data class Health(val platforms: List<Platform> = emptyList(), val activities: Map<String, String> = emptyMap()) {
+        @Serializable
+        data class Platform(val id: String, val name: String, val activities: List<String> = emptyList(), val format: String = "", val url: String, val blurb: String = "")
+    }
+
     @Serializable data class Studio(val name: String = "", val tagline: String = "", val accent: String = "#4FC3F7", val icon: String = "")
 
     @Serializable
