@@ -16,7 +16,7 @@ sealed interface Route {
 private val legalPaths = setOf("/privacy", "/privacy_policy", "/terms_of_service")
 
 // Tools that need the browser's own tech (audio, camera, video, files).
-val webTools = setOf("health", "avatar", "video", "reel", "anchor")
+val webTools = setOf("avatar", "video", "reel", "anchor")
 
 private val tabPaths = mapOf(
     "/assistant" to AppState.Tab.Assistant,

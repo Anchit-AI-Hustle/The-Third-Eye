@@ -387,4 +387,19 @@ class LogicTest {
         assertEquals(2, BookOutline.parts(5000))
         assertEquals(1, BookOutline.parts(1500))
     }
+
+    @Test fun `a health event reads its schedule like the website`() {
+        assertEquals("Weekly at 07:00 · 1h", HealthEvent(title = "Yoga").schedule)
+        assertEquals("Every 3 days at 18:30 · 1.5h", HealthEvent(frequency = "custom", customEveryDays = 3, time = "18:30", durationMin = 90).schedule)
+        assertEquals("One-time at 06:00 · 2h", HealthEvent(frequency = "once", time = "06:00", durationMin = 120).schedule)
+    }
+
+    @Test fun `the health form sends only what was filled in`() {
+        val body = HealthInput(goal = "maintain", targetWeightKg = 70, allergies = "peanuts, , shellfish", cuisine = " ", mealsPerDay = 4).body()
+        assertNull(body["targetWeightKg"])
+        assertNull(body["cuisine"])
+        assertEquals("4", body["mealsPerDay"]!!.jsonPrimitive.content)
+        assertEquals(listOf("peanuts", "shellfish"), body["allergies"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals("maintain", body["goal"]!!.jsonPrimitive.content)
+    }
 }

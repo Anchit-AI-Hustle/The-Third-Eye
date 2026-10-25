@@ -11,6 +11,7 @@ struct CatalogData: Decodable {
     let systems: [AgentSystem]
     let audits: [AuditPage]
     let plans: PlanCatalog
+    let health: HealthCatalog?
 }
 
 struct StudioInfo: Decodable {
