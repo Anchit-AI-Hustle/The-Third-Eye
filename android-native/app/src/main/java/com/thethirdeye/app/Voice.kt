@@ -175,19 +175,26 @@ class Voice(private val context: Context) : RecognitionListener {
         /** JARVIS's own voice: the British man the website and the agent roll-call use (frontend/src/lib/systems.ts). */
         val JARVIS = Accent("en-GB", 0.92f, 1f, "male")
 
-        // Engines rarely say a voice's gender; Google's en-GB and en-US voices are known by name.
-        private val MALE = Regex("""[-_](gbb|gbd|rjs|iob|iol|iom|tpd)([-_]|$)|\bmale\b""", RegexOption.IGNORE_CASE)
-        private val FEMALE = Regex("""[-_](gba|gbc|gbg|iog|sfg|tpc|tpf)([-_]|$)|\bfemale\b""", RegexOption.IGNORE_CASE)
+        // Engines rarely say a voice's gender. Google's names either carry it ("en-gb-x-rjs#male_1-local")
+        // or are known by their code (en-GB and en-US); the explicit word wins over the code.
+        private val SAYS_FEMALE = Regex("""(?<![a-z])female(?![a-z])""", RegexOption.IGNORE_CASE)
+        private val SAYS_MALE = Regex("""(?<![a-z])male(?![a-z])""", RegexOption.IGNORE_CASE)
+        private val MALE_CODE = Regex("""[-_](gbb|gbd|rjs|iob|iol|iom|tpd)([-_#]|$)""", RegexOption.IGNORE_CASE)
+        private val FEMALE_CODE = Regex("""[-_](gba|gbc|gbg|fis|iog|sfg|tpc|tpf)([-_#]|$)""", RegexOption.IGNORE_CASE)
+
+        fun genderOf(name: String): String? = when {
+            SAYS_FEMALE.containsMatchIn(name) -> "female"
+            SAYS_MALE.containsMatchIn(name) -> "male"
+            FEMALE_CODE.containsMatchIn(name) -> "female"
+            MALE_CODE.containsMatchIn(name) -> "male"
+            else -> null
+        }
 
         /** The best installed voice for an accent: its language, then its gender, then on-device, then quality. */
         fun pickVoice(voices: List<VoiceInfo>, accent: Accent): String? {
             val tag = accent.tag.lowercase()
             val lang = voices.filter { it.tag.replace('_', '-').lowercase() == tag }
-            val gendered = when (accent.gender) {
-                "male" -> lang.filter { MALE.containsMatchIn(it.name) && !FEMALE.containsMatchIn(it.name) }
-                "female" -> lang.filter { FEMALE.containsMatchIn(it.name) }
-                else -> emptyList()
-            }
+            val gendered = if (accent.gender.isEmpty()) emptyList() else lang.filter { genderOf(it.name) == accent.gender }
             return (gendered.ifEmpty { lang }).maxWithOrNull(compareBy<VoiceInfo> { it.local }.thenBy { it.quality })?.name
         }
 

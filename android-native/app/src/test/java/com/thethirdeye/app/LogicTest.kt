@@ -32,6 +32,15 @@ class LogicTest {
         assertEquals("en-gb-x-rjs-local", Voice.pickVoice(voices, Voice.JARVIS))
     }
 
+    @Test fun `Google voices that name their gender are read by that name`() {
+        val voices = listOf(v("en-gb-x-rjs#female_1-local", "en-GB", quality = 500), v("en-gb-x-fis#male_1-local", "en-GB"))
+        assertEquals("en-gb-x-fis#male_1-local", Voice.pickVoice(voices, Voice.JARVIS))
+        assertEquals("en-gb-x-rjs#female_1-local", Voice.pickVoice(voices, Voice.Accent("en-GB", 1f, 1f, "female")))
+        assertEquals("male", Voice.genderOf("en-gb-x-gbd-network"))
+        assertEquals("female", Voice.genderOf("en-gb-x-fis-local"))
+        assertNull(Voice.genderOf("en-GB-language"))
+    }
+
     @Test fun `an agent without a known gendered voice still gets its accent`() {
         val voices = listOf(v("en-US-language", "en-US"), v("en-gb-x-gba-local", "en_GB"))
         assertEquals("en-gb-x-gba-local", Voice.pickVoice(voices, Voice.JARVIS))
