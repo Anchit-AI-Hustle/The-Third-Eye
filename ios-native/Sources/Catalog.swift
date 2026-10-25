@@ -72,6 +72,7 @@ struct AgentSystem: Decodable, Identifiable {
     let href: String
     let kind: String
     let lang: String
+    let gender: String?
     let pitch: Double
     let rate: Double
     let lines: [String]

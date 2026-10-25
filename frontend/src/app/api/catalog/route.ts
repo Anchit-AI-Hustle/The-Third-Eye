@@ -17,7 +17,7 @@ export async function GET() {
     studioTools: STUDIO_TOOLS.map((t) => ({ ...t, category: categoryOf(t.id) })),
     apps: APPS,
     capabilities: CAPS.map(({ icon: _icon, ...c }) => c),
-    systems: SYSTEMS.map(({ id, name, accentColor, purpose, href, kind, lang, pitch, rate, lines }) => ({ id, name, accentColor, purpose, href, kind, lang, pitch, rate, lines: lines.map((l) => l.speech) })),
+    systems: SYSTEMS.map(({ id, name, accentColor, purpose, href, kind, lang, gender, pitch, rate, lines }) => ({ id, name, accentColor, purpose, href, kind, lang, gender, pitch, rate, lines: lines.map((l) => l.speech) })),
     audits: AUDITS,
     plans: {
       tiers: TIER_ORDER.map((id) => ({ ...TIERS[id], prices: Object.fromEntries(PERIODS.map((p) => [p.id, priceFor(id, p.id)])) })),

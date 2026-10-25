@@ -42,7 +42,7 @@ fun AgentsScreen(app: AppState, nav: Nav) {
         if (system == null) { playing = null; return }
         val line = system.lines.randomOrNull() ?: return rollCall(i + 1)
         playing = system.id
-        voice.speak(line, Voice.Accent(system.lang, system.pitch.toFloat(), system.rate.toFloat())) { rollCall(i + 1) }
+        voice.speak(line, Voice.Accent(system.lang, system.pitch.toFloat(), system.rate.toFloat(), system.gender)) { rollCall(i + 1) }
     }
 
     ListScreen("Online Agents", catalog != null || Catalog.error != null, refresh = { Catalog.load(context, refresh = true) }, onBack = nav::back) {

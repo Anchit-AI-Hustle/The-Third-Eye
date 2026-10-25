@@ -83,6 +83,7 @@ data class CatalogData(
         val href: String = "",
         val kind: String = "agent",
         val lang: String = "en-US",
+        val gender: String = "",
         val pitch: Double = 1.0,
         val rate: Double = 1.0,
         val lines: List<String> = emptyList(),

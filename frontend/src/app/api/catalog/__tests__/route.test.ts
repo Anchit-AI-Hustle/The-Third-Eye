@@ -30,6 +30,7 @@ describe("catalog API for the native apps", () => {
     expect(body.audits).toHaveLength(AUDITS.length);
     expect(body.systems).toHaveLength(SYSTEMS.length);
     expect(body.systems[0].lines.every((l: unknown) => typeof l === "string")).toBe(true);
+    expect(body.systems[0]).toMatchObject({ id: "jarvis", lang: "en-GB", gender: "male" });
     expect(body.plans.tiers.map((t: { id: string }) => t.id)).toEqual(["basic", "plus", "pro", "max"]);
     expect(body.plans.tiers[1].prices.monthly).toBe(priceFor("plus", "monthly"));
     expect(body.plans.levels[0]).toEqual({ min: 0, name: "Newcomer", avatar: "🌱" });

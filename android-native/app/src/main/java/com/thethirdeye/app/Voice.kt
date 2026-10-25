@@ -102,18 +102,21 @@ class Voice(private val context: Context) : RecognitionListener {
         listening = false
     }
 
-    /** How a voice sounds: a language tag such as en-GB, with its own pitch and speed. */
-    data class Accent(val tag: String, val pitch: Float, val rate: Float)
+    /** How a voice sounds: a language tag such as en-GB, its gender, and its own pitch and speed. */
+    data class Accent(val tag: String, val pitch: Float, val rate: Float, val gender: String = "")
 
-    fun speak(text: String, accent: Accent? = null, then: (() -> Unit)? = null) {
+    private val chosen = mutableMapOf<Accent, android.speech.tts.Voice>()
+
+    fun speak(text: String, accent: Accent = JARVIS, then: (() -> Unit)? = null) {
         val clean = speakable(text)
         if (clean.isEmpty()) { then?.invoke(); return }
         stopListening()
         onSpoken = then
         speaking = true
-        tts.language = accent?.let { Locale.forLanguageTag(it.tag) } ?: Locale.getDefault()
-        tts.setPitch(accent?.pitch ?: 1f)
-        tts.setSpeechRate(accent?.rate ?: 1f)
+        tts.language = Locale.forLanguageTag(accent.tag)
+        voiceFor(accent)?.let { tts.voice = it }
+        tts.setPitch(accent.pitch)
+        tts.setSpeechRate(accent.rate)
         // No speech engine (or not ready yet): carry on silently rather than wait for an end that never comes.
         if (tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "reply") != TextToSpeech.SUCCESS) spoken()
     }
@@ -159,7 +162,42 @@ class Voice(private val context: Context) : RecognitionListener {
     override fun onEndOfSpeech() {}
     override fun onEvent(eventType: Int, params: Bundle?) {}
 
+    // Remembered once found; the engine lists no voices until it has started.
+    private fun voiceFor(accent: Accent): android.speech.tts.Voice? = chosen[accent] ?: run {
+        val all = tts.voices.orEmpty()
+        val name = pickVoice(all.map { VoiceInfo(it.name, it.locale.toLanguageTag(), !it.isNetworkConnectionRequired, it.quality) }, accent)
+        all.firstOrNull { it.name == name }?.also { chosen[accent] = it }
+    }
+
+    data class VoiceInfo(val name: String, val tag: String, val local: Boolean, val quality: Int)
+
     companion object {
+        /** JARVIS's own voice: the British man the website and the agent roll-call use (frontend/src/lib/systems.ts). */
+        val JARVIS = Accent("en-GB", 0.92f, 1f, "male")
+
+        // Engines rarely say a voice's gender. Google's names either carry it ("en-gb-x-rjs#male_1-local")
+        // or are known by their code (en-GB and en-US); the explicit word wins over the code.
+        private val SAYS_FEMALE = Regex("""(?<![a-z])female(?![a-z])""", RegexOption.IGNORE_CASE)
+        private val SAYS_MALE = Regex("""(?<![a-z])male(?![a-z])""", RegexOption.IGNORE_CASE)
+        private val MALE_CODE = Regex("""[-_](gbb|gbd|rjs|iob|iol|iom|tpd)([-_#]|$)""", RegexOption.IGNORE_CASE)
+        private val FEMALE_CODE = Regex("""[-_](gba|gbc|gbg|fis|iog|sfg|tpc|tpf)([-_#]|$)""", RegexOption.IGNORE_CASE)
+
+        fun genderOf(name: String): String? = when {
+            SAYS_FEMALE.containsMatchIn(name) -> "female"
+            SAYS_MALE.containsMatchIn(name) -> "male"
+            FEMALE_CODE.containsMatchIn(name) -> "female"
+            MALE_CODE.containsMatchIn(name) -> "male"
+            else -> null
+        }
+
+        /** The best installed voice for an accent: its language, then its gender, then on-device, then quality. */
+        fun pickVoice(voices: List<VoiceInfo>, accent: Accent): String? {
+            val tag = accent.tag.lowercase()
+            val lang = voices.filter { it.tag.replace('_', '-').lowercase() == tag }
+            val gendered = if (accent.gender.isEmpty()) emptyList() else lang.filter { genderOf(it.name) == accent.gender }
+            return (gendered.ifEmpty { lang }).maxWithOrNull(compareBy<VoiceInfo> { it.local }.thenBy { it.quality })?.name
+        }
+
         /** Markdown and links read badly aloud: speak the words only. */
         fun speakable(text: String): String = text
             .replace(Regex("""\[([^\]]+)\]\([^)]+\)"""), "$1")
