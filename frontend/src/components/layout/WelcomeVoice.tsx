@@ -21,7 +21,7 @@ export function WelcomeVoice() {
   const { data: session, status } = useSession();
   const email = session?.user?.email;
   const { active } = useAgentProfile();
-  const { speak, stop, speaking, supported } = useTTS();
+  const { speak, stop, speaking, supported } = useTTS(active.voicePreference);
   const [blocked, setBlocked] = useState(false);
   const pending = useRef<string | null>(null);
   const say = useRef(speak);
