@@ -33,4 +33,12 @@ describe("MainLayout", () => {
     expect(screen.queryByText("voice")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open menu" })).toBeNull();
   });
+
+  it("lets a long page grow, so the bottom bar's clearance comes after its last section", () => {
+    render(<MainLayout><p>page</p></MainLayout>);
+    // A fixed-height wrapper let a long page (Plans) overflow past the
+    // padding, leaving its last section (Testing mode) under the bottom bar.
+    expect(screen.getByText("page").parentElement).toHaveClass("min-h-full");
+    expect(screen.getByText("page").parentElement).not.toHaveClass("h-full");
+  });
 });

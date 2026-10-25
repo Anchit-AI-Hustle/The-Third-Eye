@@ -64,7 +64,7 @@ export function MainLayout({ children, mainClassName }: MainLayoutProps) {
         {/* A page with its own <main> layout (the assistant) is a flex column whose
             content fills what the banner leaves; the wrapper must pass that on. */}
         <AiStatusBanner clearMenu={!!mainClassName} />
-        <div key={pathname} className={cn("page-enter", mainClassName ? "flex-1 min-h-0 flex flex-col" : "h-full")}>{children}</div>
+        <div key={pathname} className={cn("page-enter", mainClassName ? "flex-1 min-h-0 flex flex-col" : "min-h-full")}>{children}</div>
       </main>
       {/* Page change: a holographic shutter swings away and a scan line sweeps the screen. */}
       <div key={`shutter-${pathname}`} className="route-shutter" aria-hidden="true"><span /><span /></div>
