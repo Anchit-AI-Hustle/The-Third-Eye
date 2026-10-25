@@ -15,7 +15,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { usableGeminiKey } from "@/lib/providerReady";
-import { backgroundBlocked, benchedReason, classifyFailure, healthMap, noteFailure, noteSuccess } from "@/lib/providerHealth";
+import { backgroundBlocked, benchedReason, classifyFailure, forgetSeenHealth, healthMap, noteFailure, noteSuccess, resetHealthCache } from "@/lib/providerHealth";
 import { currentOwnKeys, localFirst, ownOllamaModel, tunnelAuth } from "@/lib/providerKeys";
 
 type LlmRole = "system" | "user" | "assistant";
@@ -428,8 +428,11 @@ function startCooldown(provider: string, retryAfter?: number): void {
 }
 
 /** Test-only: clear cooldown state between test cases. */
+/** Tests only: forget everything this instance knows about the providers. */
 export function resetCooldowns(): void {
   cooldownUntil.clear();
+  forgetSeenHealth();
+  resetHealthCache();
 }
 
 const MAX_TIMEOUT_MS = 120_000;

@@ -37,6 +37,6 @@ export async function GET(req: Request) {
     return finish("huggingface_error", `Hugging Face refused the sign-in (${res?.status ?? "no answer"}${body?.error_description ? `: ${body.error_description}` : body?.error ? `: ${body.error}` : ""}).`);
   }
   const tokens = await res.json().catch(() => ({}));
-  if (!(await saveHuggingFace(email, client, tokens))) return finish("huggingface_error", "Signed in, but the token couldn't be saved.");
+  if (!(await saveHuggingFace(email, client, tokens))) return finish("huggingface_error", "Signed in, but the token couldn't be saved. The database may be down.");
   return finish("huggingface_connected");
 }
