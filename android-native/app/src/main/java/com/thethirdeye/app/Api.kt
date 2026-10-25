@@ -52,7 +52,7 @@ class ApiError(val status: Int, body: String = "") : IOException() {
             status == 0 -> "No connection. Check your internet."
             status == 402 && field("code") == "insufficient_credits" ->
                 "Not enough credits (needs ${field("cost")}, you have ${field("balance")}). See Plans & Credits."
-            else -> field("error") ?: "The server said $status. Try again."
+            else -> field("error") ?: field("message") ?: "The server said $status. Try again."
         }
 }
 

@@ -152,6 +152,8 @@ class LogicTest {
         assertEquals(Route.Tool("creative"), routeOf("/tools/creative", tools))
         assertEquals(Route.Tool("music"), routeOf("/tools/music", tools))
         assertEquals(Route.Web("/tools/unknown"), routeOf("/tools/unknown", tools))
+        assertEquals(Route.Tool("anchor"), routeOf("/tools/anchor", tools))
+        assertEquals(Route.Web("/tools/avatar"), routeOf("/tools/avatar", tools + "avatar"))
         assertEquals("Studio", (routeOf("/tools", tools) as Route.Screen).item.title)
         assertEquals(Route.Web("/job-agent/search"), routeOf("/job-agent/search", tools))
         assertEquals(Route.Web("/kolab/studio"), routeOf("/kolab/studio", tools))
@@ -401,5 +403,16 @@ class LogicTest {
         assertEquals("4", body["mealsPerDay"]!!.jsonPrimitive.content)
         assertEquals(listOf("peanuts", "shellfish"), body["allergies"]!!.jsonArray.map { it.jsonPrimitive.content })
         assertEquals("maintain", body["goal"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `ANCHOR times read as minutes and seconds`() {
+        assertEquals("3:05", mmss(185.4))
+        assertEquals("", mmss(null))
+        assertEquals("-", anchorWhen(null))
+    }
+
+    @Test fun `a refusal that explains itself in message reaches the screen`() {
+        assertEquals("That isn't a Suno song link.", ApiError(400, """{"ok":false,"message":"That isn't a Suno song link."}""").message)
+        assertEquals("Not allowed", ApiError(400, """{"error":"Not allowed","message":"other"}""").message)
     }
 }
