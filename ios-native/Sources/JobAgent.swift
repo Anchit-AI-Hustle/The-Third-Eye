@@ -457,9 +457,8 @@ struct JobAgentView: View {
             .listRowBackground(Theme.surface.opacity(0.7))
         }
         Section {
-            NavigationLink { RouteView(path: "/job-agent/search", title: "Tailor resume") } label: {
-                Label("Tailor resume & cover letter", systemImage: "doc.richtext")
-            }
+            Text("To tailor your resume and cover letter, open a job and tap Tailor resume & cover letter. It uses this saved profile.")
+                .font(.system(size: 13)).foregroundStyle(Theme.muted)
         }
         .listRowBackground(Theme.surface.opacity(0.7))
     }
@@ -503,6 +502,9 @@ struct JobDetailView: View {
                 }
                 Button { Task { await model.save(job) } } label: { Label("Save", systemImage: "bookmark") }
                 Button { Task { await model.track(job) } } label: { Label("Track application", systemImage: "checklist") }
+                NavigationLink { JobTailorView(job: job, model: model) } label: {
+                    Label("Tailor resume & cover letter", systemImage: "doc.richtext")
+                }
                 if let notice = model.notice { Text(notice).font(.system(size: 13)).foregroundStyle(Theme.blue) }
                 if let error = model.error { Text(error).font(.system(size: 13)).foregroundStyle(Theme.red) }
             }
