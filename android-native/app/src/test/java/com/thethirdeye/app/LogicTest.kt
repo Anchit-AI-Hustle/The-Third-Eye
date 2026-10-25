@@ -150,7 +150,7 @@ class LogicTest {
         assertEquals("Settings", (routeOf("/settings?tab=ai", tools) as Route.Screen).item.title)
         assertEquals("Job Agent", (routeOf("/job-agent/", tools) as Route.Screen).item.title)
         assertEquals(Route.Tool("creative"), routeOf("/tools/creative", tools))
-        assertEquals(Route.Web("/tools/music"), routeOf("/tools/music", tools))
+        assertEquals(Route.Tool("music"), routeOf("/tools/music", tools))
         assertEquals(Route.Web("/tools/unknown"), routeOf("/tools/unknown", tools))
         assertEquals("Studio", (routeOf("/tools", tools) as Route.Screen).item.title)
         assertEquals(Route.Web("/job-agent/search"), routeOf("/job-agent/search", tools))
@@ -350,5 +350,28 @@ class LogicTest {
         assertEquals(start + 30 * 60_000, events[0].ts!!, 0.0)
         assertEquals("other", events[0].kind)
         assertEquals("09:00", clock24(start))
+    }
+
+    @Test fun `Music Studio fills its form from the Musicologist and keeps what it left out`() {
+        val inferred = Json.parseToJsonElement(
+            """{"title":"Neon Vow","genre":"Hard Techno, Rap","mood":"","tempo":146.4,"energy":14,"vocals":false,"duration":90}"""
+        ).jsonObject
+        val form = MusicForm(description = "warehouse at 4am", mood = "Dark", energy = 6).inferred(inferred)
+        assertEquals("Neon Vow", form.title)
+        assertEquals("Hard Techno, Rap", form.genre)
+        assertEquals("Dark", form.mood)
+        assertEquals(146, form.tempo)
+        assertEquals(6, form.energy)
+        assertEquals(false, form.vocals)
+        assertEquals(90, form.duration)
+        assertEquals("warehouse at 4am", form.payload()["description"]!!.jsonPrimitive.content)
+        assertEquals("146", form.payload()["tempo"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `an inline song decodes to its bytes and file type`() {
+        val (bytes, ext) = Music.decodeDataUrl("data:audio/wav;base64,UklGRg==")!!
+        assertEquals("RIFF", String(bytes))
+        assertEquals("wav", ext)
+        assertNull(Music.decodeDataUrl("/api/tools/music/audio/abc"))
     }
 }

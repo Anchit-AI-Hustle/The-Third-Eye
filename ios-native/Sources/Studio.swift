@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Studio {
     /// Tools that need browser tech (audio/video/camera editors) open the website page.
-    static let browserOnly: Set<String> = ["music", "health", "avatar", "video", "reel", "book", "anchor"]
+    static let browserOnly: Set<String> = ["health", "avatar", "video", "reel", "book", "anchor"]
 }
 
 struct StudioView: View {
@@ -64,7 +64,9 @@ struct StudioToolRoute: View {
     @ObservedObject private var catalog = Catalog.shared
 
     var body: some View {
-        if Studio.browserOnly.contains(id) {
+        if id == "music" {
+            MusicStudioView()
+        } else if Studio.browserOnly.contains(id) {
             web
         } else if let tool = catalog.data?.studioTools.first(where: { $0.id == id }) {
             ToolFormView(tool: tool)
