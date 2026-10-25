@@ -77,4 +77,22 @@ describe("task autopilot runner", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(calls.filter((c) => c.url === "/api/tasks/autopilot")).toEqual([]);
   });
+
+  it("doesn't poll the database from a hidden tab", async () => {
+    tasks = [];
+    vi.useFakeTimers();
+    const vis = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    render(<TaskAutopilot />);
+    await vi.advanceTimersByTimeAsync(0);
+    const reads = () => calls.filter((c) => c.url.startsWith("/api/data/tasks")).length;
+    const first = reads();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(reads()).toBe(first);
+    vis.mockReturnValue("visible");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(reads()).toBe(first + 1);
+    vis.mockRestore();
+    vi.useRealTimers();
+  });
 });
+

@@ -32,8 +32,19 @@ const files = [
   ...sorted(migrations, (f) => f.endsWith(".sql")).map((f) => join("supabase", "migrations", f)),
 ];
 
+// A database that refuses the connection itself (out of plan quota, asleep,
+// unreachable) must not also block the deploy: the app ships, and the pending
+// files apply on the next production build that can connect. A migration that
+// fails once connected still fails the build.
+const UNAVAILABLE = new Set(["53000", "53300", "57P03", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"]);
 const client = new pg.Client(pgConnection(url));
-await client.connect();
+try {
+  await client.connect();
+} catch (e) {
+  if (!UNAVAILABLE.has(e.code) && !/quota/i.test(e.message)) throw e;
+  console.warn(`::warning title=migrate::database unavailable (${e.code ?? "no code"}: ${e.message}); migrations skipped until the next production build`);
+  process.exit(0);
+}
 try {
   await client.query("select pg_advisory_lock(7317001)");
   await client.query(readFileSync(join(root, "supabase", "platform-compat.sql"), "utf8"));
