@@ -1,5 +1,7 @@
 package com.thethirdeye.app
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,6 +141,13 @@ fun KolabStudioScreen(nav: Nav) {
         busy = false
     }
 
+    // A real .csv file the user saves (Drive, Files, Sheets), with the BOM Excel needs, as the website's export.
+    val saveCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        val csv = data?.csv
+        if (uri != null && csv != null) runCatching { context.contentResolver.openOutputStream(uri)!!.use { it.write(("\uFEFF" + csv).toByteArray()) } }
+            .onFailure { error = "Couldn't save the CSV: ${it.message}" }
+    }
+
     LaunchedEffect(Unit) { load() }
 
     ListScreen(data?.org?.name ?: "Creator Studio", loaded = data != null || error != null, refresh = { load() }, onBack = nav::back) {
@@ -257,7 +266,7 @@ fun KolabStudioScreen(nav: Nav) {
                     Panel {
                         Text("Posted ${d.tracker.posted} / ${d.tracker.total}", fontSize = 12.sp)
                         LinearProgressIndicator(progress = { d.tracker.pct / 100f }, color = hexColor("#c2f04a"))
-                        TextButton(enabled = d.tracker.total > 0, onClick = { shareText(context, d.csv, "content-tracker.csv") }) { Text("Export CSV") }
+                        TextButton(enabled = d.tracker.total > 0, onClick = { saveCsv.launch("content-tracker.csv") }) { Text("Save CSV") }
                     }
                 }
                 if (d.plan.isEmpty()) item { Hint("Nothing to track yet. Build your calendar.") }
