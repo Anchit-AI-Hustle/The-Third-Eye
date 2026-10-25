@@ -20,6 +20,25 @@ class LogicTest {
         assertNull(VoiceAnswer.of(""))
     }
 
+    private fun v(name: String, tag: String, local: Boolean = true, quality: Int = 300) = Voice.VoiceInfo(name, tag, local, quality)
+
+    @Test fun `JARVIS speaks in a British male voice, not the phone's default`() {
+        val voices = listOf(
+            v("en-in-x-ene-local", "en-IN"),
+            v("en-gb-x-gba-local", "en-GB", quality = 400),
+            v("en-gb-x-rjs-network", "en-GB", local = false, quality = 500),
+            v("en-gb-x-rjs-local", "en-GB"),
+        )
+        assertEquals("en-gb-x-rjs-local", Voice.pickVoice(voices, Voice.JARVIS))
+    }
+
+    @Test fun `an agent without a known gendered voice still gets its accent`() {
+        val voices = listOf(v("en-US-language", "en-US"), v("en-gb-x-gba-local", "en_GB"))
+        assertEquals("en-gb-x-gba-local", Voice.pickVoice(voices, Voice.JARVIS))
+        assertEquals("en-gb-x-gba-local", Voice.pickVoice(voices, Voice.Accent("en-GB", 1f, 1f, "female")))
+        assertNull(Voice.pickVoice(voices, Voice.Accent("en-AU", 1f, 1f)))
+    }
+
     @Test fun `replies are spoken without markdown or links`() {
         assertEquals("Done. See the docs", Voice.speakable("**Done.** See [the docs](https://x.com) https://y.com"))
     }

@@ -44,7 +44,7 @@ final class StatusCheck: NSObject, ObservableObject, AVSpeechSynthesizerDelegate
 
     private func speak(_ line: String, as system: AgentSystem) async {
         let utterance = AVSpeechUtterance(string: line)
-        utterance.voice = AVSpeechSynthesisVoice(language: system.lang)
+        utterance.voice = Voice.best(language: system.lang, gender: system.gender == "female" ? .female : system.gender == "male" ? .male : .unspecified)
         utterance.pitchMultiplier = Float(min(2, max(0.5, system.pitch)))
         let pace = AVSpeechUtteranceDefaultSpeechRate * Float(system.rate)
         utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate, pace))
