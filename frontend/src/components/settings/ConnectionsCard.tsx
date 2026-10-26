@@ -138,7 +138,7 @@ export function ConnectionsCard() {
       {banner === "store_error" && (
         <div className="flex items-start gap-2 mb-4 text-xs text-accent-red">
           <AlertCircle size={13} className="mt-px shrink-0" />
-          <span>Google approved access, but it couldn&apos;t be saved: the app&apos;s database isn&apos;t available right now. Nothing is wrong with your Google account. Try again once it&apos;s back.</span>
+          <span>Google approved access, but the app couldn&apos;t save it on its side. Nothing is wrong with your Google account; this needs fixing in the app before connecting again will work.</span>
         </div>
       )}
       {banner === "error" && (
@@ -207,7 +207,7 @@ export function ConnectionsCard() {
           <div className="flex items-center gap-2 mb-3 text-xs text-success"><Check size={13} /> GitHub disconnected.</div>
         )}
         {banner === "github_store_error" && (
-          <div className="flex items-start gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} className="mt-px shrink-0" /> <span>GitHub approved access, but it couldn&apos;t be saved: the app&apos;s database isn&apos;t available right now. Try again once it&apos;s back.</span></div>
+          <div className="flex items-start gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} className="mt-px shrink-0" /> <span>GitHub approved access, but the app couldn&apos;t save it on its side. Nothing is wrong with your GitHub account; this needs fixing in the app before connecting again will work.</span></div>
         )}
         {banner === "github_error" && (
           <div className="flex items-center gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} /> Couldn&apos;t connect GitHub.</div>
