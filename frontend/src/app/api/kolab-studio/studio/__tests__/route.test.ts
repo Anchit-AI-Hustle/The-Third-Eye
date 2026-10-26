@@ -5,6 +5,7 @@ let user: { id: string } | null = { id: "+919999999999" };
 vi.mock("@/lib/kolab-studio/db", () => ({
   getSessionUser: async () => user,
   getEntitlementContext: async () => ctx,
+  getMyProfile: async () => ({ name: "Asha", handle: "asha", dob: "2000-01-01", pincode: "560001", city: "Bengaluru", state: "Karnataka", country: "India", website_url: null, privileged: false }),
 }));
 vi.mock("@/lib/kolab-studio/org", () => ({
   getActiveOrg: async () => ({ role: "owner", org: { id: "o1", name: "Asha Creates", type: "creator" } }),
@@ -19,9 +20,9 @@ const plan = [
 vi.mock("@/lib/kolab-studio/studio", () => ({
   getPillars: async () => pillars,
   getPlan: async () => plan,
-  getDeals: async () => [],
+  getDeals: async () => [{ id: "d1", active: true }, { id: "d2", active: false }],
   getSchedule: async () => [],
-  getChannels: async () => [],
+  getChannels: async () => [{ id: "ch1", platform: "instagram", handle: "asha", connected: true }],
 }));
 
 import { GET } from "@/app/api/kolab-studio/studio/route";
@@ -42,6 +43,16 @@ describe("GET /api/kolab-studio/studio", () => {
     expect(data.reference.channels.map((c: { k: string }) => c.k)).toContain("instagram");
     expect(data.reference.blueprints.length).toBeGreaterThan(0);
     expect(provisioned).toContain("+919999999999");
+    expect(data.profile).toMatchObject({ name: "Asha", handle: "asha", city: "Bengaluru" });
+    expect(data.profile.age).toBeGreaterThanOrEqual(26);
+    expect(data.account).toEqual({ kycVerified: true, subscriptionActive: true, privileged: false, plan: "Basic", canPro: false });
+    expect(data.analytics).toEqual({
+      activeDeals: 1, linkedChannels: 1,
+      byStatus: [
+        { status: "to_shoot", label: "To shoot", n: 1 }, { status: "shot", label: "Shot", n: 0 }, { status: "edited", label: "Edited", n: 0 },
+        { status: "scheduled", label: "Scheduled", n: 0 }, { status: "posted", label: "Posted", n: 1 },
+      ],
+    });
   });
 
   it("shows nothing but the reason while the gate is closed", async () => {
@@ -50,6 +61,10 @@ describe("GET /api/kolab-studio/studio", () => {
     expect(data.unlocked).toBe(false);
     expect(data.reason).toBe("Verify your Aadhaar to unlock features");
     expect(data.plan).toEqual([]);
+    // Profile, identity and channel linking come before the gate, as on the website's setup page.
+    expect(data.profile.name).toBe("Asha");
+    expect(data.account.kycVerified).toBe(false);
+    expect(data.channels).toHaveLength(1);
   });
 
   it("refuses a signed-out caller", async () => {
