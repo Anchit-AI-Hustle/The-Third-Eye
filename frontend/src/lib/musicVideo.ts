@@ -12,19 +12,20 @@
 //     silence from the clip so a MusicGen-style fade-to-silence ending doesn't
 //     leave a dead spot at every loop boundary — so the loop reads as one
 //     continuous song instead of an obviously repeating clip.
-//   • Quality: explicit high bitrate + 1080p (the browser's default bitrate is
+//   • Quality: explicit bitrate at 720p (the browser's default bitrate is
 //     conservative and produces blocky 720p).
 
-// A music video is one pass of the clip, looped only up to this. Recording is
-// real time at 720p; the old 3-minute 1080p capture exhausted the tab and the
-// file never appeared. The in-app player still loops the full session.
-export const MAX_VIDEO_SECONDS = 48;
+// A music video is always the whole song; a long session loops it only up to
+// this. Recording is real time, at 720p and a bitrate that keeps a 5-minute
+// file around 100 MB (the old 1080p capture exhausted the tab). The in-app
+// player still loops the full session.
+export const MAX_VIDEO_SECONDS = 300;
 
-/** How many seconds to record: the clip, or the session if it is longer, never past the cap. */
+/** How many seconds to record: the whole clip, plus session looping up to the cap. */
 export function renderLength(clipDur: number, loopToSeconds?: number): number {
   const clip = Number.isFinite(clipDur) && clipDur > 0 ? clipDur : 1;
   const asked = loopToSeconds && loopToSeconds > clip + 0.05 ? loopToSeconds : clip;
-  return Math.min(Math.max(asked, 1), MAX_VIDEO_SECONDS);
+  return Math.max(Math.min(asked, Math.max(clip, MAX_VIDEO_SECONDS)), 1);
 }
 
 export interface VisualizerOptions {
@@ -137,7 +138,7 @@ export async function generateVisualizerVideo(
   const mime = recorderMime();
   const rec = new MediaRecorder(mixed, {
     mimeType: mime,
-    videoBitsPerSecond: 4_000_000,
+    videoBitsPerSecond: 2_500_000,
     audioBitsPerSecond: 192_000,
   });
   const chunks: Blob[] = [];

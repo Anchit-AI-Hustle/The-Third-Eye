@@ -219,6 +219,11 @@ final class MusicModel: ObservableObject {
                 return
             }
             var notes: [String] = []
+            // Left blank, the voice is the one the musicologist picked to fit the song.
+            if made.vocals, made.vocalStyle.isEmpty, let voice = (reply["brief"] as? [String: Any])?["vocalStyle"] as? String, !voice.isEmpty {
+                made.vocalStyle = voice
+                notes.append("Sung as: \(voice).")
+            }
             if let el = reply["elevenLabsError"] as? String { notes.append("ElevenLabs couldn't make this one (\(el.prefix(160))), so a backup model is used.") }
             if reply["fellBackToInstrumental"] as? Bool == true { notes.append("Couldn't generate sung vocals, so this is an instrumental version (lyrics below).") }
             if reply["provider"] as? String == "code", let n = reply["note"] as? String { notes.append(n) }
@@ -370,7 +375,7 @@ struct MusicStudioView: View {
         Section("Vocals") {
             Toggle("Sung vocals", isOn: $model.form.vocals)
             if model.form.vocals {
-                suggestField("Vocal style", \.vocalStyle, "vocalStyle")
+                suggestField("Vocal style (blank: picked to fit)", \.vocalStyle, "vocalStyle")
                 suggestField("Language", \.vocalLanguage, "vocalLanguage")
                 Stepper("Intensity: \(model.form.vocalIntensity)/10", value: $model.form.vocalIntensity, in: 1...10)
                 suggestField("Vocal effects", \.vocalEffects, "vocalEffects")

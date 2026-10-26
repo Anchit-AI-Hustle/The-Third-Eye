@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/llmCascade", () => ({ llmCascade: vi.fn() }));
 import { llmCascade } from "@/lib/llmCascade";
-import { completeLyrics, conductor, fallbackLyrics, lyricist, musicologist, planSong, songSubject, stripPromptLines } from "@/lib/music/agents";
+import { completeLyrics, conductor, fallbackBrief, fallbackLyrics, lyricist, musicologist, planSong, songSubject, stripPromptLines } from "@/lib/music/agents";
 import { sectionsOf, structuresFor } from "@/lib/music/structures";
 import { cleanList, cleanTempo, cleanValue } from "@/lib/music/normalize";
 import { lookupGenres } from "@/lib/music/knowledge";
@@ -90,6 +90,33 @@ describe("lyrics", () => {
     expect(sung).not.toContain("hard techno");
     expect(sung).not.toContain("create");
     expect(stripPromptLines("[chorus]\nhard techno and acid\nfeel the night", "create hard techno and acid")).toBe("[chorus]\nfeel the night");
+  });
+});
+
+describe("singing voice", () => {
+  it("picks a voice that fits the song when none is chosen, and sings with it", async () => {
+    reply(JSON.stringify({ genre: "Indie Folk", vocalStyle: "warm female alto, breathy and intimate" }));
+    const b = await musicologist({ genre: "Folk", mood: "Intimate", vocalLanguage: "English", vocalIntensity: 3 });
+    expect(b.vocalStyle).toBe("warm female alto, breathy and intimate");
+    const user = cascade.mock.calls[0][0].messages[0].content as string;
+    expect(user).toMatch(/choose the singing voice/i);
+    const plan = conductor({ vocalLanguage: "English" }, b, { modelPrompt: "p", styleTags: "folk", tempo: 90, arrangement: "" }, "[verse]\nhome");
+    expect(plan.tags).toContain("warm female alto, breathy and intimate");
+  });
+
+  it("never sings in an 'instrumental' voice: falls back to the genre's own voice", async () => {
+    reply(JSON.stringify({ genre: "Folk", vocalStyle: "instrumental" }));
+    expect((await musicologist({ genre: "Folk" })).vocalStyle).toBe("storytelling lead vocals");
+    reply("{}");
+    expect((await musicologist({ genre: "Hard Techno" })).vocalStyle).toBe("shouted stabs");
+    expect(fallbackBrief({ genre: "Techno" }).vocalStyle).toBe("sparse processed vox");
+  });
+
+  it("keeps the voice the user chose, and none for an instrumental", async () => {
+    reply(JSON.stringify({ vocalStyle: "airy female vocal" }));
+    expect((await musicologist({ genre: "Trance", vocalStyle: "Raspy" })).vocalStyle).toBe("Raspy");
+    reply(JSON.stringify({ vocalStyle: "airy female vocal" }));
+    expect((await musicologist({ genre: "Trance", vocals: false })).vocalStyle).toBe("instrumental");
   });
 });
 
