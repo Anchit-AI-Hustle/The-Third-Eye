@@ -24,7 +24,7 @@ export function ConnectionsCard() {
   const [status, setStatus] = useState<Status | null>(null);
   const [github, setGithub] = useState<{ connected: boolean; login?: string | null; configured?: boolean } | null>(null);
   const [banner, setBanner] = useState<
-    "connected" | "error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_disconnected" | null
+    "connected" | "error" | "store_error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_store_error" | "github_disconnected" | null
   >(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [patInput, setPatInput] = useState("");
@@ -64,9 +64,11 @@ export function ConnectionsCard() {
     if (q === "google_connected") setBanner("connected");
     else if (q === "google_no_scopes") setBanner("no_scopes");
     else if (q === "google_error") setBanner("error");
+    else if (q === "google_store_error") setBanner("store_error");
     else if (q === "google_pending") setBanner("pending");
     else if (q === "github_connected") setBanner("github_connected");
     else if (q === "github_error") setBanner("github_error");
+    else if (q === "github_store_error") setBanner("github_store_error");
     if (q) window.history.replaceState({}, "", window.location.pathname);
 
     fetch("/api/connect/google/status")
@@ -133,6 +135,12 @@ export function ConnectionsCard() {
           </span>
         </div>
       )}
+      {banner === "store_error" && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-accent-red">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Google approved access, but it couldn&apos;t be saved: the app&apos;s database isn&apos;t available right now. Nothing is wrong with your Google account. Try again once it&apos;s back.</span>
+        </div>
+      )}
       {banner === "error" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-accent-red">
           <AlertCircle size={13} /> Couldn&apos;t connect - the sign-in was cancelled or the app isn&apos;t authorised for these scopes yet.
@@ -197,6 +205,9 @@ export function ConnectionsCard() {
         )}
         {banner === "github_disconnected" && (
           <div className="flex items-center gap-2 mb-3 text-xs text-success"><Check size={13} /> GitHub disconnected.</div>
+        )}
+        {banner === "github_store_error" && (
+          <div className="flex items-start gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} className="mt-px shrink-0" /> <span>GitHub approved access, but it couldn&apos;t be saved: the app&apos;s database isn&apos;t available right now. Try again once it&apos;s back.</span></div>
         )}
         {banner === "github_error" && (
           <div className="flex items-center gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} /> Couldn&apos;t connect GitHub.</div>

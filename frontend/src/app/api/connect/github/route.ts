@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const login = userData.login || null;
     const ok = await storeGithubToken(email, cleanToken, login);
     if (!ok) {
-      return NextResponse.json({ error: "Failed to store GitHub token in database" }, { status: 500 });
+      return NextResponse.json({ error: "Your token is valid, but it couldn't be saved: the app's database isn't available right now. Try again once it's back." }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, login, configured: true }, { headers: { "Cache-Control": "no-store" } });

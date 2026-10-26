@@ -133,6 +133,6 @@ describe("what the connect callback is allowed to store", () => {
     upsert.mockResolvedValueOnce({ error: { message: "write failed" } });
     vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await callback(WITH_GMAIL);
-    expect(res.headers.get("location")).toContain("connect=google_error");
+    expect(res.headers.get("location")).toContain("connect=google_store_error");
   });
 });
