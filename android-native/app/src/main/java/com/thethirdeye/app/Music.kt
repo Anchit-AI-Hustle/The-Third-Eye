@@ -272,7 +272,11 @@ class MusicModel(private val local: Local) {
             lyrics = reply.str("lyrics").orEmpty()
             loop = (reply["loop"] as? JsonPrimitive)?.booleanOrNull == true
             if ((reply["configured"] as? JsonPrimitive)?.booleanOrNull == false) return fail(reply.str("note") ?: "Music generation isn't set up on the server.")
+            // Left blank, the voice is the one the musicologist picked to fit the song.
+            val voice = (reply["brief"] as? JsonObject)?.str("vocalStyle")?.takeIf { made.vocals && made.vocalStyle.isBlank() }
+            voice?.let { made = made.copy(vocalStyle = it) }
             note = listOfNotNull(
+                voice?.let { "Sung as: $it." },
                 reply.str("elevenLabsError")?.let { "ElevenLabs couldn't make this one (${it.take(160)}), so a backup model is used." },
                 "Couldn't generate sung vocals, so this is an instrumental version (lyrics below).".takeIf { (reply["fellBackToInstrumental"] as? JsonPrimitive)?.booleanOrNull == true },
                 reply.str("note")?.takeIf { reply.str("provider") == "code" },
@@ -456,7 +460,7 @@ fun MusicScreen(onBack: () -> Unit) {
                         Switch(model.form.vocals, { model.form = model.form.copy(vocals = it) })
                     }
                     if (model.form.vocals) {
-                        Suggest("Vocal style", "vocalStyle", { it.vocalStyle }, { copy(vocalStyle = it) })
+                        Suggest("Vocal style (blank: picked to fit)", "vocalStyle", { it.vocalStyle }, { copy(vocalStyle = it) })
                         Suggest("Language", "vocalLanguage", { it.vocalLanguage }, { copy(vocalLanguage = it) })
                         Text("Intensity: ${model.form.vocalIntensity}/10", fontSize = 13.sp)
                         Slider(model.form.vocalIntensity.toFloat(), { model.form = model.form.copy(vocalIntensity = it.toInt()) }, valueRange = 1f..10f, steps = 8)

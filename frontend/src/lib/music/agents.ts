@@ -31,6 +31,15 @@ const num = (v: unknown, lo: number, hi: number, dflt: number) => {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt;
 };
 
+// The voice the song is sung in: the user's own pick, else the one the
+// musicologist chose for this song, else the genre's usual voice. A sung song
+// never gets an "instrumental" voice, which is what the model would then sing.
+export function voiceProfile(i: MusicInput, picked?: string, genreVoice?: string): string {
+  if (i.vocals === false) return "instrumental";
+  const sung = (v?: string) => (v ?? "").replace(/^\s*instrumental\b(\s*(or|,)\s*)?/i, "").replace(/,?\s*(\bor\s+)?\binstrumental\s*$/i, "").trim();
+  return i.vocalStyle?.trim() || sung(picked) || sung(genreVoice) || "expressive lead vocal";
+}
+
 // ── Agent 1: Musicologist ──────────────────────────────────────────────────
 // Understands music worldwide/through history; turns the request into a
 // grounded brief using the knowledge base + its own training.
@@ -41,7 +50,7 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
     "Given a music request and knowledge-base grounding, produce a precise musical BRIEF the production team will build from.",
     "Honour the user's explicit choices (genre, tempo, instruments, mood) but enrich them with accurate, genre-idiomatic detail. A tempo hint is the user's chosen BPM: use it exactly, even far outside the genre's usual range. Blend genres faithfully when several are named (e.g. 'hard techno + psy acid' = fast distorted kicks + rolling acid basslines).",
     "Output ONLY a JSON object - no prose, no markdown - with keys:",
-    "genre, subgenre, region, era, bpm (number), timeSignature, key, instruments (string[]), structure (string), moods (string[]), energy (1-10 number), vocalStyle (string; 'instrumental' if no vocals), referenceArtists (string[]; for feel only), culturalContext (1-2 sentences), productionNotes (string).",
+    "genre, subgenre, region, era, bpm (number), timeSignature, key, instruments (string[]), structure (string), moods (string[]), energy (1-10 number), vocalStyle (string; the singing voice: voice type and register, timbre and delivery, e.g. 'gritty male baritone, half-rapped'; 'instrumental' only if the request says no vocals), referenceArtists (string[]; for feel only), culturalContext (1-2 sentences), productionNotes (string).",
   ].join("\n");
   const user = [
     `Request: ${i.description || "(none)"}`,
@@ -54,7 +63,9 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
     i.energy != null ? `Energy hint: ${i.energy}/10` : "",
     i.structure ? `Structure hint: ${i.structure}` : "",
     i.artistInspiration ? `Vibe reference: ${i.artistInspiration}` : "",
-    i.vocals === false ? "Vocals: instrumental" : i.vocalStyle ? `Vocals: ${i.vocalStyle} (${i.vocalLanguage || "English"})` : "",
+    i.vocals === false ? "Vocals: instrumental"
+      : i.vocalStyle ? `Vocals: ${i.vocalStyle} (${i.vocalLanguage || "English"})`
+      : `Vocals: sung in ${i.vocalLanguage || "English"}. Choose the singing voice that best fits this song's genre, mood, energy, language and subject: voice type and register, timbre and delivery.`,
     i.vocals !== false && i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 (1 = soft whisper, 10 = powerful performance)` : "",
     i.vocals !== false && i.vocalEffects ? `Vocal effects: ${i.vocalEffects}` : "",
     "",
@@ -77,7 +88,7 @@ export async function musicologist(i: MusicInput): Promise<MusicBrief> {
     structure: j.structure || i.structure || "Intro - build - main - break - main - outro",
     moods: Array.isArray(j.moods) && j.moods.length ? j.moods : (i.mood ? [i.mood] : ["energetic"]),
     energy: num(i.energy ?? j.energy, 1, 10, 6),
-    vocalStyle: j.vocalStyle || (i.vocals === false ? "instrumental" : (i.vocalStyle || "instrumental")),
+    vocalStyle: voiceProfile(i, j.vocalStyle, lookupGenres(i)[0]?.vocalStyle),
     referenceArtists: Array.isArray(j.referenceArtists) ? j.referenceArtists.slice(0, 5) : [],
     culturalContext: j.culturalContext || "",
     productionNotes: j.productionNotes || "",
@@ -276,7 +287,7 @@ export function fallbackBrief(i: MusicInput): MusicBrief {
     structure: i.structure || kb?.structure || "Intro - verse - chorus - verse - chorus - outro",
     moods: i.mood ? [i.mood] : (kb?.moods ?? ["energetic"]),
     energy: num(i.energy, 1, 10, 6),
-    vocalStyle: i.vocals === false ? "instrumental" : (i.vocalStyle || kb?.vocalStyle || "expressive"),
+    vocalStyle: voiceProfile(i, undefined, kb?.vocalStyle),
     referenceArtists: kb?.artists ?? [],
     culturalContext: kb ? `${kb.name} - ${kb.region}, ${kb.era}.` : "",
     productionNotes: kb?.production ?? "",

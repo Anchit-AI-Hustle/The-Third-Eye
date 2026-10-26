@@ -257,7 +257,7 @@ function ChipInput({ id, value, onChange, options, placeholder }: {
 export function MusicStudio() {
   const [f, setF] = useState<Fields>({
     title: "", description: "", genres: [GENRES[0]], subgenre: "", moods: [MOODS[0]],
-    tempo: 120, duration: 30, vocals: true, vocalStyles: [VOCAL_STYLES[0]], vocalLanguages: [LANGUAGES[0]],
+    tempo: 120, duration: 30, vocals: true, vocalStyles: [], vocalLanguages: [LANGUAGES[0]],
     vocalIntensity: 5, vocalEffects: [],
     lyricsMode: "auto", lyricsText: "", artistInspiration: [], instruments: [], energy: 6, structure: structuresFor([GENRES[0]])[0],
     makeVideoUpfront: false,
@@ -292,6 +292,7 @@ export function MusicStudio() {
   const [savedNote, setSavedNote] = useState(false);
   const fFor = useRef(f); fFor.current = f;
   const pRef = useRef(""); const lRef = useRef("");
+  const voiceRef = useRef(""); // the voice the song was sung in, when the form left it to the musicologist
 
   // Library is localStorage-backed with cloud best-effort, so it works even
   // before the music_tracks table exists, and upgrades to cloud once it does.
@@ -340,7 +341,7 @@ export function MusicStudio() {
         { label: "Genres", value: cur.genres.join(", ") }, { label: "Moods", value: cur.moods.join(", ") },
         { label: "Tempo", value: `${cur.tempo} BPM` }, { label: "Structure", value: cur.structure },
         { label: "Instruments", value: cur.instruments.join(", ") }, { label: "Artist vibe", value: cur.artistInspiration.join(", ") },
-        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyles.join(", ")} (${cur.vocalIntensity}/10)` : "instrumental" },
+        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyles.join(", ") || voiceRef.current} (${cur.vocalIntensity}/10)` : "instrumental" },
         { label: "Vocal languages", value: cur.vocalLanguages.join(", ") },
         { label: "Vocal effects", value: cur.vocalEffects.join(", ") },
       ].filter((x) => x.value),
@@ -491,6 +492,7 @@ export function MusicStudio() {
       if (!res.ok) { setPhase("error"); setError(d.error ?? `HTTP ${res.status}`); setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); return; }
       setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); pRef.current = d.prompt ?? ""; lRef.current = d.lyrics ?? "";
       setBrief(d.brief ?? null);
+      voiceRef.current = d.brief?.vocalStyle ?? "";
       setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       const notes: string[] = [];
@@ -689,7 +691,7 @@ export function MusicStudio() {
           <>
             <div>
               <Label name="vocalStyles">Vocal style(s)</Label>
-              <TagPicker id="music-vocalStyles" values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Search vocal styles…" max={4} />
+              <TagPicker id="music-vocalStyles" values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Auto: a voice picked to fit the song, or search styles…" max={4} />
             </div>
             <div>
               <Label name="vocalLanguages">Vocal language(s)</Label>
