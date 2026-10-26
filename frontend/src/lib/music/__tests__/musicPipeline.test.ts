@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/llmCascade", () => ({ llmCascade: vi.fn() }));
 import { llmCascade } from "@/lib/llmCascade";
-import { completeLyrics, conductor, fallbackBrief, fallbackLyrics, lyricist, musicologist, planSong, songSubject, stripPromptLines } from "@/lib/music/agents";
+import { completeLyrics, conductor, fallbackBrief, fallbackLyrics, lyricist, musicologist, planSong, songSubject, stripPromptLines, voiceProfile } from "@/lib/music/agents";
 import { sectionsOf, structuresFor } from "@/lib/music/structures";
 import { cleanList, cleanTempo, cleanValue } from "@/lib/music/normalize";
 import { lookupGenres } from "@/lib/music/knowledge";
@@ -110,6 +110,9 @@ describe("singing voice", () => {
     reply("{}");
     expect((await musicologist({ genre: "Hard Techno" })).vocalStyle).toBe("shouted stabs");
     expect(fallbackBrief({ genre: "Techno" }).vocalStyle).toBe("sparse processed vox");
+    expect(fallbackBrief({ genre: "Trance" }).vocalStyle).not.toMatch(/instrumental/i);
+    expect(voiceProfile({}, undefined, "scat or crooned, or instrumental")).toBe("scat or crooned");
+    expect(voiceProfile({}, undefined, "instrumental")).toBe("expressive lead vocal");
   });
 
   it("keeps the voice the user chose, and none for an instrumental", async () => {

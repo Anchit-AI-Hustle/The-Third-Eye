@@ -36,7 +36,7 @@ const num = (v: unknown, lo: number, hi: number, dflt: number) => {
 // never gets an "instrumental" voice, which is what the model would then sing.
 export function voiceProfile(i: MusicInput, picked?: string, genreVoice?: string): string {
   if (i.vocals === false) return "instrumental";
-  const sung = (v?: string) => (v ?? "").replace(/^\s*instrumental\b(\s*(or|,)\s*)?/i, "").trim();
+  const sung = (v?: string) => (v ?? "").replace(/^\s*instrumental\b(\s*(or|,)\s*)?/i, "").replace(/,?\s*(\bor\s+)?\binstrumental\s*$/i, "").trim();
   return i.vocalStyle?.trim() || sung(picked) || sung(genreVoice) || "expressive lead vocal";
 }
 
