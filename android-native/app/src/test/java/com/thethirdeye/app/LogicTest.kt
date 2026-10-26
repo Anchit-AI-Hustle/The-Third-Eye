@@ -457,4 +457,19 @@ class LogicTest {
         assertEquals(listOf(Triple(null, "Motivation", "Drives shares")), fresh)
         assertNull(KolabStudioData.parse("""{"ok":true,"data":{"org":null,"unlocked":false,"reason":"Create an organization"}}""").org)
     }
+
+    @Test fun `kolab setup saves only filled fields and reads the KYC reference`() {
+        assertEquals("""{"name":"Asha","pincode":"560001"}""",
+            kolabProfileBody(mapOf("name" to " Asha ", "handle" to "", "dob" to "", "pincode" to "560001", "website_url" to "https://a.in"), canPro = false).toString())
+        assertEquals("https://a.in", kolabProfileBody(mapOf("website_url" to "https://a.in"), canPro = true)["website_url"]!!.jsonPrimitive.content)
+        assertEquals("ref-1", kycReference("""{"ok":true,"data":{"reference_id":"ref-1"}}"""))
+        assertNull(kycReference("""{"ok":false,"error":"Aadhaar verification isn't available yet."}"""))
+        val d = KolabStudioData.parse("""{"ok":true,"data":{"org":{"name":"A","type":"creator"},"unlocked":false,"reason":"Subscribe to unlock features",
+            "profile":{"name":"Asha","handle":"asha","dob":"2000-01-01","age":26,"pincode":"560001","city":"Bengaluru","state":"Karnataka","country":"India","website_url":""},
+            "account":{"kycVerified":true,"subscriptionActive":false,"privileged":false,"plan":"No plan","canPro":false},
+            "analytics":{"activeDeals":0,"linkedChannels":1,"byStatus":[{"status":"to_shoot","label":"To shoot","n":0}]}}}""")
+        assertEquals(26, d.profile.age)
+        assertEquals("No plan", d.account.plan)
+        assertEquals(1, d.analytics.linkedChannels)
+    }
 }

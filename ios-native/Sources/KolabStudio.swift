@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Kolab Creator Studio, as on the website (app/kolab/studio/(app)/studio/StudioClient): the eight
-// modules over GET /api/kolab-studio/studio and its mutation routes. Onboarding, KYC and the
-// subscription stay on the website.
+// Kolab Creator Studio, as on the website (app/kolab/studio/(app)): the studio's eight modules,
+// analytics, and profile setup with Aadhaar verification and channel linking, over
+// GET /api/kolab-studio/studio and the website's mutation routes. Onboarding and the
+// subscription purchase stay on the website.
 struct KolabStudioData: Decodable {
     struct Pillar: Decodable, Identifiable, Equatable { let id: String; let name: String; let role: String?; let color: String? }
     struct PlanItem: Decodable, Identifiable {
@@ -26,12 +27,31 @@ struct KolabStudioData: Decodable {
         let discount: String?
         let price: String?
         let affiliate_url: String?
+        let active: Bool?
     }
     struct Post: Decodable, Identifiable { let id: String; let title: String?; let scheduled_at: String?; let channels: [String]?; let publish_status: String? }
     struct Channel: Decodable { let platform: String; let handle: String? }
     struct Org: Decodable { let name: String; let type: String }
     struct Mix: Decodable { let counts: [String: Int]; let total: Int }
     struct Tracker: Decodable { let posted: Int; let total: Int; let pct: Int }
+    struct Profile: Decodable, Equatable {
+        let name: String
+        let handle: String
+        let dob: String
+        let age: Int?
+        let pincode: String
+        let city: String
+        let state: String
+        let country: String
+        let website_url: String
+    }
+    struct Account: Decodable { let kycVerified: Bool; let subscriptionActive: Bool; let privileged: Bool; let plan: String; let canPro: Bool }
+    struct Analytics: Decodable {
+        struct Count: Decodable { let status: String; let label: String; let n: Int }
+        let activeDeals: Int
+        let linkedChannels: Int
+        let byStatus: [Count]
+    }
     struct Reference: Decodable {
         struct Meta: Decodable { let c: String; let l: String }
         struct ChannelInfo: Decodable { let k: String; let n: String; let c: String }
@@ -58,6 +78,9 @@ struct KolabStudioData: Decodable {
     let assetMix: Mix
     let tracker: Tracker
     let csv: String
+    let profile: Profile
+    let account: Account
+    let analytics: Analytics
     let reference: Reference
 }
 
@@ -78,19 +101,23 @@ final class KolabStudioModel: ObservableObject {
         }
     }
 
-    /// One mutation, then a reload, as the website's call() + router.refresh().
     @discardableResult
     func call(_ method: String, _ path: String, _ body: [String: Any]? = nil) async -> Bool {
+        await send(method, path, body) != nil
+    }
+
+    /// One mutation, then a reload, as the website's call() + router.refresh(); the reply, or nil on failure.
+    func send(_ method: String, _ path: String, _ body: [String: Any]? = nil) async -> Data? {
         busy = true
         error = nil
         defer { busy = false }
         do {
-            try await API.fetch(method, path, json: body)
+            let reply = try await API.fetch(method, path, json: body)
             await load()
-            return true
+            return reply
         } catch {
             self.error = error.localizedDescription
-            return false
+            return nil
         }
     }
 }
@@ -99,6 +126,7 @@ struct KolabStudioView: View {
     enum Module: String, CaseIterable, Identifiable {
         case strategy = "Strategy", calendar = "Calendar", blueprints = "Blueprints", assetMap = "Asset Map"
         case scheduler = "Scheduler", deals = "Brand Deals", automation = "Automation", tracker = "Tracker"
+        case analytics = "Analytics", setup = "Profile & setup"
         var id: String { rawValue }
     }
 
@@ -114,7 +142,13 @@ struct KolabStudioView: View {
                 if data.org == nil {
                     webStep("Create your studio first", "Set up your Kolab organization on the website, then come back here.", path: "/kolab/studio/onboarding")
                 } else if !data.unlocked {
-                    webStep(data.reason ?? "Unlock Creator Studio", "Verification and the subscription are done on the website.", path: "/kolab/studio/setup")
+                    Section {
+                        Text(data.reason ?? "Unlock Creator Studio").font(.system(size: 15, weight: .semibold))
+                        Text("Complete your profile and verify your Aadhaar here. Plans are bought on the website.").font(.system(size: 13)).foregroundStyle(Theme.muted)
+                        if !data.account.subscriptionActive && !data.account.privileged { subscribeLink }
+                    }
+                    .listRowBackground(Theme.surface.opacity(0.7))
+                    KolabSetup(data: data, model: model)
                 } else {
                     Section {
                         Picker("Module", selection: $module) {
@@ -132,6 +166,8 @@ struct KolabStudioView: View {
                     case .deals: KolabDeals(data: data, model: model)
                     case .automation: automation(data)
                     case .tracker: tracker(data)
+                    case .analytics: analytics(data)
+                    case .setup: KolabSetup(data: data, model: model)
                     }
                 }
             } else if model.error == nil {
@@ -151,6 +187,45 @@ struct KolabStudioView: View {
             Text(title).font(.system(size: 15, weight: .semibold))
             Text(detail).font(.system(size: 13)).foregroundStyle(Theme.muted)
             NavigationLink { RouteView(path: path, title: "Kolab Studio") } label: { Label("Open on the website", systemImage: "safari") }
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
+    }
+
+    private var subscribeLink: some View {
+        NavigationLink { RouteView(path: "/kolab/studio/subscription", title: "Kolab plans") } label: { Label("Choose a plan on the website", systemImage: "safari") }
+    }
+
+    @ViewBuilder
+    private func analytics(_ data: KolabStudioData) -> some View {
+        Section("Your numbers") {
+            LabeledContent("Posts planned", value: "\(data.tracker.total)")
+            LabeledContent("Posted", value: "\(data.tracker.posted)/\(data.tracker.total) · \(data.tracker.pct)%")
+            LabeledContent("Active deals", value: "\(data.analytics.activeDeals)")
+            LabeledContent("Channels linked", value: "\(data.analytics.linkedChannels)/\(data.reference.channels.count)")
+            LabeledContent("Subscription", value: data.account.plan)
+            LabeledContent("Identity", value: data.account.kycVerified ? "Verified" : "Pending")
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
+        Section("Content pipeline") {
+            let top = max(1, data.analytics.byStatus.map(\.n).max() ?? 1)
+            ForEach(data.analytics.byStatus, id: \.status) { c in
+                HStack {
+                    Text(c.label).font(.system(size: 13)).frame(width: 90, alignment: .leading)
+                    GeometryReader { g in
+                        RoundedRectangle(cornerRadius: 3).fill(Color(hex: "#c2f04a")).frame(width: g.size.width * CGFloat(c.n) / CGFloat(top))
+                    }
+                    .frame(height: 10)
+                    Text("\(c.n)").font(.system(size: 12, design: .monospaced)).frame(width: 28, alignment: .trailing)
+                }
+            }
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
+        Section {
+            ForEach(data.reference.channels, id: \.k) { c in
+                LabeledContent(c.n, value: data.channels.first { $0.platform == c.k }?.handle.map { "Linked · \($0)" } ?? "Connect to see audience metrics")
+            }
+        } header: { Text("Channels") } footer: {
+            Text("Follower, reach and engagement figures need channel sign-in, which isn't live yet, so they're left blank rather than estimated.")
         }
         .listRowBackground(Theme.surface.opacity(0.7))
     }
@@ -446,5 +521,104 @@ private struct KolabDeals: View {
             }
         }
         .listRowBackground(Theme.surface.opacity(0.7))
+    }
+}
+
+private struct KolabSetup: View {
+    let data: KolabStudioData
+    @ObservedObject var model: KolabStudioModel
+    @State private var name = ""
+    @State private var handle = ""
+    @State private var dob = ""
+    @State private var pincode = ""
+    @State private var website = ""
+    @State private var handles: [String: String] = [:]
+    @State private var aadhaar = ""
+    @State private var reference: String?
+    @State private var otp = ""
+    @State private var saved: String?
+
+    var body: some View {
+        let p = data.profile
+        Section {
+            Text(p.name.isEmpty ? "New creator" : p.name).font(.system(size: 18, weight: .bold))
+            Text(["@" + (p.handle.isEmpty ? "-" : p.handle), p.age.map { "\($0) yrs" }, [p.city, p.state, p.country].filter { !$0.isEmpty }.joined(separator: ", ")]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.muted)
+            HStack {
+                Badge(text: data.account.kycVerified ? "Aadhaar verified" : "Unverified", color: data.account.kycVerified ? Theme.green : Theme.amber)
+                Badge(text: data.account.plan, color: data.account.subscriptionActive || data.account.privileged ? Theme.green : Theme.muted)
+            }
+        } header: { Text("As followers & brands see you") }
+        .listRowBackground(Theme.surface.opacity(0.7))
+
+        Section {
+            TextField("Full name", text: $name)
+            TextField("@yourhandle", text: $handle).textInputAutocapitalization(.never).autocorrectionDisabled()
+            TextField("Date of birth (YYYY-MM-DD)", text: $dob).keyboardType(.numbersAndPunctuation)
+            TextField("Pincode", text: $pincode).keyboardType(.numberPad)
+            TextField(data.account.canPro ? "Website URL" : "Website URL (Pro)", text: $website)
+                .textInputAutocapitalization(.never).keyboardType(.URL).disabled(!data.account.canPro)
+            Button("Save profile") {
+                var payload: [String: Any] = [:]
+                for (k, v) in [("name", name), ("handle", handle), ("dob", dob), ("pincode", pincode)] where !v.trimmingCharacters(in: .whitespaces).isEmpty { payload[k] = v.trimmingCharacters(in: .whitespaces) }
+                if data.account.canPro && !website.isEmpty { payload["website_url"] = website }
+                Task { if await model.call("POST", "/api/kolab-studio/profile", payload) { saved = "Profile saved" } }
+            }
+            .disabled(model.busy)
+            if let saved { Text(saved).font(.system(size: 12)).foregroundStyle(Theme.green) }
+        } header: { Text("Profile setup") }
+        .listRowBackground(Theme.surface.opacity(0.7))
+
+        Section {
+            if data.account.kycVerified {
+                Text("Your identity is verified. Features unlock once you also have an active plan.").font(.system(size: 13)).foregroundStyle(Theme.muted)
+            } else {
+                TextField("Aadhaar number", text: $aadhaar).keyboardType(.numberPad)
+                if let reference {
+                    TextField("OTP", text: $otp).keyboardType(.numberPad)
+                    Button("Confirm") { Task { if await model.call("POST", "/api/kolab-studio/kyc", ["action": "verify", "reference_id": reference, "otp": otp]) { self.reference = nil } } }
+                        .disabled(model.busy || otp.isEmpty)
+                } else {
+                    Button("Verify via OTP") {
+                        Task {
+                            guard let reply = await model.send("POST", "/api/kolab-studio/kyc", ["action": "initiate", "aadhaar": aadhaar, "consent": true]),
+                                  let object = try? JSONSerialization.jsonObject(with: reply) as? [String: Any],
+                                  let ref = (object["data"] as? [String: Any])?["reference_id"] as? String else { return }
+                            reference = ref
+                        }
+                    }
+                    .disabled(model.busy || aadhaar.filter(\.isNumber).count != 12)
+                }
+            }
+        } header: { Text("Aadhaar verification") } footer: {
+            Text(reference != nil ? "OTP sent to your Aadhaar-linked mobile." : "Runs only through a UIDAI-licensed provider with your consent. Your Aadhaar number is never stored, only the verification status and a masked reference.")
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
+
+        Section {
+            ForEach(data.reference.channels, id: \.k) { c in
+                let linked = data.channels.first { $0.platform == c.k }?.handle
+                HStack {
+                    Circle().fill(Color(hex: c.c)).frame(width: 10, height: 10)
+                    TextField("\(c.n) @handle", text: Binding(get: { handles[c.k] ?? "" }, set: { handles[c.k] = $0 }))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button(linked == nil ? "Link" : "Update") {
+                        Task { await model.call("PUT", "/api/kolab-studio/channels", ["platform": c.k, "handle": handles[c.k] ?? ""]) }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(model.busy)
+                }
+            }
+        } header: { Text("Social channels") }
+        .listRowBackground(Theme.surface.opacity(0.7))
+        .onAppear { reset() }
+        .onChange(of: data.profile) { _, _ in reset() }
+    }
+
+    private func reset() {
+        let p = data.profile
+        (name, handle, dob, pincode, website) = (p.name, p.handle, p.dob, p.pincode, p.website_url)
+        handles = Dictionary(uniqueKeysWithValues: data.channels.map { ($0.platform, $0.handle ?? "") })
     }
 }
