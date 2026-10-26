@@ -153,7 +153,7 @@ fun KolabStudioScreen(nav: Nav) {
     }
 
     // One mutation, then a reload, as the website's call() + router.refresh().
-    fun call(method: String, path: String, body: JsonElement? = null, onReply: (String) -> Unit = {}, after: () -> Unit = {}) = scope.launch {
+    fun call(method: String, path: String, body: JsonElement? = null, after: () -> Unit = {}, onReply: (String) -> Unit = {}) = scope.launch {
         busy = true
         error = null
         try {
