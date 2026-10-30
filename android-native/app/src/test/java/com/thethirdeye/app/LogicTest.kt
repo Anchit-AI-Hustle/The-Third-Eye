@@ -512,4 +512,23 @@ class LogicTest {
         assertEquals(listOf("A", "B"), d.orgs.map { it.name })
         assertEquals(listOf("Fashion"), d.packs.single().verticals)
     }
+
+    @Test fun `shortcuts, the assistant gesture and Share open the right thing`() {
+        assertEquals(Launch.Call, Launch.of("android.intent.action.ASSIST", null, null))
+        assertEquals(Launch.Call, Launch.of("android.intent.action.VIEW", "thethirdeye://call", null))
+        assertEquals(Launch.Assistant, Launch.of("android.intent.action.VIEW", "thethirdeye://assistant", null))
+        assertEquals(Launch.Ask("Give me my morning briefing"), Launch.of("android.intent.action.VIEW", "thethirdeye://assistant?ask=Give%20me%20my%20morning%20briefing", null))
+        assertEquals(Launch.Ask(Launch.sharedNote("https://x.test")), Launch.of("android.intent.action.SEND", null, " https://x.test "))
+        assertNull(Launch.of("android.intent.action.SEND", null, "  "))
+        assertNull(Launch.of("android.intent.action.VIEW", "thethirdeye://auth?code=1", null))
+        assertNull(Launch.of("android.intent.action.MAIN", null, null))
+    }
+
+    @Test fun `the forwarding recognizer hands off to Google's, never to itself`() {
+        val own = "com.thethirdeye.app"
+        assertEquals("com.google.android.tts" to "G",
+            pickRecognizer(listOf(own to "Mine", "com.samsung.voice" to "S", "com.google.android.tts" to "G"), own))
+        assertEquals("com.samsung.voice" to "S", pickRecognizer(listOf(own to "Mine", "com.samsung.voice" to "S"), own))
+        assertNull(pickRecognizer(listOf(own to "Mine"), own))
+    }
 }

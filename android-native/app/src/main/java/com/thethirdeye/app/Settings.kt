@@ -290,6 +290,17 @@ fun SettingsScreen(session: Session, nav: Nav, model: SettingsModel = remember {
             }
         }
 
+        item { SectionLabel("Assistant gesture") }
+        item("gesture") {
+            Panel {
+                Hint("Make The Third Eye your digital assistant app, and holding the power button (or swiping up from a bottom corner) starts a hands-free call with it. Long-press the app icon for Talk, Ask and Morning briefing, and share any text or link to it to save a note.")
+                TextButton(onClick = {
+                    runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) }
+                        .onFailure { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
+                }) { Text("Choose the digital assistant app") }
+            }
+        }
+
         item { SectionLabel("Connections") }
         item("google") {
             Panel {

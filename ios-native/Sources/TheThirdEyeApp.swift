@@ -4,7 +4,7 @@ import UserNotifications
 @main
 struct TheThirdEyeApp: App {
     @StateObject private var session = Session()
-    @StateObject private var app = AppState()
+    @StateObject private var app = AppState.shared
 
     init() {
         PreviewMode.seed()

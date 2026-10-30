@@ -70,10 +70,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
-        val data = intent?.data ?: return
-        if (data.scheme == "thethirdeye" && data.host == "auth") {
+        intent ?: return
+        val data = intent.data
+        if (data != null && data.scheme == "thethirdeye" && data.host == "auth") {
             claimed = true
             session.claim(data.getQueryParameter("code"), data.getQueryParameter("state"))
+            return
+        }
+        when (val launch = Launch.of(intent.action, data?.toString(), intent.getStringExtra(Intent.EXTRA_TEXT))) {
+            Launch.Call -> app.startCall()
+            Launch.Assistant -> app.tab = AppState.Tab.Assistant
+            is Launch.Ask -> app.ask(launch.text)
+            null -> {}
         }
     }
 }
@@ -94,6 +102,14 @@ class AppState : ViewModel() {
 
     fun ask(text: String) {
         pendingAsk = text
+        tab = Tab.Assistant
+    }
+
+    /** Set by the Talk shortcut and the assistant gesture; the Assistant starts a hands-free call and clears it. */
+    var pendingCall by mutableStateOf(false)
+
+    fun startCall() {
+        pendingCall = true
         tab = Tab.Assistant
     }
 }

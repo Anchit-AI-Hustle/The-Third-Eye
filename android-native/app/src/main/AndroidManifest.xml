@@ -51,7 +51,52 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="thethirdeye" android:host="auth" />
             </intent-filter>
+            <!-- App shortcuts: a hands-free call, and the Assistant with or without a question. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="thethirdeye" android:host="call" />
+                <data android:scheme="thethirdeye" android:host="assistant" />
+            </intent-filter>
+            <!-- The phone's assistant gesture and headset button, when this is the chosen assist app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Share text or a link from any app: saved as a note. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Selectable as the digital assistant app (Settings > Apps > Default apps). -->
+        <service
+            android:name=".AssistService"
+            android:exported="true"
+            android:label="The Third Eye"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/voice_interaction" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".AssistSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service
+            android:name=".AssistRecognitionService"
+            android:exported="true"
+            android:label="The Third Eye">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
 
         <service android:name=".DayRecordingService" android:exported="false" android:foregroundServiceType="microphone" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
