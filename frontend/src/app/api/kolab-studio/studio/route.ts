@@ -4,7 +4,8 @@
 // /api/kolab-studio/studio/*, /profile, /channels and /kyc.
 import { getEntitlementContext, getMyProfile, getSessionUser } from "@/lib/kolab-studio/db";
 import { canUseFeatures, canUsePro, gateReason } from "@/lib/kolab-studio/entitlements";
-import { getActiveOrg } from "@/lib/kolab-studio/org";
+import { getActiveOrg, getMyMemberships } from "@/lib/kolab-studio/org";
+import { PACKS, PACK_META } from "@/lib/kolab-studio/packs";
 import { ensureProvisioned } from "@/lib/kolab-studio/provision";
 import { getChannels, getDeals, getPillars, getPlan, getSchedule } from "@/lib/kolab-studio/studio";
 import { CHANNELS, TIERS } from "@/lib/kolab-studio/content";
@@ -25,7 +26,7 @@ export async function GET() {
   try {
     const user = await getSessionUser();
     if (!user) return fail("Not authenticated", 401);
-    const active = await getActiveOrg();
+    const [active, memberships] = await Promise.all([getActiveOrg(), getMyMemberships()]);
     // As the website's studio layout: a creator's first visit provisions them (and grants a
     // privileged account its complimentary plan) before the gate is read.
     if (active?.org.type === "creator") await ensureProvisioned(user);
@@ -43,6 +44,12 @@ export async function GET() {
     })));
     return ok({
       org: active ? { name: active.org.name, type: active.org.type } : null,
+      activeOrgId: active?.org.id ?? null,
+      orgs: memberships.map((m) => ({ id: m.org.id, name: m.org.name, type: m.org.type, role: m.role })),
+      packs: PACKS.map((t) => {
+        const { type, question, label, icon, blurb, verticals } = PACK_META[t];
+        return { type, question, label, icon, blurb, verticals };
+      }),
       unlocked,
       reason: gateReason(ctx),
       pillars: pillars.map((p) => ({ ...p, color: HEX[p.color ?? ""] ?? p.color })),

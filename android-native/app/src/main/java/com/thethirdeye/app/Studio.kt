@@ -146,7 +146,12 @@ fun ToolScreen(id: String, onBack: () -> Unit) {
     val run = remember(id) { ToolRun(tool, Local.get(context)) }
     val scope = rememberCoroutineScope()
     var writing by remember(id) { mutableStateOf(false) }
+    var shooting by remember(id) { mutableStateOf(false) }
     run.output?.takeIf { writing }?.let { return BookScreen(it, run.values.toMap()) { writing = false } }
+    run.output?.takeIf { shooting }?.let {
+        val inputs = run.values.toMap()
+        return ShotsScreen(id, inputs[tool.fields.first().name].orEmpty().take(60).ifBlank { "Untitled" }, it, inputs) { shooting = false }
+    }
 
     ListScreen(tool.label, loaded = true, refresh = {}, onBack = onBack) {
         item { Text(tool.blurb, fontSize = 13.sp, color = Palette.secondary) }
@@ -183,6 +188,7 @@ fun ToolScreen(id: String, onBack: () -> Unit) {
                     }
                     if (!run.busy) RegenerateButton { scope.launch { run.generate() } }
                     if (tool.id == "book" && !run.busy) TextButton(onClick = { writing = true }) { Text("Write the book") }
+                    if ((tool.id == "video" || tool.id == "reel") && !run.busy) TextButton(onClick = { shooting = true }) { Text("Shoot it") }
                 }
             }
         }

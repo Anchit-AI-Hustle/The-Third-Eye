@@ -2,8 +2,8 @@ import SwiftUI
 
 // Kolab Creator Studio, as on the website (app/kolab/studio/(app)): the studio's eight modules,
 // analytics, and profile setup with Aadhaar verification and channel linking, over
-// GET /api/kolab-studio/studio and the website's mutation routes. Onboarding and the
-// subscription purchase stay on the website.
+// GET /api/kolab-studio/studio and the website's mutation routes, with creating and switching
+// workspaces. The subscription purchase and non-creator workspaces stay on the website.
 struct KolabStudioData: Decodable {
     struct Pillar: Decodable, Identifiable, Equatable { let id: String; let name: String; let role: String?; let color: String? }
     struct PlanItem: Decodable, Identifiable {
@@ -32,6 +32,16 @@ struct KolabStudioData: Decodable {
     struct Post: Decodable, Identifiable { let id: String; let title: String?; let scheduled_at: String?; let channels: [String]?; let publish_status: String? }
     struct Channel: Decodable { let platform: String; let handle: String? }
     struct Org: Decodable { let name: String; let type: String }
+    struct Workspace: Decodable, Identifiable { let id: String; let name: String; let type: String; let role: String }
+    struct Pack: Decodable, Identifiable {
+        let type: String
+        let question: String
+        let label: String
+        let icon: String
+        let blurb: String
+        let verticals: [String]
+        var id: String { type }
+    }
     struct Mix: Decodable { let counts: [String: Int]; let total: Int }
     struct Tracker: Decodable { let posted: Int; let total: Int; let pct: Int }
     struct Profile: Decodable, Equatable {
@@ -68,6 +78,9 @@ struct KolabStudioData: Decodable {
     }
 
     let org: Org?
+    let activeOrgId: String?
+    let orgs: [Workspace]
+    let packs: [Pack]
     let unlocked: Bool
     let reason: String?
     let pillars: [Pillar]
@@ -139,8 +152,16 @@ struct KolabStudioView: View {
                 Text(error).font(.system(size: 13)).foregroundStyle(Theme.red).listRowBackground(Color.clear)
             }
             if let data = model.data {
+                if let org = data.org {
+                    workspaces(data)
+                    if org.type != "creator" {
+                        webStep("\(org.name) runs on the website", "The phone app has the Creator Studio. Open this workspace's tools on the website, or switch to a creator workspace above.", path: "/kolab/studio/home")
+                    }
+                }
                 if data.org == nil {
-                    webStep("Create your studio first", "Set up your Kolab organization on the website, then come back here.", path: "/kolab/studio/onboarding")
+                    KolabNewWorkspace(packs: data.packs, model: model)
+                } else if data.org?.type != "creator" {
+                    EmptyView()
                 } else if !data.unlocked {
                     Section {
                         Text(data.reason ?? "Unlock Creator Studio").font(.system(size: 15, weight: .semibold))
@@ -180,6 +201,26 @@ struct KolabStudioView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
         .refreshable { await model.load() }
+    }
+
+    private func workspaces(_ data: KolabStudioData) -> some View {
+        Section {
+            if data.orgs.count > 1 {
+                Picker("Workspace", selection: Binding(get: { data.activeOrgId ?? "" }, set: { id in
+                    Task { await model.call("POST", "/api/kolab-studio/org/switch", ["org_id": id]) }
+                })) {
+                    ForEach(data.orgs) { org in
+                        Text("\(data.packs.first { $0.type == org.type }?.icon ?? "") \(org.name)").tag(org.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(model.busy)
+            }
+            NavigationLink { Form { KolabNewWorkspace(packs: data.packs, model: model, pops: true) }.scrollContentBackground(.hidden).background(Starfield()).navigationTitle("New workspace") } label: {
+                Label("New workspace", systemImage: "plus")
+            }
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
     }
 
     private func webStep(_ title: String, _ detail: String, path: String) -> some View {
@@ -620,5 +661,59 @@ private struct KolabSetup: View {
         let p = data.profile
         (name, handle, dob, pincode, website) = (p.name, p.handle, p.dob, p.pincode, p.website_url)
         handles = Dictionary(uniqueKeysWithValues: data.channels.map { ($0.platform, $0.handle ?? "") })
+    }
+}
+
+/// Pick what the workspace is for, name it, create it: the website's onboarding.
+struct KolabNewWorkspace: View {
+    let packs: [KolabStudioData.Pack]
+    @ObservedObject var model: KolabStudioModel
+    /// Pushed from "New workspace": go back once it exists. Inline as the first-run step, the studio just reloads.
+    var pops = false
+    @Environment(\.dismiss) private var dismiss
+    @State private var type: String?
+    @State private var name = ""
+    @State private var vertical = ""
+
+    var body: some View {
+        Section {
+            Text("What are you here to do?").font(.system(size: 15, weight: .semibold))
+            Text("This sets up your workspace. You can create more later, each with its own type.").font(.system(size: 12)).foregroundStyle(Theme.muted)
+            ForEach(packs) { pack in
+                Button { type = pack.type; vertical = "" } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(pack.icon).font(.system(size: 22))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(pack.question).font(.system(size: 14, weight: .medium)).foregroundStyle(.primary)
+                            Text(pack.blurb).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                        }
+                        Spacer()
+                        if type == pack.type { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.blue) }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
+        if let pack = packs.first(where: { $0.type == type }) {
+            Section {
+                TextField(pack.type == "creator" ? "Your creator / brand name" : pack.type == "agency" ? "Agency name" : "Business name", text: $name)
+                Picker("Category", selection: $vertical) {
+                    Text("None").tag("")
+                    ForEach(pack.verticals, id: \.self) { Text($0).tag($0) }
+                }
+                Button("Create workspace") {
+                    Task {
+                        var body: [String: Any] = ["type": pack.type, "name": name.trimmingCharacters(in: .whitespaces)]
+                        if !vertical.isEmpty { body["vertical"] = vertical }
+                        if await model.call("POST", "/api/kolab-studio/org/create", body), pops { dismiss() }
+                    }
+                }
+                .buttonStyle(GlowButtonStyle())
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || model.busy)
+                if pops, let error = model.error { Text(error).font(.system(size: 12)).foregroundStyle(Theme.red) }
+            }
+            .listRowBackground(Theme.surface.opacity(0.7))
+        }
     }
 }

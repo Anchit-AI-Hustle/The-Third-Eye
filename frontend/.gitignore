@@ -5,3 +5,6 @@ tsconfig.tsbuildinfo
 .next
 node_modules
 .DS_Store
+
+# Written by `next dev`
+AGENTS.md

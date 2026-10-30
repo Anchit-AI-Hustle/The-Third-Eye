@@ -15,8 +15,8 @@ sealed interface Route {
 
 private val legalPaths = setOf("/privacy", "/privacy_policy", "/terms_of_service")
 
-// Tools that need the browser's own tech (audio, camera, video, files).
-val webTools = setOf("avatar", "video", "reel")
+// The avatar is drawn and voiced on a browser canvas, so it opens the website page.
+val webTools = setOf("avatar")
 
 /** Native tool screens that are not Studio tools in the catalog. */
 private val nativeTools = setOf("anchor")
