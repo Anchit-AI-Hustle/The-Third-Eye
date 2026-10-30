@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { creditsRefused, refundCredits, spendCredits } from "@/lib/credits";
 import { replicateConfigured, createPrediction, getPrediction, videoUrlFrom, audioUrlFrom } from "@/lib/replicate";
 import { MAX_REEL_SECONDS, planScenes } from "@/lib/videoScenes";
 
@@ -34,7 +35,8 @@ async function email() {
 type Body = { script?: unknown; seconds?: unknown; scene?: unknown; narration?: unknown };
 
 export async function POST(req: NextRequest) {
-  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const user = await email();
+  if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
   let body: Body;
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
@@ -78,10 +80,14 @@ export async function POST(req: NextRequest) {
   if (!replicateConfigured()) {
     return Response.json({ error: "AI clip rendering is not available right now. Build episode file still turns the shot list into a finished video." }, { status: 501 });
   }
+  // Clips are the paid render; a narration line costs a fraction of a cent.
+  const spend = body.scene !== undefined ? await spendCredits(user, "video.render") : null;
+  if (spend && !spend.ok) return creditsRefused(spend);
   try {
     const p = await createPrediction(model, input);
     return Response.json({ jobId: p.id, status: p.status, model });
   } catch (e) {
+    if (spend) await refundCredits(user, spend, "video.render");
     return Response.json({ error: `Render job failed: ${e instanceof Error ? e.message : "unknown"}` }, { status: 502 });
   }
 }

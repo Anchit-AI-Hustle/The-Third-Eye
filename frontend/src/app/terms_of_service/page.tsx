@@ -35,8 +35,8 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-text-primary font-semibold mb-2">The Service</h2>
             <p>
-              The Third Eye is a self-hosted personal AI operating system intended for use by the
-              account owner only. It provides an assistant, knowledge base, task management, and
+              The Third Eye is a personal AI operating system. Each account and its data belong to the
+              account owner. It provides an assistant, knowledge base, task management, studios and
               related productivity features.
             </p>
           </section>

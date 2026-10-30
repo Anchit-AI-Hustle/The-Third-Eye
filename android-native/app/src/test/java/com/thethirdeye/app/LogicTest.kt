@@ -472,4 +472,20 @@ class LogicTest {
         assertEquals("No plan", d.account.plan)
         assertEquals(1, d.analytics.linkedChannels)
     }
+
+    @Test fun `generations list this phone's, the account's and the music library once each, newest first`() {
+        val mine = Generation("g1", "studio", "landing", "Studio · Landing Page", "Here", "html", "2026-10-30T10:00:00Z", output = "<p>x</p>")
+        val rows = listOf(
+            GenerationRowIn("g1", title = "Here again", created_at = "2026-10-30T10:00:00Z"),
+            GenerationRowIn("w1", app = "jobagent", app_label = "Job Agent", title = "From the website", kind = "html", created_at = "2026-10-30T11:00:00Z"),
+        )
+        val tracks = listOf(TrackRowIn("t1", "Song", "/api/music/a.mp3", "2026-10-29T00:00:00Z"), TrackRowIn("t2", "No file", null, "2026-10-31T00:00:00Z"))
+        val all = mergeGenerations(listOf(mine), rows, tracks)
+        assertEquals(listOf("From the website", "Here", "Song"), all.map { it.title })
+        assertEquals("audio", all.last().kind)
+        assertEquals("music_t1", all.last().id)
+        val row = generationRow(mine)
+        assertEquals("landing", row["tool"]!!.jsonPrimitive.content)
+        assertEquals("<p>x</p>", row["output"]!!.jsonPrimitive.content)
+    }
 }

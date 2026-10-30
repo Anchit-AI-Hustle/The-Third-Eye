@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createPrediction = vi.fn();
 const planScenes = vi.fn();
+const rpc = vi.fn();
+
+vi.mock("@/lib/db", () => ({ getDb: () => ({ rpc: (...a: unknown[]) => rpc(...a) }) }));
 
 vi.mock("next-auth", () => ({ getServerSession: () => Promise.resolve({ user: { email: "+919999999999" } }) }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
@@ -20,9 +23,25 @@ const post = async (body: unknown) => {
 beforeEach(() => {
   vi.clearAllMocks();
   createPrediction.mockResolvedValue({ id: "abc123", status: "starting" });
+  rpc.mockResolvedValue({ data: 100, error: null });
 });
 
 describe("/api/tools/video", () => {
+  it("charges credits for a paid render and refuses it when they run out", async () => {
+    await post({ scene: { prompt: "p", seconds: 5 } });
+    expect(rpc).toHaveBeenCalledWith("spend_credits", expect.objectContaining({ p_reason: "video.render" }));
+    rpc.mockResolvedValue({ data: -1, error: null });
+    createPrediction.mockClear();
+    expect((await post({ scene: { prompt: "p", seconds: 5 } })).status).toBe(402);
+    expect(createPrediction).not.toHaveBeenCalled();
+  });
+
+  it("plans a shot list without charging", async () => {
+    planScenes.mockResolvedValue({ scenes: [] });
+    await post({ script: "A day at the beach." });
+    expect(rpc).not.toHaveBeenCalledWith("spend_credits", expect.anything());
+  });
+
   it("renders exactly the shot the user pressed Render on, without re-planning the script", async () => {
     // It used to re-plan the whole script on every render and pick scenes[i] from
     // the NEW plan — a different, freshly-generated shot from the one on screen.

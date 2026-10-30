@@ -18,12 +18,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.serialization.Serializable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+@Serializable
+data class GenerationRowIn(
+    val id: String, val app: String = "", val tool: String? = null, val app_label: String = "", val title: String = "Untitled",
+    val kind: String = "markdown", val created_at: String = "", val inputs: List<Generation.Input> = emptyList(), val output: String = "",
+)
+
+@Serializable
+data class TrackRowIn(val id: String, val title: String? = null, val audio_url: String? = null, val created_at: String = "")
+
+fun GenerationRowIn.toGeneration() = Generation(id, app, tool, app_label, title, kind, created_at, inputs, output)
+
+/** This phone's and the account's (website, other devices, assistant, music library), newest first, once each. */
+fun mergeGenerations(local: List<Generation>, rows: List<GenerationRowIn>, tracks: List<TrackRowIn>): List<Generation> {
+    val ids = local.map { it.id }.toMutableSet()
+    val out = local.toMutableList()
+    rows.filter { ids.add(it.id) }.forEach { out += it.toGeneration() }
+    // A song recorded as a generation is in the library too; account rows come without their output, so match by title as well.
+    val songs = out.filter { it.app == "music" }
+    tracks.filter { t -> !t.audio_url.isNullOrBlank() && songs.none { it.output == t.audio_url || (t.title != null && it.title == t.title) } && ids.add("music_${t.id}") }
+        .forEach { out += Generation("music_${it.id}", "music", null, "Music Studio", it.title ?: "Track", "audio", it.created_at, emptyList(), it.audio_url!!) }
+    return out.sortedByDescending { it.createdAt }
+}
 
 private val Generation.fileName get() = "${tool ?: app}.${if (kind == "html") "html" else "md"}"
 
@@ -34,14 +59,34 @@ fun GenerationsScreen(onBack: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var app by remember { mutableStateOf<String?>(null) }
     var openId by remember { mutableStateOf<String?>(null) }
-    val open = local.generations.firstOrNull { it.id == openId }
+    var rows by remember { mutableStateOf(emptyList<GenerationRowIn>()) }
+    var tracks by remember { mutableStateOf(emptyList<TrackRowIn>()) }
+    var full by remember { mutableStateOf<Generation?>(null) }
+    suspend fun load() {
+        rows = runCatching { DataStore.rows<GenerationRowIn>("generations") }.getOrDefault(rows)
+        tracks = runCatching { DataStore.rows<TrackRowIn>("music_tracks") }.getOrDefault(tracks)
+    }
+    LaunchedEffect(Unit) { load() }
+    val all = mergeGenerations(local.generations, rows, tracks)
+    val listed = all.firstOrNull { it.id == openId }
+    // A row listed from the account leaves its output out: read it whole when opened.
+    LaunchedEffect(openId) {
+        full = null
+        val l = listed ?: return@LaunchedEffect
+        if (l.output.isEmpty() && local.generations.none { it.id == l.id }) {
+            full = runCatching { DataStore.rows<GenerationRowIn>("generations?id=${java.net.URLEncoder.encode(l.id, "UTF-8")}").firstOrNull()?.toGeneration() }.getOrNull()
+        }
+    }
+    val open = full ?: listed
     BackHandler(open != null) { openId = null }
 
-    if (open != null) return GenerationDetail(open, onBack = { openId = null }, onDelete = { local.deleteGeneration(open.id); openId = null })
+    if (open != null) return GenerationDetail(open, onBack = { openId = null }, onDelete = {
+        local.deleteGeneration(open.id); rows = rows.filterNot { it.id == open.id }; tracks = tracks.filterNot { "music_${it.id}" == open.id }; openId = null
+    })
 
-    val apps = local.generations.map { it.app to it.appLabel }.distinct()
-    val shown = searchGenerations(local.generations, query, app)
-    ListScreen("Generations", loaded = true, refresh = {}, onBack = onBack) {
+    val apps = all.map { it.app to it.appLabel }.distinct()
+    val shown = searchGenerations(all, query, app)
+    ListScreen("Generations", loaded = true, refresh = { load() }, onBack = onBack) {
         item { Field("Search", query, { query = it }) }
         if (apps.size > 1) item("apps") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -49,7 +94,7 @@ fun GenerationsScreen(onBack: () -> Unit) {
                 apps.forEach { (id, label) -> FilterChip(app == id, { app = id }, label = { Text(label) }) }
             }
         }
-        if (local.generations.isEmpty()) item { Hint("Things you make in this app's Studio and Kolab show up here. Website creations stay in that browser.") }
+        if (all.isEmpty()) item { Hint("Everything you make, here, on the website or by asking the assistant, shows up here.") }
         else if (shown.isEmpty()) item { Hint("Nothing matches.") }
         shown.forEach { g ->
             item(g.id) {

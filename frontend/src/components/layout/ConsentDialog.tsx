@@ -45,11 +45,14 @@ export function ConsentDialog() {
   });
 
   useEffect(() => {
-    if (!bundleAsked && !suppressed) {
+    // The dashboard's first-run guide asks for the same permissions; don't stack two prompts.
+    let guiding = false;
+    try { guiding = pathname === "/dashboard" && localStorage.getItem("te_first_run_done") !== "1"; } catch { /* no storage */ }
+    if (!bundleAsked && !suppressed && !guiding) {
       const t = setTimeout(() => setOpen(true), 600);
       return () => clearTimeout(t);
     }
-  }, [bundleAsked, suppressed]);
+  }, [bundleAsked, suppressed, pathname]);
 
   if (!open) return null;
 

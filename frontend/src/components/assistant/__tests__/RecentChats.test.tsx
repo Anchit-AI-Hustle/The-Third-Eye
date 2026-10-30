@@ -25,6 +25,11 @@ describe("past chats on the Assistant's welcome screen", () => {
     expect(onOpen).toHaveBeenLastCalledWith("c");
   });
 
+  it("shows the latest chat's last message", () => {
+    render(<RecentChats chats={[{ ...chats[0], preview: "Day 2: Solang valley" }]} now={now} onOpen={() => {}} onShowAll={() => {}} />);
+    expect(screen.getByText("Day 2: Solang valley")).toBeTruthy();
+  });
+
   it("links to every chat when there are more", () => {
     const onShowAll = vi.fn();
     render(<RecentChats chats={chats} now={now} onOpen={() => {}} onShowAll={onShowAll} />);

@@ -23,32 +23,47 @@ const FEATURES: Feature[] = [
   {
     tag: "// assistant",
     title: "AI Assistant",
-    body: "Chat with an assistant that can search the web, look things up in your own data, and take actions - creating tasks, notes, and reminders on your behalf.",
+    body: "Chat or talk with an assistant that searches the web and your own data, then acts - creating tasks, notes, reminders and studio assets for you.",
   },
   {
     tag: "// tasks",
-    title: "Tasks",
-    body: "Capture to-dos with priorities and due dates, and let the assistant turn conversations into tracked, actionable items.",
+    title: "Tasks & Notes",
+    body: "Capture to-dos with priorities and due dates, keep searchable notes, and turn conversations into tracked items.",
   },
   {
     tag: "// knowledge",
     title: "Knowledge",
-    body: "Upload your documents and ask questions in plain language. Answers cite the passages they came from, powered by semantic search over your files.",
+    body: "Upload your documents and ask questions in plain language. Answers cite the passages they came from.",
   },
   {
-    tag: "// notes",
-    title: "Notes",
-    body: "Quickly capture thoughts and meeting notes - organized, searchable, and always private to your account.",
+    tag: "// studio",
+    title: "Studio",
+    body: "Landing pages, decks, mailers, social posts, reports and plans from a short brief, ready to copy or download.",
   },
   {
-    tag: "// reminders",
-    title: "Reminders & Daily Plan",
-    body: "Get nudged about what's due and receive a morning plan so nothing important slips through the cracks.",
+    tag: "// music & video",
+    title: "Music, Video & Book Studios",
+    body: "Write and sing a song, cut it into a lyric video, or draft a book chapter by chapter.",
+  },
+  {
+    tag: "// job agent",
+    title: "Job Agent",
+    body: "Paste a role and get a resume and cover letter tailored to it, from your own profile.",
+  },
+  {
+    tag: "// life log",
+    title: "Life Log",
+    body: "Record your day into a transcript and timeline, open any day on a calendar, and keep a diary.",
   },
   {
     tag: "// goals",
     title: "Goals & Finance",
-    body: "Track your goals over time and get a clear overview of your finances, all in one place.",
+    body: "Track goals over time and get a clear overview of your money, with calculators built in.",
+  },
+  {
+    tag: "// everywhere",
+    title: "Web, iPhone & Android",
+    body: "One account across the web and the native apps. Everything you generate shows up in Generations on each.",
   },
 ];
 

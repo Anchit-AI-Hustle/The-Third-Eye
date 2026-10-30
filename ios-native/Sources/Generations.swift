@@ -1,7 +1,8 @@
+import AVKit
 import SwiftUI
 
-// Things made in this app's Studio and Kolab, kept on this phone (the website's
-// own list lives in that browser only).
+// Things made in this app, kept on this phone and saved to the account, listed
+// with everything made on the website, other devices and by the assistant.
 struct Generation: Codable, Identifiable, Equatable {
     struct Input: Codable, Equatable {
         let label: String
@@ -26,10 +27,38 @@ final class GenerationStore: ObservableObject {
     static let shared = GenerationStore()
     static let cap = 500
 
+    /// Made on this phone, kept here.
     @Published private(set) var items: [Generation]
+    /// Made anywhere else (the website, another phone, the assistant) and the music library: listed from the account.
+    @Published private(set) var remote: [Generation] = []
+
+    private struct Row: Decodable {
+        let id: String
+        let app: String?
+        let tool: String?
+        let app_label: String?
+        let title: String?
+        let kind: String?
+        let created_at: String
+        let inputs: [Generation.Input]?
+        let output: String?
+    }
+
+    private struct Track: Decodable { let id: String; let title: String?; let audio_url: String?; let created_at: String }
 
     private init() {
         items = LocalStore.read(LocalFile.generations, as: [Generation].self) ?? []
+    }
+
+    /// Everything, newest first, once each.
+    var all: [Generation] {
+        let mine = Set(items.map(\.id))
+        // A song recorded as a generation is in the library too; account rows come without their output, so match by title as well.
+        let songs = (items + remote).filter { $0.app == "music" && !$0.id.hasPrefix("music_") }
+        let others = remote.filter { r in
+            !mine.contains(r.id) && !(r.id.hasPrefix("music_") && songs.contains { $0.output == r.output || $0.title == r.title })
+        }
+        return (items + others).sorted { $0.createdAt > $1.createdAt }
     }
 
     func add(app: String, tool: String?, appLabel: String, title: String, kind: String, inputs: [Generation.Input], output: String) {
@@ -37,11 +66,45 @@ final class GenerationStore: ObservableObject {
                               kind: kind, createdAt: Fmt.now(), inputs: inputs, output: output)
         items = Self.adding(item, to: items)
         LocalStore.write(LocalFile.generations, items)
+        let row: [String: Any] = [
+            "id": item.id, "app": app, "tool": tool.map { $0 as Any } ?? NSNull(), "app_label": appLabel, "title": title, "kind": kind,
+            "inputs": inputs.map { ["label": $0.label, "value": $0.value] }, "output": output.count <= 1_500_000 ? output : "", "created_at": item.createdAt,
+        ]
+        Task { try? await DataStore.insert("generations", row) }
     }
 
     func delete(_ id: String) {
         items.removeAll { $0.id == id }
+        remote.removeAll { $0.id == id }
         LocalStore.write(LocalFile.generations, items)
+        Task {
+            if id.hasPrefix("music_") { try? await DataStore.delete("music_tracks", id: String(id.dropFirst(6))) }
+            else { try? await DataStore.delete("generations", id: id) }
+        }
+    }
+
+    func refresh() async {
+        async let rows = try? DataStore.list("generations", as: Row.self)
+        async let tracks = try? DataStore.list("music_tracks", as: Track.self)
+        var found = (await rows ?? []).map { r in
+            Generation(id: r.id, app: r.app ?? "", tool: r.tool, appLabel: r.app_label ?? "", title: r.title ?? "Untitled",
+                       kind: r.kind ?? "text", createdAt: r.created_at, inputs: r.inputs ?? [], output: r.output ?? "")
+        }
+        for t in await tracks ?? [] {
+            guard let url = t.audio_url, !url.isEmpty else { continue }
+            found.append(Generation(id: "music_\(t.id)", app: "music", tool: nil, appLabel: "Music Studio", title: t.title ?? "Track",
+                                    kind: "audio", createdAt: t.created_at, inputs: [], output: url))
+        }
+        remote = found
+    }
+
+    /// The full row for one listed from the account (lists leave the output out).
+    func full(_ item: Generation) async -> Generation {
+        guard item.output.isEmpty, !items.contains(where: { $0.id == item.id }) else { return item }
+        let escaped = item.id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? item.id
+        guard let r = try? await DataStore.list("generations?id=\(escaped)", as: Row.self).first else { return item }
+        return Generation(id: r.id, app: r.app ?? item.app, tool: r.tool, appLabel: r.app_label ?? item.appLabel, title: r.title ?? item.title,
+                          kind: r.kind ?? item.kind, createdAt: r.created_at, inputs: r.inputs ?? [], output: r.output ?? "")
     }
 
     func reset() {
@@ -70,14 +133,14 @@ struct GenerationsView: View {
 
     private var apps: [String] {
         var seen: [String] = []
-        for item in store.items where !seen.contains(item.app) { seen.append(item.app) }
+        for item in store.all where !seen.contains(item.app) { seen.append(item.app) }
         return seen
     }
 
     var body: some View {
         List {
-            if store.items.isEmpty {
-                Text("Things you make in this app's Studio and Kolab show up here. Website creations stay in that browser.")
+            if store.all.isEmpty {
+                Text("Everything you make, here, on the website or by asking the assistant, shows up here.")
                     .foregroundStyle(Theme.muted)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -88,7 +151,7 @@ struct GenerationsView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
-                ForEach(GenerationStore.matching(store.items, search: search, app: app)) { item in
+                ForEach(GenerationStore.matching(store.all, search: search, app: app)) { item in
                     NavigationLink { GenerationDetailView(item: item) } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(item.title).font(.system(size: 15, weight: .medium)).lineLimit(2)
@@ -106,6 +169,8 @@ struct GenerationsView: View {
         .background(Starfield())
         .navigationTitle("Generations")
         .searchable(text: $search, prompt: "Search")
+        .task { await store.refresh() }
+        .refreshable { await store.refresh() }
     }
 
     private func chip(_ title: String, value: String?) -> some View {
@@ -121,7 +186,7 @@ struct GenerationsView: View {
 }
 
 struct GenerationDetailView: View {
-    let item: Generation
+    @State var item: Generation
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
 
@@ -154,8 +219,18 @@ struct GenerationDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            OutputBody(text: item.output, format: item.kind)
+            if item.kind == "audio" || item.kind == "video" {
+                if item.output.isEmpty {
+                    Text("The file itself was kept on the device that made it.").foregroundStyle(Theme.muted).padding(16)
+                } else {
+                    VideoPlayer(player: AVPlayer(url: API.url(item.output))).frame(height: item.kind == "video" ? 260 : 80).padding(.horizontal, 16)
+                }
+                Spacer()
+            } else {
+                OutputBody(text: item.output, format: item.kind)
+            }
         }
+        .task { item = await GenerationStore.shared.full(item) }
         .background(Starfield())
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -173,7 +248,7 @@ struct GenerationRoute: View {
     @ObservedObject private var store = GenerationStore.shared
 
     var body: some View {
-        if let item = store.items.first(where: { $0.id == id }) {
+        if let item = store.all.first(where: { $0.id == id }) {
             GenerationDetailView(item: item)
         } else {
             Text("This creation is no longer on this phone.")

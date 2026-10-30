@@ -25,7 +25,7 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
   // Mirror the chat route's premium gate so the paywall can't be bypassed via the
   // confirmation path when enforcement is on.
   if (premiumEnforced() && PREMIUM_TOOLS.has(tool) && (await getTier(email)) !== "premium") {
-    return { ok: false, result: "That action needs JARVIS Premium. Upgrade in Settings → Upgrade." };
+    return { ok: false, result: "That action needs Premium. Upgrade in Settings → Upgrade." };
   }
 
   switch (tool) {
@@ -40,7 +40,7 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
       // `communicate` to PREMIUM_TOOLS keeps whatsapp/sms/call/read_emails free,
       // which is what they were.
       if (premiumEnforced() && (await getTier(email)) !== "premium") {
-        return { ok: false, result: "Sending email needs JARVIS Premium. Upgrade in Settings → Upgrade." };
+        return { ok: false, result: "Sending email needs Premium. Upgrade in Settings → Upgrade." };
       }
       const recipients = emailRecipients(String(args?.to ?? ""));
       const to = recipients.join(", ");

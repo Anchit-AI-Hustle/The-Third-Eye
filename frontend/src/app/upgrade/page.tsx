@@ -46,7 +46,7 @@ export default function UpgradePage() {
     <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-10">
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-text-primary">JARVIS Premium</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">The Third Eye Premium</h1>
           <p className="text-text-secondary mt-1">Let JARVIS act for you - not just answer.</p>
         </div>
 

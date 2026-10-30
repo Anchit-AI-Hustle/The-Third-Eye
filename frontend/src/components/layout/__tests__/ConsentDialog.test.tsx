@@ -25,6 +25,7 @@ vi.mock("@/hooks/useConsent", () => ({
 describe("ConsentDialog", () => {
   beforeEach(() => {
     pathname = "/dashboard";
+    localStorage.setItem("te_first_run_done", "1");
     vi.useFakeTimers();
     requestAll.mockClear();
   });
@@ -43,6 +44,13 @@ describe("ConsentDialog", () => {
       expect(screen.queryByText("Activate Assistant")).toBeNull();
       unmount();
     }
+  });
+
+  it("waits on the dashboard while the first-run guide is asking for the same permissions", async () => {
+    localStorage.removeItem("te_first_run_done");
+    render(<ConsentDialog />);
+    await act(async () => { vi.advanceTimersByTime(700); });
+    expect(screen.queryByText("Activate Assistant")).toBeNull();
   });
 
   it("stays closed inside the native iPhone app, which asks for permissions itself", async () => {

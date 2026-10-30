@@ -243,6 +243,11 @@ fun GeneratedOutput(output: String, kind: String) {
     when (kind) {
         "html" -> HtmlView(output)
         "markdown" -> MarkdownText(output)
+        "audio", "video" -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            if (output.isBlank()) Text("The file itself was kept on the device that made it.", fontSize = 13.sp, color = Palette.muted)
+            else TextButton(onClick = { openInBrowser(context, if (output.startsWith("/")) BASE_URL + output else output) }) { Text(if (kind == "audio") "Play" else "Watch") }
+        }
         else -> SelectionContainer { Text(output, fontSize = 14.sp) }
     }
 }
