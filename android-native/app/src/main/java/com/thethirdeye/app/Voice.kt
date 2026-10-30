@@ -78,7 +78,7 @@ class Voice(private val context: Context) : RecognitionListener {
         error = null
         partial = ""
         this.onFinal = onFinal
-        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(context).also { it.setRecognitionListener(this); recognizer = it }
+        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(context, otherRecognizer(context)).also { it.setRecognitionListener(this); recognizer = it }
         listening = true
         r.startListening(
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)

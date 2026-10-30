@@ -356,6 +356,12 @@ fun AssistantScreen(app: AppState, chat: Chat = viewModel()) {
 
     // Mic or permission trouble: stop the call rather than loop on it.
     LaunchedEffect(voice.error) { if (voice.error != null) callMode = false }
+    LaunchedEffect(app.pendingCall) {
+        if (app.pendingCall) {
+            app.pendingCall = false
+            if (!callMode) withMic { callMode = true; listenForCall() }
+        }
+    }
     LaunchedEffect(app.pendingAsk, chat.busy) {
         val ask = app.pendingAsk
         if (ask != null && !chat.busy) { app.pendingAsk = null; chat.send(ask, ::replied) }

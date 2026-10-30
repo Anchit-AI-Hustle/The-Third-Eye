@@ -4,6 +4,9 @@ import SwiftUI
 // quick asks open the Assistant with it, like the website's Today page).
 @MainActor
 final class AppState: ObservableObject {
+    /// One per app, so Siri and Shortcuts intents can steer the open app.
+    static let shared = AppState()
+
     enum Tab: Hashable { case today, assistant, tasks, notes, more }
     @Published var tab: Tab = {
         switch UserDefaults.standard.string(forKey: "preview-tab") {
@@ -18,6 +21,14 @@ final class AppState: ObservableObject {
 
     func ask(_ text: String) {
         pendingAsk = text
+        tab = .assistant
+    }
+
+    /// Set by "Talk to The Third Eye"; the Assistant starts a hands-free call and clears it.
+    @Published var pendingCall = false
+
+    func startCall() {
+        pendingCall = true
         tab = .assistant
     }
 }

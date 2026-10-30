@@ -11,6 +11,10 @@ targets:
       path: Resources/Info.plist
       properties:
         CFBundleDisplayName: The Third Eye
+        # Siri also answers to "Jarvis": "Hey Siri, ask Jarvis".
+        INAlternativeAppNames:
+          - INAlternativeAppName: Jarvis
+            INAlternativeAppNamePronunciationHint: jar-viss
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSRequiresIPhoneOS: true

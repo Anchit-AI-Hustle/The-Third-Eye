@@ -351,6 +351,7 @@ struct SettingsView: View {
             WhatsAppSection(model: whatsApp)
             AutomationsSection(model: automations)
             ProvidersSection(model: providers)
+            VoiceGesturesSection()
             Section("Permissions") {
                 PermissionTiles()
                     .listRowBackground(Color.clear)
@@ -376,6 +377,24 @@ struct SettingsView: View {
         await jobs
         await models
         await system
+    }
+}
+
+// Siri, the Action button and Back Tap all run the app's Shortcuts actions (Intents.swift).
+struct VoiceGesturesSection: View {
+    var body: some View {
+        Section("Siri & gestures") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Say \u{201C}Hey Siri, talk to The Third Eye\u{201D} for a hands-free call, or \u{201C}Hey Siri, ask Jarvis\u{201D} to ask a question. \u{201C}Morning briefing in The Third Eye\u{201D} and \u{201C}Save to The Third Eye\u{201D} work too.")
+                Text("Action button: Settings > Action Button > Shortcut > The Third Eye > Talk.")
+                Text("Back Tap: Settings > Accessibility > Touch > Back Tap > Double Tap, then pick Talk to The Third Eye. If it isn't listed, add it in the Shortcuts app first.")
+                Text("Share sheet: add \u{201C}Save to The Third Eye\u{201D} as a share-sheet Shortcut to save anything as a note.")
+            }
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.secondary)
+            Link(destination: URL(string: "shortcuts://")!) { Label("Open Shortcuts", systemImage: "square.2.layers.3d") }
+        }
+        .listRowBackground(Theme.surface.opacity(0.7))
     }
 }
 
