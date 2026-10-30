@@ -1,6 +1,6 @@
 import { encode } from "next-auth/jwt";
 import { getDb } from "@/lib/db";
-import { claimHandoff, startHandoff, validCode } from "@/lib/authHandoff";
+import { browserKey, claimBrowserHandoff, claimHandoff, startHandoff, validCode } from "@/lib/authHandoff";
 import { authUsesSecureCookies, sessionCookieName } from "@/lib/authCookies";
 import { resolveAuthSecret } from "@/lib/authSecret";
 
@@ -11,16 +11,19 @@ export async function POST(req: Request) {
   const { code } = (await req.json().catch(() => ({}))) as { code?: unknown };
   const db = getDb();
   if (!validCode(code) || !db) return Response.json({ error: "bad code" }, { status: 400 });
-  await startHandoff(db, code);
+  await startHandoff(db, browserKey(code));
   return new Response(null, { status: 204 });
 }
 
-// GET: the app polls; once approved it gets its own session cookie, once.
+// GET: the app claims an approved code for its own session cookie, once. A
+// browser-started code also needs the confirmation Safari showed.
 export async function GET(req: Request) {
-  const code = new URL(req.url).searchParams.get("code");
+  const params = new URL(req.url).searchParams;
+  const code = params.get("code");
+  const confirm = params.get("confirm");
   const db = getDb();
   if (!validCode(code) || !db) return Response.json({ error: "bad code" }, { status: 400 });
-  const email = await claimHandoff(db, code);
+  const email = confirm === null ? await claimHandoff(db, code) : await claimBrowserHandoff(db, code, confirm);
   if (!email) return Response.json({ signedIn: false });
   const secure = authUsesSecureCookies();
   const token = await encode({ token: { email, sub: email }, secret: resolveAuthSecret(), maxAge: SESSION_SECONDS });

@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // retry-after honoured, and a plain final message.
 
 let health: Record<string, Record<string, unknown>> = {};
+let session: { user: { email: string } } | null = { user: { email: "u@x.test" } };
+vi.mock("next-auth", () => ({ getServerSession: async () => session }));
+vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
     from: () => ({
@@ -321,5 +324,14 @@ describe("/api/health", () => {
     const { GET } = await import("@/app/api/health/route");
     const body = await (await GET()).json();
     expect(body.llm.status).toBe("down");
+  });
+
+  it("tells a signed-out caller only whether the assistant is up and which commit is live", async () => {
+    process.env.GROQ_API_KEY = "g";
+    session = null;
+    const { GET } = await import("@/app/api/health/route");
+    const body = await (await GET()).json();
+    session = { user: { email: "u@x.test" } };
+    expect(Object.keys(body).sort()).toEqual(["ai", "commit", "commit_short", "llm_available", "ok", "timestamp"]);
   });
 });

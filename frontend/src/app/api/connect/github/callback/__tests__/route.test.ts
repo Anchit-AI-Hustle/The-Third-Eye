@@ -22,4 +22,11 @@ describe("GitHub connect callback", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ error: "bad_verification_code" }));
     expect(new URL((await call()).headers.get("location")!).search).toBe("?connect=github_error");
   });
+
+  it("refuses a code that arrives without this browser's state cookie", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const res = await GET(new Request("https://app.example/api/connect/github/callback?code=attacker&state=x"));
+    expect(new URL(res.headers.get("location")!).search).toBe("?connect=github_error");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

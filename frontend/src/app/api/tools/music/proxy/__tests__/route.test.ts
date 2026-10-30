@@ -44,4 +44,17 @@ describe("/api/tools/music/proxy", () => {
     expect((await get(RELEASE)).status).toBe(502);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("never serves a page from this origin: only media types, with nosniff and a sandbox", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<script>alert(1)</script>", { headers: { "content-type": "text/html" } })));
+    expect((await get("https://storage.googleapis.com/any-bucket/x.html")).status).toBe(415);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } })));
+    expect((await get("https://storage.googleapis.com/any-bucket/x.svg")).status).toBe(415);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("ID3", { headers: { "content-type": "audio/mpeg" } })));
+    const ok = await get("https://replicate.delivery/x/out");
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(ok.headers.get("content-security-policy")).toMatch(/sandbox/);
+    expect(ok.headers.get("access-control-allow-origin")).toBeNull();
+  });
 });

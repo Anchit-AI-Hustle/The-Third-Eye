@@ -29,7 +29,13 @@ function from(table: string) {
   return q;
 }
 
-vi.mock("@/lib/db", () => ({ getDb: () => ({ from }) }));
+const limits = new Map<string, number>();
+const rpc = async (_fn: string, a: { p_bucket: string; p_key: string }) => {
+  const k = `${a.p_bucket}:${a.p_key}`;
+  limits.set(k, (limits.get(k) ?? 0) + 1);
+  return { data: limits.get(k), error: null };
+};
+vi.mock("@/lib/db", () => ({ getDb: () => ({ from, rpc }) }));
 vi.mock("@/lib/crypto", () => ({ decrypt: (s: string) => s.replace(/^enc:/, "") }));
 const processed = new Set<string>();
 vi.mock("@/lib/cron", () => ({
@@ -42,6 +48,7 @@ const calls: { url: string; body: Row; auth: string | null }[] = [];
 let chatSse = "";
 
 beforeEach(() => {
+  limits.clear();
   for (const k of Object.keys(tables)) delete tables[k];
   processed.clear();
   sent.length = 0;
@@ -118,6 +125,15 @@ describe("handleInbound", () => {
     await handleInbound(msg("link 123456"));
     expect(tables.whatsapp_links[0].phone).toBeNull();
     expect(sent[0].body).toMatch(/expired/);
+  });
+
+  it("stops a number guessing codes after five tries an hour", async () => {
+    tables.whatsapp_links = [{ user_id: "me@x.com", phone: null, link_code: "123456", code_expires_at: new Date(Date.now() + 60000).toISOString() }];
+    const { handleInbound } = await import("@/lib/whatsappAgent");
+    for (let i = 0; i < 5; i++) await handleInbound(msg(`LINK 00000${i}`, `g${i}`));
+    await handleInbound(msg("LINK 123456", "g5"));
+    expect(tables.whatsapp_links[0].phone).toBeNull();
+    expect(sent.at(-1)!.body).toMatch(/Too many link attempts/);
   });
 
   it("tells an unknown number how to link, without calling the assistant", async () => {

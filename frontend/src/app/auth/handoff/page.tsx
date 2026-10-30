@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { validCode } from "@/lib/authHandoff";
+import { confirmCode, validCode } from "@/lib/authHandoff";
 import { SignInClient } from "../signin/SignInClient";
 
 // Opened in Safari by the home-screen app (SignInClient, standalone mode).
@@ -20,8 +20,9 @@ export default async function HandoffPage({ searchParams }: { searchParams: Prom
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return <SignInClient callbackUrl={`/auth/handoff?code=${code}`} initialError={null} />;
   if (done) return shell(<>
-    <h1 className="font-display text-xl font-semibold text-text-primary">You&apos;re signed in</h1>
-    <p className="text-text-secondary text-sm">Go back to the JARVIS app. It opens your workspace by itself.</p>
+    <h1 className="font-display text-xl font-semibold text-text-primary">Type this in the app</h1>
+    <p className="font-display text-3xl font-semibold tracking-[0.3em] text-accent-blue tabular-nums">{confirmCode(code, session.user.email)}</p>
+    <p className="text-text-secondary text-sm">Go back to the JARVIS app on this phone and enter it there. Never give it to anyone else: it signs a device in as you.</p>
   </>);
   if (expired) return shell(<p className="text-text-secondary text-sm">This sign-in request expired or was already used. Tap Sign in again in the JARVIS app.</p>);
   return shell(<>

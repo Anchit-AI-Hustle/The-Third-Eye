@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     .find((c) => c.startsWith("g_connect_state="))
     ?.split("=")[1];
 
-  if (!code || !state || (cookieState && state !== cookieState)) {
+  if (!code || !state || !cookieState || state !== cookieState) {
     return NextResponse.redirect(`${base}/settings?connect=google_error`);
   }
 

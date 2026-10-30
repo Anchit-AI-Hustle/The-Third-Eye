@@ -42,7 +42,11 @@ describe("user-added connector URLs", () => {
     for (const ip of ["10.1.2.3", "172.16.0.1", "192.168.1.1", "100.64.0.1", "169.254.1.1", "0.0.0.0", "::ffff:10.0.0.1", "fd00::1", "fe80::1"]) {
       expect(isPrivateAddress(ip), ip).toBe(true);
     }
-    for (const ip of ["8.8.8.8", "172.32.0.1", "2606:4700::1111"]) expect(isPrivateAddress(ip), ip).toBe(false);
+    for (const ip of ["8.8.8.8", "172.32.0.1", "2606:4700::1111", "::ffff:8.8.8.8", "2002:808:808::1"]) expect(isPrivateAddress(ip), ip).toBe(false);
+    // IPv4 inside IPv6 in every spelling URL parsing produces, and non-global ranges.
+    for (const ip of ["::ffff:7f00:1", "::ffff:a9fe:a9fe", "::ffff:169.254.169.254", "::", "::1", "64:ff9b::a9fe:a9fe", "2002:7f00:1::", "2001:0:1::1", "100::1", "::7f00:1"]) {
+      expect(isPrivateAddress(ip), ip).toBe(true);
+    }
   });
 
   it("makes safe tool-name prefixes and hides keys in URLs", () => {
