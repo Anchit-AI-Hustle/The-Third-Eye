@@ -48,6 +48,7 @@ export function SignInClient({
   const [busy, setBusy] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const [handoff, setHandoff] = useState<string | null>(null);
+  const [handoffFailed, setHandoffFailed] = useState(false);
 
   const [welcome, setWelcome] = useState(false);
   useEffect(() => {
@@ -57,16 +58,15 @@ export function SignInClient({
     setWelcome(!seen);
   }, [callbackUrl]);
 
-  useEffect(() => {
+  async function confirmHandoff(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     if (!handoff) return;
-    const poll = async () => {
-      const r = await fetch(`/api/auth/handoff?code=${handoff}`).then((res) => res.json()).catch(() => null);
-      if (r?.signedIn) window.location.assign(callbackUrl);
-    };
-    const id = setInterval(poll, 2000);
-    document.addEventListener("visibilitychange", poll);
-    return () => { clearInterval(id); document.removeEventListener("visibilitychange", poll); };
-  }, [handoff, callbackUrl]);
+    const typed = String(new FormData(e.currentTarget).get("confirm") ?? "").trim();
+    const r = await fetch(`/api/auth/handoff?code=${handoff}&confirm=${encodeURIComponent(typed)}`).then((res) => res.json()).catch(() => null);
+    if (r?.signedIn) return window.location.assign(callbackUrl);
+    setHandoff(null);
+    setHandoffFailed(true);
+  }
 
   // Android app: Google in the phone's browser, which hands a ready code back
   // through thethirdeye:// (api/app-signin) for this web view to claim.
@@ -88,6 +88,7 @@ export function SignInClient({
     // The code is registered long before the person reaches Approve.
     window.open(`/auth/handoff?code=${code}`, "_blank");
     await fetch("/api/auth/handoff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    setHandoffFailed(false);
     setHandoff(code);
   }
 
@@ -171,13 +172,20 @@ export function SignInClient({
               <div className="text-center space-y-2" aria-live="polite">
                 <p className="text-text-primary text-sm">Finish signing in with Google in Safari, approve code</p>
                 <p className="font-display text-2xl font-semibold tracking-widest text-accent-blue">{handoff.slice(0, 4).toUpperCase()}</p>
-                <p className="text-text-muted text-xs">then come back here. This screen opens your workspace by itself.</p>
+                <p className="text-text-muted text-xs">then type the code Safari shows you here.</p>
+                <form onSubmit={confirmHandoff} className="flex gap-2 pt-2">
+                  <input name="confirm" aria-label="Code from Safari" autoComplete="one-time-code" autoCapitalize="characters" maxLength={6} required
+                    className="min-w-0 flex-1 rounded-input border border-border-default bg-background-base px-3 h-11 text-center font-display tracking-[0.3em] uppercase text-text-primary" />
+                  <button type="submit" className="rounded-input bg-accent-blue px-4 h-11 text-sm font-semibold text-background-base">Sign in</button>
+                </form>
                 {/* iOS sometimes swallows window.open from a home-screen app; a tap on a link always opens. */}
                 <a href={`/auth/handoff?code=${handoff}`} target="_blank" rel="noopener" className="inline-block pt-2 text-sm text-accent-blue underline">
                   Open Safari to sign in
                 </a>
               </div>
             ) : (
+              <>
+              {handoffFailed && <p role="alert" className="mb-3 text-center text-sm text-accent-red">That code didn&apos;t match, or Safari hasn&apos;t approved yet. Start again.</p>}
               <button
                 type="button"
                 onClick={startHandoff}
@@ -185,6 +193,7 @@ export function SignInClient({
               >
                 Continue with Google
               </button>
+              </>
             )
           ) : (
           <>

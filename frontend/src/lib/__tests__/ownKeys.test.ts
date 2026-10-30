@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ getDb: () => null }));
+vi.mock("dns/promises", async (orig) => {
+  const lookup = async (h: string) => [{ address: h.startsWith("rebind.") ? "10.0.0.5" : "93.184.216.34", family: 4 }];
+  const real = await orig<typeof import("dns/promises")>();
+  return { ...real, default: { ...real, lookup }, lookup };
+});
 
 import { llmCascade, resetCooldowns, toolCallCascade } from "@/lib/llmCascade";
 import { enterPersona, ollamaUrlProblem, withKeys } from "@/lib/providerKeys";
@@ -77,6 +82,14 @@ describe("a user's own provider keys", () => {
     expect(r.provider).toBe("ollama");
     expect(r.text).toBe("local answer");
     expect(seen[0].url).toBe("https://my-mac.example.com/v1/chat/completions");
+  });
+
+  it("skips an own Ollama URL that now resolves to a private network", async () => {
+    resetCooldowns();
+    const seen = stub(() => ok("should not be called"));
+    const r = await withKeys({ userId: "a@x.com", ollama: "https://rebind.example.com" }, () => llmCascade({ messages: [{ role: "user", content: "hi" }] })).catch((e: Error) => e);
+    expect(seen.some((c) => c.url.includes("rebind.example.com"))).toBe(false);
+    expect(r).toBeInstanceOf(Error);
   });
 
   it("a local model answers tool calls when no cloud provider can", async () => {

@@ -66,6 +66,16 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
   const body = msg.type === "text" ? msg.text?.body?.trim() ?? "" : "";
   const code = body.match(LINK)?.[1];
   if (code) {
+    // A code is 6 digits for 15 minutes, so guessing is held to a few tries per
+    // number and a ceiling across all numbers. Fails closed.
+    // The shared ceiling only counts senders still within their own limit, so
+    // one number can't use it up for everyone.
+    const hit = (b: string, k: string) => db.rpc("auth_rate_limit_hit", { p_bucket: b, p_key: k, p_window_secs: 3600 })
+      .then(({ data, error }) => (error ? Infinity : Number(data)));
+    if ((await hit("wa_link", msg.from)) > 5 || (await hit("wa_link_all", "*")) > 300) {
+      await sendWhatsAppText(msg.from, "Too many link attempts. Try again in an hour with a fresh code from The Third Eye → Settings → WhatsApp.");
+      return;
+    }
     const { data } = await db.from("whatsapp_links").select("user_id, code_expires_at").eq("link_code", code).maybeSingle();
     const row = data as { user_id: string; code_expires_at: string | null } | null;
     if (!row || !row.code_expires_at || new Date(row.code_expires_at).getTime() < Date.now()) {

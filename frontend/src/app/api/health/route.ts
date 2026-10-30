@@ -1,3 +1,5 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { llmStatus } from "@/lib/llmCascade";
 
 export const runtime = "nodejs";
@@ -39,23 +41,20 @@ export async function GET() {
   // Git integration built the deployment. CLI deploys pass the sha in as a
   // build env var instead — written out in full here because Next.js inlines
   // NEXT_PUBLIC_* by literal text match, not through the `env` alias above.
-  const llm = await llmStatus().catch(() => null);
-
   const commit = clean(env.VERCEL_GIT_COMMIT_SHA) || clean(process.env.NEXT_PUBLIC_BUILD_SHA);
-
-  return new Response(JSON.stringify({
-    ok: llm_available,
-    ai: llm_available,                 // legacy alias for SettingsClient
-    llm_available,
+  const summary = { ok: llm_available, ai: llm_available, llm_available, commit, commit_short: commit.slice(0, 7), timestamp: new Date().toISOString() };
+  // Which providers and services are set up, and how each is doing, is only
+  // for signed-in people: to anyone else it is a map of what to attack.
+  const signedIn = !!(await getServerSession(authOptions).catch(() => null))?.user?.email;
+  const detail = signedIn ? {
     providers,
-    llm,
+    llm: await llmStatus().catch(() => null),
     services,
-    commit,
-    commit_short: commit.slice(0, 7),
     branch: clean(env.VERCEL_GIT_COMMIT_REF),
     deployment_id: clean(env.VERCEL_DEPLOYMENT_ID),
-    timestamp: new Date().toISOString(),
-  }), {
+  } : {};
+
+  return new Response(JSON.stringify({ ...summary, ...detail }), {
     status: 200,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });

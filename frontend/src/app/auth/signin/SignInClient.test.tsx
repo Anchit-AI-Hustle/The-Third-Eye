@@ -54,7 +54,7 @@ describe("SignInClient", () => {
     await waitFor(() => expect(getCsrfToken).toHaveBeenCalled());
   });
 
-  it("in the iPhone home-screen app, signs in through Safari and picks the session up when approved", async () => {
+  it("in the iPhone home-screen app, signs in through Safari once the confirmation Safari shows is typed in", async () => {
     Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const assign = vi.fn();
@@ -80,8 +80,13 @@ describe("SignInClient", () => {
     // If iOS swallowed the window, there is still something to tap.
     expect(screen.getByRole("link", { name: /Open Safari to sign in/i })).toHaveAttribute("href", `/auth/handoff?code=${code}`);
 
-    approved = true;
+    // Nothing signs in until the confirmation Safari shows is typed here.
     await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
+    expect(assign).not.toHaveBeenCalled();
+    approved = true;
+    fireEvent.change(screen.getByLabelText("Code from Safari"), { target: { value: "abc234" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Sign in" })); });
+    expect(fetchMock).toHaveBeenLastCalledWith(`/api/auth/handoff?code=${code}&confirm=abc234`);
     expect(assign).toHaveBeenCalledWith("/dashboard");
 
     vi.useRealTimers();

@@ -17,6 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { usableGeminiKey } from "@/lib/providerReady";
 import { backgroundBlocked, benchedReason, classifyFailure, forgetSeenHealth, healthMap, noteFailure, noteSuccess, resetHealthCache } from "@/lib/providerHealth";
 import { currentOwnKeys, localFirst, ownOllamaModel, tunnelAuth } from "@/lib/providerKeys";
+import { publicHost } from "@/lib/mcp/userConnectors";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -67,6 +68,9 @@ const ollamaKey = () => {
   return (process.env.OLLAMA_API_KEY ?? "").trim() || "ollama";
 };
 const ollamaModel = () => ownOllamaModel() ?? modelFor("ollama");
+// A user's address is checked again on every call: a name that was public when
+// saved can later resolve to the deployment's own network.
+const ownOllamaBlocked = async () => { const own = currentOwnKeys()?.ollama; return own ? publicHost(own) : null; };
 // A tunnel to a sleeping or closed laptop fails fast (Cloudflare answers 530);
 // skip it for a while rather than wait on it before every reply.
 const OLLAMA_AWAY_MS = 2 * 60_000;
@@ -520,7 +524,7 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
       ...opts.messages,
     ];
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST",
+      method: "POST", redirect: "error",
       headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model, messages,
@@ -743,6 +747,8 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       if (res.ok) { await noteSuccess(healthName("mistral"), model); return { text: res.text, provider: "mistral", model, attempts }; }
       if (res.quota) startCooldown(healthName("mistral"), res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
+      const blocked = await ownOllamaBlocked();
+      if (blocked) { attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${blocked}` }); continue; }
       const model = ollamaModel();
       const res = await callOpenAICompatible(ollamaBase(), ollamaKey(), model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 });
       attempts.push(attempt("ollama", model, res));
@@ -797,7 +803,7 @@ async function visionOpenAICompatible(base: string, key: string, model: string, 
   const { signal, clear } = withTimeout(o.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: authorization(key) }, signal,
+      method: "POST", redirect: "error", headers: { "Content-Type": "application/json", Authorization: authorization(key) }, signal,
       body: JSON.stringify({
         model, max_tokens: o.maxTokens ?? 1200,
         messages: [
@@ -873,7 +879,7 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
   const { signal, clear } = withTimeout(opts.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST",
+      method: "POST", redirect: "error",
       headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model,
@@ -930,7 +936,7 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
   for (const { provider, base, model, key } of toolCapableOrder()) {
     const hp = healthName(provider);
     const local = provider === "ollama";
-    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : local ? null : await benchedReason(hp);
+    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : local ? await ownOllamaBlocked() : await benchedReason(hp);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
     // The user's own model is theirs to choose, so a missing one is reported, not swapped.
     const { res, model: used } = provider === "anthropic"

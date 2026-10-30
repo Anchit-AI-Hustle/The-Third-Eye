@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     .find((c) => c.startsWith("gh_connect_state="))
     ?.split("=")[1];
 
-  if (!code || !state || (cookieState && state !== cookieState)) {
+  if (!code || !state || !cookieState || state !== cookieState) {
     return NextResponse.redirect(`${base}/settings?connect=github_error`);
   }
 

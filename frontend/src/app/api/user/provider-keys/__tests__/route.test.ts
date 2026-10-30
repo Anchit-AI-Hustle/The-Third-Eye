@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let email: string | null = "u@x.com";
+vi.mock("dns/promises", async (orig) => {
+  const lookup = async (h: string) => [{ address: h.startsWith("rebind.") ? "169.254.169.254" : "93.184.216.34", family: 4 }];
+  const real = await orig<typeof import("dns/promises")>();
+  return { ...real, default: { ...real, lookup }, lookup };
+});
 vi.mock("next-auth", () => ({ getServerSession: async () => (email ? { user: { email } } : null) }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 const saved = new Map<string, string>();
@@ -43,6 +48,7 @@ describe("own provider keys API", () => {
     const r = await put({ provider: "ollama", value: "http://192.168.1.5:11434" });
     expect(r.status).toBe(400);
     expect((await r.json()).error).toMatch(/https/);
+    expect((await put({ provider: "ollama", value: "https://rebind.example.com" })).status).toBe(400);
     expect((await put({ provider: "ollama", value: "https://mac.example.com" })).status).toBe(200);
     expect((await (await GET()).json()).keys).toEqual([{ provider: "ollama", hint: "mac.example.com" }]);
   });

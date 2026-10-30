@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { approveHandoff, validCode } from "@/lib/authHandoff";
+import { approveHandoff, browserKey, validCode } from "@/lib/authHandoff";
 
 // The signed-in person (in Safari) approves the app's code. A same-origin
 // form post only, so another site cannot approve on their behalf.
@@ -13,6 +13,6 @@ export async function POST(req: Request) {
   const code = (await req.formData()).get("code");
   const db = getDb();
   if (!validCode(code) || !db) return new Response("Bad code", { status: 400 });
-  const ok = await approveHandoff(db, code, email);
+  const ok = await approveHandoff(db, browserKey(code), email);
   return Response.redirect(`${url.origin}/auth/handoff?code=${code}&${ok ? "done=1" : "expired=1"}`, 303);
 }

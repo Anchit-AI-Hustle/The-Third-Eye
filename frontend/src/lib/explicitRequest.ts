@@ -12,10 +12,19 @@ const VERBS: Record<string, RegExp> = {
 };
 const CONNECTOR = /\b(send|post|message|create|add|update|edit|delete|remove|book|schedule|publish|reply|move|archive|invite|assign|close|merge|upload)\b/i;
 
+// Every recipient address must be in the user's own words. A name alone isn't
+// enough: text the assistant read (an email, a web page) could pair "Bob" with
+// an address of its choosing. Anything else gets a confirm card.
+function namedRecipients(text: string, to: unknown): boolean {
+  const said = text.toLowerCase();
+  const list = String(to ?? "").toLowerCase().split(/[,;\s]+/).filter(Boolean);
+  return list.length > 0 && list.every((r) => said.includes(r));
+}
+
 export function explicitlyRequested(userMessage: string, tool: string, args: Record<string, unknown> = {}): boolean {
   const text = userMessage.trim();
   if (!text || NOT_NOW.test(text) || /\?\s*$/.test(text)) return false;
-  if (tool === "communicate" && (args.action ?? "email") !== "email") return false;
+  if (tool === "communicate" && ((args.action ?? "email") !== "email" || !namedRecipients(text, args.to))) return false;
   const verb = VERBS[tool] ?? (tool.startsWith("mcp__") ? CONNECTOR : null);
   return !!verb && verb.test(text);
 }

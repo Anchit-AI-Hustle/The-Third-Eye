@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { deleteOwnKey, isModelName, loadOwnKeys, localFirst, saveOwnKey, tunnelAuth } from "@/lib/providerKeys";
+import { publicHost } from "@/lib/mcp/userConnectors";
 
 export const runtime = "nodejs";
 
@@ -75,8 +76,11 @@ export async function POST() {
   if (!email) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const own = await loadOwnKeys(email);
   if (!own.ollama) return Response.json({ error: "Add your computer's address first." }, { status: 400 });
+  const problem = await publicHost(own.ollama);
+  if (problem) return Response.json({ ok: false, error: problem });
   const started = Date.now();
   const r = await fetch(`${own.ollama.replace(/\/$/, "")}/v1/models`, {
+    redirect: "error",
     headers: own.ollama_token ? { Authorization: tunnelAuth(own.ollama_token) } : {},
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);

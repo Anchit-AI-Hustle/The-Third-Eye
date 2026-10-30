@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { approveHandoff, claimHandoff, codeHash, HANDOFF_TTL_MS, startHandoff, validCode } from "@/lib/authHandoff";
+import { describe, expect, it, vi } from "vitest";
+import { approveHandoff, browserKey, claimBrowserHandoff, claimHandoff, codeHash, confirmCode, HANDOFF_TTL_MS, startHandoff, validCode } from "@/lib/authHandoff";
+
+vi.stubEnv("NEXTAUTH_SECRET", "s3cret");
 
 type Row = Record<string, any>;
 function fakeDb() {
@@ -66,5 +68,25 @@ describe("app sign-in handoff", () => {
     const { db } = fakeDb();
     expect(await approveHandoff(db, code, "a@x.test")).toBe(false);
     expect(await claimHandoff(db, code)).toBeNull();
+  });
+
+  it("signs a browser-started code in only with the confirmation shown to the account that approved it", async () => {
+    const { db } = fakeDb();
+    await startHandoff(db, browserKey(code));
+    expect(await approveHandoff(db, browserKey(code), "victim@x.test")).toBe(true);
+    // Whoever started it knows the code, but not the confirmation for the victim's account.
+    expect(confirmCode(code, "attacker@x.test")).not.toBe(confirmCode(code, "victim@x.test"));
+    expect(await claimHandoff(db, code)).toBeNull();
+    expect(await claimBrowserHandoff(db, code, confirmCode(code, "attacker@x.test"))).toBeNull();
+    // One wrong confirmation burns it, so it can't be guessed.
+    expect(await claimBrowserHandoff(db, code, confirmCode(code, "victim@x.test"))).toBeNull();
+  });
+
+  it("claims a browser-started code with the right confirmation, typed in any case", async () => {
+    const { db } = fakeDb();
+    await startHandoff(db, browserKey(code));
+    await approveHandoff(db, browserKey(code), "a@x.test");
+    expect(confirmCode(code, "a@x.test")).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(await claimBrowserHandoff(db, code, ` ${confirmCode(code, "a@x.test").toLowerCase()} `)).toBe("a@x.test");
   });
 });

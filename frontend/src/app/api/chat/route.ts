@@ -899,7 +899,7 @@ async function runTool(
       const type = input.type ?? "image";
       switch (type) {
         case "image": {
-          if (replicateConfigured()) return await startAssistantMedia(ctx.email, "image", input.prompt ?? "", { style: input.style, size: input.size });
+          if (replicateConfigured()) return await chargedMedia(ctx.email, "image", input.prompt ?? "", { style: input.style, size: input.size });
           // No image model: draw it as a vector illustration in code.
           const url = await drawSvg(input.prompt ?? "", input.style).catch(() => null);
           if (!url) return { result: "image failed: the image could not be made. Nothing was generated." };
@@ -911,7 +911,7 @@ async function runTool(
         case "music": return await generateMusic(ctx.email, input.prompt ?? input.description ?? "");
         case "video": {
           const prompt = input.prompt ?? input.description ?? "";
-          if (replicateConfigured()) return await startAssistantMedia(ctx.email, "video", prompt);
+          if (replicateConfigured()) return await chargedMedia(ctx.email, "video", prompt);
           const url = studioVideoLink(prompt);
           return {
             result: `Videos are made in Studio. Opening ${url.startsWith("/tools/reel") ? "Reel" : "Video"} Studio with the idea filled in: the user writes the script there and taps render to get the finished file. Nothing has been rendered yet.`,
@@ -1758,6 +1758,16 @@ async function generateMusic(userId: string | null | undefined, prompt: string):
   if (!spend.ok) return { result: `No track was made: ${spend.error}` };
   const out = await composeMusic(userId, prompt);
   if (out.sideEffect?.type !== "media" && !/ job submitted /.test(out.result)) await refundCredits(userId, spend, "music.generate");
+  return out;
+}
+
+async function chargedMedia(userId: string | null | undefined, kind: "image" | "video", prompt: string, options?: { style?: string; size?: string }) {
+  if (!userId) return startAssistantMedia(undefined, kind, prompt, options);
+  const action = kind === "video" ? "video.render" : "image.generate";
+  const spend = await spendCredits(userId, action);
+  if (!spend.ok) return { result: `No ${kind} was made: ${spend.error}` };
+  const out = await startAssistantMedia(userId, kind, prompt, options);
+  if (!/ job submitted /.test(out.result)) await refundCredits(userId, spend, action);
   return out;
 }
 
