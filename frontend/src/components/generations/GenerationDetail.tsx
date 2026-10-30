@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft, Copy, Check, Download, Trash2, Eye, Code2, AlertTriangle } from "lucide-react";
-import { GEN_APPS, deleteGeneration, getGeneration, type GenerationRecord } from "@/lib/generations";
+import { GEN_APPS, deleteGeneration, getGenerationAnywhere, type GenerationRecord } from "@/lib/generations";
 import { saveMedia } from "@/lib/mediaFile";
 
 // Full input → output view for one generation.
@@ -18,13 +18,18 @@ export function GenerationDetail({ id }: { id: string }) {
   const [mediaBroken, setMediaBroken] = useState(false);
   const [dlError, setDlError] = useState<string | null>(null);
 
-  useEffect(() => { setRec(getGeneration(id)); setMediaBroken(false); }, [id]);
+  useEffect(() => {
+    let live = true;
+    setRec(undefined); setMediaBroken(false);
+    void getGenerationAnywhere(id).then((r) => { if (live) setRec(r); });
+    return () => { live = false; };
+  }, [id]);
 
   if (rec === undefined) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
   if (rec === null) {
     return (
       <div className="rounded-card border border-border-default bg-background-surface p-8 text-center">
-        <p className="text-text-secondary text-sm">This generation was not found (it may have been deleted, or lives on another device).</p>
+        <p className="text-text-secondary text-sm">This generation was not found. It may have been deleted.</p>
         <Link href="/generations" className="inline-flex items-center gap-1.5 mt-3 text-accent-blue text-sm hover:underline"><ArrowLeft size={14} /> Back to generations</Link>
       </div>
     );
@@ -106,7 +111,12 @@ export function GenerationDetail({ id }: { id: string }) {
           )}
         </div>
 
-        {rec.kind === "audio" ? (
+        {!rec.output && (rec.kind === "audio" || rec.kind === "video") ? (
+          <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">
+            <AlertTriangle size={14} className="text-warning flex-none mt-0.5" />
+            <span>The file itself was kept on the device that made it. Open this generation there to play or download it.</span>
+          </div>
+        ) : rec.kind === "audio" ? (
           <div className="space-y-3">
             {mediaBroken ? (
               <div className="flex items-start gap-2 rounded-input border border-border-default bg-background-base p-3 text-xs text-text-muted">

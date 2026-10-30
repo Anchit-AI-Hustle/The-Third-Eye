@@ -39,6 +39,8 @@ const ENTITIES: Record<string, EntityCfg> = {
   knowledge_docs: { table: "knowledge_docs", order: [{ col: "created_at", asc: false }] },
   expenses: { table: "expenses", order: [{ col: "spent_on", asc: false }, { col: "created_at", asc: false }] },
   music_tracks: { table: "music_tracks", order: [{ col: "created_at", asc: false }] },
+  // Every feature's outputs (lib/generations.ts); listed without the output, opened one at a time.
+  generations: { table: "generations", order: [{ col: "created_at", asc: false }], upsertOn: "user_id,id", listColumns: "id,app,tool,app_label,title,kind,input_text,created_at" },
   // One row per local day, re-saved as the day goes on.
   lifelog_days: { table: "lifelog_days", order: [{ col: "date", asc: false }], upsertOn: "user_id,id" },
   // Assistant chat history: listed without messages, opened one at a time.

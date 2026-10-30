@@ -3,10 +3,13 @@
 import { vaultGet, vaultSet } from "@/lib/deviceVault";
 import { logAgentAction } from "@/lib/agentControl";
 import { STUDIO_TOOLS } from "@/lib/studioTools";
+import { dataDelete, dataInsert, dataRead } from "@/lib/dataClient";
 
 // Unified generations log. Every app that produces an output records it here, so
 // the /generations dashboard can list every input→output across the whole app
-// and open a detail page for the full view. Stored on-device (device vault).
+// and open a detail page for the full view. Kept on this device (device vault)
+// and in the account (/api/data/generations), so outputs made on another device,
+// in the phone apps or by the assistant show too.
 
 export type GenKind = "text" | "markdown" | "html" | "audio" | "video" | "json";
 
@@ -58,12 +61,72 @@ export function getGeneration(id: string): GenerationRecord | null {
   return listGenerations().find((g) => g.id === id) ?? null;
 }
 
+// Larger outputs (an inline video or song) stay on this device only.
+const ROW_OUTPUT_MAX = 1_500_000;
+
+interface GenerationRow {
+  id: string; app: string; tool?: string | null; app_label: string; title: string; kind: GenKind;
+  inputs?: GenInputField[]; input_text?: string | null; output?: string; meta?: Record<string, unknown> | null; created_at: string;
+}
+
+/** The account's copy of a record. A blob: URL only means something in the browser that made it. */
+export function toRow(g: GenerationRecord): GenerationRow {
+  const keep = !g.output.startsWith("blob:") && g.output.length <= ROW_OUTPUT_MAX;
+  return {
+    id: g.id, app: g.app, tool: g.tool ?? null, app_label: g.appLabel, title: g.title, kind: g.kind,
+    inputs: g.inputs, input_text: g.inputText ?? null, output: keep ? g.output : "", meta: g.meta ?? null, created_at: g.createdAt,
+  };
+}
+
+function fromRow(r: GenerationRow): GenerationRecord {
+  return {
+    id: r.id, app: r.app, tool: r.tool ?? undefined, appLabel: r.app_label, title: r.title, kind: r.kind,
+    createdAt: r.created_at, inputs: r.inputs ?? [], inputText: r.input_text ?? undefined, output: r.output ?? "", meta: r.meta ?? undefined,
+  };
+}
+
+interface TrackRow { id: string; title?: string | null; description?: string | null; lyrics?: string | null; audio_url?: string | null; created_at: string }
+
+// Music Studio saves every song to the library, from the website and the phone apps.
+function fromTrack(t: TrackRow): GenerationRecord {
+  return {
+    id: `music_${t.id}`, app: "music", appLabel: "Music Studio", title: t.title || "Track", kind: "audio", createdAt: t.created_at,
+    inputs: [], inputText: t.description ?? undefined, output: t.audio_url ?? "", meta: t.lyrics ? { lyrics: t.lyrics } : undefined,
+  };
+}
+
+/** This device's records, the account's, and the music library, newest first, once each. */
+export async function listAllGenerations(): Promise<GenerationRecord[]> {
+  const [cloud, tracks] = await Promise.all([dataRead<GenerationRow>("generations"), dataRead<TrackRow>("music_tracks")]);
+  const all = new Map<string, GenerationRecord>();
+  for (const g of listGenerations()) all.set(g.id, g);
+  for (const r of cloud ?? []) if (!all.has(r.id)) all.set(r.id, fromRow(r));
+  // A song recorded as a generation is in the library too; account rows are listed without their output, so match by title as well.
+  const songs = [...all.values()].filter((g) => g.app === "music");
+  const listed = (t: TrackRow) => songs.some((g) => g.output === t.audio_url || (!!t.title && g.title === t.title));
+  for (const t of tracks ?? []) if (t.audio_url && !listed(t) && !all.has(`music_${t.id}`)) all.set(`music_${t.id}`, fromTrack(t));
+  return [...all.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** One record: from this device, else the account, else the music library. */
+export async function getGenerationAnywhere(id: string): Promise<GenerationRecord | null> {
+  const local = getGeneration(id);
+  if (local) return local;
+  if (id.startsWith("music_")) {
+    const t = (await dataRead<TrackRow>("music_tracks"))?.find((r) => `music_${r.id}` === id);
+    return t ? fromTrack(t) : null;
+  }
+  const row = (await dataRead<GenerationRow>(`generations?id=${encodeURIComponent(id)}`))?.[0];
+  return row ? fromRow(row) : null;
+}
+
 /** Record a generation. Returns the new id. Safe to call fire-and-forget. */
 export function recordGeneration(rec: Omit<GenerationRecord, "id" | "createdAt">): string {
   if (typeof window === "undefined") return "";
   const full: GenerationRecord = { ...rec, id: genId(), createdAt: new Date().toISOString() };
   const next = [full, ...listGenerations()].slice(0, CAP);
   vaultSet(APP, KEY, next);
+  void dataInsert("generations", toRow(full));
   // Surface every generation in the Agent Activity feed too.
   try { logAgentAction({ type: `generate.${full.app}`, label: `${full.appLabel}: ${full.title}`, outcome: "applied" }); } catch { /* noop */ }
   try { window.dispatchEvent(new CustomEvent("te:generations-updated")); } catch { /* noop */ }
@@ -88,6 +151,8 @@ export function featureHistory(tool: string): GenerationRecord[] {
 
 export function deleteGeneration(id: string): void {
   vaultSet(APP, KEY, listGenerations().filter((g) => g.id !== id));
+  if (id.startsWith("music_")) void dataDelete("music_tracks", id.slice("music_".length));
+  else void dataDelete("generations", id);
   try { window.dispatchEvent(new CustomEvent("te:generations-updated")); } catch { /* noop */ }
 }
 

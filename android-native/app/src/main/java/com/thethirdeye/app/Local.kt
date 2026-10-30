@@ -7,6 +7,15 @@ import androidx.compose.runtime.mutableStateOf
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.KSerializer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 data class Generation(
@@ -93,11 +102,15 @@ class Local private constructor(context: Context) {
     fun addGeneration(g: Generation) {
         generations = withGeneration(generations, g)
         write("generations", Generation.serializer(), generations)
+        CoroutineScope(Dispatchers.IO).launch { runCatching { DataStore.insert("generations", generationRow(g)) } }
     }
 
     fun deleteGeneration(id: String) {
         generations = generations.filterNot { it.id == id }
         write("generations", Generation.serializer(), generations)
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { if (id.startsWith("music_")) DataStore.delete("music_tracks", id.removePrefix("music_")) else DataStore.delete("generations", id) }
+        }
     }
 
     fun saveSkill(skill: Skill) {
@@ -132,4 +145,12 @@ class Local private constructor(context: Context) {
         @Volatile private var instance: Local? = null
         fun get(context: Context): Local = instance ?: synchronized(this) { instance ?: Local(context.applicationContext).also { instance = it } }
     }
+}
+
+/** The account's copy, so it lists with everything made on the website and other devices. */
+fun generationRow(g: Generation): JsonObject = buildJsonObject {
+    put("id", g.id); put("app", g.app); put("tool", g.tool?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("app_label", g.appLabel); put("title", g.title); put("kind", g.kind); put("created_at", g.createdAt)
+    put("inputs", buildJsonArray { g.inputs.forEach { i -> add(buildJsonObject { put("label", i.label); put("value", i.value) }) } })
+    put("output", if (g.output.length <= 1_500_000) g.output else "")
 }

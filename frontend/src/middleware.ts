@@ -49,5 +49,10 @@ export const config = {
     "/tools/:path*",
     "/capabilities/:path*",
     "/audit/:path*",
+    "/models/:path*",
+    "/skills/:path*",
+    "/lifelog/:path*",
+    "/settings/:path*",
+    "/connectors/:path*",
   ],
 };

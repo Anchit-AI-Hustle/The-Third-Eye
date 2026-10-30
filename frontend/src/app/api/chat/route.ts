@@ -1284,7 +1284,7 @@ async function setReminder(
   const recurrence = input.recurrence && input.recurrence !== "none" ? input.recurrence : null;
   const limits = limitsFor(ctx.tier);
   if (recurrence && !limits.recurringReminders) {
-    return "Recurring reminders are a JARVIS Premium feature. I can set a one-time reminder now, or you can upgrade in Settings → Upgrade.";
+    return "Recurring reminders are a Premium feature. I can set a one-time reminder now, or you can upgrade in Settings → Upgrade.";
   }
 
   if (!isUnlimited(limits.activeReminders)) {
@@ -1381,10 +1381,24 @@ async function createAsset(
       processing_status: "ready",
     });
     saved = !error;
+    // And to Generations, with the Studio-made ones (lib/generations.ts).
+    await sb.from("generations").insert({
+      id: `gen_${randomUUID().slice(0, 12)}`,
+      user_id: ctx.email,
+      app: "studio",
+      tool: tool.id,
+      app_label: `Studio · ${tool.label}`,
+      title,
+      kind: tool.format === "html" ? "html" : "markdown",
+      inputs: Object.entries(inputs).filter(([, v]) => v.trim()).map(([label, value]) => ({ label, value })),
+      input_text: brief,
+      output: result.output,
+      meta: { via: "assistant" },
+    });
   }
 
   const where = saved
-    ? "Saved to your Knowledge base - open Studio to preview, tweak, or download it."
+    ? "Saved to your Knowledge base and Generations - open Studio to preview, tweak, or download it."
     : "It isn't saved (cloud storage not configured), so here it is inline.";
   const preview = tool.format === "markdown"
     ? `\n\n${result.output.slice(0, 1200)}${result.output.length > 1200 ? "\n\n…(truncated - full version in Knowledge/Studio)" : ""}`
@@ -2072,7 +2086,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   if (enforced && !gate.allowed) {
     return new Response(
       JSON.stringify({
-        error: `You've hit the free plan's ${gate.limit} messages/day. Upgrade to JARVIS Premium for unlimited access.`,
+        error: `You've hit the free plan's ${gate.limit} messages/day. Upgrade to Premium for unlimited access.`,
         paywall: true,
         tier: gate.tier,
         limit: gate.limit,

@@ -49,7 +49,7 @@ export async function scheduleAutomation(
 
   const limits = limitsFor(ctx.tier);
   if (!limits.recurringReminders) {
-    return "Recurring automations are a JARVIS Premium feature. You can upgrade in Settings → Upgrade.";
+    return "Recurring automations are a Premium feature. You can upgrade in Settings → Upgrade.";
   }
   if (!isUnlimited(limits.activeReminders)) {
     const { count } = await sb

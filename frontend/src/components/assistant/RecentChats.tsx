@@ -31,6 +31,7 @@ export function RecentChats({ chats, now = Date.now(), onOpen, onShowAll }: {
         <span className="flex-1 min-w-0">
           <span className="block text-[10px] uppercase tracking-[0.14em] text-text-muted">Continue</span>
           <span className="block text-[13px] text-text-primary truncate">{readable(latest.title)}</span>
+          {latest.preview && <span className="block text-[12px] text-text-muted line-clamp-2 mt-0.5">{latest.preview}</span>}
         </span>
         <span className="text-[11px] text-text-muted flex-none">{ago(latest.updated_at, now)}</span>
       </button>
