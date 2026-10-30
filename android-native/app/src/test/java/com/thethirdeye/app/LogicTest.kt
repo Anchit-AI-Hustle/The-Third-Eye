@@ -154,6 +154,7 @@ class LogicTest {
         assertEquals(Route.Web("/tools/unknown"), routeOf("/tools/unknown", tools))
         assertEquals(Route.Tool("anchor"), routeOf("/tools/anchor", tools))
         assertEquals(Route.Web("/tools/avatar"), routeOf("/tools/avatar", tools + "avatar"))
+        assertEquals(Route.Tool("video"), routeOf("/tools/video", tools + "video"))
         assertEquals("Studio", (routeOf("/tools", tools) as Route.Screen).item.title)
         assertEquals(Route.Web("/job-agent/search"), routeOf("/job-agent/search", tools))
         assertEquals(Route.Web("/kolab/studio"), routeOf("/kolab/studio", tools))
@@ -487,5 +488,28 @@ class LogicTest {
         val row = generationRow(mine)
         assertEquals("landing", row["tool"]!!.jsonPrimitive.content)
         assertEquals("<p>x</p>", row["output"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun `reels and short-form videos shoot upright, and a reel is cut to its length`() {
+        assertEquals("9:16", Shots.aspect("reel", emptyMap()))
+        assertEquals("9:16", Shots.aspect("video", mapOf("format" to "Short-form reel (15-60s)")))
+        assertEquals("16:9", Shots.aspect("video", mapOf("format" to "YouTube video (5-10 min)")))
+        assertEquals(30, Shots.seconds("reel", mapOf("length" to "30 seconds")))
+        assertNull(Shots.seconds("video", mapOf("length" to "30 seconds")))
+        assertNull(Shots.seconds("reel", mapOf("length" to "")))
+    }
+
+    @Test fun `a shot list reads the server's scenes`() {
+        val scenes = Shots.parse("""{"scenes":[{"n":1,"title":"Open","seconds":5,"prompt":"Dunes at dawn","narration":"It begins."}],"configured":true}""")
+        assertEquals(listOf(Shots.Scene(1, "Open", 5, "Dunes at dawn", "It begins.")), scenes)
+    }
+
+    @Test fun `the studio lists the workspaces and the kinds a new one can be`() {
+        val d = KolabStudioData.parse("""{"ok":true,"data":{"org":{"name":"A","type":"creator"},"activeOrgId":"o1",
+            "orgs":[{"id":"o1","name":"A","type":"creator","role":"owner"},{"id":"o2","name":"B","type":"commerce","role":"admin"}],
+            "packs":[{"type":"creator","question":"I create content","label":"Creator","icon":"🎬","blurb":"b","verticals":["Fashion"]}]}}""")
+        assertEquals("o1", d.activeOrgId)
+        assertEquals(listOf("A", "B"), d.orgs.map { it.name })
+        assertEquals(listOf("Fashion"), d.packs.single().verticals)
     }
 }

@@ -9,6 +9,10 @@ vi.mock("@/lib/kolab-studio/db", () => ({
 }));
 vi.mock("@/lib/kolab-studio/org", () => ({
   getActiveOrg: async () => ({ role: "owner", org: { id: "o1", name: "Asha Creates", type: "creator" } }),
+  getMyMemberships: async () => [
+    { role: "owner", org: { id: "o1", name: "Asha Creates", type: "creator" } },
+    { role: "admin", org: { id: "o2", name: "Asha Store", type: "commerce" } },
+  ],
 }));
 const provisioned: string[] = [];
 vi.mock("@/lib/kolab-studio/provision", () => ({ ensureProvisioned: async (u: { id: string }) => { provisioned.push(u.id); } }));
@@ -53,6 +57,17 @@ describe("GET /api/kolab-studio/studio", () => {
         { status: "scheduled", label: "Scheduled", n: 0 }, { status: "posted", label: "Posted", n: 1 },
       ],
     });
+  });
+
+  it("lists the user's workspaces and the types a new one can be", async () => {
+    const { data } = await (await GET()).json();
+    expect(data.activeOrgId).toBe("o1");
+    expect(data.orgs).toEqual([
+      { id: "o1", name: "Asha Creates", type: "creator", role: "owner" },
+      { id: "o2", name: "Asha Store", type: "commerce", role: "admin" },
+    ]);
+    expect(data.packs.map((p: { type: string }) => p.type)).toEqual(["creator", "commerce", "local", "agency"]);
+    expect(data.packs[0]).toMatchObject({ question: expect.any(String), icon: expect.any(String), verticals: expect.any(Array) });
   });
 
   it("shows nothing but the reason while the gate is closed", async () => {

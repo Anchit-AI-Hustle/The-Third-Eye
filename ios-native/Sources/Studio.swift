@@ -1,8 +1,8 @@
 import SwiftUI
 
 enum Studio {
-    /// Tools that need browser tech (audio/video/camera editors) open the website page.
-    static let browserOnly: Set<String> = ["avatar", "video", "reel"]
+    /// The avatar is drawn and voiced on a browser canvas, so it opens the website page.
+    static let browserOnly: Set<String> = ["avatar"]
 }
 
 struct StudioView: View {
@@ -244,6 +244,11 @@ struct ToolFormView: View {
 struct ToolResultView: View {
     @ObservedObject var runner: StudioRunner
 
+    private var shotsTitle: String {
+        let first = String((runner.tool.fields.first.flatMap { runner.values[$0.name] } ?? "").prefix(60))
+        return first.isEmpty ? "Untitled" : first
+    }
+
     var body: some View {
         let text = runner.output?.text ?? ""
         VStack(spacing: 12) {
@@ -270,6 +275,15 @@ struct ToolResultView: View {
                     BookWriterView(markdown: text, inputs: runner.values)
                 } label: {
                     Label("Write the book", systemImage: "book")
+                }
+                .buttonStyle(GlowButtonStyle())
+                .padding(.horizontal, 16)
+            }
+            if runner.tool.id == "video" || runner.tool.id == "reel", !text.isEmpty, !runner.running {
+                NavigationLink {
+                    ShotsView(tool: runner.tool.id, title: shotsTitle, script: text, inputs: runner.values)
+                } label: {
+                    Label("Shoot it", systemImage: "film")
                 }
                 .buttonStyle(GlowButtonStyle())
                 .padding(.horizontal, 16)

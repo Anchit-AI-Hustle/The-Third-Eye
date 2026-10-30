@@ -44,10 +44,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-/** Kolab Creator Studio, as on the website (app/kolab/studio/(app)): the studio, analytics, and profile setup with Aadhaar and channels. Onboarding and buying a plan stay on the website. */
+/** Kolab Creator Studio, as on the website (app/kolab/studio/(app)): the studio, analytics, and profile setup with Aadhaar and channels. Creating and switching workspaces too; buying a plan and non-creator workspaces stay on the website. */
 @Serializable
 data class KolabStudioData(
     val org: Org? = null,
+    val activeOrgId: String? = null,
+    val orgs: List<Workspace> = emptyList(),
+    val packs: List<Pack> = emptyList(),
     val unlocked: Boolean = false,
     val reason: String? = null,
     val pillars: List<Pillar> = emptyList(),
@@ -74,6 +77,8 @@ data class KolabStudioData(
         @Serializable data class Count(val status: String, val label: String, val n: Int)
     }
     @Serializable data class Org(val name: String, val type: String)
+    @Serializable data class Workspace(val id: String, val name: String, val type: String, val role: String = "")
+    @Serializable data class Pack(val type: String, val question: String, val label: String = "", val icon: String = "", val blurb: String = "", val verticals: List<String> = emptyList())
     @Serializable data class Pillar(val id: String, val name: String, val role: String? = null, val color: String? = null)
     @Serializable data class PlanItem(
         val id: String, val pillar_id: String? = null, val format: String? = null, val asset_type: String? = null, val date: String? = null,
@@ -142,6 +147,7 @@ fun KolabStudioScreen(nav: Nav) {
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var module by remember { mutableStateOf(kolabModules.first()) }
+    var creating by remember { mutableStateOf(false) }
 
     suspend fun load() {
         try {
@@ -182,12 +188,30 @@ fun KolabStudioScreen(nav: Nav) {
         val setup: @Composable () -> Unit = {
             Setup(d, busy, save = { path, method, body -> call(method, path, body) }, initiateKyc = { body, gotRef -> call("POST", "/api/kolab-studio/kyc", body, onReply = { kycReference(it)?.let(gotRef) }) })
         }
-        if (d.org == null) {
+        val create: (JsonElement) -> Unit = { body -> call("POST", "/api/kolab-studio/org/create", body, after = { creating = false }) }
+        if (d.org == null || creating) {
+            item("new") { NewWorkspace(d.packs, busy, onCancel = if (d.org != null) ({ creating = false }) else null, onCreate = create) }
+            return@ListScreen
+        }
+        item("workspaces") {
+            Panel {
+                if (d.orgs.size > 1) {
+                    val label = { o: KolabStudioData.Workspace -> "${d.packs.firstOrNull { it.type == o.type }?.icon.orEmpty()} ${o.name}".trim() }
+                    Choice("Workspace", d.orgs.map(label), d.orgs.firstOrNull { it.id == d.activeOrgId }?.let(label).orEmpty()) { picked ->
+                        d.orgs.firstOrNull { label(it) == picked }?.takeIf { it.id != d.activeOrgId }?.let { o ->
+                            call("POST", "/api/kolab-studio/org/switch", buildJsonObject { put("org_id", o.id) })
+                        }
+                    }
+                }
+                TextButton(enabled = !busy, onClick = { creating = true }) { Text("New workspace") }
+            }
+        }
+        if (d.org.type != "creator") {
             item {
                 Panel {
-                    Text("Create your studio first", fontWeight = FontWeight.SemiBold)
-                    Hint("Set up your Kolab organization on the website, then come back here.")
-                    TextButton(onClick = { nav.push(Dest.Web("Kolab Studio", "/kolab/studio/onboarding")) }) { Text("Open on the website") }
+                    Text("${d.org.name} runs on the website", fontWeight = FontWeight.SemiBold)
+                    Hint("The phone app has the Creator Studio. Open this workspace's tools on the website, or switch to a creator workspace above.")
+                    TextButton(onClick = { nav.push(Dest.Web("Kolab Studio", "/kolab/studio/home")) }) { Text("Open on the website") }
                 }
             }
             return@ListScreen
@@ -511,5 +535,35 @@ private fun Setup(d: KolabStudioData, busy: Boolean, save: (String, String, Json
                 }
             }
         }
+    }
+}
+
+/** Pick what the workspace is for, name it, create it: the website's onboarding. */
+@Composable
+private fun NewWorkspace(packs: List<KolabStudioData.Pack>, busy: Boolean, onCancel: (() -> Unit)?, onCreate: (JsonElement) -> Unit) {
+    var type by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }
+    var vertical by remember { mutableStateOf("") }
+    Panel {
+        Text("What are you here to do?", fontWeight = FontWeight.SemiBold)
+        Hint("This sets up your workspace. You can create more later, each with its own type.")
+        packs.forEach { p ->
+            Row(Modifier.card(if (type == p.type) Palette.blue.copy(alpha = 0.15f) else Palette.surface.copy(alpha = 0.7f)) { type = p.type; vertical = "" },
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(p.icon, fontSize = 22.sp)
+                Column(Modifier.weight(1f)) {
+                    Text(p.question, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(p.blurb, fontSize = 12.sp, color = Palette.muted)
+                }
+            }
+        }
+        packs.firstOrNull { it.type == type }?.let { p ->
+            Field(if (p.type == "creator") "Your creator / brand name" else if (p.type == "agency") "Agency name" else "Business name", name, { name = it })
+            Choice("Category", listOf("None") + p.verticals, vertical.ifEmpty { "None" }) { vertical = if (it == "None") "" else it }
+            GlowButton("Create workspace", enabled = name.isNotBlank() && !busy) {
+                onCreate(buildJsonObject { put("type", p.type); put("name", name.trim()); if (vertical.isNotEmpty()) put("vertical", vertical) })
+            }
+        }
+        onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
     }
 }
