@@ -108,6 +108,35 @@ export function ollamaUrlProblem(raw: string): string | null {
   return null;
 }
 
+// Where a pasted key is checked before it's saved: a request that costs no tokens.
+// OpenRouter's model list is public, so its key endpoint is asked instead.
+const KEY_CHECK: Record<Exclude<OwnKeyProvider, "ollama">, { name: string; url: (key: string) => string; bearer: boolean }> = {
+  gemini: { name: "Google", url: (k) => `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(k)}`, bearer: false },
+  groq: { name: "Groq", url: () => "https://api.groq.com/openai/v1/models", bearer: true },
+  openrouter: { name: "OpenRouter", url: () => "https://openrouter.ai/api/v1/key", bearer: true },
+  mistral: { name: "Mistral", url: () => "https://api.mistral.ai/v1/models", bearer: true },
+  cerebras: { name: "Cerebras", url: () => "https://api.cerebras.ai/v1/models", bearer: true },
+  openai: { name: "OpenAI", url: () => "https://api.openai.com/v1/models", bearer: true },
+  huggingface: { name: "Hugging Face", url: () => "https://huggingface.co/api/whoami-v2", bearer: true },
+};
+
+/**
+ * Why the provider refused this key, or null. A wrong key would otherwise be tried
+ * first on every message. Only an explicit refusal counts: when the provider
+ * can't be reached the key is saved and the cascade falls back as usual.
+ */
+export async function keyProblem(provider: Exclude<OwnKeyProvider, "ollama">, key: string): Promise<string | null> {
+  const c = KEY_CHECK[provider];
+  const r = await fetch(c.url(key), {
+    headers: c.bearer ? { Authorization: `Bearer ${key}` } : {},
+    signal: AbortSignal.timeout(8_000),
+  }).catch(() => null);
+  if (r && (r.status === 400 || r.status === 401 || r.status === 403)) {
+    return `${c.name} rejected that key. Copy it again from your ${c.name} account; it may be incomplete, revoked or for another product.`;
+  }
+  return null;
+}
+
 export const HF_TOKEN_URL = "https://huggingface.co/oauth/token";
 export const HF_SCOPES = "openid inference-api";
 
