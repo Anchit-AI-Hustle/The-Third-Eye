@@ -40,8 +40,11 @@ otherwise undocumented outside this file and the code itself.
   asking for them at sign-in blocks everyone who is not a test user. The identity
   the app keys on is `session.user.email` (the Google address). A refresh token is
   stored only when the connect step actually returns a feature scope.
-- **Data:** Supabase Postgres (project `hlcjghpzxzatgjfwcoav`) with **pgvector** for
-  memory/RAG, reached server-side through `lib/db.ts` (`pg`). The browser never talks
+- **Data:** Supabase Postgres **only, never Neon**, with **pgvector** for
+  memory/RAG, reached server-side through `lib/db.ts` (`pg`) at `DATABASE_URL`
+  (pooled) and `DATABASE_URL_UNPOOLED` (direct, used by the build's migrations).
+  Both must be the Supabase project's connection strings; a production build warns
+  when they aren't. The `SUPABASE_*` API keys are not used. The browser never talks
   to the database, and Supabase's Data API is locked out of it (see §4).
 - **LLM:** a server-side cascade (`lib/llmCascade.ts`), free first, paid credit
   as backup: groq, cerebras, openrouter (:free), mistral, gemini-lite, gemini, then

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { pgConnection } from "../src/lib/pgConnection.mjs";
+import { isSupabase, pgConnection } from "../src/lib/pgConnection.mjs";
 
 // Applies the repo's SQL to the database before `next build`, once per file.
 // Preview deployments share the production database, so only production builds
@@ -16,6 +16,12 @@ if (!url) {
 if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
   console.log(`migrate: ${process.env.VERCEL_ENV} build, skipping`);
   process.exit(0);
+}
+
+// This app's data lives in Supabase only; another host (a Neon integration's
+// DATABASE_URL, say) means the deployment is pointed at the wrong database.
+if (process.env.VERCEL && !isSupabase(url)) {
+  console.warn("::warning title=migrate::DATABASE_URL is not a Supabase database. Set DATABASE_URL and DATABASE_URL_UNPOOLED to the Supabase project's connection strings.");
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
