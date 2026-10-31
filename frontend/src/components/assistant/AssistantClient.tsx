@@ -3,7 +3,7 @@
 import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo, KeyboardEvent } from "react";
 import { useSession } from "next-auth/react";
-import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Type, Phone, ChevronDown, X, Ear, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder, ExternalLink, ArrowUpRight, MessageCircle, Mail } from "lucide-react";
+import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Settings, MessageSquare, Phone, PhoneOff, X, Bookmark, History, GitBranch, Paperclip, FileText, PanelLeft, Folder, ExternalLink, ArrowUpRight, MessageCircle, Mail } from "lucide-react";
 import { ChatsPanel } from "./ChatsPanel";
 import { RecentChats } from "./RecentChats";
 import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
@@ -173,6 +173,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const [showCheckpoints, setShowCheckpoints] = useState(false);
   const voiceModeRef = useRef<"dictate" | "call">("call");
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
+  // Talk = hands-free conversation: every reply is spoken. Chat replies are read, with a play button on each.
+  const talking = micOn && voiceMode === "call";
+  const talkingRef = useRef(false);
+  useEffect(() => { talkingRef.current = talking; }, [talking]);
 
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -780,7 +784,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 if (links.length || effectiveContent !== fullText) {
                   setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: effectiveContent, links } : m)));
                 }
-                tts.speak(effectiveContent);
+                if (talkingRef.current) tts.speak(effectiveContent, undefined, true);
               }
             } catch { /* non-JSON */ }
             eventType = "";
@@ -943,14 +947,6 @@ export function AssistantClient({ userName }: { userName?: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [interrupt, tts.speaking]);
 
-  async function toggleMic() {
-    if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
-    else {
-      if (!(await requestCapability("microphone"))) return;
-      mic.markGranted(); stt.enable(); setMicOn(true);
-    }
-  }
-
   // Dictation: mic on in "dictate" mode — speech fills the composer, no auto-send.
   async function toggleDictate() {
     if (micOn) { stt.disable(); setMicOn(false); setLiveBubble(null); }
@@ -960,30 +956,17 @@ export function AssistantClient({ userName }: { userName?: string }) {
     }
   }
 
-  // ── Composer reply mode (Option B) ──────────────────────────────────────────
-  // One control governs how JARVIS answers, derived from the existing voice flags:
-  //   text  → silent (TTS off)      voice → reply read aloud (TTS on)
-  //   call  → read aloud + mic on, hands-free (voiceMode "call", auto-send)
-  const replyMode: "text" | "voice" | "call" =
-    micOn && voiceMode === "call" ? "call" : tts.enabled ? "voice" : "text";
-  function setReplyMode(mode: "text" | "voice" | "call") {
-    if (mode === "text") { if (tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
-    else if (mode === "voice") { if (!tts.enabled) tts.toggle(); if (micOn) toggleMic(); }
-    else { // call — hands-free auto-send + read aloud; needs the mic
-      setVoiceMode("call");
-      if (!tts.enabled) tts.toggle();
-      if (stt.supported && !micOn) toggleMic();
-    }
+  async function toggleTalk() {
+    if (talking) { stt.disable(); setMicOn(false); setLiveBubble(null); tts.stop(); return; }
+    if (micOn) { stt.disable(); setMicOn(false); }
+    if (!(await requestCapability("microphone"))) return;
+    mic.markGranted(); setVoiceMode("call"); stt.enable(); setMicOn(true);
   }
-  const [modeMenuOpen, setModeMenuOpen] = useState(false);
-  function narrateLastReply() {
-    setModeMenuOpen(false);
-    const last = [...messages].reverse().find((m) => m.role === "assistant" && m.content?.trim());
-    const text = last?.content
-      || "Ask me anything about your tasks, notes, knowledge base, or schedule, and I will help you get it done.";
-    if (!tts.enabled) tts.toggle();
-    tts.speak(text, undefined, true);  // force: read aloud once even if the ambient toggle is off
-  }
+
+  const speakReply = useCallback((text: string) => {
+    if (tts.speaking) tts.stop();
+    else void tts.speak(text, undefined, true);
+  }, [tts]);
 
   const isEmpty = messages.length === 0 && !liveBubble;
   // The active agent's 3D persona — shown in the top bar and empty-state hero,
@@ -1149,7 +1132,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} onSendDirect={sendDirect} />
+          <MessageBubble key={msg.id} message={msg} session={session} onAddContact={addContact} onSendDirect={sendDirect} onSpeak={speakReply} />
         ))}
 
         {pendingActions.map((a) => (
@@ -1280,77 +1263,29 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 <Paperclip size={15} />
               </button>
 
-              {/* Mode chip: Chat ▾ → Narrate */}
-              <div className="relative flex-none flex items-center">
-                {modeMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />}
-                <button type="button" onClick={() => setModeMenuOpen((v) => !v)} aria-haspopup="true" aria-expanded={modeMenuOpen}
-                  className="flex items-center gap-1 text-accent-blue bg-accent-blue/10 border border-accent-blue/25 rounded-input px-2 py-1 sm:px-2.5 sm:py-1.5 text-xs font-medium transition-colors hover:border-accent-blue/50">
-                  <MessageSquare size={13} /> Chat <ChevronDown size={11} className="opacity-70" />
-                </button>
-                {modeMenuOpen && (
-                  <div className="absolute bottom-10 left-0 z-50 w-52 bg-background-elevated border border-border-default rounded-card shadow-xl p-1.5">
-                    <button type="button" onClick={() => setModeMenuOpen(false)}
-                      className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-accent-blue hover:bg-background-surface">
-                      <MessageSquare size={14} /><span><span className="block text-[13px] font-medium">Chat</span><span className="block text-[11px] text-text-muted">Type &amp; read answers</span></span>
-                    </button>
-                    <button type="button" onClick={narrateLastReply}
-                      className="flex w-full items-center gap-2.5 rounded-input px-2.5 py-2 text-left text-text-secondary hover:bg-background-surface">
-                      <Volume2 size={14} /><span><span className="block text-[13px] font-medium text-text-primary">Narrate</span><span className="block text-[11px] text-text-muted">Read the last reply aloud</span></span>
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Right actions: tools + send button */}
             <div className="flex items-center gap-1 sm:order-3">
-              {/* Reply selector: how answers come back */}
-              <div className="flex-none flex items-center gap-0.5 bg-background-base border border-border-default rounded-input p-0.5" role="group" aria-label="How replies come back">
-                <button type="button" onClick={() => setReplyMode("text")} title="Text only - silent answers"
-                  className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "text" ? "bg-accent-blue/15 text-accent-blue" : "text-text-muted hover:text-text-secondary")}>
-                  <Type size={13} />
-                </button>
-                <button type="button" onClick={() => setReplyMode("voice")} title="Voice reply - answers read aloud"
-                  className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "voice" ? "bg-accent-violet/15 text-accent-violet" : "text-text-muted hover:text-text-secondary")}>
-                  <Volume2 size={13} />
-                </button>
-                {stt.supported && (
-                  <button type="button" onClick={() => setReplyMode("call")} title="Call - hands-free voice conversation"
-                    className={cn("p-1.5 rounded-[5px] transition-colors", replyMode === "call" ? "bg-success/15 text-success" : "text-text-muted hover:text-text-secondary")}>
-                    <Phone size={13} />
-                  </button>
-                )}
-              </div>
-              {stt.supported && (() => {
+              {stt.supported && !talking && (() => {
                 const m = micButton(micOn, voiceMode);
                 return (
                   <button onClick={toggleDictate} title={m.title} aria-pressed={m.live}
                     className={cn("flex-none p-1.5 rounded-input transition-colors",
-                      m.tone === "dictate" ? "text-accent-blue bg-accent-blue/10"
-                      : m.tone === "call" ? "text-success bg-success/10 animate-pulse"
-                      : "text-text-muted hover:text-text-secondary")}>
+                      m.tone === "dictate" ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
                     {m.live ? <Mic size={15} /> : <MicOff size={15} />}
                   </button>
                 );
               })()}
-              <button
-                onClick={async () => {
-                  if (wakeEnabled) {
-                    updateActivation("wakeWordEnabled", false);
-                    return;
-                  }
-                  if (!mic.ready && !(await requestCapability("microphone"))) return;
-                  mic.markGranted();
-                  updateActivation("wakeWordEnabled", true);
-                }}
-                title={
-                  wakeEnabled ? `Wake word on - say "${agent?.name ?? "JARVIS"}" to go hands-free`
-                    : "Enable wake word (\"Hey JARVIS\")"
-                }
-                className={cn("flex-none p-1.5 rounded-input transition-colors",
-                  wakeEnabled ? "text-accent-blue bg-accent-blue/10" : "text-text-muted hover:text-text-secondary")}>
-                <Ear size={15} />
-              </button>
+              {stt.supported && (
+                <button type="button" onClick={() => void toggleTalk()} aria-pressed={talking}
+                  title={talking ? "End the conversation" : "Talk - a hands-free spoken conversation"}
+                  className={cn("flex-none flex items-center gap-1 px-2 py-1.5 rounded-input text-xs font-medium transition-colors",
+                    talking ? "text-success bg-success/15 animate-pulse" : "text-text-secondary hover:text-text-primary border border-border-default")}>
+                  {talking ? <PhoneOff size={14} /> : <Phone size={14} />}
+                  <span>{talking ? "End" : "Talk"}</span>
+                </button>
+              )}
               <VisionButton question={input} disabled={isStreaming} onResult={handleVisionResult} />
               {(isStreaming || tts.speaking) ? (
                 <button onClick={interrupt} title="Stop (Esc)"
@@ -1368,13 +1303,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
           </div>
         </div>
         <p className={cn("text-[11px] mt-2 text-center", stt.permissionDenied ? "text-accent-red" : "text-text-muted",
-          !stt.permissionDenied && !micOn && replyMode === "text" && "hidden sm:block")}>
+          !stt.permissionDenied && !micOn && "hidden sm:block")}>
           {stt.permissionDenied
             ? "Microphone blocked for this site - click the padlock/site-info icon in your browser's address bar, allow Microphone, then reload."
             : micOn && voiceMode === "dictate" ? "Dictation on · your speech fills the box · edit, then Enter to send"
-            : replyMode === "call" ? "Call mode · speak naturally, replies are spoken aloud"
-            : replyMode === "voice" ? "Voice replies on · Enter to send · Shift+Enter for new line"
-            : "Enter to send · Shift+Enter for new line"}
+            : talking ? "Talking · just speak, replies are spoken aloud · tap End to stop"
+            : "Enter to send · Shift+Enter for new line · Talk for a spoken conversation"}
         </p>
         <CaptureNote id="chat-files" className="mt-1 text-center">
           Attachments, camera frames and voice are sent to an AI provider to answer; files, images and audio aren&apos;t kept, the chat is.
@@ -1434,11 +1368,13 @@ function MessageBubble({
   session,
   onAddContact,
   onSendDirect,
+  onSpeak,
 }: {
   message: Message;
   session: any;
   onAddContact?: (c: { name: string; phone?: string; email?: string; notes?: string }) => void;
   onSendDirect: (messageId: string, link: MessageLink) => void;
+  onSpeak: (text: string) => void;
 }) {
   const isUser = message.role === "user";
   return (
@@ -1502,6 +1438,12 @@ function MessageBubble({
               ) : message.streaming ? <ThinkingDots /> : null}
               {message.streaming && message.content && (
                 <span className="inline-block w-0.5 h-3.5 bg-accent-blue ml-0.5 animate-pulse align-middle" />
+              )}
+              {!message.streaming && message.content && (
+                <button type="button" onClick={() => onSpeak(message.content)} aria-label="Play this reply" title="Play this reply"
+                  className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary">
+                  <Volume2 size={12} /> Play
+                </button>
               )}
               {message.saved?.map((f, i) => <FileCard key={i} file={f} claimAuto={() => freshFiles.delete(`${message.id}:${i}`)} />)}
               {message.media && (

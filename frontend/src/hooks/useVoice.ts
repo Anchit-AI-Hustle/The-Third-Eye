@@ -448,8 +448,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
       rec.onspeechstart = () => {
         lastEventRef.current = Date.now();
         setRecognitionIssue(null);
-        cbRef.current.onSpeechStart?.();
+        // While the assistant speaks, the recognizer hears its voice and fires
+        // this too; stopping the reply here cut every reply off at its first
+        // word. Talking over it is detected by the echo-aware barge detector.
         if (cbRef.current.shouldSuppress?.()) return;
+        cbRef.current.onSpeechStart?.();
         setAudioState("speaking");
       };
 
