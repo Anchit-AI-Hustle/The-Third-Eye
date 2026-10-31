@@ -2019,6 +2019,13 @@ function generatePdf(title: string, content: string, format: string): { result: 
   };
 }
 
+const RECALL_MS = 2_500;
+const MCP_DISCOVERY_MS = 3_000;
+
+function within<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+}
+
 // The user's own provider keys (Settings → AI providers) apply to every model
 // call made while answering them.
 export async function POST(req: NextRequest) {
@@ -2078,8 +2085,17 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
 
   // Use the stored Google grant when it carries Gmail or Calendar scopes.
   let googleScope: string | undefined;
+  // Independent lookups run together. Recall (an embedding call) and connector
+  // discovery are capped: a slow one costs its own context, not the reply's start.
+  const googleP = getGoogleAccessToken(email);
+  const gateP = consume(email, "chatPerDay");
+  const memoryP = loadMemory(email);
+  // Awaited below in turn; a rejection while an earlier one is pending must not go unhandled.
+  for (const pending of [googleP, gateP, memoryP]) pending.catch(() => {});
+  const recallP = email ? within(retrieveMemories(email, message, 5), RECALL_MS, []) : Promise.resolve([]);
+  const mcpP = within(mcpToolDeclarations(email), MCP_DISCOVERY_MS, []);
   try {
-    const connected = await getGoogleAccessToken(email);
+    const connected = await googleP;
     if (connected?.accessToken) {
       accessToken = connected.accessToken;
       googleScope = connected.scope;
@@ -2092,7 +2108,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const google = googleCapabilities(googleScope);
 
   const enforced = premiumEnforced();
-  const gate = await consume(email, "chatPerDay");
+  const gate = await gateP;
   if (enforced && !gate.allowed) {
     return new Response(
       JSON.stringify({
@@ -2132,7 +2148,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // Durable memory lives server-side; the request body carries the client's
   // localStorage mirror, which is newer for keys set earlier this session but
   // absent entirely on a fresh device. Server first, client overrides.
-  const storedMemory = await loadMemory(email);
+  const storedMemory = await memoryP;
   const memory = { ...storedMemory, ...clientMemory };
   if (storedMemory[DAYLOG_KEY] || clientMemory[DAYLOG_KEY]) {
     memory[DAYLOG_KEY] = mergeLogs(localDay(new Date(), timezone || req.headers.get("x-vercel-ip-timezone") || undefined), storedMemory[DAYLOG_KEY], clientMemory[DAYLOG_KEY]);
@@ -2147,7 +2163,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   }
 
   // Cortex: semantic recall from past conversations (native pgvector memory).
-  const recall = email ? await retrieveMemories(email, message, 5) : [];
+  const recall = await recallP;
   if (recall.length > 0) {
     systemInstruction += `\n\n**Relevant recall from earlier conversations:**\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
   }
@@ -2228,7 +2244,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // Built-in declarations plus whatever the configured MCP servers publish.
   // Discovery is cached and failure-tolerant, so an unreachable server costs
   // its own tools rather than the request.
-  const mcpDeclarations = await mcpToolDeclarations(email);
+  const mcpDeclarations = await mcpP;
   const tools = mcpDeclarations.length
     ? [{ functionDeclarations: [...geminiTools[0].functionDeclarations, ...mcpDeclarations] }]
     : geminiTools;
