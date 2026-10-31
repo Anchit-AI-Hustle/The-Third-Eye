@@ -21,7 +21,16 @@ import { DELETE, GET, PUT } from "@/app/api/user/provider-keys/route";
 
 const put = (body: unknown) => PUT(new Request("https://x.test", { method: "PUT", body: JSON.stringify(body) }) as never);
 
-beforeEach(() => { email = "u@x.com"; saved.clear(); canSave = true; });
+let checks: string[] = [];
+let answer: number | "down" = 200;
+beforeEach(() => {
+  email = "u@x.com"; saved.clear(); canSave = true; checks = []; answer = 200;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    checks.push(`${url} ${new Headers(init?.headers).get("authorization") ?? ""}`);
+    if (answer === "down") throw new TypeError("fetch failed");
+    return new Response("{}", { status: answer });
+  }));
+});
 
 describe("own provider keys API", () => {
   it("needs a signed-in user", async () => {
@@ -36,6 +45,33 @@ describe("own provider keys API", () => {
     const body = await (await GET()).json();
     expect(JSON.stringify(body)).not.toContain("gsk_secretvalue");
     expect(body.keys).toEqual([{ provider: "groq", hint: "…9876" }]);
+  });
+
+  it("checks a key with the provider before saving it, and keeps a rejected one out", async () => {
+    answer = 401;
+    const r = await put({ provider: "groq", value: "gsk_wrongkey1234" });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/Groq rejected that key/);
+    expect(saved.size).toBe(0);
+    expect(checks).toEqual(["https://api.groq.com/openai/v1/models Bearer gsk_wrongkey1234"]);
+  });
+
+  it("asks each provider the way it accepts keys", async () => {
+    await put({ provider: "gemini", value: "AIzaGOODKEY" });
+    await put({ provider: "openrouter", value: "sk-or-good" });
+    await put({ provider: "huggingface", value: "hf_good" });
+    expect(checks).toEqual([
+      "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaGOODKEY ",
+      "https://openrouter.ai/api/v1/key Bearer sk-or-good",
+      "https://huggingface.co/api/whoami-v2 Bearer hf_good",
+    ]);
+    expect([...saved.keys()]).toEqual(["gemini", "openrouter", "huggingface"]);
+  });
+
+  it("still saves when the provider can't be reached to check", async () => {
+    answer = "down";
+    expect((await put({ provider: "mistral", value: "mistral-key-1234" })).status).toBe(200);
+    expect(saved.get("mistral")).toBe("mistral-key-1234");
   });
 
   it("rejects unknown providers and empty values", async () => {

@@ -16,11 +16,11 @@ const NAME: Record<string, string> = {
 // Each provider's own way in: a sign-in where the provider offers one to other
 // apps (OpenRouter, Hugging Face), otherwise a key from its console. Ollama
 // takes the https URL of the user's own machine.
-const OWN: { id: string; name: string; placeholder: string; note: string; url?: string; signIn?: string }[] = [
-  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", note: "Free models, or your credit for paid ones", signIn: "/api/connect/openrouter" },
+const OWN: { id: string; name: string; placeholder: string; note: string; url?: string; signIn?: string; main?: boolean }[] = [
+  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", note: "Free models, or your credit for paid ones", signIn: "/api/connect/openrouter", main: true },
   { id: "huggingface", name: "Hugging Face", placeholder: "hf_...", note: "Open models on your Hugging Face inference credit", signIn: "/api/connect/huggingface" },
-  { id: "groq", name: "Groq", placeholder: "gsk_...", note: "Free key from the Groq console", url: "https://console.groq.com/keys" },
-  { id: "gemini", name: "Google Gemini", placeholder: "AIza...", note: "Free key from Google AI Studio", url: "https://aistudio.google.com/apikey" },
+  { id: "groq", name: "Groq", placeholder: "gsk_...", note: "Free key from the Groq console", url: "https://console.groq.com/keys", main: true },
+  { id: "gemini", name: "Google Gemini", placeholder: "AIza...", note: "Free key from Google AI Studio", url: "https://aistudio.google.com/apikey", main: true },
   { id: "mistral", name: "Mistral", placeholder: "Mistral API key", note: "Free key from the Mistral console", url: "https://console.mistral.ai/api-keys" },
   { id: "cerebras", name: "Cerebras", placeholder: "csk-...", note: "Free key from Cerebras Cloud", url: "https://cloud.cerebras.ai" },
   { id: "openai", name: "OpenAI", placeholder: "sk-...", note: "API key from the OpenAI platform (billed to you)", url: "https://platform.openai.com/api-keys" },
@@ -148,7 +148,7 @@ function OwnKeys() {
     const r = await fetch("/api/user/provider-keys", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: id, value }) }).catch(() => null);
     const j = await r?.json().catch(() => ({}));
     setBusy(false);
-    if (r?.ok) { setValue(""); setAdding(null); setNote("Saved. Your requests use it first."); void load(); }
+    if (r?.ok) { setValue(""); setAdding(null); setNote(`${OWN.find((o) => o.id === id)?.name ?? "It"} connected. Your chats use it first.`); void load(); }
     else setNote(j?.error ?? "Couldn't save it.");
   }
 
@@ -157,49 +157,53 @@ function OwnKeys() {
     void load();
   }
 
+  const row = (o: (typeof OWN)[number]) => (
+    <li key={o.id} className="rounded-input border border-border-default bg-background-base/40 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[12rem] flex-1">
+          <p className="text-sm text-text-primary">{o.name}</p>
+          <p className="text-[11px] text-text-muted">{saved[o.id] ? <>Connected <span className="font-mono">{saved[o.id]}</span></> : o.note}</p>
+        </div>
+        {saved[o.id] ? (
+          <button type="button" onClick={() => void remove(o.id)} aria-label={`Disconnect ${o.name}`} className={`${button} inline-flex items-center gap-1`}><Trash2 size={12} /> Disconnect</button>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {o.signIn && <a href={o.signIn} className={`${button} inline-flex items-center gap-1.5`}><LogIn size={12} /> Sign in with {o.name}</a>}
+            {o.url && !o.signIn && <a href={o.url} target="_blank" rel="noreferrer" className={button}>Get a key</a>}
+            <button type="button" onClick={() => { setAdding(adding === o.id ? null : o.id); setValue(""); setNote(null); }} aria-expanded={adding === o.id} className={button}>
+              {o.id === "ollama" ? "Add address" : "Paste key"}
+            </button>
+          </div>
+        )}
+      </div>
+      {adding === o.id && (
+        <div className="mt-2 flex gap-2">
+          <input type={o.id === "ollama" ? "url" : "password"} value={value} onChange={(e) => setValue(e.target.value)} placeholder={o.placeholder}
+            autoComplete="off" aria-label={`${o.name} key`} className={`${field} flex-1 min-w-0`} />
+          <button type="button" onClick={() => void save(o.id)} disabled={busy || !value.trim()} className={button}>
+            {busy ? <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Checking</span> : "Connect"}
+          </button>
+        </div>
+      )}
+    </li>
+  );
+
   return (
     <div className="mt-4 pt-4 border-t border-border-default">
       <div className="flex items-center gap-2 mb-1">
         <KeyRound size={13} className="text-[#4FC3F7]" />
-        <h3 className="text-sm font-medium text-text-primary">Your own accounts</h3>
+        <h3 className="text-sm font-medium text-text-primary">Use your own free AI account (optional)</h3>
       </div>
       <p className="text-xs text-text-muted mb-3">
-        Connect your own account with each provider so your chats run on your quota first and fall back to the shared ones. Keys are stored encrypted and never shown again.
+        Your chats use it first, so they never wait on shared limits. Each key is checked with the provider when you connect it, stored encrypted and never shown again.
       </p>
-      <ul className="space-y-1.5">
-        {OWN.map((o) => (
-          <li key={o.id} className="rounded-input border border-border-default bg-background-base/40 px-3 py-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-[12rem] flex-1">
-                <p className="text-sm text-text-primary">{o.name}</p>
-                <p className="text-[11px] text-text-muted">{saved[o.id] ? <>Connected <span className="font-mono">{saved[o.id]}</span></> : o.note}</p>
-              </div>
-              {saved[o.id] ? (
-                <button type="button" onClick={() => void remove(o.id)} aria-label={`Disconnect ${o.name}`} className={`${button} inline-flex items-center gap-1`}><Trash2 size={12} /> Disconnect</button>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {o.signIn && <a href={o.signIn} className={`${button} inline-flex items-center gap-1.5`}><LogIn size={12} /> Sign in with {o.name}</a>}
-                  {o.url && !o.signIn && <a href={o.url} target="_blank" rel="noreferrer" className={button}>Get a key</a>}
-                  <button type="button" onClick={() => { setAdding(adding === o.id ? null : o.id); setValue(""); }} aria-expanded={adding === o.id} className={button}>
-                    {o.id === "ollama" ? "Add address" : "Paste key"}
-                  </button>
-                </div>
-              )}
-            </div>
-            {adding === o.id && (
-              <div className="mt-2 flex gap-2">
-                <input type={o.id === "ollama" ? "url" : "password"} value={value} onChange={(e) => setValue(e.target.value)} placeholder={o.placeholder}
-                  autoComplete="off" aria-label={`${o.name} key`} className={`${field} flex-1 min-w-0`} />
-                <button type="button" onClick={() => void save(o.id)} disabled={busy || !value.trim()} className={button}>
-                  {busy ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-                </button>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+      <ul className="space-y-1.5">{OWN.filter((o) => o.main).map(row)}</ul>
       {note && <p className="mt-2 text-xs text-text-secondary">{note}</p>}
-      {saved.ollama && <YourComputer />}
+      <details className="mt-3 group">
+        <summary className="cursor-pointer text-xs text-text-secondary hover:text-text-primary">More providers and your own computer</summary>
+        <ul className="space-y-1.5 mt-2">{OWN.filter((o) => !o.main).map(row)}</ul>
+        {saved.ollama && <YourComputer />}
+      </details>
     </div>
   );
 }
@@ -226,27 +230,37 @@ export function ProvidersCard() {
 
   const working = rows?.filter((r) => r.status === "ok").length ?? 0;
 
+  const down = !!rows?.length && working === 0 && rows.some((r) => r.status !== "unknown");
+
   return (
     <section className="rounded-card border border-border-default bg-background-surface/30 p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-1">
         <Activity size={15} className="text-[#4FC3F7]" />
-        <h2 className="font-semibold text-text-primary text-sm flex-1">AI providers</h2>
-        <button type="button" onClick={() => void recheck()} disabled={busy}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary disabled:opacity-50">
-          {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Re-check now
-        </button>
+        <h2 className="font-semibold text-text-primary text-sm flex-1">AI</h2>
       </div>
-      <p className="text-xs text-text-muted mb-3">
-        JARVIS skips any provider that is rate limited, out of quota or out of credit, and switches to a model the provider still offers when one is retired.
-      </p>
       {rows === null ? (
-        <div className="flex items-center gap-2 text-xs text-text-muted"><Loader2 size={12} className="animate-spin" /> Loading…</div>
+        <div className="flex items-center gap-2 text-xs text-text-muted"><Loader2 size={12} className="animate-spin" /> Checking…</div>
+      ) : !rows.length ? (
+        <p className="text-sm text-text-secondary">No shared AI is set up on this deployment. Connect your own free account below to chat.</p>
+      ) : down ? (
+        <p className="text-sm text-accent-red">The shared AI is busy or out of quota right now. Connect your own free account below to keep chatting.</p>
       ) : (
-        <>
-          {rows.length > 0 && working === 0 && rows.some((r) => r.status !== "unknown") && (
-            <p className="mb-3 text-xs text-accent-red">No provider is answering right now, so The Third Eye can&apos;t reply. Add credit or enable billing on one of them.</p>
-          )}
-          <ul className="space-y-1.5">
+        <p className="text-sm text-text-primary flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-success flex-none" />
+          AI is working · {working} of {rows.length} providers answering. Nothing to set up.
+        </p>
+      )}
+      {rows && rows.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-text-secondary hover:text-text-primary">Provider status</summary>
+          <div className="mt-2 flex items-center gap-2">
+            <p className="text-xs text-text-muted flex-1">Busy or out-of-quota providers are skipped automatically.</p>
+            <button type="button" onClick={() => void recheck()} disabled={busy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary disabled:opacity-50">
+              {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Re-check now
+            </button>
+          </div>
+          <ul className="space-y-1.5 mt-2">
             {rows.map((r) => (
               <li key={r.provider} className="flex items-start gap-3 rounded-input border border-border-default bg-background-base/40 px-3 py-2">
                 <span className={cn("mt-1.5 w-2 h-2 rounded-full flex-none",
@@ -260,10 +274,9 @@ export function ProvidersCard() {
                 </div>
               </li>
             ))}
-            {!rows.length && <li className="text-xs text-text-muted">No AI provider keys are configured on this deployment.</li>}
           </ul>
           {note && <p className="mt-2 text-xs text-warning">{note}</p>}
-        </>
+        </details>
       )}
       <OwnKeys />
     </section>
