@@ -37,6 +37,11 @@ const SUPABASE_HOST = /\.supabase\.(co|com)$/;
 // will switch them to libpq semantics (require = encrypt without verifying).
 const VERIFY_FULL_ALIASES = new Set(["prefer", "require", "verify-ca"]);
 
+/** Whether a connection string points at Supabase, the only database this app runs on. */
+export function isSupabase(url) {
+  return SUPABASE_HOST.test(new URL(url).hostname);
+}
+
 /** pg client config for a connection string; Supabase hosts get verified TLS. */
 export function pgConnection(url) {
   const u = new URL(url);

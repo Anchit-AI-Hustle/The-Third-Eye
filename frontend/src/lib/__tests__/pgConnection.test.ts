@@ -1,7 +1,7 @@
 import { X509Certificate } from "node:crypto";
 import { rootCertificates } from "node:tls";
 import { describe, expect, it, vi } from "vitest";
-import { pgConnection } from "@/lib/pgConnection.mjs";
+import { isSupabase, pgConnection } from "@/lib/pgConnection.mjs";
 
 describe("pgConnection", () => {
   it("verifies Supabase hosts against Supabase's root as well as the system roots", () => {
@@ -35,5 +35,12 @@ describe("pgConnection", () => {
       expect(pgConnection(url)).toEqual({ connectionString: url });
     }
     expect(pgConnection("postgres://u:p@evil-supabase.co.example.com/db")).not.toHaveProperty("ssl");
+  });
+
+  it("tells a Supabase database from any other, so the build flags a non-Supabase one", () => {
+    expect(isSupabase("postgresql://postgres.ref:pw@aws-0-ap-south-1.pooler.supabase.com:6543/postgres")).toBe(true);
+    expect(isSupabase("postgresql://postgres:pw@db.dypkppctdbmsiqclnhzx.supabase.co:5432/postgres")).toBe(true);
+    expect(isSupabase("postgresql://u:pw@ep-x-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require")).toBe(false);
+    expect(isSupabase("postgres://u:pw@localhost:5432/app")).toBe(false);
   });
 });

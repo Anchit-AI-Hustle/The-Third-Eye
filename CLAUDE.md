@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 **The live product is `frontend/`.** Next.js 14 App Router + TypeScript,
-NextAuth (phone + PIN, JWT sessions), Supabase Postgres (+ pgvector, via `lib/db.ts`) as the
+NextAuth (phone + PIN, JWT sessions), Supabase Postgres only, never Neon (+ pgvector, via `lib/db.ts` at `DATABASE_URL`) as the
 data layer, Tailwind + Radix UI, a 7-provider server-side LLM cascade
 (`lib/llmCascade.ts`), deployed on Vercel with auto-deploy on `main`. Full
 detail, updated as things ship: **[DEVELOPMENT.md](DEVELOPMENT.md) — read
