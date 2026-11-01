@@ -111,10 +111,18 @@ function setVisibility(state: "visible" | "hidden") {
 }
 
 let getUserMedia: ReturnType<typeof vi.fn>;
-let onWakeSpy: ReturnType<typeof vi.fn>;
+let onWakeSpy: ReturnType<typeof vi.fn<(trigger: string, transcript: string) => void>>;
+
+// Timer-driven so the loudness meter keeps sampling as the clock advances.
+// A synchronous stub would either spin forever or stop after N frames, and
+// stopping makes every recorded chunk look like silence to the gate. Defined
+// once, before fake timers install, so restoring real timers keeps them.
+(globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) =>
+  setTimeout(() => cb(0), 16) as unknown as number;
+(globalThis as any).cancelAnimationFrame = (id: number) => clearTimeout(id);
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
   onWakeSpy = vi.fn();
   FakeRecognition.reset();
   FakeMediaRecorder.reset();
@@ -122,12 +130,6 @@ beforeEach(() => {
 
   (window as any).SpeechRecognition = FakeRecognition;
   (globalThis as any).MediaRecorder = FakeMediaRecorder;
-  // Timer-driven so the loudness meter keeps sampling as the clock advances.
-  // A synchronous stub would either spin forever or stop after N frames, and
-  // stopping makes every recorded chunk look like silence to the gate.
-  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) =>
-    setTimeout(() => cb(0), 16) as unknown as number;
-  (globalThis as any).cancelAnimationFrame = (id: number) => clearTimeout(id);
 
   getUserMedia = vi.fn().mockResolvedValue(fakeStream);
   Object.defineProperty(navigator, "mediaDevices", {

@@ -32,6 +32,7 @@ describe("ConsentDialog", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("stays closed on the public demo, privacy, install and download pages", async () => {
