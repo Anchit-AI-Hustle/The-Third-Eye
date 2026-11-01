@@ -1,7 +1,7 @@
 {
   "name": "the-third-eye",
   "version": "1.0.0",
-  "description": "The Third Eye — Your Personal AI Operating System",
+  "description": "The Third Eye \u2014 Your Personal AI Operating System",
   "main": "index.js",
   "scripts": {
     "cap:sync": "cap sync",
@@ -32,5 +32,9 @@
     "@capacitor/push-notifications": "^8.0.0",
     "@capacitor/splash-screen": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.3",
+    "glob": "^14.0.2"
   }
 }
