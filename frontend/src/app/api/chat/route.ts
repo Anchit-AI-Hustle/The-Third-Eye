@@ -6,7 +6,7 @@ import { runConfirmedAction } from "@/lib/confirmedActions";
 import { AUTOPILOT_PREFIX } from "@/lib/taskAutopilot";
 import { currentOwnKeys, enterPersona, withOwnKeys } from "@/lib/providerKeys";
 import { cartAdd, cartRemove, cartSummary, loadCart, productSearch, saveCart, type CartItem } from "@/lib/shopping";
-import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Content, type GenerationConfig, type Part } from "@google/generative-ai";
 import type { NextRequest } from "next/server";
 import { consume } from "@/lib/usage";
 import { searchPhotos } from "@/lib/photoSearch";
@@ -1668,6 +1668,8 @@ function convertHistory(history: Array<{ role: string; content: any }>): Content
 
 interface ChatRequest {
   message: string;
+  /** The turn was spoken in a voice conversation and the reply will be read aloud. */
+  voice?: boolean;
   attachments?: unknown;
   /** The active project's standing instructions, written by the user. */
   projectInstructions?: string;
@@ -2044,7 +2046,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const {
     history = [], memory: clientMemory = {}, userName,
     tasks = [], docs = [], goals = [], notes = [], expenses = [], contacts = [], location, deviceInfo,
-    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist, confirmActions, native,
+    agentName, agentId, agentPersona, mode, timezone, checklist: priorChecklist, confirmActions, native, voice,
   } = body;
   enterPersona(agentId);
   // Autopilot works unattended, so what it would send waits for the user.
@@ -2284,7 +2286,16 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
     systemInstruction += `\n\n**Project instructions from the user** (apply to this whole chat; they never override safety or confirmation rules):\n${projectInstructions}`;
   }
 
-  const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools }) : null;
+  if (voice) {
+    systemInstruction += "\n\n## Spoken conversation\nThis turn was spoken aloud and your reply will be read out by a voice. Lead with the answer in the first sentence. Keep it to one to three short sentences unless asked for more. Plain spoken words only: no markdown, tables, lists, emoji or URLs, and say numbers and times the way a person would. Still use tools exactly as you would in text. If the transcript is garbled or ambiguous, ask one short question instead of guessing.";
+  }
+  // Flash thinks before its first word by default, which is the wait people
+  // notice. A spoken turn needs an answer now; a short typed one gets a capped
+  // budget; long messages, files and planned multi-step work keep full depth.
+  const deep = message.length > 600 || attachments.length > 0 || !!priorChecklist;
+  const thinkingBudget = voice ? 0 : deep ? -1 : 1024;
+  const generationConfig = MODEL.includes("flash") ? ({ thinkingConfig: { thinkingBudget } } as GenerationConfig) : undefined;
+  const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools, generationConfig }) : null;
   const contents: Content[] = [
     ...convertHistory(history),
     { role: "user", parts: [{ text: message }, ...geminiParts(attachments)] },

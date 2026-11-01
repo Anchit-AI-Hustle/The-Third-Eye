@@ -321,7 +321,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
       });
       if (!activeRef.current) {
         stream.getTracks().forEach((t) => t.stop());
@@ -582,6 +582,29 @@ export const useWhisperSTT = useVoiceSTT;
 
 // ─── TTS ─────────────────────────────────────────────────────────────────────
 
+const ABBREVIATION = /\b(?:mr|mrs|ms|dr|st|vs|etc|e\.g|i\.e|no|approx)\.$/i;
+
+/**
+ * Splits streamed reply text into the sentences that are complete so far, so
+ * the first one can be spoken while the rest is still being written. Text
+ * inside an unfinished code block waits for the block to close.
+ */
+export function takeSentences(text: string): { sentences: string[]; rest: string } {
+  const sentences: string[] = [];
+  let start = 0;
+  const end = /([.!?…]["')\]]*)(\s+)|\n+/g;
+  let m: RegExpExecArray | null;
+  while ((m = end.exec(text))) {
+    const cut = m.index + (m[1]?.length ?? 0);
+    const piece = text.slice(start, cut);
+    if ((piece.match(/```/g)?.length ?? 0) % 2) continue;
+    if (m[1] && ABBREVIATION.test(piece.trimEnd())) continue;
+    if (piece.trim()) sentences.push(piece.trim());
+    start = m.index + m[0].length;
+  }
+  return { sentences, rest: text.slice(start) };
+}
+
 function stripMarkdown(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, "code block")
@@ -705,76 +728,95 @@ export function useTTS(voicePreference?: string) {
     }
   }, []);
 
-  const speak = useCallback(async (text: string, onEnd?: () => void, force = false) => {
-    if (!supported) { onEnd?.(); return; }
-    if (!enabled && !force) { onEnd?.(); return; }   // force = one-shot Narrate, ignores the ambient toggle
-    const clean = stripMarkdown(text);
-    if (!clean.trim()) { onEnd?.(); return; }
+  // One reply can arrive in pieces, spoken while its text still streams in.
+  // The pieces play back to back as one reply: "speaking", the echo guard and
+  // onEnd span all of them, so the mic stays shut between sentences.
+  const replyRef = useRef({
+    id: 0, parts: [] as string[], open: false, playing: false, begun: false,
+    text: "", volume: 1, onEnd: undefined as (() => void) | undefined,
+  });
 
-    try { window.speechSynthesis.cancel(); } catch { /* noop */ }
-    try { window.speechSynthesis.resume(); } catch { /* noop */ }
-    // A cancelled utterance may never fire onend, which would leave the
-    // "still speaking" marker set.
-    if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+  const finish = useCallback((id: number) => {
+    const r = replyRef.current;
+    if (r.id !== id) return;
+    r.playing = false;
+    if (r.begun) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+    setSpeaking(false);
+    stopKeepalive();
+    const cb = r.onEnd;
+    r.onEnd = undefined;
+    cb?.();
+  }, [stopKeepalive]);
 
-    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
-    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
-    if (w.__jarvisDnd && !force) { onEnd?.(); return; }
-    const volume = typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1;
-    const started = () => {
-      lastSpoken.text = clean;
-      lastSpoken.startedAt = Date.now();
-      lastSpoken.until = Infinity;
-      setSpeaking(true);
-    };
-    let over = false;
-    let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const finished = () => {
-      if (over) return;
-      over = true;
-      clearTimeout(watchdog);
-      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
-      setSpeaking(false);
-      stopKeepalive();
-      onEnd?.();
-    };
-    if (naturalVoiceOn() && (await speakNatural(clean, { volume, onStart: started, onEnd: finished }))) return;
-
+  const playOne = useCallback(async (clean: string, volume: number, onStart: () => void): Promise<void> => {
+    if (naturalVoiceOn() && (await speakNatural(clean, { volume, onStart }))) return;
     const voices = await waitForVoices(1500);
-    const u = new SpeechSynthesisUtterance(clean);
-    u.rate = isIOS ? 1.0 : 1.05;
-    u.pitch = 0.9;
-    u.volume = volume;
-    const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
-    const preferred =
-      voices.find((v) => pattern.test(v.name)) ??
-      voices.find((v) => v.lang?.startsWith("en") && /male/i.test(v.name)) ??
-      voices.find((v) => v.lang === "en-US") ??
-      voices.find((v) => v.lang?.startsWith("en")) ??
-      voices[0];
-    if (preferred) u.voice = preferred;
+    await new Promise<void>((resolve) => {
+      const u = new SpeechSynthesisUtterance(clean);
+      u.rate = isIOS ? 1.0 : 1.05;
+      u.pitch = 0.9;
+      u.volume = volume;
+      const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
+      const preferred =
+        voices.find((v) => pattern.test(v.name)) ??
+        voices.find((v) => v.lang?.startsWith("en") && /male/i.test(v.name)) ??
+        voices.find((v) => v.lang === "en-US") ??
+        voices.find((v) => v.lang?.startsWith("en")) ??
+        voices[0];
+      if (preferred) u.voice = preferred;
 
-    // iOS can drop an utterance without onstart, or play it without onend.
-    // Either leaves "speaking" set, the mic muted and call mode stuck after
-    // one reply, so both are timed out.
-    let begun = false;
-    u.onstart = () => {
-      begun = true;
-      started();
-      startKeepalive();
-      clearTimeout(watchdog);
-      watchdog = setTimeout(finished, clean.length * SPEECH_MS_PER_CHAR + SPEECH_END_GRACE_MS);
-    };
-    u.onend = finished;
-    u.onerror = finished;
+      // iOS can drop an utterance without onstart, or play it without onend.
+      // Either leaves "speaking" set, the mic muted and call mode stuck after
+      // one reply, so both are timed out.
+      let begun = false;
+      let over = false;
+      let watchdog: ReturnType<typeof setTimeout> | undefined;
+      const done = () => {
+        if (over) return;
+        over = true;
+        clearTimeout(watchdog);
+        resolve();
+      };
+      u.onstart = () => {
+        begun = true;
+        onStart();
+        startKeepalive();
+        clearTimeout(watchdog);
+        watchdog = setTimeout(done, clean.length * SPEECH_MS_PER_CHAR + SPEECH_END_GRACE_MS);
+      };
+      u.onend = done;
+      u.onerror = done;
+      setTimeout(() => {
+        try { window.speechSynthesis.speak(u); } catch { done(); return; }
+        if (!begun) watchdog = setTimeout(done, SPEECH_START_TIMEOUT_MS);
+      }, isIOS ? 80 : 0);
+    });
+  }, [voicePreference, startKeepalive]);
 
-    setTimeout(() => {
-      try { window.speechSynthesis.speak(u); } catch { finished(); return; }
-      if (!begun) watchdog = setTimeout(finished, SPEECH_START_TIMEOUT_MS);
-    }, isIOS ? 80 : 0);
-  }, [enabled, supported, voicePreference, startKeepalive, stopKeepalive]);
+  const pump = useCallback(async () => {
+    const r = replyRef.current;
+    if (r.playing) return;
+    const id = r.id;
+    r.playing = true;
+    while (r.id === id && r.parts.length) {
+      const part = r.parts.shift()!;
+      await playOne(part, r.volume, () => {
+        if (r.id !== id) return;
+        lastSpoken.text = r.text;
+        if (!r.begun) { r.begun = true; lastSpoken.startedAt = Date.now(); }
+        lastSpoken.until = Infinity;
+        setSpeaking(true);
+      });
+    }
+    if (r.id !== id) return;
+    r.playing = false;
+    if (!r.open) finish(id);
+  }, [playOne, finish]);
 
-  const stop = useCallback(() => {
+  const halt = useCallback(() => {
+    replyRef.current.id++;
+    replyRef.current.parts = [];
+    replyRef.current.playing = false;
     stopNatural();
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
@@ -783,6 +825,54 @@ export function useTTS(voicePreference?: string) {
     stopKeepalive();
     setSpeaking(false);
   }, [supported, stopKeepalive]);
+
+  /** Starts a reply that is added to piece by piece; false when nothing will be spoken. */
+  const begin = useCallback((onEnd?: () => void, force = false): boolean => {
+    if (!supported || (!enabled && !force)) return false;   // force = one-shot, ignores the ambient toggle
+    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
+    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
+    if (w.__jarvisDnd && !force) return false;
+    const prev = replyRef.current.onEnd;
+    replyRef.current.onEnd = undefined;
+    halt();
+    prev?.();
+    try { window.speechSynthesis.resume(); } catch { /* noop */ }
+    const r = replyRef.current;
+    replyRef.current = {
+      id: r.id + 1, parts: [], open: true, playing: false, begun: false, text: "",
+      volume: typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1, onEnd,
+    };
+    return true;
+  }, [supported, enabled, halt]);
+
+  const add = useCallback((text: string) => {
+    const r = replyRef.current;
+    const clean = stripMarkdown(text);
+    if (!r.open || !clean) return;
+    r.parts.push(clean);
+    r.text = r.text ? `${r.text} ${clean}` : clean;
+    void pump();
+  }, [pump]);
+
+  const end = useCallback(() => {
+    const r = replyRef.current;
+    if (!r.open) return;
+    r.open = false;
+    if (!r.playing && !r.parts.length) finish(r.id);
+  }, [finish]);
+
+  const speak = useCallback(async (text: string, onEnd?: () => void, force = false) => {
+    if (!stripMarkdown(text) || !begin(onEnd, force)) { onEnd?.(); return; }
+    add(text);
+    end();
+  }, [begin, add, end]);
+
+  const stop = useCallback(() => {
+    const cb = replyRef.current.onEnd;
+    replyRef.current.onEnd = undefined;
+    halt();
+    cb?.();
+  }, [halt]);
 
   const toggle = useCallback(() => {
     setEnabled((v) => {
@@ -793,5 +883,5 @@ export function useTTS(voicePreference?: string) {
     });
   }, []);
 
-  return { speaking, enabled, supported, speak, stop, toggle };
+  return { speaking, enabled, supported, speak, begin, add, end, stop, toggle };
 }
