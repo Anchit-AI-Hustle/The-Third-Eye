@@ -997,21 +997,40 @@ function transcriptionFile(audio: Blob): { file: File; mime: string } {
   return { file: new File([audio], "audio.webm", { type: "audio/webm" }), mime: "audio/webm" };
 }
 
-async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = 30_000): Promise<{ ok: boolean; text?: string; status?: number; quota?: boolean }> {
+interface WhisperSegment { text: string; no_speech_prob?: number; avg_logprob?: number; compression_ratio?: number }
+
+/**
+ * Whisper's own confidence decides what was speech: a segment it scores as
+ * probably silent and decoded with low confidence is room noise turned into
+ * words, and one that repeats itself (high compression) is a decoding loop.
+ */
+export function spokenText(body: { text?: string; segments?: WhisperSegment[] }): string {
+  if (!Array.isArray(body.segments)) return (body.text ?? "").trim();
+  return body.segments
+    .filter((s) => !((s.no_speech_prob ?? 0) > 0.6 && (s.avg_logprob ?? 0) < -0.7) && (s.compression_ratio ?? 0) < 2.4)
+    .map((s) => s.text)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// A phrase comes back in a second or two, so a stalled provider is dropped
+// quickly for the next one; long recordings get time in proportion to size.
+async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = Math.min(60_000, 12_000 + audio.size / 50)): Promise<{ ok: boolean; text?: string; status?: number; quota?: boolean }> {
   const { signal, clear } = withTimeout(timeoutMs);
   try {
     const fd = new FormData();
     fd.append("file", transcriptionFile(audio).file);
     fd.append("model", model);
     if (lang) fd.append("language", lang.split("-")[0]);
-    fd.append("response_format", "text");
+    fd.append("temperature", "0");
+    fd.append("response_format", "verbose_json");
     const r = await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd, signal });
     if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false, status: r.status, quota: isQuotaError(r.status, err) }; }
     const body = await r.text();
-    // response_format=text returns raw text; some gateways still wrap it in JSON.
-    let text = body;
-    try { const j = JSON.parse(body); if (j && typeof j.text === "string") text = j.text; } catch { /* raw text */ }
-    return { ok: true, text: text.trim() };
+    let text = body.trim();
+    try { text = spokenText(JSON.parse(body)); } catch { /* a gateway that answered in plain text */ }
+    return { ok: true, text };
   } catch { return { ok: false, status: 0 }; }
   finally { clear(); }
 }

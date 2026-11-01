@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // What reaches the model: the phone's synced contact book must not be pasted
 // into the prompt whole (it once pushed a request past Groq's limit).
 const memory = vi.hoisted(() => ({ value: {} as Record<string, string> }));
-vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class { getGenerativeModel() { return {}; } } }));
+const modelParams = vi.hoisted(() => [] as Array<{ generationConfig?: { thinkingConfig?: { thinkingBudget?: number } } }>);
+vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class { getGenerativeModel(p: never) { modelParams.push(p); return {}; } } }));
 vi.mock("@/lib/serverIdentity", () => ({ identify: async () => ({ email: "+919999999999", source: "browser" }) }));
 vi.mock("@/lib/agentGuard", () => ({ isAgentKilled: async () => false, logAgentAction: async () => {} }));
 vi.mock("@/lib/usage", () => ({ consume: async () => ({ allowed: true, tier: "premium", limit: 0, limits: { chatModel: "gemini" } }) }));
@@ -17,6 +18,7 @@ const systemPrompts: string[] = [];
 beforeEach(() => {
   vi.resetModules();
   systemPrompts.length = 0;
+  modelParams.length = 0;
   vi.stubEnv("GEMINI_API_KEY", "x".repeat(39));
   vi.stubEnv("GROQ_API_KEY", "gsk_test");
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -42,5 +44,20 @@ describe("/api/chat prompt", () => {
     expect(system).toContain("Synced Device Contacts** (3000)");
     expect(system).not.toContain("Person 2999");
     expect(system).not.toContain("device_contacts:");
+  });
+
+  it("asks for a short spoken answer with no thinking pause on a voice turn", async () => {
+    const { POST } = await import("@/app/api/chat/route");
+    await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "what's on today", voice: true }) }) as never)).text();
+    expect(systemPrompts[0]).toContain("## Spoken conversation");
+    expect(modelParams[0].generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
+  });
+
+  it("caps thinking on a short typed message and leaves long ones at full depth", async () => {
+    const { POST } = await import("@/app/api/chat/route");
+    await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "hi" }) }) as never)).text();
+    await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "plan ".repeat(200) }) }) as never)).text();
+    expect(systemPrompts[0]).not.toContain("## Spoken conversation");
+    expect(modelParams.map((p) => p.generationConfig?.thinkingConfig?.thinkingBudget)).toEqual([1024, -1]);
   });
 });

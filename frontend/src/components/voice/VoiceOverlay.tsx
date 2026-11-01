@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { useVoiceSTT, useTTS, takeSentences } from "@/hooks/useVoice";
 import { useWakeWord, stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { useMicReady } from "@/hooks/useMicReady";
@@ -317,6 +317,7 @@ export function VoiceOverlay() {
             agentId: agent.id,
             agentPersona: agent.personality,
             mode: modeId,
+            voice: micOn || handsFreeRef.current,
             deviceInfo: typeof window !== "undefined" ? (window as any).__teDevice : undefined,
             tasks: allTasks,
             docs: readyDocs,
@@ -334,6 +335,9 @@ export function VoiceOverlay() {
         let buffer = "";
         let fullText = "";
         let eventType = "";
+        // Each sentence is spoken as soon as it has streamed in.
+        const voiced = tts.begin();
+        let unspoken = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -351,6 +355,11 @@ export function VoiceOverlay() {
                 if (eventType === "text" && parsed.text !== undefined) {
                   fullText += parsed.text;
                   setResponse(fullText);
+                  if (voiced) {
+                    const { sentences, rest } = takeSentences(unspoken + parsed.text);
+                    sentences.forEach(tts.add);
+                    unspoken = rest;
+                  }
                 } else if (eventType === "tool" && parsed.name) {
                   setActiveTool(toolLabel(parsed.name, parsed.input));
                 } else if (eventType === "confirm" && parsed.tool) {
@@ -366,6 +375,7 @@ export function VoiceOverlay() {
                   // and the user is waiting on a reply that never comes.
                   if (micOn || handsFreeRef.current) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
                 } else if (eventType === "error") {
+                  if (voiced) tts.end();
                   setActiveTool(null);
                   setResponse((prev) => prev.trim() ? prev : `Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
@@ -389,15 +399,17 @@ export function VoiceOverlay() {
                     fullText = `${fullText}\n\n${media.join("\n")}`;
                     setResponse(fullText);
                   }
-                  if (fullText) tts.speak(fullText);
+                  if (voiced) { tts.add(unspoken); tts.end(); }
                 }
               } catch {}
               eventType = "";
             }
           }
         }
+        if (voiced) tts.end();
       } catch (err: any) {
         if (err?.name === "AbortError") return;
+        tts.end();
         setActiveTool(null);
         setResponse(`Error: ${err?.message ?? "Unknown error"}`);
       } finally {

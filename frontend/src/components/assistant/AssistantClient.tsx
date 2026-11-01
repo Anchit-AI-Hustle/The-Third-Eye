@@ -14,7 +14,7 @@ import { groupToolLabels } from "@/lib/toolChips";
 import { micButton } from "@/lib/micButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { useVoiceSTT, useTTS, takeSentences } from "@/hooks/useVoice";
 import { matchSystemsCommand } from "@/lib/systems";
 import { triggerSystemsOnline } from "@/components/systems/SystemsOnline";
 import { NotifyPrompt } from "./NotifyPrompt";
@@ -608,6 +608,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setIsStreaming(true);
 
     const controller = new AbortController();
+      let voiced = false;
       abortRef.current = controller;
       isStreamingRef.current = true;
 
@@ -649,6 +650,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           agentId: agent?.id,
           agentPersona: agent?.personality,
           mode: modeId,
+          voice: talkingRef.current,
         }),
         signal: controller.signal,
       });
@@ -664,6 +666,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
       const decoder = new TextDecoder();
       let buffer = "";
       let fullText = "";
+      // In Talk, each sentence is spoken as soon as it has streamed in.
+      voiced = talkingRef.current && tts.begin(undefined, true);
+      let unspoken = "";
+      let streamed = false;
       const toolsUsed: string[] = [];
       let remindersChanged = false;
       let eventType = "";
@@ -683,6 +689,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
               const parsed = JSON.parse(line.slice(6));
               if (eventType === "text" && parsed.text !== undefined) {
                 fullText += parsed.text;
+                streamed = true;
+                if (voiced) {
+                  const { sentences, rest } = takeSentences(unspoken + parsed.text);
+                  sentences.forEach(tts.add);
+                  unspoken = rest;
+                }
                 setMessages((prev) => prev.map((m) =>
                   m.id === assistantId ? { ...m, content: fullText, toolsUsed } : m
                 ));
@@ -704,6 +716,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 });
               } else if (eventType === "error") {
                 const errMsg = parsed.message ?? "Unknown error";
+                if (voiced) tts.end();
                 setMessages((prev) => prev.map((m) => {
                   if (m.id !== assistantId) return m;
                   if (m.content.trim()) return { ...m, streaming: false };
@@ -784,7 +797,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 if (links.length || effectiveContent !== fullText) {
                   setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: effectiveContent, links } : m)));
                 }
-                if (talkingRef.current) tts.speak(effectiveContent, undefined, true);
+                if (voiced) {
+                  tts.add(streamed ? unspoken : effectiveContent);
+                  unspoken = "";
+                  tts.end();
+                }
               }
             } catch { /* non-JSON */ }
             eventType = "";
@@ -792,11 +809,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
         }
       }
 
+      if (voiced) tts.end();
       setMessages((prev) => prev.map((m) =>
         m.id === assistantId ? { ...m, streaming: false } : m
       ));
     } catch (err: any) {
       if (err?.name === "AbortError") return;
+      if (voiced) tts.end();
       const errMsg = err?.message ?? "Unknown error";
       setApiError(errMsg);
       setMessages((prev) => prev.map((m) =>
