@@ -30,6 +30,10 @@ export function readRoutines(store: Record<string, string>): Routine[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export function summarizeRoutine(name: string, steps: string[]): string {
+  return `Save routine "${name.trim()}": ${steps.map((s) => s.trim()).filter(Boolean).join("; ")}`;
+}
+
 export function saveRoutine(store: Record<string, string>, name: string, steps: string[]): string {
   const clean = steps.map((s) => s.trim()).filter(Boolean).slice(0, 12);
   if (!norm(name) || !clean.length) return "A routine needs a name and at least one step.";
@@ -38,10 +42,12 @@ export function saveRoutine(store: Record<string, string>, name: string, steps: 
   return `Saved routine "${name.trim()}" (${clean.length} step${clean.length > 1 ? "s" : ""}: ${clean.join("; ")}). Say "${name.trim()}" to run it${instant ? " - it runs instantly, no AI needed" : ""}.`;
 }
 
+// Memory is written by upsert only, so a deleted routine is left empty rather
+// than removed; an empty value is not a routine.
 export function deleteRoutine(store: Record<string, string>, name: string): string {
   const key = ROUTINE_PREFIX + norm(name);
-  if (!(key in store)) return `No routine called "${name}".`;
-  delete store[key];
+  if (!store[key]) return `No routine called "${name}".`;
+  store[key] = "";
   return `Deleted routine "${name}".`;
 }
 

@@ -15,7 +15,7 @@ import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
 import { directTurn, gmailSendError } from "@/lib/liveActions";
-import { deleteRoutine, matchRoutine, readRoutines, routineBrief, runInstant, saveRoutine } from "@/lib/routines";
+import { deleteRoutine, matchRoutine, readRoutines, ROUTINE_PREFIX, routineBrief, runInstant } from "@/lib/routines";
 import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
@@ -999,6 +999,7 @@ async function runTool(
     }
 
     case "remember": {
+      if (String(input.key ?? "").startsWith(ROUTINE_PREFIX)) return { result: "Routines are saved with manage_routines, which the user approves." };
       ctx.memoryStore[input.key] = input.value;
       return {
         result: `Remembered: ${input.key} = ${input.value}`,
@@ -1012,7 +1013,7 @@ async function runTool(
         return { result: all.length ? all.map((r) => `- ${r.name}: ${r.steps.join("; ")}`).join("\n") : "No routines saved yet." };
       }
       if (input.action === "delete") return { result: deleteRoutine(ctx.memoryStore, String(input.name ?? "")) };
-      return { result: saveRoutine(ctx.memoryStore, String(input.name ?? ""), Array.isArray(input.steps) ? input.steps.map(String) : []) };
+      return { result: `Unknown manage_routines action: ${input.action}.` };
     }
 
     case "web_search":

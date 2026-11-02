@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deleteRoutine, matchRoutine, readRoutines, routineBrief, runInstant, saveRoutine } from "@/lib/routines";
+import { isSensitive, summarizeAction } from "@/lib/actions";
+import { explicitlyRequested } from "@/lib/explicitRequest";
 
 describe("routines", () => {
   it("saves, lists and deletes a routine by name", () => {
@@ -43,4 +45,22 @@ describe("routines", () => {
     expect(runInstant(r)).toBeNull();
     expect(routineBrief(r)).toContain("1. open spotify\n2. remind me to sleep at 11pm");
   });
+
+  it("keeps a deleted routine from running again", () => {
+    const store: Record<string, string> = {};
+    saveRoutine(store, "Focus Mode", ["open gmail"]);
+    deleteRoutine(store, "Focus Mode");
+    expect(matchRoutine("focus mode", store)).toBeNull();
+    expect(deleteRoutine(store, "Focus Mode")).toBe('No routine called "Focus Mode".');
+  });
+
+  it("needs the user's approval to save, unless they asked for it in their own words", () => {
+    const args = { action: "save", name: "Focus Mode", steps: ["open gmail", "open calendar"] };
+    expect(isSensitive("manage_routines", args)).toBe(true);
+    expect(isSensitive("manage_routines", { action: "list" })).toBe(false);
+    expect(summarizeAction("manage_routines", args)).toBe('Save routine "Focus Mode": open gmail; open calendar');
+    expect(explicitlyRequested("make this a shortcut called Focus Mode", "manage_routines", args)).toBe(true);
+    expect(explicitlyRequested("open gmail and calendar", "manage_routines", args)).toBe(false);
+  });
 });
+

@@ -9,6 +9,7 @@ const VERBS: Record<string, RegExp> = {
   communicate: /\b(send|email|e-mail|mail|reply|respond|forward)\b/i,
   anchor: /\b(run|drop|publish|post|queue|release|mix|rehearse)\b/i,
   build_app: /\b(build|make|create|code|ship)\b[\s\S]*\b(app|site|website|page|tool|game|dashboard)\b/i,
+  manage_routines: /\b(save|make|create|add|set up|turn)\b[\s\S]*\b(routine|shortcut)\b/i,
 };
 const CONNECTOR = /\b(send|post|message|create|add|update|edit|delete|remove|book|schedule|publish|reply|move|archive|invite|assign|close|merge|upload)\b/i;
 
