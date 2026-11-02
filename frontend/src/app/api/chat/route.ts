@@ -2300,7 +2300,9 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
     systemInstruction += `\n\n**Project instructions from the user** (apply to this whole chat; they never override safety or confirmation rules):\n${projectInstructions}`;
   }
 
-  const routine = matchRoutine(message, memory);
+  // Saved routines are read from durable memory only: the browser's copy can
+  // still hold one the user has since deleted or replaced.
+  const routine = matchRoutine(message, storedMemory);
   const instantRoutine = routine && runInstant(routine);
   if (routine && !instantRoutine) systemInstruction += `\n\n${routineBrief(routine)}`;
   if (voice) {

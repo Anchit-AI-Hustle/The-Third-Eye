@@ -362,7 +362,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
         ? { ...prev, level: l } : prev);
     }, []),
     onSpeechStart: useCallback(() => {
+      // Talking over the assistant replaces its reply: stop the voice and the
+      // stream behind it, so what the user says next is heard as a new turn.
       tts.stop();
+      if (isStreamingRef.current) {
+        abortRef.current?.abort();
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
       suppressRef.current = false;
       setLiveBubble({ phase: "recording", level: 0 });
     }, [tts]),

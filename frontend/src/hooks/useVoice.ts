@@ -813,10 +813,13 @@ export function useTTS(voicePreference?: string) {
     if (!r.open) finish(id);
   }, [playOne, finish]);
 
+  // Ends the reply outright: sentences still streaming in for it are dropped,
+  // so a reply the user cut off does not start talking again.
   const halt = useCallback(() => {
     replyRef.current.id++;
     replyRef.current.parts = [];
     replyRef.current.playing = false;
+    replyRef.current.open = false;
     stopNatural();
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
