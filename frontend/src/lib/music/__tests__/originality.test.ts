@@ -31,7 +31,19 @@ describe("song title originality", () => {
     const t = await originalTitle("Victory Lap", "seed", "Hip-Hop");
     expect(t).not.toMatch(/victory lap/i);
     expect(t).toBe(coinedTitle("seed", "Hip-Hop"));
-    expect(t).toMatch(/^[A-Z][a-z]+ (Ledger|Blueprint|Cipher|Testament|Verdict|Dossier)$/);
+    expect(t).toMatch(/^(Concrete|Golden|Dusty|Late|Paper|Velvet) (Ledger|Blueprint|Cipher|Testament|Verdict|Dossier)$/);
+  });
+
+  it("keeps a suggested title the user will review when MusicBrainz can't be asked", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("busy", { status: 503 })));
+    expect(await originalTitle("Brass Ledger Nights", "seed", "Hip-Hop")).toBe("Brass Ledger Nights");
+  });
+
+  it("coins titles from real words, preferring a vivid one from the description", () => {
+    const brief = "A high-energy hip-hop track with a gritty soul sample and bright piano and brass stabs";
+    const t = coinedTitle(brief, "Hip-Hop");
+    expect(t).toMatch(/^(Gritty|Soul|Bright|Brass) (Ledger|Blueprint|Cipher|Testament|Verdict|Dossier)$/);
+    for (const g of ["Psytrance", "Hard Techno", "Lo-fi", "Rap"]) expect(coinedTitle("plain words only", g)).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
   });
 
   it("asks again when the daily concept's title is already a song", async () => {

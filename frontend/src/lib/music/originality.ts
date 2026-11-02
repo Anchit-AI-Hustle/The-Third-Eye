@@ -1,27 +1,33 @@
 // Song titles must not belong to any released song. MusicBrainz (free, no key)
-// is the check; a coined word is the fallback, since an invented word is not
-// the title of anything.
+// is the check. The fallback is two real, evocative words chosen for the
+// genre (and from the description where it has a vivid one): far less likely
+// to be a released title than a common phrase, and it still reads like a song.
 
 const MB = "https://musicbrainz.org/ws/2/recording";
 const UA = "TheThirdEye/1.0 (https://the-third-eye.anchit-tandon.com)";
 
 const key = (s: string) => s.toLowerCase().replace(/\(.*?\)|\[.*?\]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
-/** Whether a released recording already has this title. A failed lookup counts as taken. */
-export async function titleTaken(title: string): Promise<boolean> {
+/** Whether a released recording has this title; "unknown" when MusicBrainz could not be asked. */
+export async function titleStatus(title: string): Promise<"taken" | "free" | "unknown"> {
   const q = `recording:"${title.replace(/["\\]/g, "")}"`;
   try {
     const r = await fetch(`${MB}?query=${encodeURIComponent(q)}&limit=25&fmt=json`, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       signal: AbortSignal.timeout(5000),
     });
-    if (!r.ok) return true;
+    if (!r.ok) return "unknown";
     const j = (await r.json()) as { recordings?: { title?: string }[] };
     const k = key(title);
-    return (j.recordings ?? []).some((x) => key(x.title ?? "") === k);
+    return (j.recordings ?? []).some((x) => key(x.title ?? "") === k) ? "taken" : "free";
   } catch {
-    return true;
+    return "unknown";
   }
+}
+
+/** For titles published without review: a failed lookup counts as taken. */
+export async function titleTaken(title: string): Promise<boolean> {
+  return (await titleStatus(title)) !== "free";
 }
 
 function hash(s: string): number {
@@ -30,19 +36,22 @@ function hash(s: string): number {
   return h;
 }
 
-const ONSET = ["v", "z", "k", "th", "dr", "sh", "tr", "x", "m", "r", "l", "n", "q", "br", "kr", "s", "zh", "vr"];
-const VOWEL = ["a", "e", "i", "o", "u", "ai", "ae", "y", "ei", "ou"];
-const CODA = ["", "n", "r", "x", "th", "k", "l", "s", "nd", "rn"];
+// Words that make a title a picture. One from the description wins over the
+// genre's list, so "soul sample with brass stabs" gives "Brass …" or "Soul …".
+const VIVID = new Set([
+  "midnight", "neon", "velvet", "golden", "gold", "concrete", "silver", "crimson", "amber", "electric", "static",
+  "paper", "glass", "iron", "copper", "smoke", "ember", "thunder", "rain", "river", "ocean", "desert", "winter",
+  "summer", "city", "street", "skyline", "moon", "sun", "fire", "storm", "shadow", "echo", "ghost", "wild",
+  "brass", "soul", "gritty", "dusty", "hazy", "cosmic", "lunar", "solar", "northern", "southern", "hollow",
+  "broken", "restless", "quiet", "heavy", "bright", "dark", "cold", "warm", "late", "last",
+]);
 
-/** A pronounceable invented word, the same for the same seed. */
-export function coinedWord(seed: string): string {
-  let h = hash(seed);
-  const pick = <T>(a: T[]) => { const v = a[h % a.length]; h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; return v; };
-  const syllables = 2 + (h % 2);
-  let w = "";
-  for (let i = 0; i < syllables; i++) w += pick(ONSET) + pick(VOWEL) + (i === syllables - 1 ? pick(CODA) : "");
-  return w[0].toUpperCase() + w.slice(1);
-}
+const ADJECTIVES: Record<string, string[]> = {
+  psy: ["Lunar", "Cosmic", "Liquid", "Ancient", "Hollow", "Electric"],
+  techno: ["Concrete", "Iron", "Static", "Midnight", "Heavy", "Cold"],
+  hiphop: ["Concrete", "Golden", "Dusty", "Late", "Paper", "Velvet"],
+  default: ["Midnight", "Golden", "Northern", "Quiet", "Bright", "Restless"],
+};
 
 const NOUNS: Record<string, string[]> = {
   psy: ["Spiral", "Mantra", "Vortex", "Ritual", "Lattice", "Prism"],
@@ -51,7 +60,7 @@ const NOUNS: Record<string, string[]> = {
   default: ["Signal", "Current", "Horizon", "Frequency", "Orbit", "Pulse"],
 };
 
-function nounKey(genre: string): string {
+function genreKey(genre: string): string {
   const g = genre.toLowerCase();
   if (/psy|goa|trance|acid/.test(g)) return "psy";
   if (/hip|rap|trap|drill|boom/.test(g)) return "hiphop";
@@ -59,14 +68,21 @@ function nounKey(genre: string): string {
   return "default";
 }
 
-/** An original title: an invented word plus a genre-flavoured noun. */
+/** Two real words: a vivid one (from the description when it has one) and a genre noun. */
 export function coinedTitle(seed: string, genre = ""): string {
-  const nouns = NOUNS[nounKey(genre)];
-  return `${coinedWord(seed)} ${nouns[hash(`${seed}|noun`) % nouns.length]}`;
+  const k = genreKey(genre);
+  const noun = NOUNS[k][hash(`${seed}|noun`) % NOUNS[k].length];
+  const fromBrief = [...new Set(seed.toLowerCase().match(/\p{L}+/gu) ?? [])].filter((w) => VIVID.has(w));
+  const pool = fromBrief.length ? fromBrief : ADJECTIVES[k];
+  const word = pool[hash(`${seed}|word`) % pool.length];
+  return `${word[0].toUpperCase()}${word.slice(1)} ${noun}`;
 }
 
-/** The title if no released song has it, else a coined one. */
+/**
+ * The suggested title unless a released song has it, then a coined one. A
+ * suggestion the user reviews keeps its title when MusicBrainz can't be asked.
+ */
 export async function originalTitle(title: string, seed: string, genre = ""): Promise<string> {
   const t = title.trim();
-  return t && !(await titleTaken(t)) ? t : coinedTitle(seed || t, genre);
+  return t && (await titleStatus(t)) !== "taken" ? t : coinedTitle(seed || t, genre);
 }
