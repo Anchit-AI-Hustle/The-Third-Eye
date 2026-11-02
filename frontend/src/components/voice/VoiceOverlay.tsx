@@ -117,7 +117,13 @@ export function VoiceOverlay() {
       );
     }, []),
     onSpeechStart: useCallback(() => {
+      // Talking over the reply replaces it, as in the Assistant.
       tts.stop();
+      if (isStreamingRef.current) {
+        abortRef.current?.abort();
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
       suppressRef.current = false;
       setLiveBubble({ phase: "recording", level: 0 });
       setExpanded(true);

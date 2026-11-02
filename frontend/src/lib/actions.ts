@@ -5,6 +5,7 @@
 // the target app pre-filled on the confirming tap (see lib/intents.ts).
 
 import { isMcpWrite, summarizeMcpAction } from "@/lib/mcp/permissions";
+import { summarizeRoutine } from "@/lib/routines";
 
 /** Local copy of the namespace test — keeps this module free of the MCP client. */
 function isMcpTool(tool: string): boolean {
@@ -40,6 +41,9 @@ function isSensitiveWithArgs(tool: string, args: any): boolean {
   if (tool === "communicate") return (args?.action ?? "email") === "email";
   // ANCHOR publishes to the user's public channels; only reading its status is free.
   if (tool === "anchor") return (args?.action ?? "status") !== "status";
+  // A saved routine runs later on its name alone, so the user approves its
+  // exact steps once: text the assistant read must not plant one.
+  if (tool === "manage_routines") return args?.action === "save";
   return false;
 }
 
@@ -54,6 +58,8 @@ export function summarizeAction(tool: string, args: any): string {
   switch (tool) {
     case "manage_contacts":
       return `Access device contacts (${args?.action ?? "search"})`;
+    case "manage_routines":
+      return summarizeRoutine(String(args?.name ?? ""), Array.isArray(args?.steps) ? args.steps.map(String) : []);
     case "communicate":
       return `Send an email to ${args?.to ?? "?"} - subject "${args?.subject ?? ""}"`;
     case "send_email":

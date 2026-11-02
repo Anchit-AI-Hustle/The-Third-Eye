@@ -65,6 +65,11 @@ describe("a reply spoken while it streams", () => {
     await act(async () => { result.current.stop(); spoken[0].onend?.(); await vi.advanceTimersByTimeAsync(10); });
     expect(spoken.map((u) => u.text)).toEqual(["One."]);
     expect(result.current.speaking).toBe(false);
+
+    // The stream behind the cut-off reply keeps arriving; none of it is spoken.
+    await act(async () => { result.current.add("Three."); result.current.end(); await vi.advanceTimersByTimeAsync(10); });
+    expect(spoken.map((u) => u.text)).toEqual(["One."]);
+    expect(result.current.speaking).toBe(false);
   });
 
   it("says nothing when voice is off and the reply isn't forced", () => {

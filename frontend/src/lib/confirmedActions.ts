@@ -6,6 +6,8 @@ import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
 import { generateApp, publishApp } from "@/lib/appBuilder";
 import { getGithubAccessToken } from "@/lib/github";
+import { loadMemory, saveMemory } from "@/lib/memoryStore";
+import { saveRoutine } from "@/lib/routines";
 
 // Runs one world-changing action exactly as given: after the user confirms it
 // (/api/act), or straight away when the user's own message asked for it
@@ -82,6 +84,14 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));
       return { ok: out.ok, result: out.message };
+    }
+    case "manage_routines": {
+      const store = await loadMemory(email);
+      const before = { ...store };
+      const result = saveRoutine(store, String(args?.name ?? ""), Array.isArray(args?.steps) ? args.steps.map(String) : []);
+      const ok = !result.startsWith("A routine needs");
+      if (ok && !(await saveMemory(email, before, store))) return { ok: false, result: "The routine could not be saved. Try again." };
+      return { ok, result };
     }
     default:
       // Confirmed connector (MCP) write. `isSensitive` above already classified

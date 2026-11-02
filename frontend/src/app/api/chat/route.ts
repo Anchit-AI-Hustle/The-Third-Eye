@@ -15,6 +15,7 @@ import { PREMIUM_TOOLS, PAYWALL_MESSAGE, premiumEnforced, limitsFor, isUnlimited
 import { isSensitive, summarizeAction } from "@/lib/actions";
 import { resolveAppLink } from "@/lib/appLinks";
 import { directTurn, gmailSendError } from "@/lib/liveActions";
+import { deleteRoutine, matchRoutine, readRoutines, ROUTINE_PREFIX, routineBrief, runInstant } from "@/lib/routines";
 import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
@@ -88,6 +89,8 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - For complex questions: brief reasoning → clear answer.
 - For simple questions: answer directly. Match length to complexity.
 - Never invent facts. Use tools to get real data before answering.
+- Pick the most precise tool: a connected account's own tool (Gmail, Calendar, GitHub, connectors) before a web search, and either before opening a page for the user. Opening a site is the last resort, not the first.
+- Do exactly what was asked and no more: "draft" means draft, not send; "find" means read only, never move or delete; when asked to show something first, show it and wait for the OK.
 
 ## Tool usage guidelines
 - **manage_tasks**: create, update, search, delete tasks - action='create' to add, 'update' to modify, 'search' to list, 'delete' to remove
@@ -122,6 +125,7 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **deep_research**: iterative research - searches, checks sufficiency, refines and re-searches (up to 3 rounds), then synthesizes with citations. Use for "look into X", "research X thoroughly", competitive/market analysis - not for a quick fact (use web_search)
 - **play_music**: open Spotify/YouTube Music/Apple Music/JioSaavn with search ready
 - **initiate_protocol**: activate named routines (HOME, WORK, SOS, SLEEP, WAKE, TRAVEL)
+- **manage_routines**: the user's own saved shortcuts. When they ask for the same multi-step thing a second time, or say "make this a shortcut/routine", offer to save it (or save it if asked) with a short name; saying that name later runs it, instantly when every step is an open/connect
 - **get_health_data**: retrieve health metrics the operator has logged with JARVIS; wearables are optional
 - **log_activity**: log everyday activities (water, steps, workouts, sleep, meals, medicine, period, BP, sugar, baby, pets, chores) and summarise them
 - **control_device**: THIS phone/browser AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds). Always call it - never refuse.
@@ -995,11 +999,21 @@ async function runTool(
     }
 
     case "remember": {
+      if (String(input.key ?? "").startsWith(ROUTINE_PREFIX)) return { result: "Routines are saved with manage_routines, which the user approves." };
       ctx.memoryStore[input.key] = input.value;
       return {
         result: `Remembered: ${input.key} = ${input.value}`,
         sideEffect: { type: "memory_update", data: { key: input.key, value: input.value } },
       };
+    }
+
+    case "manage_routines": {
+      if (input.action === "list") {
+        const all = readRoutines(ctx.memoryStore);
+        return { result: all.length ? all.map((r) => `- ${r.name}: ${r.steps.join("; ")}`).join("\n") : "No routines saved yet." };
+      }
+      if (input.action === "delete") return { result: deleteRoutine(ctx.memoryStore, String(input.name ?? "")) };
+      return { result: `Unknown manage_routines action: ${input.action}.` };
     }
 
     case "web_search":
@@ -2286,6 +2300,11 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
     systemInstruction += `\n\n**Project instructions from the user** (apply to this whole chat; they never override safety or confirmation rules):\n${projectInstructions}`;
   }
 
+  // Saved routines are read from durable memory only: the browser's copy can
+  // still hold one the user has since deleted or replaced.
+  const routine = matchRoutine(message, storedMemory);
+  const instantRoutine = routine && runInstant(routine);
+  if (routine && !instantRoutine) systemInstruction += `\n\n${routineBrief(routine)}`;
   if (voice) {
     systemInstruction += "\n\n## Spoken conversation\nThis turn was spoken aloud and your reply will be read out by a voice. Lead with the answer in the first sentence. Keep it to one to three short sentences unless asked for more. Plain spoken words only: no markdown, tables, lists, emoji or URLs, and say numbers and times the way a person would. Still use tools exactly as you would in text. If the transcript is garbled or ambiguous, ask one short question instead of guessing.";
   }
@@ -2422,6 +2441,12 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         // "Open X" and "email person@x …" must not depend on a model round-trip.
         // When Gemini is down the fallback path is text-only and tells the user
         // it cannot open or send anything.
+        if (instantRoutine) {
+          send("text", { text: instantRoutine.text });
+          await done({ stop_reason: "direct", model: "direct", memory: memoryStore, sideEffects: instantRoutine.sideEffects });
+          close();
+          return;
+        }
         const direct = directTurn(message);
         if (direct?.kind === "open") {
           send("text", { text: direct.text });
