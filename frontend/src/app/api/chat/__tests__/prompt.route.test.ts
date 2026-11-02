@@ -60,4 +60,22 @@ describe("/api/chat prompt", () => {
     expect(systemPrompts[0]).not.toContain("## Spoken conversation");
     expect(modelParams.map((p) => p.generationConfig?.thinkingConfig?.thinkingBudget)).toEqual([1024, -1]);
   });
+
+  it("runs a saved routine of opens instantly, without asking any model", async () => {
+    memory.value = { "routine:focus mode": JSON.stringify({ name: "Focus Mode", steps: ["open gmail", "open calendar"] }) };
+    const { POST } = await import("@/app/api/chat/route");
+    const out = await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "Run focus mode" }) }) as never)).text();
+    expect(out).toContain("Running Focus Mode.");
+    expect(out).toContain('"stop_reason":"direct"');
+    expect(systemPrompts).toHaveLength(0);
+  });
+
+  it("gives the assistant the steps of a routine it has to carry out", async () => {
+    memory.value = { "routine:wind down": JSON.stringify({ name: "Wind down", steps: ["open spotify", "remind me to sleep at 11pm"] }) };
+    const { POST } = await import("@/app/api/chat/route");
+    await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "wind down" }) }) as never)).text();
+    expect(systemPrompts[0]).toContain('saved routine "Wind down"');
+    expect(systemPrompts[0]).toContain("2. remind me to sleep at 11pm");
+  });
 });
+

@@ -351,6 +351,19 @@ export const geminiTools = [
         },
       },
       {
+        name: "manage_routines",
+        description: "The user's own shortcuts: a name that stands for a list of steps, run later by saying the name. action='save' stores one (name + steps, each step a plain command such as 'open gmail', 'open calendar', 'turn on do not disturb', 'remind me to stretch in 1 hour'); 'list' shows them; 'delete' removes one. Saving replaces a routine with the same name.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["save", "list", "delete"] },
+            name: { type: "STRING", description: "What the user will say to run it, e.g. 'Focus Mode'" },
+            steps: { type: "ARRAY", items: { type: "STRING" }, description: "The steps in order, one plain command each" },
+          },
+          required: ["action"],
+        },
+      },
+      {
         name: "web_search",
         description: "Search the web for current events, news, prices, facts. Use proactively when uncertain or when info may have changed.",
         parameters: {
