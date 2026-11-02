@@ -1259,6 +1259,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
           {/* Top row on mobile, inline on desktop: Textarea takes full width */}
           <div className="flex-1 w-full min-w-0 order-1 sm:order-2">
             <textarea
+              data-no-dictate
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}

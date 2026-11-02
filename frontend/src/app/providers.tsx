@@ -11,6 +11,7 @@ import { TaskAutopilot } from "@/components/tasks/TaskAutopilot";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { CommandPalette } from "@/components/command/CommandPalette";
+import { DictationButton } from "@/components/voice/DictationButton";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
 import { getDeviceInfo } from "@/lib/deviceInfo";
 
@@ -84,6 +85,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <DeviceLogBridge />
             <SystemsOnline />
             <CommandPalette />
+            <DictationButton />
           </CaptureProvider>
         </PermissionProvider>
       </QueryClientProvider>

@@ -675,6 +675,7 @@ export function VoiceOverlay() {
                 <Paperclip size={11} />
               </button>
               <input
+                data-no-dictate
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handsFreeRef.current = false; sendMessage(); } }}
