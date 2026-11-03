@@ -49,7 +49,9 @@ async def test_bootstrap_schema_noop_for_public_schema(monkeypatch):
 @pytest.mark.asyncio
 async def test_bootstrap_schema_creates_dedicated_schema(monkeypatch):
     fake_settings = SimpleNamespace(
-        db_schema="backend_app", database_url="postgresql+asyncpg://u:p@h/db"
+        db_schema="backend_app",
+        database_url="postgresql+asyncpg://u:p@h/db",
+        environment="test",
     )
     monkeypatch.setattr("app.bootstrap_schema.get_settings", lambda: fake_settings)
     fake_engine = _FakeEngine()
@@ -59,6 +61,8 @@ async def test_bootstrap_schema_creates_dedicated_schema(monkeypatch):
     ) as mock_create:
         await main()
 
-    mock_create.assert_called_once_with(fake_settings.database_url)
+    assert mock_create.call_count == 1
+    assert mock_create.call_args.args[0] == fake_settings.database_url
+    assert "connect_args" in mock_create.call_args.kwargs
     assert fake_engine.disposed is True
     assert len(fake_engine.conn.executed) == 1

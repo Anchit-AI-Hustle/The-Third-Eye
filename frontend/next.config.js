@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 
-// Baseline security headers on every route. CSP was Report-Only through
-#543; enforcing now with the same allowlist that matched live traffic
-// (Google, Supabase, Stripe, Razorpay, Vercel scripts).
+// Baseline security headers on every route. CSP is enforcing (was Report-Only
+// through PR 543) with the allowlist that matched live traffic (Google,
+// Supabase, Stripe, Razorpay, Vercel scripts).
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://checkout.razorpay.com https://*.vercel-scripts.com",
