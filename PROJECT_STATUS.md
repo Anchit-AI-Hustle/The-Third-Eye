@@ -14,8 +14,8 @@ decided 2026-08-22 to deploy on a free stack, deploy not yet run). The sections 
 
 ## What's live today (`frontend/`)
 
-- Tool-calling assistant (`/api/chat`) with ~25 tools, 4 personas, streaming
-  SSE, confirm-then-act on sensitive actions.
+- Tool-calling assistant (`/api/chat`) with ~25 tools, six agent personas,
+  streaming SSE, confirm-then-act on sensitive actions.
 - Tasks, notes, goals, knowledge-base RAG (pgvector), calendar/email
   (opt-in Google connect), reminders, multi-agent reasoning.
 - Live Capture (continuous speech transcription → auto-created tasks) and

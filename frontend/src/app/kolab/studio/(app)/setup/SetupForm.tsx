@@ -130,47 +130,12 @@ export function SetupForm({
         </div>
       </Card>
 
-      <KycCard verified={kycVerified} onDone={() => router.refresh()} />
+      <KycCard verified={kycVerified} />
     </div>
   );
 }
 
-function KycCard({ verified, onDone }: { verified: boolean; onDone: () => void }) {
-  const [aadhaar, setAadhaar] = useState("");
-  const [ref, setRef] = useState<string | null>(null);
-  const [otp, setOtp] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function call(action: "initiate" | "verify") {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/kolab-studio/kyc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          action === "initiate"
-            ? { action, aadhaar, consent: true }
-            : { action, reference_id: ref, otp },
-        ),
-      });
-      const body = await res.json();
-      if (!res.ok || !body.ok) throw new Error(body.error || "KYC unavailable");
-      if (action === "initiate") {
-        setRef(body.data.reference_id);
-        setMsg("OTP sent to your Aadhaar-linked mobile.");
-      } else {
-        setMsg("Aadhaar verified.");
-        onDone();
-      }
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "KYC unavailable");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function KycCard({ verified }: { verified: boolean }) {
   return (
     <Card className="p-[22px]">
       <div className="mb-3 flex items-center gap-2">
@@ -181,35 +146,16 @@ function KycCard({ verified, onDone }: { verified: boolean; onDone: () => void }
         <p className="text-[13px] text-kolab-muted">Your identity is verified. Features are unlocked once you also have an active plan.</p>
       ) : (
         <>
-          <div className="grid gap-3.5 md:grid-cols-2">
-            <Input
-              inputMode="numeric"
-              maxLength={14}
-              placeholder="XXXX XXXX XXXX"
-              value={aadhaar}
-              onChange={(e) => setAadhaar(e.target.value)}
-            />
-            {!ref ? (
-              <Button disabled={busy} onClick={() => call("initiate")}>
-                Verify via OTP
-              </Button>
-            ) : (
-              <div className="flex gap-2">
-                <Input placeholder="OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
-                <Button variant="primary" disabled={busy} onClick={() => call("verify")}>
-                  Confirm
-                </Button>
-              </div>
-            )}
-          </div>
+          <Button disabled title="Aadhaar eKYC is not wired yet">
+            Verify via OTP (unavailable)
+          </Button>
           <p className="mt-2.5 font-kolab-mono text-[10px] leading-relaxed text-kolab-faint">
             Coming soon: real Aadhaar eKYC through a UIDAI-licensed provider with your consent. Until
-            then verification is unavailable. We never store your Aadhaar number or biometrics - only
-            verification status and a masked reference once a provider is wired.
+            then verification is unavailable — nothing is sent or stored. We never store your Aadhaar
+            number or biometrics - only verification status and a masked reference once a provider is wired.
           </p>
         </>
       )}
-      {msg && <div className="mt-2 font-kolab-mono text-[12px] text-kolab-muted">{msg}</div>}
     </Card>
   );
 }

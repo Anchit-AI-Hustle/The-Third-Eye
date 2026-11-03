@@ -114,7 +114,6 @@ export const APPS: AppEntry[] = [
   { id: "netflix", label: "Netflix", category: "Entertainment", modes: [P], kind: "external", href: "https://www.netflix.com", icon: "Film" },
   { id: "primevideo", label: "Prime Video", category: "Entertainment", modes: [P], kind: "external", href: "https://www.primevideo.com", icon: "Film" },
   { id: "hotstar", label: "JioHotstar", category: "Entertainment", modes: [P], kind: "external", href: "https://www.hotstar.com", icon: "Film" },
-  { id: "jiocinema", label: "JioCinema", category: "Entertainment", modes: [P], kind: "external", href: "https://www.jiocinema.com", icon: "Film" },
   { id: "sonyliv", label: "Sony LIV", category: "Entertainment", modes: [P], kind: "external", href: "https://www.sonyliv.com", icon: "Film" },
   { id: "play-games", label: "Games", category: "Entertainment", modes: [P], kind: "external", href: "https://play.google.com/store/games", icon: "Gamepad2" },
 

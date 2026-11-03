@@ -122,6 +122,6 @@ describe("bundles", () => {
 describe("welcome grant", () => {
   it("covers one use of every paid action, and no more", () => {
     expect(WELCOME_CREDITS).toBe(Object.keys(CREDIT_COSTS).reduce((sum, a) => sum + costOf(a), 0));
-    expect(WELCOME_CREDITS).toBe(106);
+    expect(WELCOME_CREDITS).toBe(116);
   });
 });

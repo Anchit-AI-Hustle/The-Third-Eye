@@ -78,7 +78,7 @@ export function Paywall({
 
               <div className="flex gap-2 mb-4">
                 <Link
-                  href="/plans"
+                  href={reason === "recharge" ? "/plans" : "/upgrade"}
                   onClick={onClose}
                   className="flex-1 text-center rounded-input px-4 py-2.5 text-sm font-medium text-black transition-opacity hover:opacity-90"
                   style={{ backgroundColor: t.color }}
@@ -86,11 +86,11 @@ export function Paywall({
                   {reason === "recharge" ? "Buy credits" : `Upgrade to ${t.label}`}
                 </Link>
                 <Link
-                  href="/plans"
+                  href={reason === "recharge" ? "/upgrade" : "/plans"}
                   onClick={onClose}
                   className="rounded-input px-4 py-2.5 text-sm font-medium border border-border-default text-text-secondary hover:text-text-primary"
                 >
-                  See plans
+                  {reason === "recharge" ? "Premium" : "Buy credits"}
                 </Link>
               </div>
 

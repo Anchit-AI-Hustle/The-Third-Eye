@@ -7,8 +7,6 @@ import { assembleEpisode, type Aspect, type Soundtrack } from "@/lib/episodeVide
 import { saveMedia } from "@/lib/mediaFile";
 import { SoundtrackPicker } from "@/components/studio/SoundtrackPicker";
 import { AiFieldBar } from "@/components/studio/AiFieldBar";
-import { chargeCreation } from "@/lib/billing/useBilling";
-
 const POLL_LIMIT_MS = 10 * 60_000;
 
 interface Scene { n: number; title: string; seconds: number; prompt: string; narration: string }
@@ -80,15 +78,19 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
       if (!res.ok || !d.jobId) return fail(d.error ?? `HTTP ${res.status}`);
       stopPoll(key);
       const giveUp = Date.now() + POLL_LIMIT_MS;
+      const charged = kind === "clip" ? "&charged=video.render" : "";
       polls.current[key] = setInterval(async () => {
         if (Date.now() > giveUp) { stopPoll(key); return fail("Still not finished after 10 minutes. The provider may be stuck; try again."); }
         try {
-          const r = await fetch(`/api/tools/video?id=${encodeURIComponent(d.jobId)}`);
+          const r = await fetch(`/api/tools/video?id=${encodeURIComponent(d.jobId)}${charged}`);
           const s = await r.json();
           if (s.status === "succeeded" && s.url) {
             stopPoll(key);
             set((p) => ({ ...p, [scene.n]: { status: "done", url: s.url } }));
             onDone?.(s.url, d.jobId);
+          } else if (s.status === "succeeded" && !s.url) {
+            stopPoll(key);
+            fail(s.error || "The render finished without a media file.");
           } else if (s.status === "failed" || s.status === "canceled" || s.error) {
             stopPoll(key);
             fail(s.error || "Render failed.");
@@ -129,9 +131,8 @@ export function VideoScenes({ script, title, accent, aspect = "16:9", seconds, t
 
   async function buildEpisode() {
     if (!scenes) return;
+    // Client-side mux only — AI clip renders were already charged per shot.
     setEpisode({ status: "building", progress: 0 });
-    const paid = await chargeCreation("video.render");
-    if (!paid.ok) { setEpisode({ status: "error", msg: paid.error }); return; }
     try {
       const { blob, ext } = await assembleEpisode({
         title,

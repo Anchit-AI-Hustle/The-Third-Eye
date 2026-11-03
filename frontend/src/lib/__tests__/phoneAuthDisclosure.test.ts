@@ -1,22 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * What the unauthenticated sign-in surface is allowed to give away, and what the
- * lockout counter has to guarantee.
+ * Phone + PIN sign-in is retired (Google only). POST /api/auth/phone returns 410.
+ * The phoneAuth library helpers below still enforce lockout / rate-limit invariants
+ * for the dormant stack and residual integration tests.
  *
- * THE THREE THINGS PINNED HERE
- *   1. POST /api/auth/phone is reachable by anyone who can guess a number
- *      (middleware does not cover /api/*). It answers one bit — is this number
- *      registered — and must not return the account holder's NAME, which would
- *      turn a list of numbers into a list of people and hand a phisher "Welcome
- *      back, <name>". It also must not distinguish a locked account, which would
- *      confirm to an attacker that their lockout attack landed.
- *   2. A wrong PIN must be counted by the database in one statement. Counting it
- *      in application code let parallel guesses all read the same value and write
- *      the same one back, so N simultaneous attempts moved the counter by one and
- *      the lock never arrived — against a secret that is one of ten thousand.
- *   3. A PIN of the wrong shape must not be hashed. scrypt is the expensive part,
- *      and this path is unauthenticated.
+ * PINNED HERE
+ *   1. The HTTP preflight is gone — 410, no account lookup.
+ *   2. A wrong PIN must be counted by the database in one statement.
+ *   3. A PIN of the wrong shape must not be hashed.
  */
 
 const rpc = vi.fn();
@@ -72,45 +64,19 @@ afterEach(() => {
   row = null;
 });
 
-async function preflight(body: Record<string, unknown>) {
+async function preflight(_body?: Record<string, unknown>) {
   const { POST } = await import("@/app/api/auth/phone/route");
-  const res = await POST(
-    new Request("https://example.com/api/auth/phone", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.9" },
-      body: JSON.stringify(body),
-    }),
-  );
+  const res = await POST();
   return { status: res.status, body: await res.json() };
 }
 
 describe("POST /api/auth/phone", () => {
-  it("never returns the account holder's name", async () => {
-    const { body } = await preflight({ phone: PHONE });
-    expect(body).toEqual({ ok: true, exists: true });
+  it("is retired — 410, no account disclosure", async () => {
+    const { status, body } = await preflight({ phone: PHONE });
+    expect(status).toBe(410);
+    expect(body.ok).toBe(false);
     expect(JSON.stringify(body)).not.toContain("Anchit");
-  });
-
-  it("answers a locked account exactly as it answers an unlocked one", async () => {
-    const open = await preflight({ phone: PHONE });
-    await seedRow({ locked_until: new Date(Date.now() + 9e5).toISOString() });
-    const locked = await preflight({ phone: PHONE });
-    expect(locked).toEqual(open);
-  });
-
-  it("says a number is not registered without inventing an account", async () => {
-    row = null;
-    const { body } = await preflight({ phone: PHONE });
-    expect(body).toEqual({ ok: true, exists: false });
-  });
-
-  it("refuses a number that is not a valid number at all", async () => {
-    expect((await preflight({ phone: "12345" })).status).toBe(400);
-  });
-
-  it("rate-limits by caller once the window is spent", async () => {
-    rpc.mockImplementation(() => Promise.resolve({ data: 999, error: null }));
-    expect((await preflight({ phone: PHONE })).status).toBe(429);
+    expect(JSON.stringify(body)).toMatch(/Google/i);
   });
 });
 

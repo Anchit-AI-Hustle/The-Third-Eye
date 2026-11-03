@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
   } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!text.trim()) return Response.json({ error: "Empty" }, { status: 400 });
 
-  const today = localDay(new Date(), timezone);
+  // No client zone → UTC (documented server default). Host TZ must not decide "today".
+  const today = localDay(new Date(), timezone || "UTC");
 
   try {
     const out = await llmCascade({

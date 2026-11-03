@@ -153,46 +153,14 @@ server route**, `app/api/data/[entity]/route.ts`:
   `docker run -d -p 54322:5432 -e POSTGRES_PASSWORD=pw supabase/postgres:17.6.1.104`,
   then `DATABASE_URL=postgres://postgres:pw@localhost:54322/postgres node scripts/migrate.mjs`.
 
-### 4a. Moving an existing workspace onto a phone identity
+### 4a. Auth identity (Google only)
 
-**Read this before signing in by number on a deployment that has real data.**
+Sign-in is **Google only** (`lib/auth.ts`). Phone + PIN was removed from the
+provider list; `/api/auth/phone` returns 410. `user_id` in Postgres is the
+Google account email from `session.user.email`.
 
-`user_id` is whatever sign-in put in `session.user.email`. Under Google that was
-an email address; under phone sign-in it is an E.164 number. They are *different
-identities*, so a phone account starts empty and **the data keyed by the old
-email is not reachable from it** — and since Google is no longer a sign-in
-provider, once the existing 24-hour JWT expires there is nothing that can produce
-the email identity again either.
-
-There is no automatic link, on purpose: silently merging two identities is a
-worse failure than an obvious empty workspace. Re-key deliberately instead, once,
-against the database (Supabase SQL editor), **before** putting anything into the
-new account so nothing collides:
-
-```sql
--- Substitute your own two values. Run once.
-DO $$
-DECLARE t text;
-BEGIN
-  FOR t IN
-    SELECT table_name FROM information_schema.columns
-     WHERE table_schema = 'public' AND column_name = 'user_id'
-  LOOP
-    EXECUTE format('update public.%I set user_id = $1 where user_id = $2', t)
-      USING '+919876543210', 'you@example.com';
-  END LOOP;
-END $$;
-```
-
-It walks every `public` table with a `user_id` column, so it covers tables added
-since this was written. Two things to know:
-
-- **Order matters.** `google_tokens.user_id` is a primary key and several tables
-  are unique on `(user_id, …)`, so if the phone identity already has rows the
-  update raises a conflict. Re-key first, use the account after.
-- **Stripe.** `profiles.stripe_customer_id` moves with the row, so an existing
-  subscription follows; but the `metadata.email` on the Stripe subscription
-  itself still holds the old address, which only matters if you reconcile by it.
+Historical note: phone-identity migrations and `phoneAuth` helpers remain in
+the tree for tests/docs of the old design, but they cannot mint a live session.
 
 ---
 

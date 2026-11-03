@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { creditsRefused, refundCredits, spendCredits } from "@/lib/credits";
+import { creditsRefused, refundCredits, refundJobOnce, spendCredits } from "@/lib/credits";
 import { replicateConfigured, createPrediction, getPrediction, videoUrlFrom, audioUrlFrom } from "@/lib/replicate";
 import { MAX_REEL_SECONDS, planScenes } from "@/lib/videoScenes";
 
@@ -93,13 +93,29 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
-  const id = new URL(req.url).searchParams.get("id");
+  const user = await email();
+  if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const q = new URL(req.url).searchParams;
+  const id = q.get("id");
+  // Only clip renders are charged; narration polls omit `charged` so we never
+  // invent a refund for a free TTS job.
+  const charged = q.get("charged") === "video.render";
   if (!id || !/^[a-zA-Z0-9]+$/.test(id)) return Response.json({ error: "valid id required" }, { status: 400 });
   try {
     const p = await getPrediction(id);
-    const url = p.status === "succeeded" ? videoUrlFrom(p.output) ?? audioUrlFrom(p.output) : null;
-    return Response.json({ status: p.status, url, error: p.error });
+    if (p.status === "failed" || p.status === "canceled") {
+      const refunded = charged ? await refundJobOnce(user, "video.render", id) : false;
+      return Response.json({ status: p.status, url: null, error: p.error || `Render ${p.status}`, refunded });
+    }
+    if (p.status !== "succeeded") {
+      return Response.json({ status: p.status, url: null, error: p.error });
+    }
+    const url = videoUrlFrom(p.output) ?? audioUrlFrom(p.output);
+    if (!url) {
+      const refunded = charged ? await refundJobOnce(user, "video.render", id) : false;
+      return Response.json({ status: "failed", url: null, error: "The render finished without a media file.", refunded });
+    }
+    return Response.json({ status: "succeeded", url, error: null });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "poll failed" }, { status: 502 });
   }

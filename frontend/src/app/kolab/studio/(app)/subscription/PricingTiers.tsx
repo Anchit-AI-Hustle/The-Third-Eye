@@ -27,11 +27,14 @@ export function PricingTiers({
         body: JSON.stringify({ plan, cycle }),
       });
       const body = await res.json();
-      if (!res.ok || !body.ok) throw new Error(body.error || "Billing unavailable");
+      if (!res.ok || !body.ok) {
+        // Production returns 501 until Razorpay checkout is wired — say so plainly.
+        throw new Error(body.error || "Checkout is not available yet. Nothing was charged.");
+      }
       setMsg(body.data?.message ?? "Plan selected.");
       router.refresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Billing unavailable");
+      setMsg(e instanceof Error ? e.message : "Checkout is not available yet. Nothing was charged.");
     } finally {
       setBusy(null);
     }
@@ -85,7 +88,7 @@ export function PricingTiers({
                   disabled={privileged || isCurrent || busy === k}
                   onClick={() => subscribe(k)}
                 >
-                  {privileged ? "Complimentary access" : isCurrent ? "Current plan" : `Choose ${t.name}`}
+                  {privileged ? "Complimentary access" : isCurrent ? "Current plan" : `Choose ${t.name} (coming soon)`}
                 </Button>
               </Card>
             );

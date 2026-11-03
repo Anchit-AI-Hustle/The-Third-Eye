@@ -8,6 +8,7 @@ import { DashboardWidgets } from "./DashboardWidgets";
 import { cn } from "@/lib/utils";
 import { isAgentKilled, AGENT_EVENT } from "@/lib/agentControl";
 import { taskStatusLabel } from "@/lib/taskStatus";
+import { localDay } from "@/lib/localDay";
 import {
   CheckSquare, MessageSquare, Zap, Brain, ArrowRight, Clock,
   Target, FileText, Cpu, Shield, Mic, AlertTriangle,
@@ -109,7 +110,8 @@ export function DashboardClient() {
   const urgent   = open.filter((t) => t.priority === "urgent" || t.priority === "high");
   const doneToday = allTasks.filter((t) => {
     if (t.status !== "done" || !t.completed_at) return false;
-    return new Date(t.completed_at).toDateString() === new Date().toDateString();
+    // completed_at is YYYY-MM-DD from localDay() — compare as a date string.
+    return t.completed_at.slice(0, 10) === localDay();
   });
   const overdue  = open.filter((t) => t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()));
   const inProgress = open.filter((t) => t.status === "in_progress");

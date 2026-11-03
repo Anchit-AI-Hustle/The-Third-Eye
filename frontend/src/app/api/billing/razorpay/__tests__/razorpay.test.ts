@@ -79,7 +79,7 @@ const hook = (event: object, secret = HOOK_SECRET) => {
   }));
 };
 const USER = "+919000090000";
-const GIFT = 106;
+const GIFT = 116;
 
 beforeEach(() => {
   email = USER;

@@ -1302,7 +1302,7 @@ async function setReminder(
   const recurrence = input.recurrence && input.recurrence !== "none" ? input.recurrence : null;
   const limits = limitsFor(ctx.tier);
   if (recurrence && !limits.recurringReminders) {
-    return "Recurring reminders are a Premium feature. I can set a one-time reminder now, or you can upgrade in Settings → Upgrade.";
+    return "Recurring reminders are a Premium feature. I can set a one-time reminder now, or you can upgrade at Premium (/upgrade).";
   }
 
   if (!isUnlimited(limits.activeReminders)) {

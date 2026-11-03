@@ -57,6 +57,7 @@ export const CREDIT_COSTS: Record<string, number> = {
   "studio.text": 3,
   "studio.html": 6,
   "music.generate": 20,
+  "image.generate": 10,
   "video.render": 50,
   "vision.analyze": 5,
   "transcribe.minute": 2,

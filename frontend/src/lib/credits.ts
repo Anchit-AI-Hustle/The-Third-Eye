@@ -49,24 +49,35 @@ export async function refundCredits(email: string, spend: Spend, action: string)
 }
 
 /**
- * Idempotent refund for an async Music Studio job that failed after POST charged.
- * Reason is keyed by job id so repeated polls do not over-credit.
+ * Idempotent refund for an async paid job that failed after POST charged.
+ * Reason is keyed by action + job id so repeated polls do not over-credit.
+ * Prefers refund_credits_once (atomic); falls back to check-then-refund.
  */
-export async function refundMusicJobOnce(email: string, jobId: string): Promise<boolean> {
-  if (!jobId || unlimitedCredits(email)) return false;
-  const cost = costOf("music.generate");
+export async function refundJobOnce(email: string, action: string, jobId: string): Promise<boolean> {
+  if (!jobId || !action || unlimitedCredits(email)) return false;
+  const cost = costOf(action);
   if (!cost) return false;
   const db = getDb();
   if (!db) return false;
-  const reason = `Refund: music.generate job ${jobId}`;
+  const reason = `Refund: ${action} job ${jobId}`;
+  const once = await db.rpc("refund_credits_once", { p_user_id: email, p_amount: cost, p_reason: reason });
+  if (!once.error) {
+    const code = Number(once.data);
+    return Number.isFinite(code) && code >= 0;
+  }
+  // RPC missing (migration not applied yet): best-effort check-then-refund.
   const { data: existing } = await db.from("credit_ledger").select("id").eq("user_id", email).eq("reason", reason).limit(1);
   if (existing?.length) return false;
   const { error } = await db.rpc("refund_credits", { p_user_id: email, p_amount: cost, p_reason: reason });
   if (error) {
-    console.error("refundMusicJobOnce failed", error.code, error.message);
+    console.error("refundJobOnce failed", error.code, error.message);
     return false;
   }
   return true;
+}
+
+export function refundMusicJobOnce(email: string, jobId: string): Promise<boolean> {
+  return refundJobOnce(email, "music.generate", jobId);
 }
 
 // Adds credits (a test purchase on an owner account). refund_credits adds to
