@@ -3,6 +3,8 @@
 // so Music Studio always has something real to play. It is an instrumental
 // synth track; sung vocals still need a music model.
 
+import { BPM_MAX, BPM_MIN } from "./types";
+
 export const SAMPLE_RATE = 22_050;
 
 export interface SynthSpec {
@@ -58,7 +60,7 @@ const MINOR: [number, boolean][][] = [
 ];
 
 export function composeTrack(spec: SynthSpec): { events: NoteEvent[]; root: number; minor: boolean } {
-  const bpm = Math.min(Math.max(spec.bpm || 100, 50), 200);
+  const bpm = Math.min(Math.max(spec.bpm || 100, BPM_MIN), BPM_MAX);
   const energy = Math.min(Math.max(Math.round(spec.energy ?? 5), 1), 10);
   const seconds = Math.max(spec.seconds, 1);
   const rand = rng(spec.seed || "jarvis");
@@ -102,7 +104,7 @@ export function specFromText(text: string, seconds: number): SynthSpec {
   const energy = HIGH.test(text) ? 8 : CALM.test(text) ? 3 : 5;
   const key = text.match(/\b([A-G][#b]?\s*(?:minor|major|min|maj|m)?)\b(?=\s|$|[,.])/)?.[1];
   return {
-    bpm: bpm >= 50 && bpm <= 200 ? bpm : energy === 8 ? 124 : energy === 3 ? 80 : 100,
+    bpm: bpm >= BPM_MIN && bpm <= BPM_MAX ? bpm : energy === 8 ? 124 : energy === 3 ? 80 : 100,
     energy, seconds, seed: text, moods: text.split(/\W+/),
     ...(key && /\b(in|key)\b/i.test(text) ? { key } : {}),
   };

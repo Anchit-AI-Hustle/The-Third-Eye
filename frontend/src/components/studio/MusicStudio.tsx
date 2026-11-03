@@ -94,7 +94,8 @@ type Fields = {
   title: string; description: string; genres: string[]; subgenre: string; moods: string[];
   tempo: number; duration: number; vocals: boolean; vocalStyles: string[]; vocalLanguages: string[];
   vocalIntensity: number; vocalEffects: string[];
-  lyricsMode: "auto" | "manual" | "none"; lyricsText: string; artistInspiration: string[];
+  lyricsMode: "auto" | "manual" | "none"; lyricsText: string; lyricsTheme: string;
+  artistInspiration: string[];
   instruments: string[]; energy: number; structure: string; makeVideoUpfront: boolean;
 };
 
@@ -107,7 +108,7 @@ const NUMBER_RANGES: Partial<Record<keyof Fields, [number, number]>> = {
 const FIELD_DEFAULTS: Partial<Record<keyof Fields, Fields[keyof Fields]>> = {
   title: "", description: "", genres: [], subgenre: "", moods: [],
   tempo: 120, duration: 30, vocalStyles: [], vocalLanguages: [],
-  vocalIntensity: 5, vocalEffects: [], lyricsText: "", artistInspiration: [],
+  vocalIntensity: 5, vocalEffects: [], lyricsText: "", lyricsTheme: "", artistInspiration: [],
   instruments: [], energy: 6, structure: "",
 };
 
@@ -128,18 +129,25 @@ function fmtDuration(s: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+const INSTRUMENTAL_LANG = /instrumental\s*\/\s*no lyrics/i;
+
 // The form as the generator (and the daily drop) reads it: lists as comma strings.
 function payloadOf(f: Fields) {
   const { makeVideoUpfront: _video, ...rest } = f;
+  const langs = f.vocalLanguages.filter((l) => !INSTRUMENTAL_LANG.test(l));
+  const forceInstrumental = f.vocalLanguages.some((l) => INSTRUMENTAL_LANG.test(l));
   return {
     ...rest,
     genre: f.genres.join(", "),
     mood: f.moods.join(", "),
     vocalStyle: f.vocalStyles.join(", "),
-    vocalLanguage: f.vocalLanguages.join(", "),
+    vocalLanguage: langs.join(", "),
     vocalEffects: f.vocalEffects.join(", "),
     instruments: f.instruments.join(", "),
     artistInspiration: f.artistInspiration.join(", "),
+    // "Instrumental / no lyrics" is not a language — force lyrics off.
+    vocals: forceInstrumental ? false : f.vocals,
+    lyricsMode: forceInstrumental ? "none" as const : f.lyricsMode,
   };
 }
 
@@ -259,7 +267,7 @@ export function MusicStudio() {
     title: "", description: "", genres: [GENRES[0]], subgenre: "", moods: [MOODS[0]],
     tempo: 120, duration: 30, vocals: true, vocalStyles: [], vocalLanguages: [LANGUAGES[0]],
     vocalIntensity: 5, vocalEffects: [],
-    lyricsMode: "auto", lyricsText: "", artistInspiration: [], instruments: [], energy: 6, structure: structuresFor([GENRES[0]])[0],
+    lyricsMode: "auto", lyricsText: "", lyricsTheme: "", artistInspiration: [], instruments: [], energy: 6, structure: structuresFor([GENRES[0]])[0],
     makeVideoUpfront: false,
   });
   const set = useCallback(<K extends keyof Fields>(k: K, v: Fields[K]) => setF((p) => ({ ...p, [k]: v })), []);
@@ -396,7 +404,7 @@ export function MusicStudio() {
         moods: x.mood ? matchOptions(x.mood, MOODS, 5, /[,&/]|\band\b/i) : p.moods,
         tempo: Number(x.tempo) >= BPM_MIN && Number(x.tempo) <= BPM_MAX ? Math.round(x.tempo) : p.tempo,
         energy: Number(x.energy) >= 1 && Number(x.energy) <= 10 ? Math.round(x.energy) : p.energy,
-        duration: Number(x.duration) >= 10 && Number(x.duration) <= 120 ? Math.round(x.duration) : p.duration,
+        duration: Number(x.duration) >= 10 && Number(x.duration) <= MAX_DURATION ? Math.round(x.duration) : p.duration,
         structure: x.structure || p.structure,
         instruments: x.instruments ? matchOptions(x.instruments, INSTRUMENTS, 10) : p.instruments,
         artistInspiration: x.artistInspiration ? matchOptions(x.artistInspiration, ARTIST_INSPIRATION, 4) : p.artistInspiration,
@@ -405,6 +413,7 @@ export function MusicStudio() {
         vocalLanguages: x.vocalLanguage ? matchOptions(x.vocalLanguage, LANGUAGES, 5) : p.vocalLanguages,
         vocalIntensity: Number(x.vocalIntensity) >= 1 && Number(x.vocalIntensity) <= 10 ? Math.round(x.vocalIntensity) : p.vocalIntensity,
         vocalEffects: x.vocalEffects ? matchOptions(x.vocalEffects, VOCAL_EFFECTS, 6) : p.vocalEffects,
+        lyricsTheme: typeof x.lyricsTheme === "string" && x.lyricsTheme.trim() ? x.lyricsTheme.trim() : p.lyricsTheme,
       }));
     } catch { setError("Auto-fill network error."); }
     finally { setFilling(false); }
@@ -521,13 +530,31 @@ export function MusicStudio() {
     // A job a provider never finishes would otherwise be polled for as long as the page is open.
     const giveUp = Date.now() + 10 * 60_000;
     pollRef.current = setInterval(async () => {
-      if (Date.now() > giveUp) { stopPoll(); setPhase("error"); setError("Still not finished after 10 minutes. The provider may be stuck; try again."); return; }
+      if (Date.now() > giveUp) {
+        stopPoll();
+        setPhase("error");
+        setError("Still not finished after 10 minutes. The provider may be stuck; try again.");
+        // Ask the poll endpoint once more so a stuck job can still refund if the provider failed.
+        void fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`).catch(() => null);
+        return;
+      }
       try {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();
         if (d.status) setStatus(`Composing audio… (${d.status})`);
         if (d.status === "succeeded" && d.audioUrl) { stopPoll(); onAudioReady(d.audioUrl); }
-        else if (d.status === "failed" || d.status === "canceled" || d.error) { stopPoll(); setPhase("error"); setError(d.error || "Generation failed."); }
+        else if (d.status === "succeeded" && !d.audioUrl) {
+          stopPoll();
+          setPhase("error");
+          setError(d.error || "The render finished without an audio file.");
+          if (d.refunded) setNote("Credits for this failed job were returned.");
+        }
+        else if (d.status === "failed" || d.status === "canceled" || (d.error && d.status !== "starting" && d.status !== "processing")) {
+          stopPoll();
+          setPhase("error");
+          setError(d.error || "Generation failed.");
+          if (d.refunded) setNote("Credits for this failed job were returned.");
+        }
       } catch { /* keep polling */ }
     }, 3000);
   }

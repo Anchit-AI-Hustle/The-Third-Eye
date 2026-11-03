@@ -48,6 +48,27 @@ export async function refundCredits(email: string, spend: Spend, action: string)
   if (error) console.error("refund_credits failed", error.code, error.message);
 }
 
+/**
+ * Idempotent refund for an async Music Studio job that failed after POST charged.
+ * Reason is keyed by job id so repeated polls do not over-credit.
+ */
+export async function refundMusicJobOnce(email: string, jobId: string): Promise<boolean> {
+  if (!jobId || unlimitedCredits(email)) return false;
+  const cost = costOf("music.generate");
+  if (!cost) return false;
+  const db = getDb();
+  if (!db) return false;
+  const reason = `Refund: music.generate job ${jobId}`;
+  const { data: existing } = await db.from("credit_ledger").select("id").eq("user_id", email).eq("reason", reason).limit(1);
+  if (existing?.length) return false;
+  const { error } = await db.rpc("refund_credits", { p_user_id: email, p_amount: cost, p_reason: reason });
+  if (error) {
+    console.error("refundMusicJobOnce failed", error.code, error.message);
+    return false;
+  }
+  return true;
+}
+
 // Adds credits (a test purchase on an owner account). refund_credits adds to
 // the balance and writes the ledger row; credit_balance opens the wallet first.
 export async function grantCredits(email: string, amount: number, reason: string): Promise<number | null> {

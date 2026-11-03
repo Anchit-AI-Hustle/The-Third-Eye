@@ -10,13 +10,22 @@ interface Family {
 
 const FAMILIES: Family[] = [
   {
-    keys: ["psy", "goa", "full-on", "full on", "forest", "hi-tech", "hitech", "darkpsy", "dark psy", "psycore", "trance", "acid", "rave"],
+    // No bare "trance" — that also matches Psytrance and stole classic trance forms.
+    keys: ["psy", "goa", "full-on", "full on", "forest", "hi-tech", "hitech", "darkpsy", "dark psy", "psycore", "acid", "rave"],
     structures: [
       "Intro - Groove - Acid Build - Drop - Mantra Breakdown - Build - Drop - Outro",
       "Intro - Build - Drop - Vocal Break - Drop - Acid Break - Final Drop - Outro",
       "DJ Intro - Main Groove - Breakdown - Peak - Main Groove - DJ Outro",
       "Intro - Kick & Bass - Lead Theme - Breakdown - Climax - Outro",
       "Intro - Rapid Build - Drop - Glitch Break - Drop - Outro",
+    ],
+  },
+  {
+    keys: ["uplifting trance", "progressive trance", "vocal trance", "classic trance", "trance"],
+    structures: [
+      "Intro - Verse - Breakdown - Build - Drop - Verse - Breakdown - Build - Drop - Outro",
+      "Intro - Build - Breakdown - Anthem - Breakdown - Anthem - Outro",
+      "Intro - Theme - Build - Climax - Theme - Outro",
     ],
   },
   {
@@ -36,7 +45,8 @@ const FAMILIES: Family[] = [
     ],
   },
   {
-    keys: ["drum", "dnb", "d&b", "jungle", "dubstep", "riddim", "bass"],
+    // No bare "bass" — "Future bass" is not DnB structure.
+    keys: ["drum", "dnb", "d&b", "jungle", "dubstep", "riddim", "drum and bass", "drum & bass"],
     structures: [
       "Intro - Build - Drop - Halftime Break - Build - Drop - Outro",
       "Intro - Verse - Build - Drop - Verse - Drop - Outro",
@@ -73,15 +83,36 @@ const GENERAL = [
   "Rondo (ABACA)",
 ];
 
+const NAMED_SECTIONS: Record<string, string[]> = {
+  aaba: ["verse", "verse", "bridge", "verse"],
+  "12-bar blues": ["verse", "verse", "turnaround"],
+  "theme and variations": ["theme", "variation", "variation", "variation", "theme"],
+  "through-composed (no repeats)": ["section a", "section b", "section c", "section d"],
+  "rondo (abaca)": ["theme", "episode", "theme", "episode", "theme"],
+  "call-and-response loop": ["call", "response", "call", "response", "call", "response"],
+};
+
+const PSY_MARK = /\b(?:psy|goa|full-?on|forest|hi-?tech|dark\s*psy|psycore|acid\s*rave)\b/i;
+
+function keyHits(hay: string, key: string): boolean {
+  if (key === "trance") {
+    // Classic trance only — psy* already has its own family.
+    return /\btrance\b/i.test(hay) && !PSY_MARK.test(hay);
+  }
+  return hay.includes(key);
+}
+
 /** Structures for these genres first, then the general ones — no duplicates. */
 export function structuresFor(genres: string[], subgenre = ""): string[] {
   const hay = [...genres, subgenre].join(" ").toLowerCase();
-  const matched = FAMILIES.filter((f) => f.keys.some((k) => hay.includes(k))).flatMap((f) => f.structures);
+  const matched = FAMILIES.filter((f) => f.keys.some((k) => keyHits(hay, k))).flatMap((f) => f.structures);
   return [...new Set([...matched, ...GENERAL])];
 }
 
 /** "Intro–Kick & Bass (16 bars) → Outro" → ["intro", "kick and bass", "outro"]. */
 export function sectionsOf(structure: string): string[] {
+  const named = NAMED_SECTIONS[structure.trim().toLowerCase()];
+  if (named) return named;
   if (!/[–→>|,]|\s-\s/.test(structure)) return [];
   return structure
     .split(/\s*(?:–|→|->|>|\||,|\s-\s)\s*/)

@@ -146,8 +146,16 @@ export function songSubject(description: string): string {
   return stripped || raw;
 }
 
+function singingLanguages(raw?: string): string[] {
+  return (raw || "English")
+    .split(",")
+    .map((l) => l.trim())
+    .filter((l) => l && !/instrumental|no\s*lyrics/i.test(l));
+}
+
 export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string> {
-  const langs = (i.vocalLanguage || "English").split(",").map((l) => l.trim()).filter(Boolean);
+  const langs = singingLanguages(i.vocalLanguage);
+  if (!langs.length) return "";
   const structure = i.structure || brief.structure || "Verse-Chorus-Verse-Chorus-Bridge-Chorus";
   const sections = sectionsOf(structure);
   const light = VOCAL_LIGHT.test(`${brief.genre} ${brief.subgenre ?? ""} ${i.genre ?? ""}`);
@@ -170,6 +178,7 @@ export async function lyricist(i: MusicInput, brief: MusicBrief): Promise<string
   const user = [
     `Title: ${i.title || "(untitled)"} - a title may be the hook only when it is not the request itself.`,
     i.description ? `Production brief (never sing these words): ${i.description}` : `Feel: ${brief.culturalContext}`,
+    i.lyricsTheme ? `Lyrical theme to write about (in your own words, never quote): ${i.lyricsTheme}` : "",
     `Genre & feel: ${brief.genre}${brief.subgenre ? ` / ${brief.subgenre}` : ""}, moods ${brief.moods.join(", ")}, ${brief.bpm} BPM, energy ${brief.energy}/10`,
     `Vocal style: ${brief.vocalStyle}`,
     i.vocalIntensity != null ? `Vocal intensity: ${i.vocalIntensity}/10 - sparser, softer lines toward 1 (whispered/intimate), bigger declamatory lines toward 10 (belted/anthemic).` : "",
@@ -256,15 +265,18 @@ export function tempoFeel(bpm: number): string {
  * collapses it, and a vocal track always has something to sing.
  */
 export async function planSong(i: MusicInput): Promise<{ brief: MusicBrief; plan: FinalPlan; sing: boolean }> {
-  const vocals = i.vocals !== false && i.lyricsMode !== "none";
+  const instrumentalLang = /instrumental|no\s*lyrics/i.test(i.vocalLanguage || "") && !singingLanguages(i.vocalLanguage).length;
+  const vocals = i.vocals !== false && i.lyricsMode !== "none" && !instrumentalLang;
   const brief = await musicologist(i).catch(() => fallbackBrief(i));
   const manual = vocals && i.lyricsMode === "manual" ? cleanLyrics(i.lyricsText ?? "") : "";
+  // Empty manual lyrics still need a fallback — tags-only manual does not.
+  const manualHasSung = !!manual && sungLines(manual);
   const [beats, autoLyrics] = await Promise.all([
     beatSmith(i, brief).catch(() => fallbackBeats(i, brief)),
     vocals && i.lyricsMode !== "manual" ? lyricist(i, brief).catch(() => "") : Promise.resolve(""),
   ]);
-  let lyrics = manual || stripPromptLines(autoLyrics.trim(), i.description || "");
-  if (vocals && !manual && !sungLines(lyrics)) lyrics = fallbackLyrics(i, brief);
+  let lyrics = (manualHasSung ? manual : "") || stripPromptLines(autoLyrics.trim(), i.description || "");
+  if (vocals && !manualHasSung && !sungLines(lyrics)) lyrics = fallbackLyrics(i, brief);
   const plan = conductor(i, brief, beats, lyrics);
   return { brief, plan, sing: vocals && plan.lyrics.trim().length > 0 };
 }

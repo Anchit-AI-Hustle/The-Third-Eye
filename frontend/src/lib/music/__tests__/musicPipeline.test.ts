@@ -28,7 +28,16 @@ describe("structures", () => {
   it("turns a structure into lyric section tags", () => {
     expect(sectionsOf("Intro - Kick & Bass (16 bars) - Mantra Breakdown → Drop - Outro")).toEqual(["intro", "kick and bass", "mantra breakdown", "drop", "outro"]);
     expect(sectionsOf("Intro - Verse - Pre-chorus - Chorus")).toEqual(["intro", "verse", "pre-chorus", "chorus"]);
-    expect(sectionsOf("AABA")).toEqual([]);
+    expect(sectionsOf("AABA")).toEqual(["verse", "verse", "bridge", "verse"]);
+    expect(sectionsOf("12-bar blues")).toEqual(["verse", "verse", "turnaround"]);
+  });
+
+  it("keeps classic Trance off the psy structure list", () => {
+    const trance = structuresFor(["Trance"]);
+    const psy = structuresFor(["Psytrance"]);
+    expect(trance[0]).toMatch(/Breakdown|Anthem|Theme/i);
+    expect(psy[0]).toMatch(/Drop|Mantra|Acid/i);
+    expect(trance[0]).not.toBe(psy[0]);
   });
 });
 
