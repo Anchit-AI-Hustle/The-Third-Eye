@@ -8,3 +8,4 @@ node_modules
 
 # Written by `next dev`
 AGENTS.md
+.env*

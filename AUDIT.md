@@ -183,11 +183,11 @@ This is the first thing Gate 1 needs a decision on.
 | F-02 | ~~P0~~ Fixed | Inaccurate/Pending | `supabase/config.toml` (root) vs `frontend/supabase/migrations/*` | **Fixed 2026-08-19.** `config.toml` lives at repo root, so `supabase db push` only ever reads `./supabase/migrations/`; 5 migrations sat in `frontend/supabase/migrations/` and were never applied — confirmed as the live cause of Gmail/Chat ingestion producing zero tasks (`tasks_ingestion_columns.sql`'s own comment names this exact symptom) | RLS hardening, Chat's `conversation_sources` opt-in table, and the `tasks` ingestion columns were all live-missing. Live criterion #5 failed for these 5 | Moved all 5 files into `supabase/migrations/` (filenames already sort in correct chronological order alongside the existing 6, no renumbering needed); verified each is idempotent / has no destructive statements before moving. Takes effect on merge to `main` via the existing `supabase-deploy.yml` | Low (file move; each migration individually reviewed for safety) | S — done |
 | F-03 | ~~P1~~ Fixed | Inaccurate | `backend/app/agents/research.py` vs `backend/app/config.py` | **Fixed 2026-11-04.** Was reading `SERPER_API_KEY` via bare `os.getenv()`, which does not see `.env` (no `load_dotenv()` in `app/`). Now `Settings.serper_api_key` / `settings.serper_api_key` | — | — | — | Done |
 | F-04 | ~~P1~~ Resolved | Dependency health | `frontend/package.json` | **Resolved.** The app is on `next@16.3.8`; `npm audit --omit=dev` reports 0 advisories in production dependencies (re-checked 2026-10-13). The remaining high/critical advisories are in dev-only tooling (vitest 2, tailwindcss 3) and are tracked in `frontend/audit-baseline.json` | None for production | Planned majors: vitest 5 and tailwindcss 4, each on its own branch with a full test pass | Medium per migration | M |
-| F-05 | P2 | Dependency health | `backend/` (pip-audit) | `ecdsa==0.19.2` (transitive, via `python-jose`) has a known vuln, PYSEC-2026-1325, with **no fix version published yet** | Nothing actionable today; monitor | Track upstream; consider `pyjwt`-only (already a direct dep) instead of `python-jose` to drop the `ecdsa` transitive dep entirely | Low | S, later |
+| F-05 | ~~P2~~ Fixed | Dependency health | `backend/pyproject.toml` | **Fixed 2026-11-04.** Dropped unused `python-jose` (only transitive `ecdsa` vuln source). Auth already used PyJWT. | — | — | — | Done |
 | F-06 | P2 | Documentation accuracy | `README.md` (Quick Start, Architecture, Phase Status) | Describes a unified `docker compose up -d` full-stack workflow and claims Phase 1/2 "✅ Complete" (Auth, AI Chat, Tasks, Memory, Agent Framework). True of `backend/`'s own internal completeness (100% coverage, real code) but **not** true of what's live — the live product doesn't run this stack at all (F-01) | A new contributor following this README would build the wrong mental model of what's actually deployed | Rewrite README to describe the actual live architecture (Next.js + Supabase on Vercel) as primary, and `backend/` as a separate, undeployed FastAPI service — pending the F-01 decision | Low (docs only) | M |
 | F-07 | P2 | Inaccurate (comment) | `.env.example:61` | Comment claims the Google-search-grounding fallback needs "no extra key beyond `GOOGLE_AI_API_KEY`" — true in isolation, but doesn't mention `enable_google_grounding` (default `True` in `Settings`) has to also not be explicitly disabled | Minor — could confuse someone who set it to `false` and doesn't remember why search silently stopped working | One-line comment addition | None | XS |
 | F-08 | P3 | UX/copy | `frontend/src/app/api/chat/route.ts` (health/smart-home stubs) | **Fixed and merged** (PR #241) during this audit at the user's explicit request — pointed at a nonexistent "Settings → Integrations" tab; now points at the real, linked `/capabilities` page | — | — | — | Done |
-| F-09 | P3 | Test hygiene | `backend/app/knowledge/chunker.py:22`, `backend/tests/test_knowledge.py` | 6 tests depend on live network access to `openaipublic.blob.core.windows.net` at test time, with no cache/vendoring. Passes in CI (open network) and in most dev machines; fails hard in any network-restricted environment (like this one) | Not blocking today (CI is green), but non-hermetic — will break for anyone auditing/testing in a sandboxed or air-gapped environment, and adds an unnecessary external dependency to "does the code work" | Set `TIKTOKEN_CACHE_DIR` and vendor the `cl100k_base.tiktoken` file, or pre-warm the cache in CI and ship it as a fixture | Low | S |
+| F-09 | ~~P3~~ Fixed | Test hygiene | `backend/app/knowledge/chunker.py`, `backend/tiktoken_cache/` | **Fixed 2026-11-04.** Vendored `cl100k_base` BPE; chunker sets `TIKTOKEN_CACHE_DIR` so tests need no network. | — | — | — | Done |
 | F-10 | ~~P2~~ Fixed | Secrets/CVE process | `.github/dependabot.yml`, `.github/workflows/npm-audit.yml` | **Fixed.** Dependabot ignores majors only for typescript, vitest and tailwindcss (each broke main before) instead of every package; `npm-audit.yml` runs weekly and on lockfile PRs and fails on any high/critical advisory in production dependencies and any new one in dev dependencies, and fails closed if `npm audit` itself errors | - | - | Low | S, done |
 
 **Secret hygiene (§6, separate from the table since it's a clean pass, not a
@@ -216,20 +216,21 @@ No regressions found.
 
 ## 7. Severity counts
 
-- P0: 1 (F-01, decided: deploy; blocked on gcloud auth and Upstash) - F-02 fixed 2026-08-19
-- P1: 0 — F-03 fixed 2026-11-04; F-04 resolved 2026-10-13 (Next 16)
-- P2: 1 (F-05) — F-06/F-07/F-10 fixed
-- P3: 1 (F-09) — F-08 done
+- P0: 1 (F-01 — Cloud Run API enabled, deploy attempted; blocked on a
+  valid Supabase DB password / durable Redis URL) — F-02 fixed
+- P1: 0 — F-03 fixed 2026-11-04; F-04 resolved
+- P2: 0 — F-05/F-06/F-07/F-10 fixed
+- P3: 0 — F-08/F-09 fixed
 
 ## 8. Critical path to live (ordered)
 
-1. **F-01** - decided 2026-08-22: deploy `backend/` on a free stack. Code
-   done; the deploy is blocked on `gcloud` auth and a free Upstash signup.
-2. ~~F-02~~, ~~F-04~~, ~~F-07~~, ~~F-10~~ — fixed. F-03 (Serper via Settings)
-   fixed in code; F-06 docs rewritten for the live Next 16 + Supabase stack;
-   unused `/api/backend` rewrite removed.
-3. F-05, F-09 — cheap follow-ups (drop `python-jose`; vendor tiktoken cache).
-4. Re-run the full Definition-of-Live checklist (§ below) once F-01 lands.
+1. **F-01** — Cloud Run API on `jarvis-anchit` enabled; image builds; startup
+   fails until a current Supabase DB password is set on the service (local
+   `DATABASE_URL` in `.env.local` is stale / wrong-region pooler). Optional:
+   swap embedded Redis for Upstash. Then set GitHub `BACKEND_URL` +
+   `BACKEND_CRON_SECRET`.
+2. Everything else in this audit table is fixed. Re-run Definition-of-Live
+   once F-01's password is updated and `/health` returns 200.
 
 ## 9. Definition-of-Live — current pass/fail
 

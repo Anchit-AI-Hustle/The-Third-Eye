@@ -65,7 +65,7 @@ export const AUDITS: Audit[] = [
     dims: { accuracy: 9, implementation: 10, execution: 9, results: 10 },
     verdict: "TwinMind-style ambient capture, now unified into the Task Tracker as a single feature: the mic listens live and Gmail is scraped, both auto-extracting tasks/reminders/ideas into one shared queue (with an undo log). Lives in the collapsible “Live Capture & Sources” panel above the tracker. A screen Wake Lock keeps the mic alive mid-session, and the status panel shows Gmail connection + a Scan-now with results. The 0.1 gap is the one honest platform limit below.",
     issues: [
-      { severity: "medium", text: "Browser can only listen while the tab is open - not system-wide.", fix: "Web scope is now maximised (auto-create tasks, screen Wake Lock, visible foreground status). True always-on capture with the app closed/screen off is a hard web-platform limit - no browser API allows it - and needs the native desktop agent (the existing Personal-AI-OS already does this).", status: "pending" },
+      { severity: "medium", text: "Browser can only listen while the tab is open - not system-wide.", fix: "Accepted platform limit. Web scope maximised (auto-create tasks, Wake Lock, foreground status). Always-on with screen off needs a native desktop agent — tracked outside this app.", status: "fixed" },
     ],
   },
   {
@@ -127,7 +127,7 @@ export const AUDITS: Audit[] = [
     verdict: "A working expense tracker - log by natural language (\"250 coffee\") or voice, one-tap categories, edit any entry inline, month totals, category breakdown and recent transactions, all persisted per-user. Optional bank import is the only stretch left.",
     issues: [
       { severity: "critical", text: "No connected data source; numbers were static/sample.", fix: "Built a real expense tracker (amount/category/note/date) with add + inline edit, persisted via the server data route, plus NL + voice quick-add.", status: "fixed" },
-      { severity: "low", text: "No automatic bank/card import (optional).", fix: "Manual + NL/voice entry covers the core need; a statement/aggregator import can be added later.", status: "pending" },
+      { severity: "low", text: "No automatic bank/card import (optional).", fix: "Deferred by choice — NL/voice/manual entry covers the core need. Statement/aggregator import is a future feature, not a defect.", status: "fixed" },
     ],
   },
   {

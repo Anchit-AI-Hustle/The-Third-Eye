@@ -4,8 +4,10 @@ Prefers paragraph and sentence boundaries; falls back to hard token cuts.
 """
 
 import functools
+import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import tiktoken
 
@@ -13,12 +15,14 @@ CHUNK_SIZE_TOKENS = 512
 CHUNK_OVERLAP_TOKENS = 50
 ENCODING_NAME = "cl100k_base"  # matches text-embedding-3-small
 
+# Vendored BPE (backend/tiktoken_cache/) so tests/CI need no network (AUDIT F-09).
+_CACHE = Path(__file__).resolve().parents[2] / "tiktoken_cache"
+if _CACHE.is_dir():
+    os.environ.setdefault("TIKTOKEN_CACHE_DIR", str(_CACHE))
+
 
 @functools.lru_cache(maxsize=1)
 def _get_encoding() -> "tiktoken.Encoding":
-    # Resolved on first use, not at import: tiktoken downloads the encoding on a
-    # cache miss, and doing that at import time makes this module — and anything
-    # that transitively imports it — unimportable without network access.
     return tiktoken.get_encoding(ENCODING_NAME)
 
 

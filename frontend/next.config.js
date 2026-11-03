@@ -1,22 +1,20 @@
 /** @type {import('next').NextConfig} */
 
-// Baseline security headers, applied to every route. The CSP is sent in
-// Report-Only mode first so it can be validated against real traffic without
-// breaking the app (Google, Supabase, Stripe, etc.); flip it to an enforcing
-// `Content-Security-Policy` header once the violation reports are clean.
-const CSP_REPORT_ONLY = [
+// Baseline security headers on every route. CSP was Report-Only through
+#543; enforcing now with the same allowlist that matched live traffic
+// (Google, Supabase, Stripe, Razorpay, Vercel scripts).
+const CSP = [
   "default-src 'self'",
-  // Next.js needs inline/eval; Stripe and Razorpay load externally.
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://checkout.razorpay.com https://*.vercel-scripts.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https: wss:",
+  "media-src 'self' blob: data: https:",
+  "worker-src 'self' blob:",
   "frame-src 'self' https://js.stripe.com https://checkout.stripe.com https://api.razorpay.com https://checkout.razorpay.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
-  // Chrome applies form-action to the 302 after the Google sign-in POST.
-  // 'self' alone blocks accounts.google.com and the button never leaves the app.
   "form-action 'self' https://accounts.google.com",
   "object-src 'none'",
 ].join("; ");
@@ -27,9 +25,8 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "X-DNS-Prefetch-Control", value: "on" },
-  // Voice needs the mic; vision needs the camera; tools use geo/payment/screen/clipboard/sensors.
   { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self), payment=(self), display-capture=(self), clipboard-read=(self), clipboard-write=(self), accelerometer=(self), gyroscope=(self), magnetometer=(self), screen-wake-lock=(self)" },
-  { key: "Content-Security-Policy-Report-Only", value: CSP_REPORT_ONLY },
+  { key: "Content-Security-Policy", value: CSP },
 ];
 
 const nextConfig = {

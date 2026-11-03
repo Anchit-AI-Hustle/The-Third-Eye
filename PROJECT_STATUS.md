@@ -72,25 +72,21 @@ real, ongoing paid infrastructure regardless of traffic. Replaced with:
   for real. Disabled by default (`INTERNAL_CRON_SECRET` unset ⇒ the route
   404s rather than existing at all).
 
-**What's left, and who does it:**
-1. *(you)* Create a free Upstash Redis database, copy its `REDIS_URL`.
-2. *(you)* `gcloud auth login` + `gcloud config set project jarvis-anchit`
-   locally, or grant this environment gcloud access — deploying from here
-   isn't possible without one of those (no CLI, no stored credentials).
-3. *(either)* `gcloud run deploy jarvis-backend --source backend/ --region
-   <your region> --allow-unauthenticated --set-env-vars
-   DB_SCHEMA=backend_app,ENVIRONMENT=production,...` with `DATABASE_URL`
-   (Supabase connection string), `REDIS_URL` (from step 1), and the other
-   required secrets (`SECRET_KEY`, `FINANCIAL_ENCRYPTION_KEY`,
-   `NEXTAUTH_SECRET`, `GOOGLE_AI_API_KEY`, and a new random
-   `INTERNAL_CRON_SECRET`) set via `--set-secrets` or the Cloud Run console,
-   never committed to the repo.
-4. *(you)* Add `BACKEND_URL` (the Cloud Run service URL) and
-   `BACKEND_CRON_SECRET` (same value as `INTERNAL_CRON_SECRET`) as GitHub
-   repo secrets, so the cron workflow starts firing.
-5. Verify: `curl https://<service-url>/health` returns `{"status":
-   "healthy", ...}` and `/api/docs` loads — that's Definition-of-Live
-   criteria #3 satisfied.
+**Progress 2026-11-04:** Cloud Run Admin API enabled on `jarvis-anchit`;
+`jarvis-backend` service created in `asia-south1` with embedded Redis in the
+image (no Upstash required for a single scale-to-zero instance). Startup still
+fails: the `DATABASE_URL` available locally points at the wrong pooler region
+(`ap-south-1` vs project `ap-northeast-1`) and its password is rejected.
+SSL/`statement_cache_size` handling for Supabase pooler is in `database.py`.
+
+**What's left (you — one-time):**
+1. In Supabase → Project Settings → Database, copy the **URI** (session
+   pooler, region `ap-northeast-1`) or reset the DB password.
+2. `gcloud run services update jarvis-backend --region asia-south1 \
+   --update-env-vars DATABASE_URL='postgresql+asyncpg://…?ssl=require'`
+3. Optional: replace embedded Redis with Upstash by setting `REDIS_URL`.
+4. Add GitHub secrets `BACKEND_URL` + `BACKEND_CRON_SECRET` once `/health` is 200.
+5. Sync `NEXTAUTH_SECRET` with Vercel before any frontend cutover.
 
 Standing it up alone (this plan) is deliberately separate from any later
 decision to actually cut the frontend over to calling it (AUDIT.md §4.4
@@ -128,4 +124,4 @@ Full findings table: [AUDIT.md](AUDIT.md).
 
 ---
 
-*Last updated: 2026-11-04.*
+*Last updated: 2026-11-04 (F-05/F-09/CSP/Cloud Run attempt).*

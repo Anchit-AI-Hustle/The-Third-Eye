@@ -23,9 +23,7 @@ dependencies = [
     # Redis
     "redis>=5.0.4",
 
-    # Auth & Security
-    "python-jose[cryptography]>=3.3.0",
-    # app.auth.service / middleware use the PyJWT API (jwt.encode / jwt.decode)
+    # Auth & Security — PyJWT only (python-jose dropped: unused, pulled vulnerable ecdsa)
     "pyjwt>=2.8.0",
     # bcrypt directly, not via passlib: passlib 1.7.4 is unmaintained, breaks on
     # bcrypt>=4.1, and imports the stdlib `crypt` module that Python 3.13 removed.

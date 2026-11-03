@@ -24,8 +24,23 @@ def build_engine_kwargs(database_url: str, environment: str, schema: str = "publ
     if not database_url.startswith("sqlite"):
         kwargs["pool_size"] = 10
         kwargs["max_overflow"] = 20
+        connect_args: dict = {}
+        # Supabase pooler presents a chain asyncpg's default context rejects
+        # (CERTIFICATE_VERIFY_FAILED). Require TLS but skip hostname/CA check.
+        if "localhost" not in database_url and "127.0.0.1" not in database_url:
+            import ssl
+
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            connect_args["ssl"] = ctx
+        # PgBouncer transaction poolers (Supabase :6543) reject prepared stmts.
+        if ":6543" in database_url or "pooler.supabase" in database_url:
+            connect_args["statement_cache_size"] = 0
         if schema != "public":
-            kwargs["connect_args"] = {"server_settings": {"search_path": schema}}
+            connect_args["server_settings"] = {"search_path": schema}
+        if connect_args:
+            kwargs["connect_args"] = connect_args
     return kwargs
 
 
