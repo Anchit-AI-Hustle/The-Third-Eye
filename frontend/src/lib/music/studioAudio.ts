@@ -55,7 +55,7 @@ export async function persistStudioRemoteAudio(
   let bytes: Buffer;
   let mime = "audio/mpeg";
   if (source.startsWith("data:")) {
-    const m = /^data:([^;,]+);base64,(.+)$/s.exec(source);
+    const m = /^data:([^;,]+);base64,([\s\S]+)$/.exec(source);
     if (!m) return null;
     mime = m[1] || mime;
     bytes = Buffer.from(m[2], "base64");
