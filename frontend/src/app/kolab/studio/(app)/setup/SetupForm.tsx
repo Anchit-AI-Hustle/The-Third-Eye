@@ -203,8 +203,9 @@ function KycCard({ verified, onDone }: { verified: boolean; onDone: () => void }
             )}
           </div>
           <p className="mt-2.5 font-kolab-mono text-[10px] leading-relaxed text-kolab-faint">
-            Real Aadhaar eKYC runs only through a UIDAI-licensed provider with your consent. We never
-            store your Aadhaar number or biometrics - only verification status and a masked reference.
+            Coming soon: real Aadhaar eKYC through a UIDAI-licensed provider with your consent. Until
+            then verification is unavailable. We never store your Aadhaar number or biometrics - only
+            verification status and a masked reference once a provider is wired.
           </p>
         </>
       )}

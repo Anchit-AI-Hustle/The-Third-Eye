@@ -29,7 +29,7 @@ otherwise undocumented outside this file and the code itself.
 
 ## 2. Tech stack & platform
 
-- **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
+- **Framework:** Next.js 16 (App Router, TypeScript, React) — `frontend/`.
 - **Auth:** NextAuth v4, **Google only**, **JWT** sessions. The login request is
   identity only (`GOOGLE_SIGNIN_PARAMS`: `openid email profile`,
   `prompt=select_account`, `access_type=online`). The button is a form POST to

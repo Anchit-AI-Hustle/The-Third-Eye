@@ -1,6 +1,6 @@
 # The Third Eye — Project Status
 
-**Live product:** Next.js 14 + Supabase on Vercel (`frontend/`). See
+**Live product:** Next.js 16 + Supabase on Vercel (`frontend/`). See
 [DEVELOPMENT.md](DEVELOPMENT.md) for what's actually shipped and running.
 
 This file used to track `backend/`'s internal phase checklist (Phase
@@ -38,8 +38,8 @@ agents, a document ingestion → chunk → embed → retrieve pipeline, nightly
 memory consolidation. All real, all tested — but it has no hosting target
 (no `fly.toml`/`railway.json`/`render.yaml`, no second Vercel project), and
 nothing in the frontend calls it (the old `lib/api.ts` and `auth.ts`'s
-`BACKEND_URL` POST were removed; only an unused `/api/backend` rewrite in
-`next.config.js` remains). See
+`BACKEND_URL` POST were removed; the unused `/api/backend` rewrite was
+removed from `next.config.js`). See
 [ARCHITECTURE.md](ARCHITECTURE.md) for its design and ADRs.
 
 **Decision (2026-08-22, AUDIT.md F-01):** deploy it, on a genuinely free
@@ -109,26 +109,23 @@ determine which one is actually set in Vercel's `GEMINI_API_KEY`/
 one-time manual check in the Vercel dashboard before the unused key can be
 safely deleted.
 
-## Known documentation drift (from AUDIT.md, not yet resolved)
+## Known documentation drift (from AUDIT.md)
 
-- F-02: **fixed 2026-08-19.** The 5 Supabase migration files that sat in
-  `frontend/supabase/migrations/` (RLS hardening, `conversation_sources`,
-  the `tasks` ingestion columns, `music_tracks`, `job_agent`) are now in
-  `supabase/migrations/` where `supabase db push`/CI actually reads from.
-  This was the confirmed root cause of Gmail/Chat task-tracker ingestion
-  silently producing nothing in production: `saveExtractedTasks` writes
-  columns (`dedupe_hash`, `normalized_heading`, etc.) that only existed in
-  the stranded migration, so every ingest insert failed; Chat ingestion
-  additionally needs the `conversation_sources` table for its opt-in
-  picker, which never existed live either. Takes effect once this change
-  merges to `main` and the `supabase-deploy` workflow runs.
-- F-04: 2 high-severity Next.js CVEs; fix needs a Next 14→16 major bump
-  (Dependabot ignores majors — F-10).
-- 8 loose `supabase-schema-*.sql` files at repo root are a third,
-  unreconciled schema path (superseded by `supabase/migrations/`).
+- F-02: **fixed** — migrations live in `supabase/migrations/`.
+- F-04: **resolved** — app is on Next 16; 0 production npm advisories.
+  Remaining high/critical are dev-only (vitest chain) in
+  `frontend/audit-baseline.json`.
+- F-10: **fixed** — Dependabot ignores majors only for typescript / vitest /
+  tailwindcss; `npm-audit.yml` gates the rest.
+- Root `supabase-schema-*.sql`: **archived** under
+  `docs/archive/supabase-schema/` (canonical path is still
+  `supabase/migrations/`).
+
+Still open (needs you): F-01 backend deploy (Upstash + `gcloud`); confirm
+which Gemini API key Vercel uses and delete the unused GCP key.
 
 Full findings table: [AUDIT.md](AUDIT.md).
 
 ---
 
-*Last updated: 2026-08-19.*
+*Last updated: 2026-11-04.*

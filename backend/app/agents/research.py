@@ -7,7 +7,6 @@ GOOGLE_AI_API_KEY. Only if that is disabled too does it report
 "search unavailable".
 """
 
-import os
 from dataclasses import dataclass
 
 import httpx
@@ -41,7 +40,7 @@ class ResearchAgent(BaseAgent):
         return task.task_type in ("research", "web_search", "chat")
 
     async def run(self, task: AgentTask, context: AgentContext) -> AgentResult:
-        api_key = os.getenv("SERPER_API_KEY")
+        api_key = settings.serper_api_key
         if not api_key:
             if settings.enable_google_grounding:
                 return await self._run_grounded(task, context)

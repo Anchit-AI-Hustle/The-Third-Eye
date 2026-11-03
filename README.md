@@ -6,7 +6,7 @@ knowledge-base RAG, calendar/email, live voice capture, vision, and a Studio
 of generators (including Music Studio) — plus an "All apps" hub of 24
 self-built tools and 76 linked third-party apps.
 
-Live product: **Next.js 14 + Supabase**, deployed on Vercel. See
+Live product: **Next.js 16 + Supabase**, deployed on Vercel. See
 [DEVELOPMENT.md](DEVELOPMENT.md) for the real, current architecture — start
 there, not `ARCHITECTURE.md` (see note below).
 

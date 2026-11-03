@@ -44,14 +44,6 @@ const nextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
-  async rewrites() {
-    return [
-      {
-        source: "/api/backend/:path*",
-        destination: `${process.env.BACKEND_URL || "http://backend:8000"}/:path*`,
-      },
-    ];
-  },
 };
 
 module.exports = nextConfig;

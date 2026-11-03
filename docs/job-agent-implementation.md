@@ -8,7 +8,7 @@ deployment steps. It is the source of truth for the module.
 
 | Area | Finding | Decision |
 |---|---|---|
-| Framework | Next.js 14 App Router, React 18, strict TS | Reuse App Router + RSC/client split |
+| Framework | Next.js 16 App Router, React 18, strict TS | Reuse App Router + RSC/client split |
 | Auth (active) | **NextAuth v4** (Google OAuth, JWT) via `withAuth` middleware; identity = session **email** | Reuse it. **No second auth system added.** |
 | DB / storage | Supabase (`@supabase/supabase-js`), service-role via `/api/data/[entity]`; RLS keyed on `auth.jwt()->>'email' = user_id`; localStorage fallback when unconfigured | Reuse the data API + add Job Agent entities; add a migration with the same RLS pattern |
 | AI | `llmCascade({system,messages,jsonMode,maxTokens,temperature,stage}) → {text,provider}` (7-provider fallback) | Reuse as the AI provider abstraction (no new vendor lock-in) |
