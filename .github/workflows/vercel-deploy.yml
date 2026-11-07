@@ -107,14 +107,35 @@ jobs:
         id: live
         env:
           SHA: ${{ steps.target.outputs.sha }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          # The custom domain sits behind Cloudflare, whose bot protection has
+          # refused GitHub's runners (HTTP 403) since 2026-11-06. When the site
+          # will not answer, Vercel's API says which commit production serves,
+          # if VERCEL_TOKEN is set. Empty means "could not tell", never "behind".
+          live_commit() {
+            local c
+            c=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' 2>/dev/null || true)
+            if [ -z "$c" ] && [ -n "${TOKEN:-}" ]; then
+              c=$(curl -fsS --max-time 30 -H "Authorization: Bearer $TOKEN" \
+                "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" \
+                | jq -r '.deployments[0].meta.githubCommitSha // ""' 2>/dev/null || true)
+            fi
+            echo "$c"
+          }
           # A later push to main can go live first (Vercel builds the newest
           # commit and skips the queued one); that still carries this commit.
           contains() { [ -n "$1" ] && { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch -q origin main; } && git merge-base --is-ancestor "$SHA" "$1" 2>/dev/null; }
-          live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""')
-          echo "Live commit:   ${live:-<none reported>}"
+          live=$(live_commit)
+          echo "Live commit:   ${live:-<could not tell>}"
           echo "Target commit: $SHA"
-          if [ "$live" = "$SHA" ] || contains "$live"; then
+          if [ -z "$live" ]; then
+            # Not knowing is not the same as being behind: a blind redeploy
+            # every day helped nothing, so a scheduled run only warns.
+            echo "unknown=true" >> "$GITHUB_OUTPUT"
+            echo "current=${{ github.event_name == 'schedule' }}" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not read the live commit: $SITE/api/health refused this runner and no VERCEL_TOKEN is set to ask Vercel instead. Allow GitHub Actions through Cloudflare for /api/health, or add VERCEL_TOKEN."
+          elif [ "$live" = "$SHA" ] || contains "$live"; then
             echo "current=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Production is already serving $live, which includes $SHA — nothing to deploy."
           else
@@ -171,7 +192,23 @@ jobs:
         if: steps.guard.outputs.defer != 'true' && steps.live.outputs.current == 'false'
         env:
           SHA: ${{ steps.target.outputs.sha }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          UNKNOWN: ${{ steps.live.outputs.unknown }}
         run: |
+          # The custom domain sits behind Cloudflare, whose bot protection has
+          # refused GitHub's runners (HTTP 403) since 2026-11-06. When the site
+          # will not answer, Vercel's API says which commit production serves,
+          # if VERCEL_TOKEN is set. Empty means "could not tell", never "behind".
+          live_commit() {
+            local c
+            c=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' 2>/dev/null || true)
+            if [ -z "$c" ] && [ -n "${TOKEN:-}" ]; then
+              c=$(curl -fsS --max-time 30 -H "Authorization: Bearer $TOKEN" \
+                "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=1" \
+                | jq -r '.deployments[0].meta.githubCommitSha // ""' 2>/dev/null || true)
+            fi
+            echo "$c"
+          }
           # A triggered deploy is not a finished deploy, and an untriggered one
           # is the Vercel Git integration's job — either way the only thing that
           # settles it is the live site reporting our commit.
@@ -187,13 +224,17 @@ jobs:
           # A later push to main can go live first (Vercel builds the newest
           # commit and skips the queued one); that still carries this commit.
           contains() { [ -n "$1" ] && { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch -q origin main; } && git merge-base --is-ancestor "$SHA" "$1" 2>/dev/null; }
+          if [ "$UNKNOWN" = "true" ]; then
+            echo "::warning::A deploy was started, but the live commit cannot be read to confirm it (see the warning above)."
+            exit 0
+          fi
           if [ "${{ steps.trigger.outputs.deployed }}" = "true" ] || [ "${{ github.event_name }}" != "schedule" ]; then
             deadline=$(( $(date +%s) + 900 ))
           else
             deadline=$(date +%s)
           fi
           while :; do
-            live=$(curl -fsS --max-time 30 "$SITE/api/health" | jq -r '.commit // ""' || echo "")
+            live=$(live_commit)
             if [ "$live" = "$SHA" ]; then
               echo "::notice::Production is serving $SHA."
               exit 0
