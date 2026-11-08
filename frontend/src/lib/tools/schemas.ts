@@ -175,6 +175,17 @@ export const geminiTools = [
         },
       },
       {
+        name: "life_log",
+        description: "Read the user's Life Log: what was said and what happened on a day, hour by hour (summary, events, transcript). Use it when the user asks what happened, what was discussed, or what someone said at a time or on a day.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            date: { type: "STRING", description: "Local day, YYYY-MM-DD (default today)" },
+            hour: { type: "NUMBER", description: "Local hour 0-23 to narrow to; omit for the whole day" },
+          },
+        },
+      },
+      {
         name: "manage_calendar",
         description: "Unified calendar manager: add events and get upcoming events. action='add' to create an event, 'get' to retrieve upcoming events.",
         parameters: {

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, Square, Loader2, ChevronLeft, ChevronRight, Play, Pause, Sparkles, BookHeart, Radio, Calendar as CalIcon, Clock, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { Mic, Square, Loader2, ChevronLeft, ChevronRight, Play, Pause, Sparkles, BookHeart, Radio, Calendar as CalIcon, Clock, Trash2, RefreshCw, AlertTriangle, Bell, ListChecks } from "lucide-react";
 import { loadDay, saveDay, listDates, syncFromCloud, deleteDay } from "@/lib/lifelog/store";
 import { getAudio } from "@/lib/lifelog/audioStore";
-import { emptyDay, localDateKey, type DayLog, type LogSegment, type LogEvent } from "@/lib/lifelog/types";
-import { useDayRecorder } from "@/hooks/useDayRecorder";
+import { emptyDay, localDateKey, type DayLog, type LogSegment, type LogEvent, type DiaryEntry, type SavedAction } from "@/lib/lifelog/types";
+import { LIFELOG_UPDATED, useLifeLog } from "./LifeLogRecorder";
 import { CaptureNote } from "@/components/privacy/CaptureNote";
 
 const KIND_COLORS: Record<string, string> = {
@@ -13,7 +14,6 @@ const KIND_COLORS: Record<string, string> = {
   idea: "#A78BFA", decision: "#F472B6", note: "#94A3B8", other: "#64748B",
 };
 const fmtTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const clock = (ts: number) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 const fmtDayTitle = (date: string) => new Date(date + "T00:00:00").toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
 export function LifeLog() {
@@ -22,85 +22,32 @@ export function LifeLog() {
   const [day, setDay] = useState<DayLog>(() => emptyDay(today));
   const [dates, setDates] = useState<string[]>([]);
   const [monthCursor, setMonthCursor] = useState(() => new Date());
-  const [extracting, setExtracting] = useState(false);
-  const [extractError, setExtractError] = useState<string | null>(null);
   const [diaryText, setDiaryText] = useState("");
-  const newSegsRef = useRef(0);
+  const { rec, listen, stopListening, extracting, extractError, extract } = useLifeLog();
 
   useEffect(() => { syncFromCloud().finally(() => setDates(listDates())); }, []);
   useEffect(() => { setDay(loadDay(selectedDate)); }, [selectedDate]);
-
-  const refreshDates = useCallback(() => setDates(listDates()), []);
-
-  // Extraction: turn the day's transcript into a timeline + summary.
-  const runExtract = useCallback(async (target: DayLog) => {
-    const transcript = target.segments.filter((s) => s.transcript).map((s) => `[${clock(s.startTs)}] ${s.transcript}`).join("\n");
-    if (transcript.trim().length < 20) return;
-    setExtracting(true);
-    setExtractError(null);
-    try {
-      const res = await fetch("/api/tools/lifelog/extract", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, date: target.date }),
-      });
-      const d = await res.json().catch(() => ({}));
-      // A failed extraction must never replace the timeline that is already saved.
-      if (!res.ok || d.error || !Array.isArray(d.events)) {
-        setExtractError(d.error ?? "Couldn't build the timeline right now. Your recordings are safe; try again shortly.");
-        return;
-      }
-      const base = target.segments[0]?.startTs ?? Date.now();
-      const span = ((target.segments[target.segments.length - 1]?.endTs ?? base) - base) || 1;
-      const fresh: LogEvent[] = d.events.map((e: any, idx: number) => ({
-        id: crypto.randomUUID(),
-        ts: e.time ? new Date(`${target.date}T${e.time.padStart(5, "0")}:00`).getTime() : base + Math.round((idx / Math.max(1, d.events.length)) * span),
-        title: e.title, kind: e.kind || "other", detail: e.detail,
-      })).sort((a: LogEvent, b: LogEvent) => a.ts - b.ts);
-      const merged = { ...loadDay(target.date) };
-      merged.events = fresh;               // extraction returns the full timeline
-      if (d.summary) merged.summary = d.summary;
-      saveDay(merged);
-      if (merged.date === selectedDate) setDay(merged);
-      refreshDates();
-    } catch { setExtractError("Couldn't reach the server. Your timeline is unchanged."); }
-    finally { setExtracting(false); }
-  }, [selectedDate, refreshDates]);
-
-  // A recorded chunk arrived → append to TODAY's log (recording always logs the
-  // real current day, even if the user is viewing a past day).
-  const onSegment = useCallback((seg: LogSegment) => {
-    const t = localDateKey(new Date());
-    const d = loadDay(t);
-    d.segments = [...d.segments, seg];
-    saveDay(d);
-    if (t === selectedDate) setDay(d);
-    refreshDates();
-    if (seg.transcript) {
-      newSegsRef.current += 1;
-      if (newSegsRef.current >= 3) { newSegsRef.current = 0; void runExtract(loadDay(t)); }
-    }
-  }, [selectedDate, refreshDates, runExtract]);
-
-  const rec = useDayRecorder(onSegment);
+  useEffect(() => {
+    const onUpdate = (e: Event) => {
+      setDates(listDates());
+      if ((e as CustomEvent<string>).detail === selectedDate) setDay(loadDay(selectedDate));
+    };
+    window.addEventListener(LIFELOG_UPDATED, onUpdate);
+    return () => window.removeEventListener(LIFELOG_UPDATED, onUpdate);
+  }, [selectedDate]);
 
   const toggleRecord = useCallback(() => {
-    if (rec.recording) {
-      rec.stop();
-      newSegsRef.current = 0;
-      void runExtract(loadDay(localDateKey(new Date()))); // final pass on stop
-    } else {
-      setSelectedDate(localDateKey(new Date())); // jump to today when recording
-      void rec.start();
-    }
-  }, [rec, runExtract]);
+    if (rec.recording) stopListening();
+    else { setSelectedDate(localDateKey(new Date())); listen(); }
+  }, [rec.recording, stopListening, listen]);
 
   const addDiary = useCallback(() => {
     const text = diaryText.trim();
     if (!text) return;
     const d = loadDay(selectedDate);
     d.diary = [...d.diary, { id: crypto.randomUUID(), ts: Date.now(), text }];
-    saveDay(d); setDay(d); setDiaryText(""); refreshDates();
-  }, [diaryText, selectedDate, refreshDates]);
+    saveDay(d); setDay(d); setDiaryText(""); setDates(listDates());
+  }, [diaryText, selectedDate]);
 
   const removeDay = useCallback(async () => {
     if (!confirm(`Delete the entire log for ${selectedDate}? This removes its audio, transcript, timeline and diary.`)) return;
@@ -109,17 +56,9 @@ export function LifeLog() {
     setDay(loadDay(selectedDate));
   }, [selectedDate]);
 
-  // Timeline = extracted events + diary entries, merged and time-ordered.
-  const timeline = useMemo(() => {
-    const items = [
-      ...day.events.map((e) => ({ kind: "event" as const, ts: e.ts, ev: e })),
-      ...day.diary.map((e) => ({ kind: "diary" as const, ts: e.ts, di: e })),
-    ];
-    return items.sort((a, b) => a.ts - b.ts);
-  }, [day]);
-
-  const transcriptText = day.segments.filter((s) => s.transcript).map((s) => `[${fmtTime(s.startTs)}] ${s.transcript}`).join("\n");
-  const audioSegs = day.segments.filter((s) => s.hasAudio);
+  const hours = useMemo(() => byHour(day), [day]);
+  const actions = day.actions ?? [];
+  const needsYou = actions.filter((a) => a.needsYou);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
@@ -129,12 +68,12 @@ export function LifeLog() {
           <div className="flex items-center gap-2"><Radio size={15} className={rec.recording ? "text-accent-red animate-pulse" : "text-[#34D399]"} /><span className="hud-label text-[#34D399]">Recorder</span></div>
           <button onClick={toggleRecord}
             className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-input text-sm font-semibold transition-all ${rec.recording ? "bg-accent-red/15 text-accent-red border border-accent-red/30 hover:bg-accent-red/25" : "text-[#07070F] bg-[#34D399] hover:brightness-110"}`}>
-            {rec.recording ? <><Square size={14} /> Stop recording</> : <><Mic size={15} /> Start recording the day</>}
+            {rec.recording ? <><Square size={14} /> Stop listening</> : <><Mic size={15} /> Always listen</>}
           </button>
           {rec.recording && <p className="text-[11px] font-mono text-text-muted flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-accent-red animate-pulse" /> Listening · {day.segments.length} segment{day.segments.length === 1 ? "" : "s"}{rec.lastAt ? ` · last ${fmtTime(rec.lastAt)}` : ""}</p>}
           {rec.error && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{rec.error}</p>}
           {extractError && <p className="text-[11px] text-accent-red flex items-start gap-1.5"><AlertTriangle size={12} className="mt-0.5 flex-none" />{extractError}</p>}
-          <p className="text-[10px] text-text-muted leading-relaxed">Records while this screen is open. Phones pause the mic when the app is in the background or the screen is locked - keep it foregrounded for a continuous log.</p>
+          <p className="text-[10px] text-text-muted leading-relaxed">Keeps listening on every page of the app and resumes when you come back, until you stop it. Every 30 minutes a notification reminds you it is on; tap it to turn listening off. Follow-ups it hears become tasks and reminders, and the assistant works on them. A browser can only listen while the app is open; phones pause the mic when the screen locks.</p>
           <CaptureNote id="life-log" className="text-[10px]">Audio stays on this device. Speech is sent for transcription, and the text is saved to your account.</CaptureNote>
         </div>
 
@@ -149,7 +88,7 @@ export function LifeLog() {
             <h2 className="font-display text-lg font-semibold text-text-primary mt-0.5">{fmtDayTitle(selectedDate)}</h2>
           </div>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => runExtract(loadDay(selectedDate))} disabled={extracting || !day.segments.some((s) => s.transcript)} title="Re-summarise the day"
+            <button onClick={() => void extract(selectedDate)} disabled={extracting || !day.segments.some((s) => s.transcript)} title="Re-summarise the day"
               className="p-1.5 rounded-input border border-border-default text-text-muted hover:text-[#34D399] disabled:opacity-40">
               {extracting ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
             </button>
@@ -166,50 +105,66 @@ export function LifeLog() {
           </div>
         )}
 
-        {/* Timeline */}
+        {needsYou.length > 0 && (
+          <div className="rounded-input border border-accent-red/30 bg-accent-red/[0.05] p-3">
+            <div className="flex items-center gap-1.5 mb-1.5"><Bell size={12} className="text-accent-red" /><span className="hud-label text-accent-red">Needs you</span></div>
+            <ul className="space-y-1">{needsYou.map((a) => <ActionRow key={`${a.type}${a.title}`} a={a} />)}</ul>
+          </div>
+        )}
+
+        {actions.length > needsYou.length && (
+          <div>
+            <span className="hud-label text-text-muted flex items-center gap-1.5"><ListChecks size={12} /> The assistant is on these</span>
+            <ul className="mt-2 space-y-1">{actions.filter((a) => !a.needsYou).map((a) => <ActionRow key={`${a.type}${a.title}`} a={a} />)}</ul>
+            <Link href="/tasks" className="inline-block mt-1.5 text-[11px] text-[#34D399] hover:underline">Open Tasks</Link>
+          </div>
+        )}
+
+        {/* Hour by hour */}
         <div>
-          <span className="hud-label text-text-muted flex items-center gap-1.5"><Clock size={12} /> Timeline</span>
-          {timeline.length === 0 ? (
-            <p className="text-sm text-text-muted mt-2">Nothing logged yet. Start recording, or add a diary note below.</p>
+          <span className="hud-label text-text-muted flex items-center gap-1.5"><Clock size={12} /> Hour by hour</span>
+          {hours.length === 0 ? (
+            <p className="text-sm text-text-muted mt-2">Nothing logged yet. Turn on listening, or add a diary note below.</p>
           ) : (
             <div className="mt-2 space-y-2">
-              {timeline.map((it, idx) => it.kind === "event" ? (
-                <div key={idx} className="flex items-start gap-2.5">
-                  <span className="text-[10px] font-mono text-text-muted w-11 flex-none pt-0.5">{fmtTime(it.ts)}</span>
-                  <span className="w-2 h-2 rounded-full flex-none mt-1.5" style={{ background: KIND_COLORS[it.ev!.kind] || KIND_COLORS.other }} />
-                  <div className="min-w-0">
-                    <p className="text-sm text-text-primary">{it.ev!.title} <span className="text-[10px] font-mono uppercase text-text-muted">· {it.ev!.kind}</span></p>
-                    {it.ev!.detail && <p className="text-xs text-text-muted">{it.ev!.detail}</p>}
+              {hours.map((h) => (
+                <details key={h.hour} open={h.hour === hours[hours.length - 1].hour} className="rounded-input border border-border-default px-3 py-2">
+                  <summary className="cursor-pointer select-none flex items-center gap-2 text-sm">
+                    <span className="font-mono text-[#34D399]">{String(h.hour).padStart(2, "0")}:00</span>
+                    <span className="text-text-muted text-xs">{[h.events.length && `${h.events.length} event${h.events.length === 1 ? "" : "s"}`, h.audio.length && `${h.audio.length} recording${h.audio.length === 1 ? "" : "s"}`, h.actions.length && `${h.actions.length} follow-up${h.actions.length === 1 ? "" : "s"}`, h.diary.length && "diary"].filter(Boolean).join(" · ")}</span>
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {h.events.map((ev) => (
+                      <div key={ev.id} className="flex items-start gap-2.5">
+                        <span className="text-[10px] font-mono text-text-muted w-11 flex-none pt-0.5">{fmtTime(ev.ts)}</span>
+                        <span className="w-2 h-2 rounded-full flex-none mt-1.5" style={{ background: KIND_COLORS[ev.kind] || KIND_COLORS.other }} />
+                        <div className="min-w-0">
+                          <p className="text-sm text-text-primary">{ev.title} <span className="text-[10px] font-mono uppercase text-text-muted">· {ev.kind}</span></p>
+                          {ev.detail && <p className="text-xs text-text-muted">{ev.detail}</p>}
+                        </div>
+                      </div>
+                    ))}
+                    {h.diary.map((di) => (
+                      <div key={di.id} className="flex items-start gap-2.5">
+                        <span className="text-[10px] font-mono text-text-muted w-11 flex-none pt-0.5">{fmtTime(di.ts)}</span>
+                        <BookHeart size={13} className="text-[#F472B6] flex-none mt-1" />
+                        <p className="text-sm text-text-secondary italic">{di.text}</p>
+                      </div>
+                    ))}
+                    {h.actions.length > 0 && <ul className="space-y-1">{h.actions.map((a) => <ActionRow key={`${a.type}${a.title}`} a={a} />)}</ul>}
+                    {h.audio.length > 0 && <div className="flex flex-wrap gap-2">{h.audio.map((s) => <AudioChip key={s.id} seg={s} />)}</div>}
+                    {h.transcript && (
+                      <details>
+                        <summary className="text-[11px] text-text-muted cursor-pointer select-none">What was said</summary>
+                        <pre className="mt-1 text-xs text-text-secondary whitespace-pre-wrap font-mono leading-relaxed max-h-60 overflow-y-auto">{h.transcript}</pre>
+                      </details>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <div key={idx} className="flex items-start gap-2.5">
-                  <span className="text-[10px] font-mono text-text-muted w-11 flex-none pt-0.5">{fmtTime(it.ts)}</span>
-                  <BookHeart size={13} className="text-[#F472B6] flex-none mt-1" />
-                  <p className="text-sm text-text-secondary italic">{it.di!.text}</p>
-                </div>
+                </details>
               ))}
             </div>
           )}
         </div>
-
-        {/* Audio segments */}
-        {audioSegs.length > 0 && (
-          <div>
-            <span className="hud-label text-text-muted">Audio ({audioSegs.length})</span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {audioSegs.map((s) => <AudioChip key={s.id} seg={s} />)}
-            </div>
-          </div>
-        )}
-
-        {/* Transcript */}
-        {transcriptText && (
-          <details className="group">
-            <summary className="hud-label text-text-muted cursor-pointer select-none">Full transcript ▾</summary>
-            <pre className="mt-2 text-xs text-text-secondary whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto">{transcriptText}</pre>
-          </details>
-        )}
 
         {/* Dear Diary */}
         <div className="pt-1">
@@ -224,6 +179,41 @@ export function LifeLog() {
         </div>
       </div>
     </div>
+  );
+}
+
+interface Hour { hour: number; events: LogEvent[]; diary: DiaryEntry[]; audio: LogSegment[]; actions: SavedAction[]; transcript: string }
+
+// Everything on the day, filed under the local hour it happened in.
+export function byHour(day: DayLog): Hour[] {
+  const map = new Map<number, Hour>();
+  const at = (ts: number) => {
+    const hour = new Date(ts).getHours();
+    if (!map.has(hour)) map.set(hour, { hour, events: [], diary: [], audio: [], actions: [], transcript: "" });
+    return map.get(hour)!;
+  };
+  for (const e of day.events) at(e.ts).events.push(e);
+  for (const d of day.diary) at(d.ts).diary.push(d);
+  for (const s of day.segments) {
+    const h = at(s.startTs);
+    if (s.hasAudio) h.audio.push(s);
+    if (s.transcript) h.transcript += `${h.transcript ? "\n" : ""}[${fmtTime(s.startTs)}] ${s.transcript}`;
+  }
+  for (const a of day.actions ?? []) if (a.when?.startsWith(day.date)) at(new Date(a.when).getTime()).actions.push(a);
+  for (const h of map.values()) { h.events.sort((a, b) => a.ts - b.ts); h.diary.sort((a, b) => a.ts - b.ts); }
+  return [...map.values()].filter((h) => h.events.length || h.diary.length || h.audio.length || h.actions.length || h.transcript).sort((a, b) => a.hour - b.hour);
+}
+
+function ActionRow({ a }: { a: SavedAction }) {
+  return (
+    <li className="text-sm text-text-primary flex items-start gap-2">
+      {a.type === "reminder" ? <Bell size={12} className="mt-1 flex-none text-[#F0C94E]" /> : <ListChecks size={12} className="mt-1 flex-none text-[#4FC3F7]" />}
+      <div className="min-w-0">
+        <p>{a.title}{a.when && <span className="text-[10px] font-mono text-text-muted"> · {a.when.replace("T", " ")}</span>}</p>
+        {a.steps?.length ? <ul className="text-xs text-text-muted list-disc pl-4">{a.steps.map((s) => <li key={s}>{s}</li>)}</ul> : null}
+        <p className={`text-[10px] ${a.saved ? "text-text-muted" : "text-accent-red"}`}>{a.saved ? (a.note ?? (a.type === "reminder" ? "Reminder set" : "Added to Tasks")) : (a.note ?? "Not saved")}</p>
+      </div>
+    </li>
   );
 }
 

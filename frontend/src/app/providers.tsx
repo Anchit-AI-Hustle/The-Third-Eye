@@ -13,6 +13,7 @@ import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { DictationButton } from "@/components/voice/DictationButton";
 import { GetAppNudge } from "@/components/layout/GetAppNudge";
+import { LifeLogRecorderProvider } from "@/components/lifelog/LifeLogRecorder";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
 import { getDeviceInfo } from "@/lib/deviceInfo";
 
@@ -77,6 +78,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <PermissionProvider>
           <CaptureProvider>
+           <LifeLogRecorderProvider>
             {children}
             <ConsentDialog />
             <LocationBridge />
@@ -88,6 +90,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <CommandPalette />
             <DictationButton />
             <GetAppNudge />
+           </LifeLogRecorderProvider>
           </CaptureProvider>
         </PermissionProvider>
       </QueryClientProvider>

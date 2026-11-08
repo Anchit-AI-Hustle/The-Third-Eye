@@ -24,6 +24,7 @@ const ACTION_LABELS: Record<string, Record<string, string>> = {
 };
 
 const BASE_LABELS: Record<string, string> = {
+  life_log: "Checking your Life Log",
   plan_checklist: "Planning the steps",
   start_step: "Working on the next step",
   complete_step: "Verifying a step",
