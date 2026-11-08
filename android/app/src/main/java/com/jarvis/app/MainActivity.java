@@ -18,7 +18,24 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (intent != null && ListenService.STOP.equals(intent.getAction())) {
+            ListenService.stop(this);
+            if (getBridge() != null) getBridge().triggerWindowJSEvent("te:stop-listening");
+            return;
+        }
         openShared(intent);
+    }
+
+    // While the Life Log listens, the WebView keeps running in the background
+    // (Android would otherwise pause its timers and the recorder with them).
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (ListenService.running && getBridge() != null) {
+            WebView view = getBridge().getWebView();
+            view.onResume();
+            view.resumeTimers();
+        }
     }
 
     // Text or a link shared from another app opens the assistant with it (the site's /share).

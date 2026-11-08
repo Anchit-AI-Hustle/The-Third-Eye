@@ -23,6 +23,14 @@ export const alwaysListen = () => { try { return localStorage.getItem(LISTEN_KEY
 const setAlwaysListen = (on: boolean) => { try { if (on) localStorage.setItem(LISTEN_KEY, "1"); else localStorage.removeItem(LISTEN_KEY); } catch { /* noop */ } };
 
 const clock = (ts: number) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+type Native = { startListening?: () => Promise<unknown>; stopListening?: () => Promise<unknown> };
+// The Android app's microphone foreground service keeps capture going with the
+// screen off or the app in the background.
+const native = (): Native | null => {
+  const cap = (globalThis as { Capacitor?: { getPlatform?: () => string; Plugins?: Record<string, unknown> } }).Capacitor;
+  return cap?.getPlatform?.() === "android" ? (cap.Plugins?.DeviceControl as Native | undefined) ?? null : null;
+};
+
 const key = (a: SavedAction) => `${a.type}|${a.title.toLowerCase()}`;
 
 function notify(title: string, body: string, tag: string, onClick?: () => void) {
@@ -104,6 +112,7 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
   const stopListening = useCallback(() => {
     setAlwaysListen(false);
     recRef.current.stop();
+    void native()?.stopListening?.().catch(() => {});
     newSegs.current = 0;
     void extract(localDateKey(new Date()));
   }, [extract]);
@@ -111,12 +120,48 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
   const listen = useCallback(() => {
     setAlwaysListen(true);
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission().catch(() => {});
+    void native()?.startListening?.().catch(() => {});
     void recRef.current.start();
   }, []);
 
+  // Listening carries on until the person stops it: whenever the app comes
+  // back (reopened, unlocked, back online), it picks up again by itself.
   useEffect(() => {
-    if (status === "authenticated" && alwaysListen()) void recRef.current.start();
-  }, [status]);
+    if (status !== "authenticated") return;
+    const resume = () => {
+      if (!alwaysListen() || recRef.current.recording || document.visibilityState !== "visible") return;
+      void native()?.startListening?.().catch(() => {});
+      void recRef.current.start();
+    };
+    resume();
+    const stop = () => stopListening();
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", resume);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("te:stop-listening", stop);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("online", resume);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("te:stop-listening", stop);
+    };
+  }, [status, stopListening]);
+
+  // In a browser a locked phone stops the mic, so the screen is kept awake
+  // while listening (the Android app's service covers that there instead).
+  useEffect(() => {
+    if (!rec.recording || native() || !("wakeLock" in navigator)) return;
+    let lock: { release: () => Promise<void> } | null = null;
+    const take = async () => {
+      if (document.visibilityState !== "visible") return;
+      try { lock = await (navigator as unknown as { wakeLock: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } }).wakeLock.request("screen"); } catch { /* battery saver or unsupported */ }
+    };
+    void take();
+    document.addEventListener("visibilitychange", take);
+    return () => { document.removeEventListener("visibilitychange", take); void lock?.release().catch(() => {}); };
+  }, [rec.recording]);
 
   useEffect(() => {
     if (!rec.recording) return;

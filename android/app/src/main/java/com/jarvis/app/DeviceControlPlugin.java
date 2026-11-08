@@ -196,6 +196,26 @@ public class DeviceControlPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void startListening(PluginCall call) {
+        try {
+            ListenService.start(getContext());
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        ListenService.stop(getContext());
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void openSettings(PluginCall call) {
         String pane = call.getString("pane", "wifi");
         Intent intent;
