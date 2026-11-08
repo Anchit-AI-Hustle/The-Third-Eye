@@ -90,8 +90,14 @@ export async function notifyWhatsApp(userId: string, text: string): Promise<bool
   if (!link?.phone || !link.notify) return false;
   const open = link.last_inbound_at && Date.now() - new Date(link.last_inbound_at).getTime() < DAY_MS;
   if (open) return sendWhatsAppText(link.phone, text);
+  return sendWhatsAppTemplate(link.phone, text);
+}
+
+/** An update to a number that may not have written in the last 24 hours: the approved template. */
+export async function sendWhatsAppTemplate(phone: string, text: string): Promise<boolean> {
+  if (!whatsappConfigured()) return false;
   return graphSend({
-    to: link.phone,
+    to: phone,
     type: "template",
     template: {
       name: process.env.WHATSAPP_UPDATE_TEMPLATE || "jarvis_update",

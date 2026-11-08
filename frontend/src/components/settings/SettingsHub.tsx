@@ -14,6 +14,7 @@ import { ProvidersCard } from "@/components/settings/ProvidersCard";
 import { WhatsAppCard } from "@/components/settings/WhatsAppCard";
 import { DeviceSyncCard } from "@/components/settings/DeviceSyncCard";
 import { WhatsAppAutoSendCard } from "@/components/settings/WhatsAppAutoSendCard";
+import { SocialAccountsCard } from "@/components/settings/SocialAccountsCard";
 
 interface Props {
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -67,6 +68,7 @@ export function SettingsHub({ user }: Props) {
         <div className="space-y-6">
           <SettingsClient user={user} />
           <ConnectionsCard />
+          <SocialAccountsCard />
           <WhatsAppCard />
           <AutomationsCard />
         </div>
