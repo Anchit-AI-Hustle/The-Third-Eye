@@ -1,5 +1,6 @@
 "use client";
 
+import { routeToPhone } from "@/lib/handoff";
 import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
@@ -386,6 +387,9 @@ export function VoiceOverlay() {
                   setResponse((prev) => prev.trim() ? prev : `Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
                   setActiveTool(null);
+                  const routed = await routeToPhone(parsed.sideEffects);
+                  parsed.sideEffects = routed.effects;
+                  if (routed.note) { fullText = `${fullText.trim()}\n\n${routed.note}`; setResponse(fullText); }
                   if (parsed.memory) memoryRef.current = parsed.memory;
                   historyRef.current = [
                     ...historyRef.current,

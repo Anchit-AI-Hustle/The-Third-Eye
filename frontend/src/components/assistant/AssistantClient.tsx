@@ -50,6 +50,7 @@ import { personaFor } from "@/lib/persona/personas";
 import { toolLabel } from "@/lib/toolLabels";
 import { toWhatsAppNumber } from "@/lib/whatsappNumber";
 import { deviceSendable, sendFromDevice } from "@/lib/nativeOutreach";
+import { routeToPhone } from "@/lib/handoff";
 
 // Replies whose files should save and open on arrival (after the permission
 // check); files in reopened chats only act when their buttons are clicked.
@@ -741,6 +742,12 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   if (email) {
                     localStorage.setItem(`jarvis_memory_v1_${email}`, JSON.stringify(parsed.memory));
                   }
+                }
+                const routed = await routeToPhone(parsed.sideEffects);
+                parsed.sideEffects = routed.effects;
+                if (routed.note) {
+                  fullText = `${fullText.trim()}\n\n${routed.note}`;
+                  setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullText } : m)));
                 }
                 const links: MessageLink[] = (parsed.sideEffects ?? [])
                   .filter((fx: any) => fx.type === "open_url" && fx.data?.url)
