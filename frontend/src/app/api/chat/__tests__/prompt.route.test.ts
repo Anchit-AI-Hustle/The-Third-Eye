@@ -77,5 +77,12 @@ describe("/api/chat prompt", () => {
     expect(systemPrompts[0]).toContain('saved routine "Wind down"');
     expect(systemPrompts[0]).toContain("2. remind me to sleep at 11pm");
   });
+
+  it("tells the assistant never to lie and to claim done only when a tool confirmed it", async () => {
+    const { POST } = await import("@/app/api/chat/route");
+    await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "hi" }) }) as never)).text();
+    expect(systemPrompts[0]).toContain("Never lie, about anything.");
+    expect(systemPrompts[0]).toContain('"Done" means a tool confirmed it.');
+  });
 });
 
