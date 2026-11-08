@@ -12,6 +12,7 @@ import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { DictationButton } from "@/components/voice/DictationButton";
+import { GetAppNudge } from "@/components/layout/GetAppNudge";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
 import { getDeviceInfo } from "@/lib/deviceInfo";
 
@@ -86,6 +87,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <SystemsOnline />
             <CommandPalette />
             <DictationButton />
+            <GetAppNudge />
           </CaptureProvider>
         </PermissionProvider>
       </QueryClientProvider>

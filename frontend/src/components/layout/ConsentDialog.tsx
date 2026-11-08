@@ -11,7 +11,7 @@ import { useConsentBundle } from "@/hooks/useConsent";
 // first impression and an obstacle to anyone reviewing the document, including
 // Google's OAuth reviewers, who open these URLs directly. The demo promises it
 // captures nothing, so it must not ask for the camera or microphone either.
-const NO_PROMPT_PATHS = ["/privacy", "/terms_of_service", "/auth", "/install", "/get", "/demo", "/calculators", "/upgrade"];
+const NO_PROMPT_PATHS = ["/privacy", "/terms_of_service", "/auth", "/install", "/get", "/calculators", "/upgrade"];
 
 interface ConsentItem {
   key: ConsentKey;

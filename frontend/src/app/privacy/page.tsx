@@ -152,13 +152,6 @@ export default function PrivacyNotePage() {
                 4,000 characters) is saved as text with a search index so it can recall it later. These memories have
                 no per-item delete yet; they go when you delete your account.
               </li>
-              <li>
-                <span className="text-text-primary">The demo captures nothing.</span>{" "}
-                <Link href="/demo" className="text-accent-blue hover:underline">
-                  The demo
-                </Link>{" "}
-                uses built-in sample data, and nothing you do there is sent to our server or an AI provider.
-              </li>
             </ul>
           </div>
 

@@ -35,8 +35,8 @@ describe("ConsentDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("stays closed on the public demo, privacy, install and download pages", async () => {
-    for (const path of ["/install", "/get", "/demo", "/privacy", "/privacy_policy", "/calculators/sip-calculator"]) {
+  it("stays closed on the public privacy, install and download pages", async () => {
+    for (const path of ["/install", "/get", "/privacy", "/privacy_policy", "/calculators/sip-calculator"]) {
       pathname = path;
       const { unmount } = render(<ConsentDialog />);
       await act(async () => {
