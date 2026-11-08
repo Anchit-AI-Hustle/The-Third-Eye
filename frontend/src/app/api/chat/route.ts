@@ -99,6 +99,7 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **manage_notes**: create, search, delete notes - action='create' to save, 'search' to find, 'delete' to remove
 - **manage_goals**: create, update progress, delete goals - action='create' to set, 'update' to report progress, 'delete' to remove
 - **manage_reminders**: set, list, cancel reminders - action='set' to schedule, 'list' to see pending, 'cancel' to remove
+- **life_log**: what happened or was said on a day or at an hour, from the user's Life Log recordings - read it before answering "what did we discuss at 3", "what did X say this morning"
 - **manage_calendar**: add events and get upcoming - action='add' to create event, 'get' to retrieve
 - **manage_expenses**: log spending or summarise it - action='create' to log (amount is GST-inclusive; pass gst_rate when known), 'summary' for this-month totals + GST paid
 - **calculate**: run a precise financial calc (GST, income tax, EMI, SIP, FD…) by slug + inputs - always use this instead of doing money arithmetic yourself
@@ -645,6 +646,9 @@ async function runTool(
       // list
       return { result: await listReminders(ctx) };
     }
+
+    case "life_log":
+      return { result: await readLifeLog(ctx, input) };
 
     case "manage_calendar": {
       const action = input.action ?? "get";
@@ -1324,6 +1328,27 @@ async function setReminder(
     .single();
   if (error) return `Could not save the reminder: ${error.message}`;
   return `Reminder set for ${formatWhen(data.fire_at, ctx.timezone)}${recurrence ? ` (repeats ${recurrence})` : ""}. (id: ${data.id})`;
+}
+
+async function readLifeLog(ctx: RunContext, input: { date?: string; hour?: number }): Promise<string> {
+  const sb = getDb();
+  if (!sb || !ctx.email) return "The Life Log needs cloud sync to be read here.";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "") ? input.date! : localDay(new Date(), ctx.timezone);
+  const { data } = await sb.from("lifelog_days").select("segments, events, summary").eq("user_id", ctx.email).eq("id", date).maybeSingle();
+  if (!data) return `Nothing is logged for ${date}.`;
+  const tz = validZone(ctx.timezone) ?? "UTC";
+  const hm = (ts: number) => new Date(ts).toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const hour = typeof input.hour === "number" ? Math.floor(input.hour) : null;
+  const inHour = (ts: number) => hour === null || Number(hm(ts).slice(0, 2)) === hour;
+  const events = ((data.events ?? []) as { ts: number; title: string; detail?: string }[]).filter((e) => inHour(e.ts));
+  const said = ((data.segments ?? []) as { startTs: number; transcript?: string }[]).filter((s) => s.transcript && inHour(s.startTs)).map((s) => `[${hm(s.startTs)}] ${s.transcript}`).join("\n");
+  if (hour !== null && !events.length && !said) return `Nothing is logged for ${date} between ${hour}:00 and ${hour + 1}:00.`;
+  return [
+    `Life Log ${date}${hour !== null ? `, ${hour}:00-${hour + 1}:00` : ""}:`,
+    hour === null && data.summary ? `Summary: ${data.summary}` : "",
+    events.length ? `Events:\n${events.map((e) => `- ${hm(e.ts)} ${e.title}${e.detail ? `: ${e.detail}` : ""}`).join("\n")}` : "",
+    said ? `Transcript:\n${said.slice(-6000)}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 async function listReminders(ctx: RunContext): Promise<string> {

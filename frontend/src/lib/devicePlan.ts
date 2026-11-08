@@ -42,7 +42,26 @@ const PHONE_DEVICES = new Set([
   "notify",
   "status",
   "speak",
+  "app",
+  "alarm",
+  "timer",
+  "media",
+  "ringer",
+  "screen_lock",
+  "go_home",
+  "go_back",
+  "recents",
+  "screenshot",
+  "notifications_shade",
+  "quick_settings",
+  "settings",
 ]);
+
+// Said to the phone itself ("lock the phone"), these are phone actions, not Home Hub ones.
+const PHONE_ACTIONS: Record<string, string> = {
+  lock: "screen_lock", screenshot: "screenshot", home: "go_home", back: "go_back",
+  play: "media", pause: "media", next: "media", previous: "media", skip: "media",
+};
 
 const ALIASES: Record<string, string> = {
   torch: "flashlight",
@@ -78,6 +97,25 @@ const ALIASES: Record<string, string> = {
   device: "phone",
   say: "speak",
   talk: "speak",
+  "lock screen": "screen_lock",
+  "screen lock": "screen_lock",
+  "home screen": "go_home",
+  home: "go_home",
+  back: "go_back",
+  "recent apps": "recents",
+  "screen shot": "screenshot",
+  music: "media",
+  song: "media",
+  player: "media",
+  playback: "media",
+  ringtone: "ringer",
+  "ringer mode": "ringer",
+  "alarm clock": "alarm",
+  application: "app",
+  "notification shade": "notifications_shade",
+  "notification panel": "notifications_shade",
+  "quick settings": "quick_settings",
+  "control center": "quick_settings",
 };
 
 function canon(raw: string): string {
@@ -94,7 +132,9 @@ export function planDeviceControl(
   const actRaw = (action || "status").trim();
   const payloadValue = value == null || value === "" ? null : String(value);
 
-  if (SMART_HOME.test(targetRaw) || SMART_HOME.test(actRaw)) {
+  const phoneAct = canon(targetRaw) === "phone" || !targetRaw.trim() ? PHONE_ACTIONS[actRaw.toLowerCase()] : undefined;
+  const phoneTarget = PHONE_DEVICES.has(canon(targetRaw)) || Boolean(phoneAct);
+  if (!phoneTarget && (SMART_HOME.test(targetRaw) || SMART_HOME.test(actRaw))) {
     return {
       kind: "smarthome",
       result:
@@ -108,8 +148,8 @@ export function planDeviceControl(
     };
   }
 
-  const target = canon(targetRaw) || "phone";
-  let act = canon(actRaw) || "status";
+  const target = phoneAct ?? (canon(targetRaw) || "phone");
+  let act = phoneAct ? (target === "media" ? canon(actRaw) : target) : canon(actRaw) || "status";
 
   if (PHONE_DEVICES.has(target) && target !== "status") {
     if (["on", "enable", "start"].includes(act)) act = `${target}_on`;

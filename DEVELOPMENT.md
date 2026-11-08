@@ -304,9 +304,11 @@ the self-built ones so they don't get buried in the third-party directory.
 
 ## 11. Front-end & dashboard
 
-- **Logo:** `components/layout/LogoMark` (segmented-arc eye with a "T" iris) is
-  the one app mark; `public/logo.svg` is it on the icon tile, and every web,
-  iOS and Android icon and splash PNG is rendered from that.
+- **Logo:** the chrome eye with a "T" iris (#496) is the one app mark. The app
+  icon (`public/icon-512.png`, the iOS AppIcon and Android launcher icons) is
+  the source; `public/logo-mark.png` (the eye cut from its tile, used by
+  `components/layout/LogoMark`), the splash screens and the native apps' launch
+  logos are rendered from it.
 - **Cinematic layer:** Three.js landing hero (`components/landing/HeroCanvas`)
   and GSAP scroll-reveals — lazy-imported,
   DPR-capped, disposed on unmount, `prefers-reduced-motion`-aware, paused on hidden

@@ -219,7 +219,7 @@ object LifeLogToday {
         if (transcript.length < 20) return
         extracting = true
         try {
-            val body = buildJsonObject { put("transcript", transcript); put("date", day.date) }
+            val body = buildJsonObject { put("transcript", transcript); put("date", day.date); put("tzOffset", -java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000) }
             val reply = json.parseToJsonElement(Api.backend.send("POST", "/api/tools/lifelog/extract", body)).jsonObject
             val items = reply["events"]?.let { runCatching { it.jsonArray }.getOrNull() }
             // A failed extraction never replaces the timeline already saved.

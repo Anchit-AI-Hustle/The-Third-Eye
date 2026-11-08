@@ -12,13 +12,28 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DeviceControlPlugin.class);
         super.onCreate(savedInstanceState);
+        // "Turn off" tapped while the app wasn't running.
+        if (ListenService.STOP.equals(getIntent().getAction())) ListenService.stop(this);
     }
 
     // BridgeActivity also calls this with the launch intent once the bridge exists.
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (intent != null && ListenService.STOP.equals(intent.getAction())) {
+            ListenService.stop(this);
+            if (getBridge() != null) getBridge().triggerWindowJSEvent("te:stop-listening");
+            return;
+        }
         openShared(intent);
+    }
+
+    // Android refuses to restart a microphone service from the background, so
+    // listening the person left on resumes the moment the app is opened again.
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (ListenService.wanted(this) && !ListenService.running) ListenService.start(this);
     }
 
     // Text or a link shared from another app opens the assistant with it (the site's /share).

@@ -195,6 +195,197 @@ public class DeviceControlPlugin extends Plugin {
         return true;
     }
 
+    // Life Log "always listen": the native recorder in ListenService.
+    @PluginMethod
+    public void startListening(PluginCall call) {
+        try {
+            Backend.remember(getContext(), getBridge().getServerUrl());
+            ListenService.start(getContext());
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        ListenService.stop(getContext());
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void listeningStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("on", ListenService.wanted(getContext()));
+        ret.put("running", ListenService.running);
+        ret.put("lastChunkAt", ListenService.lastChunkAt);
+        ret.put("error", ListenService.error);
+        ret.put("whatsappAutoSend", WhatsAppSender.enabled(getContext()));
+        call.resolve(ret);
+    }
+
+    // Opens the chat with the message typed; with WhatsApp auto-send turned on in
+    // Accessibility, presses send and resolves sent=true only once it has.
+    @PluginMethod
+    public void sendWhatsApp(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !(url.startsWith("whatsapp:") || url.startsWith("https://wa.me/"))) {
+            call.reject("A WhatsApp link is required");
+            return;
+        }
+        WhatsAppSender.send(getContext(), url, sent -> {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("sent", sent);
+            call.resolve(ret);
+        });
+    }
+
+    // ---- Device control the person allows ---------------------------------
+    // Each action needs its own grant; without it the matching Settings screen
+    // opens and the result says so, so nothing is claimed that didn't happen.
+
+    private JSObject needs(String what, String settingsAction) {
+        Intent i = new Intent(settingsAction).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { getContext().startActivity(i); } catch (Exception ignored) { }
+        JSObject ret = new JSObject();
+        ret.put("ok", false);
+        ret.put("needsPermission", what);
+        return ret;
+    }
+
+    private static JSObject done(String applied) {
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("applied", applied);
+        return ret;
+    }
+
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String name = call.getString("name", "").trim().toLowerCase();
+        if (name.isEmpty()) { call.resolve(failure("Which app?")); return; }
+        android.content.pm.PackageManager pm = getContext().getPackageManager();
+        Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        android.content.pm.ResolveInfo best = null;
+        int bestScore = 0;
+        for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(main, 0)) {
+            String label = String.valueOf(ri.loadLabel(pm)).toLowerCase();
+            int score = label.equals(name) ? 3 : label.startsWith(name) ? 2 : label.contains(name) ? 1 : 0;
+            if (score > bestScore) { best = ri; bestScore = score; }
+        }
+        if (best == null) { call.resolve(failure("No app called \"" + name + "\" is installed.")); return; }
+        Intent launch = pm.getLaunchIntentForPackage(best.activityInfo.packageName);
+        if (launch == null) { call.resolve(failure("That app can't be opened directly.")); return; }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(launch);
+        call.resolve(done("Opened " + best.loadLabel(pm)));
+    }
+
+    @PluginMethod
+    public void setAlarm(PluginCall call) {
+        Integer hour = call.getInt("hour");
+        Integer minute = call.getInt("minute", 0);
+        if (hour == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) { call.resolve(failure("What time?")); return; }
+        Intent i = new Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
+            .putExtra(android.provider.AlarmClock.EXTRA_HOUR, hour)
+            .putExtra(android.provider.AlarmClock.EXTRA_MINUTES, minute)
+            .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, call.getString("label", "JARVIS"))
+            .putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(i);
+            call.resolve(done(String.format(java.util.Locale.US, "Alarm set for %02d:%02d", hour, minute)));
+        } catch (Exception e) {
+            call.resolve(failure("No clock app here takes alarms."));
+        }
+    }
+
+    @PluginMethod
+    public void setTimer(PluginCall call) {
+        Integer seconds = call.getInt("seconds");
+        if (seconds == null || seconds < 1 || seconds > 86_400) { call.resolve(failure("How long?")); return; }
+        Intent i = new Intent(android.provider.AlarmClock.ACTION_SET_TIMER)
+            .putExtra(android.provider.AlarmClock.EXTRA_LENGTH, seconds)
+            .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, call.getString("label", "JARVIS"))
+            .putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(i);
+            call.resolve(done("Timer started"));
+        } catch (Exception e) {
+            call.resolve(failure("No clock app here takes timers."));
+        }
+    }
+
+    @PluginMethod
+    public void media(PluginCall call) {
+        String key = call.getString("key", "toggle");
+        int code;
+        switch (key) {
+            case "play": code = android.view.KeyEvent.KEYCODE_MEDIA_PLAY; break;
+            case "pause": code = android.view.KeyEvent.KEYCODE_MEDIA_PAUSE; break;
+            case "next": code = android.view.KeyEvent.KEYCODE_MEDIA_NEXT; break;
+            case "previous": code = android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS; break;
+            default: code = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+        }
+        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) { call.resolve(failure("No audio service")); return; }
+        am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code));
+        am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code));
+        call.resolve(done("Sent " + key + " to the music that's playing"));
+    }
+
+    @PluginMethod
+    public void doNotDisturb(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("on", true));
+        NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) { call.resolve(failure("No notification service")); return; }
+        if (!nm.isNotificationPolicyAccessGranted()) { call.resolve(needs("dnd", Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)); return; }
+        nm.setInterruptionFilter(on ? NotificationManager.INTERRUPTION_FILTER_PRIORITY : NotificationManager.INTERRUPTION_FILTER_ALL);
+        call.resolve(done(on ? "Do Not Disturb is on" : "Do Not Disturb is off"));
+    }
+
+    @PluginMethod
+    public void ringer(PluginCall call) {
+        String mode = call.getString("mode", "normal");
+        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        if (am == null || nm == null) { call.resolve(failure("No audio service")); return; }
+        // Android counts silent and leaving silent as Do Not Disturb changes.
+        if (!nm.isNotificationPolicyAccessGranted() && (mode.equals("silent") || am.getRingerMode() == AudioManager.RINGER_MODE_SILENT)) {
+            call.resolve(needs("dnd", Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+            return;
+        }
+        int m = mode.equals("silent") ? AudioManager.RINGER_MODE_SILENT : mode.equals("vibrate") ? AudioManager.RINGER_MODE_VIBRATE : AudioManager.RINGER_MODE_NORMAL;
+        am.setRingerMode(m);
+        call.resolve(done("Ringer set to " + mode));
+    }
+
+    @PluginMethod
+    public void systemAction(PluginCall call) {
+        String action = call.getString("action", "");
+        WhatsAppSender svc = WhatsAppSender.instance;
+        if (svc == null) { call.resolve(needs("accessibility", Settings.ACTION_ACCESSIBILITY_SETTINGS)); return; }
+        int g;
+        switch (action) {
+            case "lock": g = Build.VERSION.SDK_INT >= 28 ? android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN : -1; break;
+            case "screenshot": g = Build.VERSION.SDK_INT >= 28 ? android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT : -1; break;
+            case "home": g = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME; break;
+            case "back": g = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK; break;
+            case "recents": g = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS; break;
+            case "notifications": g = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS; break;
+            case "quick_settings": g = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS; break;
+            default: g = -1;
+        }
+        if (g < 0) { call.resolve(failure("This phone can't do \"" + action + "\".")); return; }
+        call.resolve(svc.performGlobalAction(g) ? done("Done: " + action.replace('_', ' ')) : failure("The phone didn't accept that."));
+    }
+
     @PluginMethod
     public void openSettings(PluginCall call) {
         String pane = call.getString("pane", "wifi");
@@ -205,6 +396,35 @@ public class DeviceControlPlugin extends Plugin {
                 break;
             case "airplane":
                 intent = new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS);
+                break;
+            case "accessibility":
+                intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                break;
+            case "dnd":
+                intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+                break;
+            case "location":
+                intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                break;
+            case "battery":
+                intent = new Intent(Intent.ACTION_POWER_USAGE_SUMMARY);
+                break;
+            case "display":
+                intent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+                break;
+            case "sound":
+                intent = new Intent(Settings.ACTION_SOUND_SETTINGS);
+                break;
+            case "apps":
+                intent = new Intent(Settings.ACTION_APPLICATION_SETTINGS);
+                break;
+            case "notifications":
+                intent = Build.VERSION.SDK_INT >= 26
+                    ? new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName())
+                    : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName()));
+                break;
+            case "internet":
+                intent = Build.VERSION.SDK_INT >= 29 ? new Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY) : new Intent(Settings.ACTION_WIFI_SETTINGS);
                 break;
             case "wifi":
             default:

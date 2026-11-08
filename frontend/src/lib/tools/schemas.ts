@@ -175,6 +175,17 @@ export const geminiTools = [
         },
       },
       {
+        name: "life_log",
+        description: "Read the user's Life Log: what was said and what happened on a day, hour by hour (summary, events, transcript). Use it when the user asks what happened, what was discussed, or what someone said at a time or on a day.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            date: { type: "STRING", description: "Local day, YYYY-MM-DD (default today)" },
+            hour: { type: "NUMBER", description: "Local hour 0-23 to narrow to; omit for the whole day" },
+          },
+        },
+      },
+      {
         name: "manage_calendar",
         description: "Unified calendar manager: add events and get upcoming events. action='add' to create an event, 'get' to retrieve upcoming events.",
         parameters: {
@@ -623,11 +634,11 @@ export const geminiTools = [
       },
       {
         name: "control_device",
-        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this - the client executor applies it. Do not refuse.",
+        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak; in the Android app also: open an app by name [device=app, value=name], alarm [device=alarm, value='7:30 am'], timer [device=timer, value='10 min'], music [device=media, action=play/pause/next/previous], ringer [device=ringer, value=silent/vibrate/normal], lock screen, home, back, recents, screenshot, notifications, quick settings, a settings screen [device=settings, value=wifi/bluetooth/location/battery/display/sound/apps]) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Each needs the permission the person gave; report exactly what the executor says. Always call this - the client executor applies it. Do not refuse.",
         parameters: {
           type: "OBJECT",
           properties: {
-            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight"], description: "Action to perform" },
+            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight", "play", "pause", "next", "previous", "screenshot", "home", "back"], description: "Action to perform" },
             device: { type: "STRING", description: "Device name or type - e.g. living room lights, front door, flashlight, phone" },
             value: { type: "STRING", description: "Value for dim/temperature/text/duration" },
           },
