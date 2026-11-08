@@ -1,4 +1,5 @@
 import { signOut } from "next-auth/react";
+import { pauseAccountSync } from "@/components/layout/AccountSync";
 
 // Personal data cached on this browser: tasks, notes, goals, knowledge, chat
 // history and memory (jarvis_), Studio generations (te_vault:), Life Log
@@ -10,6 +11,7 @@ const PERSONAL_PREFIXES = ["jarvis_", "te_vault:", "te_lifelog", "te_music_track
 
 export function clearSensitiveLocalData(): void {
   if (typeof window === "undefined") return;
+  pauseAccountSync();
   try {
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
