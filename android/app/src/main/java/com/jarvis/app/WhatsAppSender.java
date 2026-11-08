@@ -14,10 +14,12 @@ import android.view.accessibility.AccessibilityNodeInfo;
 
 import java.util.List;
 
-// WhatsApp lets no app send for the person, but an accessibility service the
-// person turns on can press WhatsApp's own send button. It acts only on a chat
-// this app opened in the last few seconds with a message already typed, and
-// reports whether the send button was really pressed.
+// The Third Eye's accessibility switch. WhatsApp lets no app send for the
+// person, but this service, once they turn it on, presses WhatsApp's own send
+// button, only on a chat this app opened in the last few seconds with a
+// message already typed, and reports whether it really did. It also performs
+// system actions the assistant is asked for: lock screen, home, back, recents,
+// notifications, quick settings and screenshot.
 public class WhatsAppSender extends AccessibilityService {
     interface Result { void done(boolean sent); }
 
@@ -26,6 +28,21 @@ public class WhatsAppSender extends AccessibilityService {
     private static volatile long armedUntil = 0;
     private static volatile Result pending;
     private static final Handler main = new Handler(Looper.getMainLooper());
+    // The running service, for system actions (lock screen, home, screenshot)
+    // the person allowed by turning it on.
+    static volatile WhatsAppSender instance;
+
+    @Override
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        instance = this;
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        instance = null;
+        return super.onUnbind(intent);
+    }
 
     static boolean enabled(Context ctx) {
         String on = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);

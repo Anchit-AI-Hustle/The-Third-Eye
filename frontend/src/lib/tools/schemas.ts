@@ -634,11 +634,11 @@ export const geminiTools = [
       },
       {
         name: "control_device",
-        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this - the client executor applies it. Do not refuse.",
+        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak; in the Android app also: open an app by name [device=app, value=name], alarm [device=alarm, value='7:30 am'], timer [device=timer, value='10 min'], music [device=media, action=play/pause/next/previous], ringer [device=ringer, value=silent/vibrate/normal], lock screen, home, back, recents, screenshot, notifications, quick settings, a settings screen [device=settings, value=wifi/bluetooth/location/battery/display/sound/apps]) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Each needs the permission the person gave; report exactly what the executor says. Always call this - the client executor applies it. Do not refuse.",
         parameters: {
           type: "OBJECT",
           properties: {
-            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight"], description: "Action to perform" },
+            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight", "play", "pause", "next", "previous", "screenshot", "home", "back"], description: "Action to perform" },
             device: { type: "STRING", description: "Device name or type - e.g. living room lights, front door, flashlight, phone" },
             value: { type: "STRING", description: "Value for dim/temperature/text/duration" },
           },

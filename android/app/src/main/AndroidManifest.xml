@@ -2,6 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- "Open Spotify": the assistant finds launchable apps by name. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -80,6 +88,9 @@
     <!-- The web layer already takes a wake lock so the screen cannot sleep out
          from under SpeechRecognition; this is its native counterpart. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Device control: alarms and timers in the Clock app, Do Not Disturb (granted in Settings). -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Life Log "always listen": a microphone foreground service keeps capture going with the screen off. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
