@@ -8,8 +8,11 @@ import { isSupabase, pgConnection } from "../src/lib/pgConnection.mjs";
 // Preview deployments share the production database, so only production builds
 // (or a local build pointed at its own DATABASE_URL) may migrate.
 
-const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-if (!url) {
+// The app queries DATABASE_URL (lib/db.ts); the build prefers the unpooled
+// connection for DDL. Both are migrated: if they ever point at different
+// databases, the one the app reads must not be left without its tables.
+const urls = [...new Set([process.env.DATABASE_URL_UNPOOLED, process.env.DATABASE_URL].filter(Boolean))];
+if (!urls.length) {
   console.log("migrate: no DATABASE_URL, skipping");
   process.exit(0);
 }
@@ -20,8 +23,10 @@ if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
 
 // This app's data lives in Supabase only; another host (a Neon integration's
 // DATABASE_URL, say) means the deployment is pointed at the wrong database.
-if (process.env.VERCEL && !isSupabase(url)) {
-  console.warn("::warning title=migrate::DATABASE_URL is not a Supabase database. Set DATABASE_URL and DATABASE_URL_UNPOOLED to the Supabase project's connection strings.");
+for (const url of urls) {
+  if (process.env.VERCEL && !isSupabase(url)) {
+    console.warn(`::warning title=migrate::${new URL(url).hostname} is not a Supabase database. Set DATABASE_URL and DATABASE_URL_UNPOOLED to the Supabase project's connection strings.`);
+  }
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -43,16 +48,22 @@ const files = [
 // files apply on the next production build that can connect. A migration that
 // fails once connected still fails the build.
 const UNAVAILABLE = new Set(["53000", "53300", "57P03", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET"]);
+async function migrate(url) {
+const where = `${new URL(url).hostname}/${new URL(url).pathname.slice(1) || "postgres"}`;
+console.log(`migrate: ${where}`);
 const client = new pg.Client(pgConnection(url));
 try {
   await client.connect();
 } catch (e) {
   if (!UNAVAILABLE.has(e.code) && !/quota/i.test(e.message)) throw e;
-  console.warn(`::warning title=migrate::database unavailable (${e.code ?? "no code"}: ${e.message}); migrations skipped until the next production build`);
-  process.exit(0);
+  console.warn(`::warning title=migrate::database ${where} unavailable (${e.code ?? "no code"}: ${e.message}); migrations skipped until the next production build`);
+  return;
 }
 try {
-  await client.query("select pg_advisory_lock(7317001)");
+  // A session lock through the transaction pooler (port 6543) would be left on
+  // a pooled backend and block every later build, so only direct connections lock.
+  const pooled = new URL(url).port === "6543";
+  if (!pooled) await client.query("select pg_advisory_lock(7317001)");
   await client.query(readFileSync(join(root, "supabase", "platform-compat.sql"), "utf8"));
   await client.query(
     "create table if not exists public.app_migrations (name text primary key, applied_at timestamptz not null default now())",
@@ -64,10 +75,10 @@ try {
       await client.query(readFileSync(join(root, f), "utf8"));
       await client.query("insert into public.app_migrations (name) values ($1)", [f]);
       await client.query("commit");
-      console.log(`migrate: applied ${f}`);
+      console.log(`migrate: ${where}: applied ${f}`);
     } catch (e) {
       await client.query("rollback");
-      console.error(`migrate: ${f} failed — ${e.message}`);
+      console.error(`migrate: ${where}: ${f} failed — ${e.message}`);
       process.exitCode = 1;
       break;
     }
@@ -76,3 +87,6 @@ try {
 } finally {
   await client.end();
 }
+}
+
+for (const url of urls) await migrate(url);
