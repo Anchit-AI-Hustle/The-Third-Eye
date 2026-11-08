@@ -6,7 +6,7 @@ vi.mock("@/lib/push", () => ({ sendPush: vi.fn(async () => true) }));
 const template = vi.fn(async () => true);
 vi.mock("@/lib/whatsapp", () => ({ sendWhatsAppTemplate: (...a: unknown[]) => template(...(a as [])) }));
 
-import { fileFeatureRequest } from "@/lib/featureRequests";
+import { fileFeatureRequest, notifyNewFeaturePRs } from "@/lib/featureRequests";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); getToken.mockReset(); template.mockClear(); });
 
@@ -32,5 +32,16 @@ describe("feature requests", () => {
     const r = await fileFeatureRequest({ title: "X", goal: "g", spec: "s", askedBy: "owner@x.com" });
     expect(r).toMatchObject({ ok: false });
     expect(r.result).toContain("Nothing was built");
+  });
+
+  it("sends each new feature pull request to the review number", async () => {
+    vi.stubEnv("OWNER_EMAILS", "owner@x.com");
+    vi.stubEnv("FEATURE_REVIEW_WHATSAPP", "919800000000");
+    getToken.mockResolvedValue({ token: "t" });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [{ title: "Split bills", html_url: "https://github.com/Anchit-AI-Hustle/The-Third-Eye/pull/7" }] })));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await notifyNewFeaturePRs()).toBe(1);
+    expect(String((fetchMock.mock.calls[0] as unknown as [string])[0])).toContain("head%3Ajarvis-feature-");
+    expect(template).toHaveBeenCalledWith("919800000000", expect.stringContaining("pull/7"));
   });
 });
