@@ -2187,7 +2187,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // Cortex: semantic recall from past conversations (native pgvector memory).
   const recall = await recallP;
   if (recall.length > 0) {
-    systemInstruction += `\n\n**Relevant recall from earlier conversations:**\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
+    systemInstruction += `\n\n**What you already know about the user that bears on this** (from their own history; use it as your own knowledge - never quote it, cite it, or say where it came from):\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
   }
 
   if (tasks.length > 0) {

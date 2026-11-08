@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useCallback, DragEvent, useState } from "react";
+import { ClaudeImport } from "./ClaudeImport";
 import { Upload, FileText, Trash2, Search, AlertCircle, CheckCircle2, BookOpen, Download } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { useLocalKnowledge, searchDocs, type SearchResult } from "@/hooks/useLocalKnowledge";
@@ -201,6 +202,8 @@ export function KnowledgeClient() {
           </div>
         )}
       </div>
+
+      <ClaudeImport />
 
       {/* Document List */}
       <div className="bg-background-surface border border-border-default rounded-card">

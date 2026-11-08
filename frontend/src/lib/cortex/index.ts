@@ -30,6 +30,32 @@ export async function rememberExchange(email: string, userMsg: string, assistant
   await sb.from("cortex_memories").insert({ user_id: email, kind: "episodic", content, embedding: vec });
 }
 
+const IMPORT_MAX = 50;
+
+/**
+ * Stores background from the user's own history (e.g. a Claude export). The id
+ * is a hash of the user and the text, so importing the same file again adds
+ * nothing twice.
+ */
+export async function rememberBackground(email: string, texts: string[]): Promise<number> {
+  const sb = getDb();
+  if (!sb || !email || !cortexEnabled()) return 0;
+  const clean = [...new Set(texts.map((t) => t.trim().slice(0, 2000)).filter(Boolean))].slice(0, IMPORT_MAX);
+  const vectors = await embedBatch(clean);
+  const rows = await Promise.all(clean.map(async (content, i) => ({
+    id: `bg_${await sha256(`${email}\n${content}`)}`, user_id: email, kind: "background", content, embedding: vectors[i],
+  })));
+  const ready = rows.filter((r) => r.embedding);
+  if (!ready.length) return 0;
+  const { error } = await sb.from("cortex_memories").upsert(ready, { onConflict: "id", ignoreDuplicates: true });
+  return error ? 0 : ready.length;
+}
+
+async function sha256(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function searchChunks(email: string, query: string, k = 5): Promise<ChunkHit[]> {
   const sb = getDb();
   if (!sb || !email) return [];
