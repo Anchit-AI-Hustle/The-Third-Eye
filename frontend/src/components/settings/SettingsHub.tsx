@@ -13,6 +13,7 @@ import { ActivationSettings } from "@/components/settings/ActivationSettings";
 import { ProvidersCard } from "@/components/settings/ProvidersCard";
 import { WhatsAppCard } from "@/components/settings/WhatsAppCard";
 import { DeviceSyncCard } from "@/components/settings/DeviceSyncCard";
+import { WhatsAppAutoSendCard } from "@/components/settings/WhatsAppAutoSendCard";
 
 interface Props {
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -59,6 +60,7 @@ export function SettingsHub({ user }: Props) {
       {tab === "device" ? (
         <div className="space-y-6">
           <PermissionsCard />
+          <WhatsAppAutoSendCard />
           <DeviceSyncCard />
         </div>
       ) : tab === "account" ? (

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Radio, X } from "lucide-react";
-import { loadDay, saveDay } from "@/lib/lifelog/store";
+import { loadDay, saveDay, syncFromCloud } from "@/lib/lifelog/store";
 import { localDateKey, type DayLog, type LogEvent, type LogSegment, type SavedAction } from "@/lib/lifelog/types";
 import { useDayRecorder, type DayRecorder } from "@/hooks/useDayRecorder";
 
@@ -23,13 +23,47 @@ export const alwaysListen = () => { try { return localStorage.getItem(LISTEN_KEY
 const setAlwaysListen = (on: boolean) => { try { if (on) localStorage.setItem(LISTEN_KEY, "1"); else localStorage.removeItem(LISTEN_KEY); } catch { /* noop */ } };
 
 const clock = (ts: number) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
-type Native = { startListening?: () => Promise<unknown>; stopListening?: () => Promise<unknown> };
-// The Android app's microphone foreground service keeps capture going with the
-// screen off or the app in the background.
+type NativeStatus = { on?: boolean; running?: boolean; lastChunkAt?: number; error?: string | null };
+type Native = { startListening: () => Promise<unknown>; stopListening: () => Promise<unknown>; listeningStatus: () => Promise<NativeStatus> };
+// The Android app records natively (ListenService), so listening keeps going
+// with the screen off and after the app is closed; its chunks are filed on the
+// server and reach this view through the cloud sync.
 const native = (): Native | null => {
   const cap = (globalThis as { Capacitor?: { getPlatform?: () => string; Plugins?: Record<string, unknown> } }).Capacitor;
-  return cap?.getPlatform?.() === "android" ? (cap.Plugins?.DeviceControl as Native | undefined) ?? null : null;
+  const p = cap?.getPlatform?.() === "android" ? cap.Plugins?.DeviceControl as Partial<Native> | undefined : undefined;
+  return p?.startListening && p.listeningStatus ? p as Native : null;
 };
+
+const STATUS_MS = 5_000;
+
+function useNativeDayRecorder(on: boolean): DayRecorder {
+  const [st, setSt] = useState<NativeStatus>({});
+  const seen = useRef(0);
+  const poll = useCallback(async () => {
+    const p = native();
+    if (!p) return;
+    const next = await p.listeningStatus().catch(() => ({} as NativeStatus));
+    setSt(next);
+    if (next.lastChunkAt && next.lastChunkAt !== seen.current) {
+      seen.current = next.lastChunkAt;
+      await syncFromCloud();
+      window.dispatchEvent(new CustomEvent(LIFELOG_UPDATED, { detail: localDateKey(new Date()) }));
+    }
+  }, []);
+  useEffect(() => {
+    if (!on) return;
+    void poll();
+    const t = setInterval(poll, STATUS_MS);
+    return () => clearInterval(t);
+  }, [on, poll]);
+  return {
+    recording: Boolean(st.on),
+    lastAt: st.lastChunkAt || null,
+    error: st.error ?? null,
+    start: async () => { await native()?.startListening().catch(() => {}); await poll(); },
+    stop: () => { void native()?.stopListening().catch(() => {}).then(poll); setSt((x) => ({ ...x, on: false })); },
+  };
+}
 
 const key = (a: SavedAction) => `${a.type}|${a.title.toLowerCase()}`;
 
@@ -105,14 +139,17 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
     if (seg.transcript && ++newSegs.current >= EXTRACT_EVERY) { newSegs.current = 0; void extract(today); }
   }, [extract]);
 
-  const rec = useDayRecorder(onSegment);
+  const [isNative, setIsNative] = useState(false);
+  useEffect(() => setIsNative(native() !== null), []);
+  const webRec = useDayRecorder(onSegment);
+  const nativeRec = useNativeDayRecorder(isNative);
+  const rec = isNative ? nativeRec : webRec;
   const recRef = useRef(rec);
   recRef.current = rec;
 
   const stopListening = useCallback(() => {
     setAlwaysListen(false);
     recRef.current.stop();
-    void native()?.stopListening?.().catch(() => {});
     newSegs.current = 0;
     void extract(localDateKey(new Date()));
   }, [extract]);
@@ -120,7 +157,6 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
   const listen = useCallback(() => {
     setAlwaysListen(true);
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission().catch(() => {});
-    void native()?.startListening?.().catch(() => {});
     void recRef.current.start();
   }, []);
 
@@ -129,8 +165,8 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     if (status !== "authenticated") return;
     const resume = () => {
-      if (!alwaysListen() || recRef.current.recording || document.visibilityState !== "visible") return;
-      void native()?.startListening?.().catch(() => {});
+      // The Android app's service resumes itself (MainActivity.onResume).
+      if (native() || !alwaysListen() || recRef.current.recording || document.visibilityState !== "visible") return;
       void recRef.current.start();
     };
     resume();

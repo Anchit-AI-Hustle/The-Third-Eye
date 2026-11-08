@@ -239,7 +239,7 @@ final class LifeLogTodayModel: ObservableObject {
             let error: String?
         }
         do {
-            let reply = try await API.call("POST", "/api/tools/lifelog/extract", json: ["transcript": transcript, "date": day.date], as: Extracted.self)
+            let reply = try await API.call("POST", "/api/tools/lifelog/extract", json: ["transcript": transcript, "date": day.date, "tzOffset": -TimeZone.current.secondsFromGMT() / 60] as [String: Any], as: Extracted.self)
             // A failed extraction never replaces the timeline already saved.
             guard reply.error == nil, let items = reply.events else {
                 error = reply.error ?? "Couldn't build the timeline right now. Your recordings are safe; try again shortly."

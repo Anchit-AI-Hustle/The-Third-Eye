@@ -12,6 +12,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DeviceControlPlugin.class);
         super.onCreate(savedInstanceState);
+        // "Turn off" tapped while the app wasn't running.
+        if (ListenService.STOP.equals(getIntent().getAction())) ListenService.stop(this);
     }
 
     // BridgeActivity also calls this with the launch intent once the bridge exists.
@@ -26,16 +28,12 @@ public class MainActivity extends BridgeActivity {
         openShared(intent);
     }
 
-    // While the Life Log listens, the WebView keeps running in the background
-    // (Android would otherwise pause its timers and the recorder with them).
+    // Android refuses to restart a microphone service from the background, so
+    // listening the person left on resumes the moment the app is opened again.
     @Override
-    public void onPause() {
-        super.onPause();
-        if (ListenService.running && getBridge() != null) {
-            WebView view = getBridge().getWebView();
-            view.onResume();
-            view.resumeTimers();
-        }
+    public void onResume() {
+        super.onResume();
+        if (ListenService.wanted(this) && !ListenService.running) ListenService.start(this);
     }
 
     // Text or a link shared from another app opens the assistant with it (the site's /share).

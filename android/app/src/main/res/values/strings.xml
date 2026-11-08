@@ -4,4 +4,5 @@
     <string name="title_activity_main">The Third Eye</string>
     <string name="package_name">com.jarvis.app</string>
     <string name="custom_url_scheme">com.jarvis.app</string>
+    <string name="whatsapp_sender_description">Lets The Third Eye press WhatsApp\'s send button for a message you asked it to send. It acts only on a chat it just opened with your message typed, and reads nothing else.</string>
 </resources>

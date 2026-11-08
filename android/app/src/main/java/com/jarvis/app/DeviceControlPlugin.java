@@ -195,9 +195,11 @@ public class DeviceControlPlugin extends Plugin {
         return true;
     }
 
+    // Life Log "always listen": the native recorder in ListenService.
     @PluginMethod
     public void startListening(PluginCall call) {
         try {
+            Backend.remember(getContext(), getBridge().getServerUrl());
             ListenService.start(getContext());
             JSObject ret = new JSObject();
             ret.put("ok", true);
@@ -216,6 +218,34 @@ public class DeviceControlPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void listeningStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("on", ListenService.wanted(getContext()));
+        ret.put("running", ListenService.running);
+        ret.put("lastChunkAt", ListenService.lastChunkAt);
+        ret.put("error", ListenService.error);
+        ret.put("whatsappAutoSend", WhatsAppSender.enabled(getContext()));
+        call.resolve(ret);
+    }
+
+    // Opens the chat with the message typed; with WhatsApp auto-send turned on in
+    // Accessibility, presses send and resolves sent=true only once it has.
+    @PluginMethod
+    public void sendWhatsApp(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !(url.startsWith("whatsapp:") || url.startsWith("https://wa.me/"))) {
+            call.reject("A WhatsApp link is required");
+            return;
+        }
+        WhatsAppSender.send(getContext(), url, sent -> {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("sent", sent);
+            call.resolve(ret);
+        });
+    }
+
+    @PluginMethod
     public void openSettings(PluginCall call) {
         String pane = call.getString("pane", "wifi");
         Intent intent;
@@ -225,6 +255,9 @@ public class DeviceControlPlugin extends Plugin {
                 break;
             case "airplane":
                 intent = new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS);
+                break;
+            case "accessibility":
+                intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
                 break;
             case "wifi":
             default:

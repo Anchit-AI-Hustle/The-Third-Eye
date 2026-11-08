@@ -44,23 +44,40 @@ export function listDates(): string[] {
   return readIndex();
 }
 
-/** Merge any cloud-stored days into the local index (best-effort, on mount). */
+/** Merge cloud-stored days into this device (best-effort): days recorded on
+ * another device, or by the Android app's background recorder, show up here. */
 export async function syncFromCloud(): Promise<void> {
   try {
     const r = await dataList<any>(ENTITY).catch(() => ({ rows: [] as any[] }));
     for (const row of r.rows ?? []) {
       if (!row?.date) continue;
-      const local = localStorage.getItem(KEY(row.date));
-      if (!local) {
-        localStorage.setItem(KEY(row.date), JSON.stringify({
-          date: row.date, segments: row.segments ?? [], events: row.events ?? [],
-          diary: row.diary ?? [], summary: row.summary ?? "", updatedAt: Date.parse(row.updated_at) || Date.now(),
-        }));
-      }
+      const cloud: DayLog = {
+        date: row.date, segments: row.segments ?? [], events: row.events ?? [],
+        diary: row.diary ?? [], summary: row.summary ?? "", updatedAt: Date.parse(row.updated_at) || Date.now(),
+      };
+      const raw = localStorage.getItem(KEY(row.date));
+      if (!raw) { localStorage.setItem(KEY(row.date), JSON.stringify(cloud)); continue; }
+      const mine: DayLog = { ...emptyDay(row.date), ...JSON.parse(raw) };
+      if (cloud.updatedAt <= mine.updatedAt) continue;
+      localStorage.setItem(KEY(row.date), JSON.stringify(mergeDays(mine, cloud)));
     }
     const cloudDates = (r.rows ?? []).map((x: any) => x.date).filter(Boolean);
     if (cloudDates.length) writeIndex([...readIndex(), ...cloudDates]);
   } catch { /* noop */ }
+}
+
+// The newer cloud copy wins for the timeline and summary; recordings and diary
+// entries from both are kept, and this device keeps its own audio.
+export function mergeDays(mine: DayLog, cloud: DayLog): DayLog {
+  const byId = <T extends { id: string }>(a: T[], b: T[]) => [...new Map([...b, ...a].map((x) => [x.id, x])).values()];
+  return {
+    ...mine,
+    segments: byId(mine.segments, cloud.segments).sort((a, b) => a.startTs - b.startTs),
+    diary: byId(mine.diary, cloud.diary).sort((a, b) => a.ts - b.ts),
+    events: cloud.events.length ? cloud.events : mine.events,
+    summary: cloud.summary || mine.summary,
+    updatedAt: cloud.updatedAt,
+  };
 }
 
 export async function deleteDay(date: string): Promise<void> {
