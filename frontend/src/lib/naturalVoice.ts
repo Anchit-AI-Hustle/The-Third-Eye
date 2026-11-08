@@ -25,9 +25,18 @@ let generation = 0;
 export const naturalVoiceProgress = () => progress;
 export const naturalVoiceSupported = () => typeof navigator !== "undefined" && "gpu" in navigator;
 
+// On by default on a computer; on a phone it waits to be switched on, since
+// the voice is an 86 MB download a mobile data plan should not pay unasked.
 export function naturalVoiceOn(): boolean {
-  try { return localStorage.getItem(NATURAL_VOICE_KEY) === "1"; } catch { return false; }
+  try {
+    const set = localStorage.getItem(NATURAL_VOICE_KEY);
+    if (set) return set === "1";
+  } catch { /* storage blocked: fall through to the default */ }
+  return typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
+
+/** Whether the model is loaded, so speaking with it costs no wait. */
+export const naturalVoiceReady = () => model !== null;
 
 const importKokoro: Importer = () => import(/* webpackIgnore: true */ KOKORO_URL);
 

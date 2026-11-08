@@ -117,13 +117,7 @@ export function VoiceOverlay() {
       );
     }, []),
     onSpeechStart: useCallback(() => {
-      // Talking over the reply replaces it, as in the Assistant.
       tts.stop();
-      if (isStreamingRef.current) {
-        abortRef.current?.abort();
-        isStreamingRef.current = false;
-        setIsStreaming(false);
-      }
       suppressRef.current = false;
       setLiveBubble({ phase: "recording", level: 0 });
       setExpanded(true);
@@ -142,7 +136,13 @@ export function VoiceOverlay() {
       setLiveBubble(null);
       // A pending "confirm before I act" takes priority over a new question.
       if (handleVoiceConfirm(text)) return;
-      if (!isStreamingRef.current) sendRef.current(text);
+      // Words the user said replace a reply still being written, as in the Assistant.
+      if (isStreamingRef.current) {
+        abortRef.current?.abort();
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
+      sendRef.current(text);
     }, [handleVoiceConfirm]),
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { naturalVoiceOn, speakNatural, stopNatural } from "@/lib/naturalVoice";
+import { loadNaturalVoice, naturalVoiceOn, naturalVoiceReady, speakNatural, stopNatural } from "@/lib/naturalVoice";
 import { speechRecognizer } from "@/lib/speechRecognizer";
 import { downsample, encodeWav, PcmClip, TARGET_RATE } from "@/lib/pcmClip";
 
@@ -677,6 +677,24 @@ async function waitForVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> 
 
 const TTS_KEY = "jarvis_tts_enabled_v2";
 
+// Neural and network voices sound like a person; the old desktop SAPI voices
+// and eSpeak sound like a machine.
+const HUMAN = /natural|neural|online|premium|enhanced|siri|google/i;
+const ROBOTIC = /\b(david|mark|zira|hazel|george|susan|espeak|compact|novelty|bad news|bells|boing|bubbles|cellos|whisper|zarvox|trinoids|albert|jester|organ|superstar|wobble)\b/i;
+
+/** The most human-sounding voice for the user's language, or the agent's chosen one. */
+export function humanVoice(voices: SpeechSynthesisVoice[], preference: string | undefined, language: string): SpeechSynthesisVoice | undefined {
+  const lang = (language || "en").slice(0, 2).toLowerCase();
+  const pool = voices.filter((v) => v.lang?.toLowerCase().startsWith(lang));
+  const candidates = pool.length ? pool : voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
+  const chosen = preference ? candidates.find((v) => new RegExp(preference, "i").test(v.name)) : undefined;
+  if (chosen) return chosen;
+  const score = (v: SpeechSynthesisVoice) =>
+    (HUMAN.test(v.name) ? 10 : 0) - (ROBOTIC.test(v.name) ? 10 : 0) + (v.localService === false ? 2 : 0) +
+    (v.lang?.toLowerCase() === language.toLowerCase() ? 1 : 0);
+  return [...candidates].sort((a, b) => score(b) - score(a))[0] ?? voices[0];
+}
+
 export function useTTS(voicePreference?: string) {
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -749,20 +767,20 @@ export function useTTS(voicePreference?: string) {
   }, [stopKeepalive]);
 
   const playOne = useCallback(async (clean: string, volume: number, onStart: () => void): Promise<void> => {
-    if (naturalVoiceOn() && (await speakNatural(clean, { volume, onStart }))) return;
+    // The natural voice speaks once it has loaded; until then (and while it
+    // downloads in the background) the device's most human voice answers, so
+    // a reply never waits on a download.
+    if (naturalVoiceOn()) {
+      if (naturalVoiceReady()) { if (await speakNatural(clean, { volume, onStart })) return; }
+      else void loadNaturalVoice();
+    }
     const voices = await waitForVoices(1500);
     await new Promise<void>((resolve) => {
       const u = new SpeechSynthesisUtterance(clean);
-      u.rate = isIOS ? 1.0 : 1.05;
-      u.pitch = 0.9;
+      u.rate = 1.0;
+      u.pitch = 1.0;
       u.volume = volume;
-      const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
-      const preferred =
-        voices.find((v) => pattern.test(v.name)) ??
-        voices.find((v) => v.lang?.startsWith("en") && /male/i.test(v.name)) ??
-        voices.find((v) => v.lang === "en-US") ??
-        voices.find((v) => v.lang?.startsWith("en")) ??
-        voices[0];
+      const preferred = humanVoice(voices, voicePreference, typeof navigator !== "undefined" ? navigator.language : "en");
       if (preferred) u.voice = preferred;
 
       // iOS can drop an utterance without onstart, or play it without onend.

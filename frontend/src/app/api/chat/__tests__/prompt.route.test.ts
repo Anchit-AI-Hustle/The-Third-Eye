@@ -53,12 +53,12 @@ describe("/api/chat prompt", () => {
     expect(modelParams[0].generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
   });
 
-  it("caps thinking on a short typed message and leaves long ones at full depth", async () => {
+  it("answers a short typed message without a thinking pause and leaves long ones at full depth", async () => {
     const { POST } = await import("@/app/api/chat/route");
     await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "hi" }) }) as never)).text();
     await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "plan ".repeat(200) }) }) as never)).text();
     expect(systemPrompts[0]).not.toContain("## Spoken conversation");
-    expect(modelParams.map((p) => p.generationConfig?.thinkingConfig?.thinkingBudget)).toEqual([1024, -1]);
+    expect(modelParams.map((p) => p.generationConfig?.thinkingConfig?.thinkingBudget)).toEqual([0, -1]);
   });
 
   it("runs a saved routine of opens instantly, without asking any model", async () => {
@@ -76,6 +76,13 @@ describe("/api/chat prompt", () => {
     await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "wind down" }) }) as never)).text();
     expect(systemPrompts[0]).toContain('saved routine "Wind down"');
     expect(systemPrompts[0]).toContain("2. remind me to sleep at 11pm");
+  });
+
+  it("tells the assistant never to lie and to claim done only when a tool confirmed it", async () => {
+    const { POST } = await import("@/app/api/chat/route");
+    await (await POST(new Request("https://x.test/api/chat", { method: "POST", body: JSON.stringify({ message: "hi" }) }) as never)).text();
+    expect(systemPrompts[0]).toContain("Never lie, about anything.");
+    expect(systemPrompts[0]).toContain('"Done" means a tool confirmed it.');
   });
 });
 

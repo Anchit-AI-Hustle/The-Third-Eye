@@ -78,3 +78,22 @@ describe("a reply spoken while it streams", () => {
     expect(result.current.begin()).toBe(false);
   });
 });
+
+describe("choosing a human voice", () => {
+  const v = (name: string, lang = "en-US", localService = true) => ({ name, lang, localService }) as SpeechSynthesisVoice;
+
+  it("prefers neural, network and Siri voices over the old robotic ones", async () => {
+    const { humanVoice } = await import("@/hooks/useVoice");
+    const voices = [v("Microsoft David - English (United States)"), v("Microsoft Aria Online (Natural) - English (United States)", "en-US", false), v("Fred")];
+    expect(humanVoice(voices, undefined, "en-US")?.name).toMatch(/Aria Online \(Natural\)/);
+    expect(humanVoice([v("Microsoft Zira Desktop"), v("Samantha"), v("Google US English", "en-US", false)], undefined, "en-US")?.name).toBe("Google US English");
+    expect(humanVoice([v("Daniel (Enhanced)", "en-GB"), v("Daniel", "en-GB")], undefined, "en-GB")?.name).toBe("Daniel (Enhanced)");
+  });
+
+  it("speaks the user's language, and keeps the agent's chosen voice", async () => {
+    const { humanVoice } = await import("@/hooks/useVoice");
+    const voices = [v("Google US English", "en-US", false), v("Google हिन्दी", "hi-IN", false), v("Lekha", "hi-IN")];
+    expect(humanVoice(voices, undefined, "hi-IN")?.name).toBe("Google हिन्दी");
+    expect(humanVoice(voices, "lekha", "hi-IN")?.name).toBe("Lekha");
+  });
+});

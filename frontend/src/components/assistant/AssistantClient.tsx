@@ -362,14 +362,10 @@ export function AssistantClient({ userName }: { userName?: string }) {
         ? { ...prev, level: l } : prev);
     }, []),
     onSpeechStart: useCallback(() => {
-      // Talking over the assistant replaces its reply: stop the voice and the
-      // stream behind it, so what the user says next is heard as a new turn.
+      // The user talking over the assistant's voice silences it at once. The
+      // barge detector only fires on sustained speech clearly louder than the
+      // assistant's own echo, so its voice and room noise do not cut it off.
       tts.stop();
-      if (isStreamingRef.current) {
-        abortRef.current?.abort();
-        isStreamingRef.current = false;
-        setIsStreaming(false);
-      }
       suppressRef.current = false;
       setLiveBubble({ phase: "recording", level: 0 });
     }, [tts]),
@@ -401,7 +397,14 @@ export function AssistantClient({ userName }: { userName?: string }) {
         setInput((prev) => (prev ? prev.replace(/\s+$/, "") + " " : "") + text);
         return;
       }
-      if (!isStreamingRef.current) sendRef.current(text);
+      // Words the user actually said replace a reply still being written;
+      // a noise alone never does, since only a transcript gets here.
+      if (isStreamingRef.current) {
+        abortRef.current?.abort();
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
+      sendRef.current(text);
     }, [confirmAction, cancelAction]),
   });
 

@@ -90,6 +90,7 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - For complex questions: brief reasoning → clear answer.
 - For simple questions: answer directly. Match length to complexity.
 - Never invent facts. Use tools to get real data before answering.
+- Never lie, about anything. Say only what you know or a tool returned; when you are unsure, say so; when something failed or cannot be done, say that plainly. "Done" means a tool confirmed it.
 - Pick the most precise tool: a connected account's own tool (Gmail, Calendar, GitHub, connectors) before a web search, and either before opening a page for the user. Opening a site is the last resort, not the first.
 - Do exactly what was asked and no more: "draft" means draft, not send; "find" means read only, never move or delete; when asked to show something first, show it and wait for the OK.
 
@@ -2039,8 +2040,8 @@ function generatePdf(title: string, content: string, format: string): { result: 
   };
 }
 
-const RECALL_MS = 2_500;
-const MCP_DISCOVERY_MS = 3_000;
+const RECALL_MS = 1_200;
+const MCP_DISCOVERY_MS = 1_500;
 
 function within<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
@@ -2114,6 +2115,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   for (const pending of [googleP, gateP, memoryP]) pending.catch(() => {});
   const recallP = email ? within(retrieveMemories(email, message, 5), RECALL_MS, []) : Promise.resolve([]);
   const mcpP = within(mcpToolDeclarations(email), MCP_DISCOVERY_MS, []);
+  const storedP = storedLists(email).catch(() => null);
   try {
     const connected = await googleP;
     if (connected?.accessToken) {
@@ -2185,7 +2187,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // Cortex: semantic recall from past conversations (native pgvector memory).
   const recall = await recallP;
   if (recall.length > 0) {
-    systemInstruction += `\n\n**Relevant recall from earlier conversations:**\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
+    systemInstruction += `\n\n**What you already know about the user that bears on this** (from their own history; use it as your own knowledge - never quote it, cite it, or say where it came from):\n${recall.map((m) => `- ${m.content}`).join("\n")}`;
   }
 
   if (tasks.length > 0) {
@@ -2314,10 +2316,10 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
     systemInstruction += "\n\n## Spoken conversation\nThis turn was spoken aloud and your reply will be read out by a voice. Lead with the answer in the first sentence. Keep it to one to three short sentences unless asked for more. Plain spoken words only: no markdown, tables, lists, emoji or URLs, and say numbers and times the way a person would. Still use tools exactly as you would in text. If the transcript is garbled or ambiguous, ask one short question instead of guessing.";
   }
   // Flash thinks before its first word by default, which is the wait people
-  // notice. A spoken turn needs an answer now; a short typed one gets a capped
-  // budget; long messages, files and planned multi-step work keep full depth.
-  const deep = message.length > 600 || attachments.length > 0 || !!priorChecklist;
-  const thinkingBudget = voice ? 0 : deep ? -1 : 1024;
+  // notice. Ordinary turns answer at once; long messages, files and planned
+  // multi-step work keep full depth.
+  const deep = !voice && (message.length > 600 || attachments.length > 0 || !!priorChecklist);
+  const thinkingBudget = deep ? -1 : 0;
   const generationConfig = MODEL.includes("flash") ? ({ thinkingConfig: { thinkingBudget } } as GenerationConfig) : undefined;
   const model = genAI ? genAI.getGenerativeModel({ model: MODEL, systemInstruction, tools, generationConfig }) : null;
   const contents: Content[] = [
@@ -2327,7 +2329,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
 
   const memoryStore = { ...memory };
   const sideEffects: { type: string; data: any }[] = [];
-  const stored = await storedLists(email).catch(() => null);
+  const stored = await storedP;
   const ctx: RunContext = {
     memoryStore, docs, contacts: allContacts, accessToken, location, tier: effectiveTier, email,
     tasks: stored?.tasks ?? [...tasks], notes: stored?.notes ?? [...notes], goals: stored?.goals ?? [...goals], expenses: stored?.expenses ?? [...expenses],
