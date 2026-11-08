@@ -1,0 +1,52 @@
+name: JARVIS feature build
+
+# A feature JARVIS wrote up (issue labelled jarvis-feature) is built only after
+# the owner approves it by adding the "approved" label. The build opens a pull
+# request; the owner gets it on WhatsApp and decides whether to merge.
+# Needs repository secrets ANTHROPIC_API_KEY and CRON_SECRET (same value as on
+# Vercel), and SITE_URL as a repository variable (optional).
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  build:
+    if: github.event.label.name == 'approved' && contains(github.event.issue.labels.*.name, 'jarvis-feature') && github.event.sender.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          claude_args: --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
+          prompt: |
+            Build the feature described in issue #${{ github.event.issue.number }} of this repository ("${{ github.event.issue.title }}"); read it with `gh issue view ${{ github.event.issue.number }}`.
+            Follow CLAUDE.md and DEVELOPMENT.md. Work on a new branch named jarvis-feature-${{ github.event.issue.number }}.
+            Add tests, and run `npm ci`, `npx tsc --noEmit` and `npx vitest run` in frontend/ until they pass.
+            Commit, push the branch, and open a pull request with `gh pr create` whose body starts with "Closes #${{ github.event.issue.number }}" and says what was built and how it was checked. Do not merge it.
+            If the feature can't be built safely, comment on the issue explaining why instead.
+      - name: Send the pull request to the owner for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://the-third-eye.anchit-tandon.com' }}
+        run: |
+          pr=$(gh pr list --state open --head "jarvis-feature-${{ github.event.issue.number }}" --json url,title -q '.[0]')
+          [ -n "$pr" ] || { echo "No pull request was opened."; exit 0; }
+          curl -fsS -X POST "$SITE_URL/api/features/notify" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            -d "$(echo "$pr" | jq -c '{url, title}')"

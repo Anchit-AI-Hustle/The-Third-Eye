@@ -53,6 +53,7 @@ import { anchorStatus, isAnchorOperator } from "@/lib/anchor";
 import { modelFor } from "@/lib/llmCascade";
 import { CHECKLIST_INSTRUCTION, CHECKLIST_TOOLS, Checklist, classifyResult, resumeNote } from "@/lib/checklist";
 import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
+import { fileFeatureRequest } from "@/lib/featureRequests";
 import { refundCredits, spendCredits } from "@/lib/credits";
 import { applyEffects } from "@/lib/nativeClient";
 import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
@@ -99,6 +100,8 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 - **manage_notes**: create, search, delete notes - action='create' to save, 'search' to find, 'delete' to remove
 - **manage_goals**: create, update progress, delete goals - action='create' to set, 'update' to report progress, 'delete' to remove
 - **manage_reminders**: set, list, cancel reminders - action='set' to schedule, 'list' to see pending, 'cancel' to remove
+- **request_feature**: when the user asks for something The Third Eye can't do because the feature doesn't exist, say so plainly, then write it up: a clear title, the goal behind the request, and a buildable spec. It goes to the owner for review; never say it is done or available.
+- **social_post**: post as the user on their connected Facebook Pages, Instagram, Threads, X, LinkedIn and Reddit (Settings → Account → Social accounts); Instagram needs an image. Write the post for the platform; the user confirms unless they asked to post.
 - **life_log**: what happened or was said on a day or at an hour, from the user's Life Log recordings - read it before answering "what did we discuss at 3", "what did X say this morning"
 - **manage_calendar**: add events and get upcoming - action='add' to create event, 'get' to retrieve
 - **manage_expenses**: log spending or summarise it - action='create' to log (amount is GST-inclusive; pass gst_rate when known), 'summary' for this-month totals + GST paid
@@ -649,6 +652,12 @@ async function runTool(
 
     case "life_log":
       return { result: await readLifeLog(ctx, input) };
+
+    case "request_feature": {
+      if (!ctx.email) return { result: "Feature requests need you to be signed in." };
+      const out = await fileFeatureRequest({ title: String(input.title ?? "").trim() || "New feature", goal: String(input.goal ?? ""), spec: String(input.spec ?? ""), userWords: input.user_words ? String(input.user_words) : undefined, askedBy: ctx.email.toLowerCase() });
+      return { result: out.result, ...(out.url ? { sideEffect: { type: "open_url", data: { url: out.url, label: "Open the write-up" } } } : {}) };
+    }
 
     case "manage_calendar": {
       const action = input.action ?? "get";

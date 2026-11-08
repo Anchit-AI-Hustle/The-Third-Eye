@@ -175,6 +175,34 @@ export const geminiTools = [
         },
       },
       {
+        name: "request_feature",
+        description: "When the user wants something The Third Eye cannot do yet, write the missing feature up for the owner's review (filed on GitHub and sent to the owner on WhatsApp). Nothing is built until the owner approves and merges it.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "Short feature name" },
+            goal: { type: "STRING", description: "What the user is trying to achieve and why" },
+            spec: { type: "STRING", description: "What to build: behaviour, screens or tools, data, edge cases, how to know it works" },
+            user_words: { type: "STRING", description: "The user's request in their own words" },
+          },
+          required: ["title", "goal", "spec"],
+        },
+      },
+      {
+        name: "social_post",
+        description: "Post publicly as the user on their own connected social accounts: facebook (their Pages), instagram (needs an image), threads, x, linkedin, reddit (their profile). Use 'all' for every connected account. The user confirms first unless they asked to post in their own words. Report each platform's result exactly.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            platforms: { type: "ARRAY", items: { type: "STRING", enum: ["all", "facebook", "instagram", "threads", "x", "linkedin", "reddit"] }, description: "Where to post" },
+            text: { type: "STRING", description: "The post, written for these platforms (X keeps the first 280 characters)" },
+            image_url: { type: "STRING", description: "Public image URL (required for Instagram)" },
+            title: { type: "STRING", description: "Reddit title (defaults to the first line)" },
+          },
+          required: ["platforms", "text"],
+        },
+      },
+      {
         name: "life_log",
         description: "Read the user's Life Log: what was said and what happened on a day, hour by hour (summary, events, transcript). Use it when the user asks what happened, what was discussed, or what someone said at a time or on a day.",
         parameters: {

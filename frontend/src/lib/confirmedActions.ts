@@ -8,6 +8,7 @@ import { generateApp, publishApp } from "@/lib/appBuilder";
 import { getGithubAccessToken } from "@/lib/github";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { saveRoutine } from "@/lib/routines";
+import { PLATFORMS, describeResults, listAccounts, postEverywhere, type Platform } from "@/lib/social";
 
 // Runs one world-changing action exactly as given: after the user confirms it
 // (/api/act), or straight away when the user's own message asked for it
@@ -80,6 +81,17 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
           ? `Built ${files.length} files and published them to ${out.repoUrl}. GitHub Pages is building it; it goes live at ${out.pagesUrl} in a minute or two.`
           : `Built ${files.length} files and pushed them to ${out.repoUrl}, but GitHub Pages could not be turned on (${out.pagesError}). Turn it on in the repo's Settings > Pages.`,
       };
+    }
+    case "social_post": {
+      const text = String(args?.text ?? "").trim();
+      if (!text) return { ok: false, result: "There was nothing to post." };
+      const asked = (Array.isArray(args?.platforms) ? args.platforms : [args?.platforms]).map((p: unknown) => String(p ?? "").toLowerCase().replace("twitter", "x"));
+      const platforms = asked.includes("all")
+        ? [...new Set((await listAccounts(email)).map((a) => a.platform))]
+        : asked.filter((p: string): p is Platform => PLATFORMS.includes(p as Platform));
+      if (!platforms.length) return { ok: false, openUrl: "/settings?tab=account", result: "No connected social account to post to. Connect them in Settings → Account → Social accounts." };
+      const results = await postEverywhere(email, platforms, { text, imageUrl: args?.image_url ? String(args.image_url) : undefined, title: args?.title ? String(args.title) : undefined });
+      return { ok: results.some((r) => r.ok), result: describeResults(results) };
     }
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));

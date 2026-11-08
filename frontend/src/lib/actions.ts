@@ -18,6 +18,8 @@ export const SENSITIVE_ACTIONS = new Set<string>([
   "pay", "send_whatsapp", "make_call", "send_sms",
   // Creates a public repo on the user's GitHub.
   "build_app",
+  // Posts publicly as the user on their social accounts.
+  "social_post",
 ]);
 
 /**
@@ -75,6 +77,8 @@ export function summarizeAction(tool: string, args: any): string {
         : `Run today's ANCHOR drop${args?.now ? " and publish immediately" : " (posts at 17:30 UTC)"}`;
     case "build_app":
       return `Build "${args?.name ?? "app"}" and publish it as a public repo on your GitHub with a GitHub Pages site: ${String(args?.description ?? "").slice(0, 200)}`;
+    case "social_post":
+      return `Post on ${(Array.isArray(args?.platforms) ? args.platforms : [args?.platforms ?? "?"]).join(", ")}: "${String(args?.text ?? "").slice(0, 200)}"${args?.image_url ? " (with an image)" : ""}`;
     case "make_call":
       return `Call ${args?.number ?? "?"}`;
     case "send_sms":
