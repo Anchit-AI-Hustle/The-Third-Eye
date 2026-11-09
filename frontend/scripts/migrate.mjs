@@ -83,10 +83,37 @@ try {
       break;
     }
   }
+  await heal(client, where);
   await client.query(readFileSync(join(root, "supabase", "lockdown.sql"), "utf8"));
 } finally {
   await client.end();
 }
+}
+
+// A file can be recorded as applied while its tables are gone (production had
+// app_migrations rows for the base schema but no notes, goals or team_members).
+// Every file whose public tables are missing is run again, each in its own
+// transaction; one that still fails is reported without failing the build.
+const TABLE = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s*\(/gi;
+async function heal(client, where) {
+  for (const f of files) {
+    const sql = readFileSync(join(root, f), "utf8");
+    const tables = [...new Set([...sql.matchAll(TABLE)].map((m) => m[1].toLowerCase()))];
+    if (!tables.length) continue;
+    const { rows } = await client.query("select t from unnest($1::text[]) t where to_regclass('public.' || quote_ident(t)) is null", [tables]);
+    if (!rows.length) continue;
+    const missing = rows.map((r) => r.t).join(", ");
+    await client.query("begin");
+    try {
+      await client.query(sql);
+      await client.query("insert into public.app_migrations (name) values ($1) on conflict do nothing", [f]);
+      await client.query("commit");
+      console.log(`migrate: ${where}: re-applied ${f} (was missing ${missing})`);
+    } catch (e) {
+      await client.query("rollback");
+      console.warn(`::warning title=migrate::${where}: ${f} is missing ${missing} and could not be re-applied: ${e.message}`);
+    }
+  }
 }
 
 for (const url of urls) await migrate(url);
