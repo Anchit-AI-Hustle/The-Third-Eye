@@ -16,6 +16,7 @@ create table if not exists tasks (
 );
 create index if not exists tasks_user_id_idx on tasks(user_id);
 alter table tasks enable row level security;
+drop policy if exists "users own tasks" on tasks;
 create policy "users own tasks" on tasks for all using (auth.jwt() ->> 'email' = user_id);
 
 -- Team members (linked to tasks)
@@ -31,6 +32,7 @@ create table if not exists team_members (
 create index if not exists team_members_user_id_idx on team_members(user_id);
 create index if not exists team_members_task_id_idx on team_members(task_id);
 alter table team_members enable row level security;
+drop policy if exists "users own team_members" on team_members;
 create policy "users own team_members" on team_members for all using (auth.jwt() ->> 'email' = user_id);
 
 -- Notes
@@ -45,6 +47,7 @@ create table if not exists notes (
 );
 create index if not exists notes_user_id_idx on notes(user_id);
 alter table notes enable row level security;
+drop policy if exists "users own notes" on notes;
 create policy "users own notes" on notes for all using (auth.jwt() ->> 'email' = user_id);
 
 -- Goals
@@ -62,6 +65,7 @@ create table if not exists goals (
 );
 create index if not exists goals_user_id_idx on goals(user_id);
 alter table goals enable row level security;
+drop policy if exists "users own goals" on goals;
 create policy "users own goals" on goals for all using (auth.jwt() ->> 'email' = user_id);
 
 -- Knowledge docs
@@ -79,14 +83,20 @@ create table if not exists knowledge_docs (
 );
 create index if not exists knowledge_docs_user_id_idx on knowledge_docs(user_id);
 alter table knowledge_docs enable row level security;
+drop policy if exists "users own knowledge_docs" on knowledge_docs;
 create policy "users own knowledge_docs" on knowledge_docs for all using (auth.jwt() ->> 'email' = user_id);
 
 -- Enable realtime for all tables
-alter publication supabase_realtime add table tasks;
-alter publication supabase_realtime add table team_members;
-alter publication supabase_realtime add table notes;
-alter publication supabase_realtime add table goals;
-alter publication supabase_realtime add table knowledge_docs;
+-- (only tables not already in it, so the file can be run again safely)
+do $$
+declare t text;
+begin
+  foreach t in array array['tasks','team_members','notes','goals','knowledge_docs'] loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table %I', t);
+    end if;
+  end loop;
+end $$;
 
 -- Persistent memory (key-value facts JARVIS learns about the user)
 create table if not exists jarvis_memory (
@@ -100,4 +110,5 @@ create table if not exists jarvis_memory (
 );
 create index if not exists jarvis_memory_user_id_idx on jarvis_memory(user_id);
 alter table jarvis_memory enable row level security;
+drop policy if exists "users own memory" on jarvis_memory;
 create policy "users own memory" on jarvis_memory for all using (auth.jwt() ->> 'email' = user_id);
