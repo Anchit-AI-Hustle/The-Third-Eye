@@ -7,7 +7,7 @@
 const KOKORO_URL = "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js";
 const MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
 export const NATURAL_VOICE_KEY = "jarvis_natural_voice";
-const VOICE = "bm_george";
+const DEFAULT_VOICE = "bm_george";
 // One failure may be a lost GPU device; a run of them means this machine can't.
 const MAX_FAILURES = 3;
 
@@ -77,9 +77,26 @@ export function splitSentences(text: string): string[] {
   return out.flatMap((s) => s.match(/.{1,400}(?:\s|$)/g)?.map((c) => c.trim()) ?? [s]);
 }
 
-async function render(tts: Kokoro, text: string): Promise<string | null> {
+type Speaker = { id?: string; gender?: "male" | "female" | "neutral"; voicePreference?: string; naturalVoice?: string };
+
+// Each preset assistant has its own neural voice; a custom one gets the voice
+// matching its gender and accent, so switching assistant changes how it sounds.
+const PRESET_VOICES: Record<string, string> = {
+  jarvis: "bm_george", friday: "bf_emma", edith: "af_heart", ultron: "am_michael", zeus: "am_fenrir", athena: "bf_isabella",
+};
+
+export function kokoroVoice(agent?: Speaker): string {
+  if (!agent) return DEFAULT_VOICE;
+  if (agent.naturalVoice) return agent.naturalVoice;
+  if (agent.id && PRESET_VOICES[agent.id]) return PRESET_VOICES[agent.id];
+  const british = /uk|british|daniel|arthur|oliver|kate|serena|moira|en-gb/i.test(agent.voicePreference ?? "");
+  if (agent.gender === "male") return british ? "bm_george" : "am_michael";
+  return british ? "bf_emma" : "af_heart";
+}
+
+async function render(tts: Kokoro, text: string, voice: string): Promise<string | null> {
   try {
-    const audio = await tts.generate(text, { voice: VOICE, speed: 0.95 });
+    const audio = await tts.generate(text, { voice, speed: 1.05 });
     failures = 0;
     return URL.createObjectURL(audio.toBlob());
   } catch (e) {
@@ -90,16 +107,17 @@ async function render(tts: Kokoro, text: string): Promise<string | null> {
 }
 
 /** Speaks text sentence by sentence. False when the voice isn't usable, so the caller can fall back. */
-export async function speakNatural(text: string, o: { volume?: number; onStart?: () => void; onEnd?: () => void }): Promise<boolean> {
+export async function speakNatural(text: string, o: { voice?: string; volume?: number; onStart?: () => void; onEnd?: () => void }): Promise<boolean> {
   const tts = await loadNaturalVoice();
   if (!tts) return false;
   const id = ++generation;
   const sentences = splitSentences(text);
-  let url = await render(tts, sentences[0] ?? "");
+  const voice = o.voice ?? DEFAULT_VOICE;
+  let url = await render(tts, sentences[0] ?? "", voice);
   if (!url) return false;
   for (let i = 0; url && id === generation; i++) {
     // The next sentence renders while this one plays.
-    const pending = i + 1 < sentences.length ? render(tts, sentences[i + 1]) : null;
+    const pending = i + 1 < sentences.length ? render(tts, sentences[i + 1], voice) : null;
     const playing = url;
     const played = await new Promise<boolean>((done) => {
       const a = new Audio(playing);

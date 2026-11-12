@@ -52,6 +52,10 @@ export type GoogleTokenState =
  * refresh tokens while the consent screen is in Testing): only reconnecting
  * fixes it, so the UI must say that rather than "Connected" or "not connected".
  */
+// Access tokens last an hour; reusing one on a warm instance saves every chat
+// turn a round trip to Google before the reply can start.
+const minted = new Map<string, { accessToken: string; until: number }>();
+
 export async function refreshGoogleToken(email: string): Promise<GoogleTokenState> {
   const sb = getDb();
   if (!sb) return { state: "none" };
@@ -64,6 +68,9 @@ export async function refreshGoogleToken(email: string): Promise<GoogleTokenStat
 
   const row = data as { refresh_token_enc?: string; scope?: string } | null;
   if (!row?.refresh_token_enc) return { state: "none" };
+  const key = `${email}|${row.refresh_token_enc}`;
+  const hit = minted.get(key);
+  if (hit && hit.until > Date.now()) return { state: "ok", accessToken: hit.accessToken, scope: row.scope };
   const refreshToken = decrypt(row.refresh_token_enc);
   if (!refreshToken) return { state: "error", reason: "the stored token could not be decrypted (TOKEN_ENCRYPTION_KEY changed?)" };
 
@@ -78,8 +85,12 @@ export async function refreshGoogleToken(email: string): Promise<GoogleTokenStat
     }),
   }).catch(() => null);
   if (!res) return { state: "error", reason: "Google could not be reached" };
-  const json = (await res.json().catch(() => ({}))) as { access_token?: string; error?: string; error_description?: string };
-  if (res.ok && json.access_token) return { state: "ok", accessToken: json.access_token, scope: row.scope };
+  const json = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string; error_description?: string };
+  if (res.ok && json.access_token) {
+    minted.set(key, { accessToken: json.access_token, until: Date.now() + ((json.expires_in ?? 3600) - 300) * 1000 });
+    return { state: "ok", accessToken: json.access_token, scope: row.scope };
+  }
+  minted.delete(key);
   const reason = `${json.error ?? res.status}${json.error_description ? `: ${json.error_description}` : ""}`;
   console.warn(`google token refresh failed: ${reason}`);
   return json.error === "invalid_grant" ? { state: "expired", reason } : { state: "error", reason };

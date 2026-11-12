@@ -75,7 +75,7 @@ export function VoiceOverlay() {
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
   const requestCapability = useCapability();
-  const tts = useTTS(agent.voicePreference);
+  const tts = useTTS(agent);
   const {
     pendingActions,
     pendingOpens,
