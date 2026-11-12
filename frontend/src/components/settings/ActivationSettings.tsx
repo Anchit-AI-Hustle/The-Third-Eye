@@ -414,21 +414,59 @@ function ClosedAppWake() {
           iPhone lets only Siri listen while apps are closed. Say <span className="text-text-primary">“Hey Siri, talk to Jarvis”</span> and The Third Eye opens ready to talk.
         </p>
       )}
-      {platform === "desktop" && (
-        <div className="space-y-1.5">
-          <p className="text-xs text-text-muted">
-            Install the small helper once and “Hey JARVIS” opens talk mode even with no tab open. It recognises only the name, offline, on this computer.
-          </p>
-          <p className="text-xs text-text-muted">Mac - paste in Terminal:</p>
+      {platform === "desktop" && <ComputerListener host={host} />}
+    </div>
+  );
+}
+
+// The install command carries a token that lets this computer file its Life
+// Log chunks (transcribe + lifelog scopes only), so it logs the day with the
+// browser closed, as well as answering to "Hey JARVIS".
+function ComputerListener({ host }: { host: string }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const mint = async () => {
+    setBusy(true);
+    const j = await fetch("/api/listener/token", { method: "POST" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    setBusy(false);
+    if (j?.token) setToken(j.token); else setNote("Couldn't create the command. Try again.");
+  };
+  const revoke = async () => {
+    const ok = await fetch("/api/listener/token", { method: "DELETE" }).then((r) => r.ok).catch(() => false);
+    setToken(null);
+    setNote(ok ? "Computers stopped logging. “Hey JARVIS” still works there." : "Couldn't stop them. Try again.");
+  };
+  const arg = token ?? "";
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-text-muted">
+        Install the listener once and this computer listens all day with no tab open: “Hey JARVIS” opens talk mode, and what you say is logged to your Life Log, where tasks and reminders are picked up. The name is spotted offline; speech is sent for transcription in 45-second pieces, silence skipped.
+      </p>
+      {!token ? (
+        <div className="flex gap-2">
+          <button type="button" disabled={busy} onClick={() => void mint()}
+            className="px-3 py-1.5 rounded-input text-xs font-medium bg-accent-blue/15 border border-accent-blue/50 text-accent-blue disabled:opacity-50">
+            {busy ? "Creating…" : "Set up this computer"}
+          </button>
+          <button type="button" onClick={() => void revoke()}
+            className="px-3 py-1.5 rounded-input text-xs border border-border-default text-text-muted hover:text-text-primary">
+            Stop logging on computers
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-text-muted">Mac - paste in Terminal (shown once; it holds this computer&apos;s key):</p>
           <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
-            curl -fsSL {host}/wake/install-mac.sh | bash
+            curl -fsSL {host}/wake/install-mac.sh | bash -s -- {arg}
           </code>
           <p className="text-xs text-text-muted">Windows - paste in PowerShell:</p>
           <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
-            irm {host}/wake/install-windows.ps1 | iex
+            {"& ([scriptblock]::Create((irm " + host + "/wake/install-windows.ps1))) " + arg}
           </code>
-        </div>
+        </>
       )}
+      {note && <p className="text-xs text-text-muted">{note}</p>}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 // Which of this browser's stored values belong to the person rather than the
 // device. These follow the account to every device it signs in on; anything
 // else (mic and voice downloads per device, the device id, install prompts,
-// per-device permission answers, "always listen" on this device) stays local.
+// per-device permission answers) stays local. "Always listen" follows the
+// account, so turning it on once listens on every device signed in.
 
 const EXACT = new Set([
   "jarvis_agent_profiles", "jarvis_active_agent",
@@ -13,6 +14,7 @@ const EXACT = new Set([
   "jarvis_capture_sessions_v1", "te_capture_autocreate",
   "jarvis_tts_enabled_v2", "jarvis_intro_spoken_v1",
   "te_first_run_done", "te_welcome_seen",
+  "te_lifelog_always_listen",
 ]);
 
 const PREFIXES = ["jarvis_memory_v1_", "jarvis_checkpoints_v1_", "jarvis_briefing_", "book-studio:", "te_welcomed_v1:"];

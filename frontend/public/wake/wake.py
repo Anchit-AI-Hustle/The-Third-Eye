@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
-# The Third Eye on a computer with no tab open: says "Hey JARVIS" -> talk mode.
-# Offline name spotting with Vosk (Apache-2.0): the grammar holds only the
-# assistants' names, so no other speech is recognised and nothing is sent anywhere.
-import json, os, queue, subprocess, sys, time, webbrowser
+# The Third Eye on a computer, with or without a tab open, all day:
+#  - "Hey JARVIS" opens talk mode. Spotted offline with Vosk (Apache-2.0).
+#  - With a listener token (Settings -> Activation), the day is logged like the
+#    phone does: 45-second chunks, silence skipped, transcribed and filed in the
+#    Life Log, where follow-ups become tasks and reminders.
+import json, os, queue, subprocess, sys, threading, time, urllib.request, uuid, webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import sounddevice as sd
 from vosk import KaldiRecognizer, Model, SetLogLevel
 
 SITE = os.environ.get("THIRD_EYE_URL", "https://the-third-eye.anchit-tandon.com").rstrip("/")
-MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
+HERE = os.path.dirname(os.path.abspath(__file__))
+MODEL = os.path.join(HERE, "model")
+TOKEN_FILE = os.path.join(HERE, "token")
+CHUNK_S = 45
+# The website's silence threshold: 0.012 of full scale.
+SILENT_PEAK = 393
+# The open site asks here whether this computer is already logging, so a tab
+# doesn't record the same day twice.
+STATUS_PORT = 47321
 # Everyday words compete with the names in the grammar, so ordinary speech
 # ("Harvey and Davis will present") matches them rather than "jarvis".
 COMMON = (
@@ -77,16 +88,96 @@ def open_talk():
     webbrowser.open(url)
 
 
+def token():
+    try:
+        with open(TOKEN_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def wav(pcm):
+    n = len(pcm)
+    return (b"RIFF" + (36 + n).to_bytes(4, "little") + b"WAVEfmt " + (16).to_bytes(4, "little")
+            + (1).to_bytes(2, "little") + (1).to_bytes(2, "little") + (16000).to_bytes(4, "little")
+            + (32000).to_bytes(4, "little") + (2).to_bytes(2, "little") + (16).to_bytes(2, "little")
+            + b"data" + n.to_bytes(4, "little") + pcm)
+
+
+def post(path, body, content_type):
+    req = urllib.request.Request(SITE + path, data=body, method="POST", headers={
+        "Authorization": "Bearer " + token(), "Content-Type": content_type, "User-Agent": "ThirdEyeListener/1",
+    })
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read() or b"{}")
+
+
+def deliver(pcm, start, end, silent):
+    try:
+        text, provider = "", None
+        if not silent:
+            boundary = uuid.uuid4().hex
+            body = (("--%s\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"chunk.wav\"\r\n"
+                     "Content-Type: audio/wav\r\n\r\n" % boundary).encode() + wav(pcm)
+                    + ("\r\n--%s\r\nContent-Disposition: form-data; name=\"hint\"\r\n\r\nen\r\n--%s--\r\n" % (boundary, boundary)).encode())
+            t = post("/api/transcribe", body, "multipart/form-data; boundary=" + boundary)
+            text, provider = (t.get("text") or "").strip(), t.get("provider")
+        segment = {"id": "d%d" % start, "startTs": start, "endTs": end, "transcript": text, "silent": silent}
+        if provider:
+            segment["provider"] = provider
+        post("/api/lifelog/segment", json.dumps({"segment": segment, "tzOffset": -time.localtime().tm_gmtoff // 60}).encode(), "application/json")
+    except Exception as e:
+        print("Couldn't file the last recording (%s)" % e, flush=True)
+
+
+class Status(BaseHTTPRequestHandler):
+    def _head(self):
+        self.send_header("Access-Control-Allow-Origin", SITE)
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Access-Control-Allow-Methods", "GET")
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._head()
+        self.end_headers()
+
+    def do_GET(self):
+        self.send_response(200)
+        self._head()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"logging": bool(token()), "wake": True}).encode())
+
+    def log_message(self, *args):
+        pass
+
+
+def serve_status():
+    try:
+        ThreadingHTTPServer(("127.0.0.1", STATUS_PORT), Status).serve_forever()
+    except OSError:
+        pass  # Port taken (a second copy running): that copy answers instead.
+
+
 def listen():
     rec = KaldiRecognizer(Model(MODEL), 16000, json.dumps(NAMES))
     rec.SetWords(True)
     audio = queue.Queue()
     last = 0.0
+    chunk, peak, start = bytearray(), 0, int(time.time() * 1000)
     with sd.RawInputStream(samplerate=16000, blocksize=1600, dtype="int16", channels=1,
                            callback=lambda data, frames, t, status: audio.put(bytes(data))):
-        print("Listening for \"Hey JARVIS\"...", flush=True)
+        print("Listening for \"Hey JARVIS\"%s..." % (" and logging the day" if token() else ""), flush=True)
         while True:
-            if not rec.AcceptWaveform(audio.get()):
+            data = audio.get()
+            if token():
+                chunk += data
+                peak = max(peak, max(abs(int.from_bytes(data[i:i + 2], "little", signed=True)) for i in range(0, len(data), 64)))
+                now = int(time.time() * 1000)
+                if now - start >= CHUNK_S * 1000:
+                    threading.Thread(target=deliver, args=(bytes(chunk), start, now, peak < SILENT_PEAK), daemon=True).start()
+                    chunk, peak, start = bytearray(), 0, now
+            if not rec.AcceptWaveform(data):
                 continue
             result = json.loads(rec.Result())
             if heard_name(result) and time.time() - last > COOLDOWN_S:
@@ -97,6 +188,7 @@ def listen():
 
 if __name__ == "__main__":
     SetLogLevel(-1)
+    threading.Thread(target=serve_status, daemon=True).start()
     while True:
         try:
             listen()

@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { identify } from "@/lib/serverIdentity";
 import { isHallucination, transcribeCascade } from "@/lib/llmCascade";
 import { usableGeminiKey } from "@/lib/providerReady";
 
@@ -14,8 +13,8 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // Whisper's hard limit
 // keeps working when one provider is down or out of credit.
 export async function POST(req: NextRequest) {
   // Auth gate: transcription bills a provider — don't leave it open to anyone.
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  // A browser session, or the computer listener's token (scope "transcribe").
+  if (!(await identify(req.headers, "transcribe")).email) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 

@@ -7,7 +7,7 @@ describe("account sync keys", () => {
     expect(cloudKey("te_agent_killed")).toBe("te_agent_killed");
     expect(cloudKey("jarvis_memory_v1_a@x.com")).toBe("jarvis_memory_v1_a@x.com");
     expect(cloudKey("te_device_id_v1")).toBeNull();
-    expect(cloudKey("te_lifelog_always_listen")).toBeNull();
+    expect(cloudKey("te_lifelog_always_listen")).toBe("te_lifelog_always_listen");
     expect(cloudKey("te_natural_voice")).toBeNull();
   });
 

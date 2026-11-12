@@ -1,4 +1,7 @@
-# Installs the "Hey JARVIS" helper on this PC: starts at sign-in, runs in the background.
+# Installs the listener on this PC: starts at sign-in, runs in the background,
+# listens for "Hey JARVIS" and, given the token from Settings, logs the day.
+# Usage: & ([scriptblock]::Create((irm <site>/wake/install-windows.ps1))) <token>
+param([string]$Token = "")
 # Remove it: delete "Third Eye wake.lnk" from shell:startup and the folder %LOCALAPPDATA%\ThirdEyeWake.
 $ErrorActionPreference = "Stop"
 $Site = if ($env:THIRD_EYE_URL) { $env:THIRD_EYE_URL } else { "https://the-third-eye.anchit-tandon.com" }
@@ -12,6 +15,7 @@ Write-Host "Installing into $Dir ..."
 python -m venv (Join-Path $Dir "venv")
 & (Join-Path $Dir "venv\Scripts\pip.exe") install -q --upgrade pip vosk sounddevice
 Invoke-WebRequest "$Site/wake/wake.py" -OutFile (Join-Path $Dir "wake.py")
+if ($Token) { Set-Content -NoNewline -Path (Join-Path $Dir "token") -Value $Token }
 if (-not (Test-Path (Join-Path $Dir "model"))) {
   Write-Host "Downloading the offline voice model (36 MB, once) ..."
   $zip = Join-Path $Dir "model.zip"

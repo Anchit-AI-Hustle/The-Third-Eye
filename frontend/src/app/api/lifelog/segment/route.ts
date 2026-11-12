@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { identify } from "@/lib/serverIdentity";
 import { getDb } from "@/lib/db";
 import { saveLifeActions } from "@/lib/lifelog/actions";
 import { extractDay } from "@/lib/lifelog/extract";
@@ -9,8 +8,8 @@ import type { LogEvent, LogSegment } from "@/lib/lifelog/types";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Where the phone's own recorder (the Android app's listening service, which
-// keeps going with the app closed) delivers each chunk. The day lives on the
+// Where recorders that run with the app closed deliver each chunk: the Android
+// app's listening service (session cookie) and the computer listener (token). The day lives on the
 // server here, and every few transcribed chunks it is re-read into a timeline
 // with its follow-ups saved as tasks and reminders.
 
@@ -19,7 +18,7 @@ const EXTRACT_EVERY = 3;
 const local = (ts: number, offsetMin: number) => new Date(ts - offsetMin * 60_000).toISOString();
 
 export async function POST(req: Request) {
-  const email = (await getServerSession(authOptions))?.user?.email;
+  const { email } = await identify(req.headers, "lifelog");
   if (!email) return Response.json({ error: "unauthenticated" }, { status: 401 });
   const b = (await req.json().catch(() => null)) as { segment?: Partial<LogSegment>; tzOffset?: number } | null;
   const s = b?.segment;
