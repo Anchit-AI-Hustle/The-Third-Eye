@@ -8,6 +8,7 @@ import { Mic, MicOff, Volume2, VolumeX, ChevronDown, ExternalLink, X } from "luc
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { useAgentProfile } from "@/hooks/useAgentProfile";
 
 interface Turn {
   role: "user" | "assistant";
@@ -35,7 +36,8 @@ export function VoiceWidget() {
   // Don't render on the assistant page — it has its own voice UI
   const hidden = pathname?.startsWith("/assistant") || pathname?.startsWith("/auth");
 
-  const tts = useTTS();
+  const { active: agent } = useAgentProfile();
+  const tts = useTTS(agent);
 
   const stt = useVoiceSTT({
     shouldSuppress: useCallback(() => suppressRef.current, []),

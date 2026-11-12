@@ -45,3 +45,14 @@ describe("natural voice falls back instead of going silent", () => {
   });
 });
 
+
+describe("kokoroVoice", () => {
+  it("gives each preset assistant its own voice and custom ones a voice of their gender", async () => {
+    const { kokoroVoice } = await import("@/lib/naturalVoice");
+    const ids = ["jarvis", "friday", "edith", "ultron", "zeus", "athena"].map((id) => kokoroVoice({ id }));
+    expect(new Set(ids).size).toBe(6);
+    expect(kokoroVoice({ id: "custom_1", gender: "female", voicePreference: "samantha" })).toBe("af_heart");
+    expect(kokoroVoice({ id: "custom_2", gender: "male", voicePreference: "google uk english male" })).toBe("bm_george");
+    expect(kokoroVoice({ id: "custom_3", gender: "male", naturalVoice: "am_puck" })).toBe("am_puck");
+  });
+});

@@ -97,3 +97,13 @@ describe("choosing a human voice", () => {
     expect(humanVoice(voices, "lekha", "hi-IN")?.name).toBe("Lekha");
   });
 });
+
+describe("humanVoice for the selected assistant", () => {
+  const v = (name: string, lang = "en-GB") => ({ name, lang, localService: true } as SpeechSynthesisVoice);
+  it("takes the preference in its own order, skips a broken pattern, and keeps the gender", async () => {
+    const { humanVoice } = await import("@/hooks/useVoice");
+    expect(humanVoice([v("Oliver"), v("Daniel")], "daniel|oliver", "en-GB")?.name).toBe("Daniel");
+    expect(humanVoice([v("Daniel")], "(|daniel", "en-GB")?.name).toBe("Daniel");
+    expect(humanVoice([v("Google UK English Male"), v("Google UK English Female")], "nobody", "en-GB", "female")?.name).toBe("Google UK English Female");
+  });
+});
