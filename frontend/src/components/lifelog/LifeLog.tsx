@@ -25,7 +25,10 @@ export function LifeLog() {
   const [diaryText, setDiaryText] = useState("");
   const { rec, listen, stopListening, extracting, extractError, extract } = useLifeLog();
 
-  useEffect(() => { syncFromCloud().finally(() => setDates(listDates())); }, []);
+  const selectedRef = useRef(selectedDate);
+  selectedRef.current = selectedDate;
+  // The day on screen was read before this first sync; read it again after.
+  useEffect(() => { syncFromCloud().finally(() => { setDates(listDates()); setDay(loadDay(selectedRef.current)); }); }, []);
   useEffect(() => { setDay(loadDay(selectedDate)); }, [selectedDate]);
   useEffect(() => {
     const onUpdate = (e: Event) => {
