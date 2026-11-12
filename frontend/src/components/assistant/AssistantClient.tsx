@@ -212,6 +212,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const taskSync = useChatTaskSync();
   const [showChats, setShowChats] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
   const [projectId, setProjectId] = useState<string | null>(null);
   const project = library.projects.find((x) => x.id === projectId) ?? null;
   // Only a turn the user started marks the chat for saving, so opening an old
@@ -940,9 +942,13 @@ export function AssistantClient({ userName }: { userName?: string }) {
   useEffect(() => {
     if (!liveTick || chatId !== ASK_CHAT_ID || isStreamingRef.current) return;
     void library.openChat<Message, HistoryEntry>(ASK_CHAT_ID).then((chat) => {
-      if (!chat || isStreamingRef.current || chat.messages.length <= messagesRef.current.length) return;
-      setMessages(settleMessages(chat.messages));
-      historyRef.current = chat.history;
+      // The person may have switched chats or started a turn while this was read.
+      if (!chat || isStreamingRef.current || chatIdRef.current !== ASK_CHAT_ID) return;
+      const have = new Set(messagesRef.current.map((m) => m.id));
+      const added = chat.messages.filter((m) => !have.has(m.id));
+      if (!added.length) return;
+      setMessages((prev) => [...prev, ...settleMessages(added)]);
+      historyRef.current = [...historyRef.current, ...added.map((m) => ({ role: m.role, content: m.content }))];
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveTick]);

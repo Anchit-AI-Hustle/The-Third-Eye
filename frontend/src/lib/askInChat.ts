@@ -14,14 +14,11 @@ const KEEP = 200;
 export async function askInChat(sb: Db, email: string, question: string): Promise<void> {
   const text = question.trim().slice(0, 6000);
   if (!text) return;
-  const now = new Date().toISOString();
-  const { data } = await sb.from("conversations").select("messages, history").eq("user_id", email).eq("id", ASK_CHAT_ID).maybeSingle();
-  const row = data as { messages?: unknown[]; history?: unknown[] } | null;
-  const messages = [...(row?.messages ?? []), { id: crypto.randomUUID(), role: "assistant", content: text }].slice(-KEEP);
-  const history = [...(row?.history ?? []), { role: "assistant", content: text }].slice(-KEEP);
-  await sb.from("conversations").upsert(
-    { user_id: email, id: ASK_CHAT_ID, title: TITLE, project_id: null, messages, history, updated_at: now },
-    { onConflict: "user_id,id" },
-  );
+  const { error } = await sb.rpc("append_conversation_message", {
+    p_user: email, p_id: ASK_CHAT_ID, p_title: TITLE,
+    p_message: { id: crypto.randomUUID(), role: "assistant", content: text },
+    p_history: { role: "assistant", content: text }, p_keep: KEEP,
+  });
+  if (error) throw new Error(error.message);
   await sendPush(email, TITLE, text.split("\n")[0].slice(0, 160), `/assistant?chat=${ASK_CHAT_ID}`).catch(() => false);
 }
