@@ -56,3 +56,12 @@ describe("kokoroVoice", () => {
     expect(kokoroVoice({ id: "custom_3", gender: "male", naturalVoice: "am_puck" })).toBe("am_puck");
   });
 });
+
+describe("collapseRepeats", () => {
+  it("keeps one copy of a phrase Whisper looped on", async () => {
+    const { collapseRepeats } = await import("@/lib/llmCascade");
+    expect(collapseRepeats("Thank you. I know. I know. I know. I know.")).toBe("Thank you. I know.");
+    expect(collapseRepeats("haan haan haan theek hai")).toBe("haan theek hai");
+    expect(collapseRepeats("Book a table for two at eight.")).toBe("Book a table for two at eight.");
+  });
+});

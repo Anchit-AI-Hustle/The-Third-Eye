@@ -71,6 +71,25 @@ export function isEchoOf(transcript: string, spoken: string): boolean {
   return heard.length - prev[said.length] <= Math.floor(heard.length * 0.1);
 }
 
+/**
+ * The user's words with the assistant's own heard back removed: any run of
+ * five or more words that also occurs, in order, in what it just said. What is
+ * left is what the user added ("…sir, did you mean Lenskart? Yes, go ahead").
+ */
+export function stripEcho(transcript: string, spoken: string): string {
+  const tokens = transcript.split(/\s+/).filter(Boolean);
+  const said = words(spoken).join(" ");
+  if (!said || tokens.length < 5) return transcript;
+  const key = (t: string) => words(t).join(" ");
+  const keep = new Array(tokens.length).fill(true);
+  for (let i = 0; i < tokens.length; i++) {
+    let j = i;
+    while (j < tokens.length && ` ${said} `.includes(` ${tokens.slice(i, j + 1).map(key).filter(Boolean).join(" ")} `)) j++;
+    if (j - i >= 5) { for (let k = i; k < j; k++) keep[k] = false; i = j - 1; }
+  }
+  return tokens.filter((_, i) => keep[i]).join(" ").replace(/^[\s,.;:!?-]+/, "").trim();
+}
+
 // What the assistant last said, when it started, and until when a transcript
 // of it counts as echo (Infinity while it is still speaking). The recognizer
 // hands back its last words within a second or so of the voice stopping.
@@ -81,6 +100,8 @@ const SPEECH_START_TIMEOUT_MS = 3_000;
 const SPEECH_MS_PER_CHAR = 90;
 const SPEECH_END_GRACE_MS = 4_000;
 const lastSpoken = { text: "", startedAt: 0, until: 0 };
+// A reply heard back after a long tail of room echo still counts for this long.
+const ECHO_STRIP_MS = 30_000;
 const ttsSpeaking = () => lastSpoken.until === Infinity;
 
 export function createBargeDetector(now: () => number = Date.now) {
@@ -167,6 +188,7 @@ function armUtteranceRecorder(
       fd.append("audio", blob, "speech.wav");
       const code = lang();
       if (code) fd.append("lang", code);
+      fd.append("hint", navigator.language || "en");
       const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
       const data = await res.json().catch(() => ({}));
       const text = res.ok && typeof data?.text === "string" ? data.text.trim() : "";
@@ -263,6 +285,13 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const startRecRef = useRef<() => void>(() => {});
   const lastTranscriptRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
   const webFinalAt = useRef(0);
+  // Whisper large-v3 on the server hears Hindi, Hinglish and accents far better
+  // than the browser recognizer, so when it is available its transcript is the
+  // one sent; the browser's final is kept as a fallback for a phrase the
+  // server didn't catch or couldn't transcribe.
+  const serverFirst = useRef(false);
+  const serverBusy = useRef(false);
+  const heldFinal = useRef<{ text: string; timer: ReturnType<typeof setTimeout> | null }>({ text: "", timer: null });
   const stuckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeLock = useWakeLock();
 
@@ -280,13 +309,17 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   };
 
   const emitTranscript = useCallback((text: string) => {
-    const t = text.trim();
+    let t = text.trim();
     if (!t || cbRef.current.shouldSuppress?.()) return;
     if (Date.now() < lastSpoken.until && isEchoOf(t, lastSpoken.text)) return;
+    if (lastSpoken.text && Date.now() - lastSpoken.until < ECHO_STRIP_MS) t = stripEcho(t, lastSpoken.text);
+    if (words(t).length === 0) return;
     const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
     const now = Date.now();
     if (norm(t) && norm(t) === norm(lastTranscriptRef.current.text) && now - lastTranscriptRef.current.at < 6000) return;
     lastTranscriptRef.current = { text: t, at: now };
+    if (heldFinal.current.timer) clearTimeout(heldFinal.current.timer);
+    heldFinal.current = { text: "", timer: null };
     setRecognitionIssue(null);
     clearStuck();
     cbRef.current.onInterim?.("");
@@ -300,7 +333,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
     // Check Whisper (200 = available + key set, 503 = no key)
     fetch("/api/transcribe", { method: "POST", body: new FormData() })
-      .then((r) => setWhisperAvailable(r.status === 200))
+      .then((r) => { setWhisperAvailable(r.status === 200); serverFirst.current = r.status === 200; })
       .catch(() => setWhisperAvailable(false));
   }, []);
 
@@ -356,21 +389,25 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         analyser,
         () => activeRef.current,
         () => !!cbRef.current.shouldSuppress?.(),
-        // Unset, Whisper guesses the language per clip and "hears" Ukrainian or
-        // Portuguese in noise; the browser language is the right default.
-        () => cbRef.current.lang || navigator.language,
-        emitTranscript,
+        // Only a language the user picked is forced; otherwise the server
+        // detects it (Hindi and Hinglish forced to "en" came back as English
+        // nonsense) and falls back to the device language for noise.
+        () => cbRef.current.lang || undefined,
+        (text) => { serverBusy.current = false; emitTranscript(text); },
         () => {
+          serverBusy.current = true;
           cbRef.current.onSpeechEnd?.();
           setAudioState("transcribing");
           armStuck();
         },
         () => { cbRef.current.onSpeechStart?.(); },
         () => {
+          serverBusy.current = false;
           setAudioState("waiting");
-          cbRef.current.onInterim?.("");
+          if (heldFinal.current.text) emitTranscript(heldFinal.current.text);
+          else cbRef.current.onInterim?.("");
         },
-        () => setRecognitionIssue("server"),
+        () => { serverFirst.current = false; setRecognitionIssue("server"); },
         () => Date.now() - webFinalAt.current < 2500,
       );
       const tick = () => {
@@ -477,7 +514,16 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         }
         srDelayRef.current = 150;
         if (interim.trim()) cbRef.current.onInterim?.(interim.trim());
-        if (final.trim()) {
+        if (final.trim() && serverFirst.current && !cbRef.current.lang) {
+          const held = heldFinal.current.text ? `${heldFinal.current.text} ${final.trim()}` : final.trim();
+          if (heldFinal.current.timer) clearTimeout(heldFinal.current.timer);
+          cbRef.current.onInterim?.(held);
+          const fallback = (waited = 0) => {
+            if (serverBusy.current && waited < 8_000) { heldFinal.current.timer = setTimeout(() => fallback(waited + 500), 500); return; }
+            if (heldFinal.current.text) emitTranscript(heldFinal.current.text);
+          };
+          heldFinal.current = { text: held, timer: setTimeout(() => fallback(), 3_500) };
+        } else if (final.trim()) {
           webFinalAt.current = Date.now();
           emitTranscript(final.trim());
           setAudioState("waiting");

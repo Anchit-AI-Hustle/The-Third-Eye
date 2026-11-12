@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
@@ -24,30 +26,42 @@ import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// The Life Log's "always listen" on Android. Records the mic itself in
-// 45-second chunks (not through the web view), so it keeps going with the
-// screen off and after the app is swiped away, until the person turns it off.
+// The Life Log's "always listen" and the "Hey JARVIS" wake word on Android.
+// Reads the mic itself (not through the web view), so both keep going with
+// the screen off and after the app is swiped away, until turned off. The day
+// is logged in 45-second chunks; the wake word is spotted on the device.
 // Each chunk is transcribed and filed on the server, which turns the day into
 // a timeline and its follow-ups into tasks and reminders. While it runs it also
 // picks up what the person asked for on their computer (WhatsApp, SMS, calls).
 public class ListenService extends Service {
     static final String STOP = "com.jarvis.app.STOP_LISTENING";
+    static final String WAKE = "com.jarvis.app.WAKE";
     private static final String CHANNEL = "jarvis_listening";
     private static final String PREFS = "jarvis_listening";
+    private static final String WAKE_CHANNEL = "jarvis_wake";
     private static final int ID = 4242;
+    private static final int WAKE_ID = 4243;
+    private static final int RATE = 16_000;
+    // After a wake the conversation has the mic; a second wake right away is the reply echoing.
+    private static final long WAKE_COOLDOWN_MS = 8_000;
     private static final long CHUNK_MS = 45_000;
     private static final long HANDOFF_MS = 15_000;
-    // The website's silence threshold (0.012 of full scale) on MediaRecorder's 0..32767 amplitude.
+    // The website's silence threshold (0.012 of full scale) on the 0..32767 sample range.
     private static final int SILENT_PEAK = 393;
 
     static volatile boolean running = false;
     static volatile long lastChunkAt = 0;
     static volatile String error = null;
+    static volatile boolean wakeReady = false;
 
     private volatile boolean active = false;
     private PowerManager.WakeLock wake;
@@ -55,19 +69,35 @@ public class ListenService extends Service {
     private Thread handoff;
     private final ExecutorService uploads = Executors.newSingleThreadExecutor();
 
-    static void start(Context ctx) {
-        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("on", true).apply();
+    static void start(Context ctx) { set(ctx, "on", true); }
+
+    static void stop(Context ctx) { set(ctx, "on", false); }
+
+    static void startWake(Context ctx) { set(ctx, "wake", true); }
+
+    /** Starts the service for whatever is already switched on. */
+    static void resume(Context ctx) {
         Intent i = new Intent(ctx, ListenService.class);
         if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i); else ctx.startService(i);
     }
 
-    static void stop(Context ctx) {
-        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("on", false).apply();
-        ctx.stopService(new Intent(ctx, ListenService.class));
+    static void stopWake(Context ctx) { set(ctx, "wake", false); }
+
+    private static void set(Context ctx, String key, boolean value) {
+        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(key, value).apply();
+        if (wanted(ctx)) resume(ctx); else ctx.stopService(new Intent(ctx, ListenService.class));
+    }
+
+    static boolean logging(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("on", false);
+    }
+
+    static boolean waking(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("wake", false);
     }
 
     static boolean wanted(Context ctx) {
-        return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("on", false);
+        return logging(ctx) || waking(ctx);
     }
 
     @Override
@@ -81,8 +111,8 @@ public class ListenService extends Service {
         PendingIntent tap = PendingIntent.getActivity(this, 0, stop, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification n = new NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(getApplicationInfo().icon)
-            .setContentTitle("JARVIS is listening")
-            .setContentText("Logging your day. Tap to turn listening off.")
+            .setContentTitle(logging(this) ? "JARVIS is listening" : "Say \"Hey JARVIS\"")
+            .setContentText(logging(this) ? "Logging your day. Tap to turn listening off." : "Listening for its name only, on this phone. Tap to turn off.")
             .setContentIntent(tap)
             .addAction(0, "Turn off", tap)
             .setOngoing(true)
@@ -122,53 +152,106 @@ public class ListenService extends Service {
                 nap(30_000);
                 continue;
             }
-            if (chunk()) backoff = 2_000;
+            if (listen()) backoff = 2_000;
             else { nap(backoff); backoff = Math.min(backoff * 2, 30_000); }
         }
     }
 
-    // One chunk; false when the mic couldn't be opened (another app holds it), to retry.
-    @SuppressWarnings("deprecation")
-    private boolean chunk() {
-        File file;
-        MediaRecorder rec = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : new MediaRecorder();
+    // Reads the mic until stopped; false when it couldn't be opened (another app holds it), to retry.
+    private boolean listen() {
+        int min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        AudioRecord rec;
         try {
-            file = File.createTempFile("lifelog", ".m4a", getCacheDir());
-            rec.setAudioSource(MediaRecorder.AudioSource.MIC);
-            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            rec.setAudioSamplingRate(16_000);
-            rec.setAudioEncodingBitRate(32_000);
-            rec.setAudioChannels(1);
-            rec.setOutputFile(file.getAbsolutePath());
-            rec.prepare();
-            rec.start();
+            rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(min, RATE));
+            if (rec.getState() != AudioRecord.STATE_INITIALIZED) { rec.release(); throw new IllegalStateException(); }
+            rec.startRecording();
         } catch (Exception e) {
-            rec.release();
             error = "The microphone isn't available right now. Retrying…";
             return false;
         }
         error = null;
+        WakeWord wake = null;
+        long wokeAt = 0;
+        short[] buf = new short[RATE / 10];
+        ByteArrayOutputStream chunk = new ByteArrayOutputStream();
         long start = System.currentTimeMillis();
         int peak = 0;
-        while (active && System.currentTimeMillis() - start < CHUNK_MS) {
-            nap(500);
-            try { peak = Math.max(peak, rec.getMaxAmplitude()); } catch (Exception ignored) { break; }
+        try {
+            while (active) {
+                int n = rec.read(buf, 0, buf.length);
+                if (n <= 0) { if (n < 0) break; continue; }
+                if (waking(this)) {
+                    // Opened here, off the main thread: the first time downloads the model.
+                    if (wake == null) { wake = WakeWord.open(this); wakeReady = wake != null; }
+                    if (wake != null && wake.feed(buf, n) && System.currentTimeMillis() - wokeAt > WAKE_COOLDOWN_MS) { wokeAt = System.currentTimeMillis(); woke(); }
+                }
+                if (!logging(this)) { chunk.reset(); start = System.currentTimeMillis(); peak = 0; continue; }
+                ByteBuffer bytes = ByteBuffer.allocate(n * 2).order(ByteOrder.LITTLE_ENDIAN);
+                for (int i = 0; i < n; i++) { bytes.putShort(buf[i]); peak = Math.max(peak, Math.abs(buf[i])); }
+                chunk.write(bytes.array(), 0, n * 2);
+                long now = System.currentTimeMillis();
+                if (now - start >= CHUNK_MS) {
+                    byte[] pcm = chunk.toByteArray();
+                    long from = start, to = now;
+                    boolean silent = peak < SILENT_PEAK;
+                    uploads.execute(() -> deliver(pcm, from, to, silent));
+                    chunk.reset();
+                    start = now;
+                    peak = 0;
+                }
+            }
+        } finally {
+            try { rec.stop(); } catch (Exception ignored) { /* already stopped */ }
+            rec.release();
+            if (wake != null) wake.close();
         }
-        try { rec.stop(); } catch (Exception ignored) { /* too short to keep */ }
-        rec.release();
-        long end = System.currentTimeMillis();
-        boolean silent = peak < SILENT_PEAK || file.length() < 2000;
-        uploads.execute(() -> deliver(file, start, end, silent));
         return true;
     }
 
-    private void deliver(File file, long start, long end, boolean silent) {
+    // The name was heard: open the assistant in talk mode, over the lock screen if need be.
+    private void woke() {
+        Intent open = new Intent(this, MainActivity.class).setAction(WAKE)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pi = PendingIntent.getActivity(this, 1, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(new NotificationChannel(WAKE_CHANNEL, "Hey JARVIS", NotificationManager.IMPORTANCE_HIGH));
+        }
+        nm.notify(WAKE_ID, new NotificationCompat.Builder(this, WAKE_CHANNEL)
+            .setSmallIcon(getApplicationInfo().icon)
+            .setContentTitle("JARVIS")
+            .setContentText("Listening… go ahead.")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setFullScreenIntent(pi, true)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .setTimeoutAfter(15_000)
+            .build());
+    }
+
+    private static byte[] wav(byte[] pcm) {
+        ByteBuffer h = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN);
+        h.put("RIFF".getBytes()).putInt(36 + pcm.length).put("WAVE".getBytes())
+            .put("fmt ".getBytes()).putInt(16).putShort((short) 1).putShort((short) 1)
+            .putInt(RATE).putInt(RATE * 2).putShort((short) 2).putShort((short) 16)
+            .put("data".getBytes()).putInt(pcm.length);
+        byte[] out = new byte[44 + pcm.length];
+        System.arraycopy(h.array(), 0, out, 0, 44);
+        System.arraycopy(pcm, 0, out, 44, pcm.length);
+        return out;
+    }
+
+    private void deliver(byte[] pcm, long start, long end, boolean silent) {
+        File file = null;
         try {
             String transcript = "";
             String provider = null;
             if (!silent) {
-                JSONObject t = new JSONObject(Backend.upload(this, "/api/transcribe", "audio", file, "chunk.m4a", "audio/mp4"));
+                file = File.createTempFile("lifelog", ".wav", getCacheDir());
+                try (FileOutputStream f = new FileOutputStream(file)) { f.write(wav(pcm)); }
+                JSONObject t = new JSONObject(Backend.upload(this, "/api/transcribe", "audio", file, "chunk.wav", "audio/wav"));
                 transcript = t.optString("text", "").trim();
                 provider = t.optString("provider", null);
             }
@@ -183,7 +266,7 @@ public class ListenService extends Service {
         } catch (Exception e) {
             error = "Couldn't reach the server for the last recording.";
         } finally {
-            file.delete();
+            if (file != null) file.delete();
         }
     }
 

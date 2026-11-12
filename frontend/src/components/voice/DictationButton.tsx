@@ -109,7 +109,7 @@ export function DictationButton() {
       try {
         const fd = new FormData();
         fd.append("audio", wav, "speech.wav");
-        fd.append("lang", navigator.language || "en");
+        fd.append("hint", navigator.language || "en");
         const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
         const text = res.ok ? String((await res.json().catch(() => ({})))?.text ?? "") : "";
         if (text) insertDictation(el, text);

@@ -942,6 +942,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (id) void openChat(id, true);
     const ask = takeUrlParam("ask");
     if (ask) void sendMessage(ask);
+    // "Hey JARVIS" heard with the app closed (phone service or laptop helper).
+    if (takeUrlParam("talk")) void toggleTalk();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [library.ready]);
 

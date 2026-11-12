@@ -217,10 +217,23 @@ public class DeviceControlPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    // "Hey JARVIS" with the app closed: the same service spots the name on the phone.
+    @PluginMethod
+    public void setWakeWord(PluginCall call) {
+        Backend.remember(getContext(), getBridge().getServerUrl());
+        if (Boolean.TRUE.equals(call.getBoolean("on", false))) ListenService.startWake(getContext());
+        else ListenService.stopWake(getContext());
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void listeningStatus(PluginCall call) {
         JSObject ret = new JSObject();
-        ret.put("on", ListenService.wanted(getContext()));
+        ret.put("on", ListenService.logging(getContext()));
+        ret.put("wake", ListenService.waking(getContext()));
+        ret.put("wakeReady", ListenService.wakeReady);
         ret.put("running", ListenService.running);
         ret.put("lastChunkAt", ListenService.lastChunkAt);
         ret.put("error", ListenService.error);

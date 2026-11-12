@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const audio = form.get("audio") as Blob | null;
-    const lang = (form.get("lang") as string | null) ?? undefined;
+    const lang = (form.get("lang") as string | null) || undefined;
+    const hint = (form.get("hint") as string | null) || undefined;
 
     if (!audio || audio.size < 400) {
       return Response.json({ text: "" });
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Audio too large (max 25 MB)" }, { status: 413 });
     }
 
-    const { text, provider } = await transcribeCascade(audio, lang);
+    const { text, provider } = await transcribeCascade(audio, lang, hint);
     return Response.json({ text: isHallucination(text) ? "" : text, provider });
   } catch (err) {
     console.error("transcribe route error:", err);
