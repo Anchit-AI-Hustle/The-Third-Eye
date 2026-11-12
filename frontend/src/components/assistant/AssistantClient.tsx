@@ -331,7 +331,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
     if (undoTimer.current) clearTimeout(undoTimer.current);
   }, [undoable]);
 
-  const tts = useTTS(agent?.voicePreference);
+  const tts = useTTS(agent);
   const ttsRef = useRef(tts);
   useEffect(() => { ttsRef.current = tts; }, [tts]);
 

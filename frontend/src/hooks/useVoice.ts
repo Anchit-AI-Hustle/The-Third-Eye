@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { loadNaturalVoice, naturalVoiceOn, naturalVoiceReady, speakNatural, stopNatural } from "@/lib/naturalVoice";
+import { kokoroVoice, loadNaturalVoice, naturalVoiceOn, naturalVoiceReady, speakNatural, stopNatural } from "@/lib/naturalVoice";
 import { speechRecognizer } from "@/lib/speechRecognizer";
 import { downsample, encodeWav, PcmClip, TARGET_RATE } from "@/lib/pcmClip";
 
@@ -682,20 +682,43 @@ const TTS_KEY = "jarvis_tts_enabled_v2";
 const HUMAN = /natural|neural|online|premium|enhanced|siri|google/i;
 const ROBOTIC = /\b(david|mark|zira|hazel|george|susan|espeak|compact|novelty|bad news|bells|boing|bubbles|cellos|whisper|zarvox|trinoids|albert|jester|organ|superstar|wobble)\b/i;
 
-/** The most human-sounding voice for the user's language, or the agent's chosen one. */
-export function humanVoice(voices: SpeechSynthesisVoice[], preference: string | undefined, language: string): SpeechSynthesisVoice | undefined {
+const FEMALE = /female|samantha|victoria|zira|karen|moira|tessa|kate|serena|susan|hazel|fiona|veena|allison|\bava\b|heera|kalpana|lekha|neerja|swara|aria|jenny|sonia|libby|natasha|emma|isabella|google us english/i;
+const MALE = /\bmale\b|daniel|alex|david|mark|arthur|oliver|\bfred\b|rishi|aaron|\btom\b|gordon|\blee\b|ravi|hemant|prabhat|madhur|\bguy\b|ryan|thomas|william|eric|christopher/i;
+
+export function voiceGender(v: SpeechSynthesisVoice | undefined): "male" | "female" | undefined {
+  if (!v) return undefined;
+  if (FEMALE.test(v.name)) return "female";
+  return MALE.test(v.name) ? "male" : undefined;
+}
+
+export type VoiceGender = "male" | "female" | "neutral";
+
+/** The agent's chosen voice (its first listed name that exists here), else the most human voice of its gender. */
+export function humanVoice(voices: SpeechSynthesisVoice[], preference: string | undefined, language: string, gender?: VoiceGender): SpeechSynthesisVoice | undefined {
   const lang = (language || "en").slice(0, 2).toLowerCase();
   const pool = voices.filter((v) => v.lang?.toLowerCase().startsWith(lang));
   const candidates = pool.length ? pool : voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  const chosen = preference ? candidates.find((v) => new RegExp(preference, "i").test(v.name)) : undefined;
-  if (chosen) return chosen;
+  for (const alt of (preference ?? "").split("|").map((s) => s.trim()).filter(Boolean)) {
+    let re: RegExp;
+    // A custom profile's preference is typed by hand and may not be a valid pattern.
+    try { re = new RegExp(alt, "i"); } catch { continue; }
+    const hit = candidates.find((v) => re.test(v.name));
+    if (hit) return hit;
+  }
+  const want = gender === "male" || gender === "female" ? gender : undefined;
   const score = (v: SpeechSynthesisVoice) =>
     (HUMAN.test(v.name) ? 10 : 0) - (ROBOTIC.test(v.name) ? 10 : 0) + (v.localService === false ? 2 : 0) +
-    (v.lang?.toLowerCase() === language.toLowerCase() ? 1 : 0);
+    (v.lang?.toLowerCase() === language.toLowerCase() ? 1 : 0) +
+    (want ? (voiceGender(v) === want ? 6 : voiceGender(v) ? -6 : 0) : 0);
   return [...candidates].sort((a, b) => score(b) - score(a))[0] ?? voices[0];
 }
 
-export function useTTS(voicePreference?: string) {
+export interface TTSVoice { id?: string; voicePreference?: string; gender?: VoiceGender; naturalVoice?: string }
+
+export function useTTS(agent?: TTSVoice) {
+  const voicePreference = agent?.voicePreference;
+  const gender = agent?.gender;
+  const natural = kokoroVoice(agent);
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
   // Replies are text by default; reading them aloud is opt-in. A new key, so the
@@ -771,17 +794,19 @@ export function useTTS(voicePreference?: string) {
     // downloads in the background) the device's most human voice answers, so
     // a reply never waits on a download.
     if (naturalVoiceOn()) {
-      if (naturalVoiceReady()) { if (await speakNatural(clean, { volume, onStart })) return; }
+      if (naturalVoiceReady()) { if (await speakNatural(clean, { voice: natural, volume, onStart })) return; }
       else void loadNaturalVoice();
     }
     const voices = await waitForVoices(1500);
     await new Promise<void>((resolve) => {
       const u = new SpeechSynthesisUtterance(clean);
-      u.rate = 1.0;
-      u.pitch = 1.0;
+      u.rate = 1.05;
       u.volume = volume;
-      const preferred = humanVoice(voices, voicePreference, typeof navigator !== "undefined" ? navigator.language : "en");
-      if (preferred) u.voice = preferred;
+      const preferred = humanVoice(voices, voicePreference, typeof navigator !== "undefined" ? navigator.language : "en", gender);
+      if (preferred) { u.voice = preferred; u.lang = preferred.lang; }
+      // No voice of the agent's gender on this device: shift the pitch toward it.
+      const off = (gender === "male" || gender === "female") && voiceGender(preferred) !== gender;
+      u.pitch = off ? (gender === "male" ? 0.8 : 1.2) : 1.0;
 
       // iOS can drop an utterance without onstart, or play it without onend.
       // Either leaves "speaking" set, the mic muted and call mode stuck after
@@ -809,7 +834,7 @@ export function useTTS(voicePreference?: string) {
         if (!begun) watchdog = setTimeout(done, SPEECH_START_TIMEOUT_MS);
       }, isIOS ? 80 : 0);
     });
-  }, [voicePreference, startKeepalive]);
+  }, [voicePreference, gender, natural, startKeepalive]);
 
   const pump = useCallback(async () => {
     const r = replyRef.current;
