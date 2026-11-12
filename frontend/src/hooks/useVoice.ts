@@ -2,18 +2,13 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { kokoroVoice, loadNaturalVoice, naturalVoiceOn, naturalVoiceReady, speakNatural, stopNatural } from "@/lib/naturalVoice";
-import { speechRecognizer } from "@/lib/speechRecognizer";
 import { downsample, encodeWav, PcmClip, TARGET_RATE } from "@/lib/pcmClip";
 
 import { useWakeLock } from "./useWakeLock";
 
-// Mirrors WATCHDOG_MS in useWakeWord: if the recognizer goes quiet for this
-// long while it should be listening, assume it died silently and restart.
-const STT_WATCHDOG_MS = 10_000;
-
 export type AudioState = "idle" | "waiting" | "speaking" | "transcribing";
 
-// ─── Voice STT (Web Speech API + AudioContext level meter) ───────────────────
+// ─── Voice STT (speech-gated AudioContext capture) ───────────────────────────
 
 export interface VoiceSTTCallbacks {
   onTranscript: (text: string) => void;
@@ -169,9 +164,12 @@ function armUtteranceRecorder(
   // Raw samples rather than a MediaRecorder: see lib/pcmClip.ts.
   const clip = new PcmClip(ctx.sampleRate, Math.round(ctx.sampleRate * PRE_ROLL_S));
   const tap = ctx.createScriptProcessor(4096, 1, 1);
+  const mute = ctx.createGain();
+  mute.gain.value = 0;
   tap.onaudioprocess = (e) => { if (!stopped) clip.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
   analyser.connect(tap);
-  tap.connect(ctx.destination);
+  tap.connect(mute);
+  mute.connect(ctx.destination);
 
   const drop = () => {
     clip.drop();
@@ -259,7 +257,7 @@ function armUtteranceRecorder(
     cancelAnimationFrame(raf);
     drop();
     tap.onaudioprocess = null;
-    try { analyser.disconnect(tap); tap.disconnect(); } catch { /* already disconnected */ }
+    try { analyser.disconnect(tap); tap.disconnect(); mute.disconnect(); } catch { /* already disconnected */ }
   };
 }
 
@@ -277,21 +275,10 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const cbRef = useRef(cb);
   useEffect(() => { cbRef.current = cb; }, [cb]);
 
-  const recRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
-  const lastEventRef = useRef(0);
-  const startRecRef = useRef<() => void>(() => {});
   const lastTranscriptRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
-  const webFinalAt = useRef(0);
-  // Whisper large-v3 on the server hears Hindi, Hinglish and accents far better
-  // than the browser recognizer, so when it is available its transcript is the
-  // one sent; the browser's final is kept as a fallback for a phrase the
-  // server didn't catch or couldn't transcribe.
-  const serverFirst = useRef(false);
-  const serverBusy = useRef(false);
-  const heldFinal = useRef<{ text: string; timer: ReturnType<typeof setTimeout> | null }>({ text: "", timer: null });
   const stuckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeLock = useWakeLock();
 
@@ -301,7 +288,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     // leave the composer on "thinking" after the server has also had its turn.
     stuckTimer.current = setTimeout(() => {
       stuckTimer.current = null;
-      if (Date.now() - webFinalAt.current > 2500) cbRef.current.onInterim?.("");
+      cbRef.current.onInterim?.("");
     }, 9000);
   };
   const clearStuck = () => {
@@ -318,8 +305,6 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     const now = Date.now();
     if (norm(t) && norm(t) === norm(lastTranscriptRef.current.text) && now - lastTranscriptRef.current.at < 6000) return;
     lastTranscriptRef.current = { text: t, at: now };
-    if (heldFinal.current.timer) clearTimeout(heldFinal.current.timer);
-    heldFinal.current = { text: "", timer: null };
     setRecognitionIssue(null);
     clearStuck();
     cbRef.current.onInterim?.("");
@@ -327,31 +312,19 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   }, []);
 
   useEffect(() => {
-    const SR = speechRecognizer();
     const mic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-    setSupported(!!SR || mic);
+    setSupported(mic);
 
     // Check Whisper (200 = available + key set, 503 = no key)
     fetch("/api/transcribe", { method: "POST", body: new FormData() })
-      .then((r) => { setWhisperAvailable(r.status === 200); serverFirst.current = r.status === 200; })
+      .then((r) => setWhisperAvailable(r.status === 200))
       .catch(() => setWhisperAvailable(false));
   }, []);
 
   const stopEarRef = useRef<(() => void) | null>(null);
   const resumeCtxRef = useRef<(() => void) | null>(null);
-  const srDelayRef = useRef(150);
-
   const startMeter = useCallback(async (opened?: AudioContext) => {
     if (streamRef.current) { void opened?.close().catch(() => {}); return; }
-    const synthetic = () => {
-      const tick = () => {
-        if (!activeRef.current) return;
-        const level = 25 + Math.round(Math.sin(Date.now() / 200) * 20 + 20);
-        cbRef.current.onLevel?.(level);
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
@@ -393,22 +366,19 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         // detects it (Hindi and Hinglish forced to "en" came back as English
         // nonsense) and falls back to the device language for noise.
         () => cbRef.current.lang || undefined,
-        (text) => { serverBusy.current = false; emitTranscript(text); },
+        emitTranscript,
         () => {
-          serverBusy.current = true;
           cbRef.current.onSpeechEnd?.();
           setAudioState("transcribing");
           armStuck();
         },
         () => { cbRef.current.onSpeechStart?.(); },
         () => {
-          serverBusy.current = false;
           setAudioState("waiting");
-          if (heldFinal.current.text) emitTranscript(heldFinal.current.text);
-          else cbRef.current.onInterim?.("");
+          cbRef.current.onInterim?.("");
         },
-        () => { serverFirst.current = false; setRecognitionIssue("server"); },
-        () => Date.now() - webFinalAt.current < 2500,
+        () => setRecognitionIssue("server"),
+        () => false,
       );
       const tick = () => {
         if (!activeRef.current) return;
@@ -418,11 +388,15 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
-    } catch {
+    } catch (error) {
       void opened?.close().catch(() => {});
-      synthetic();
+      setRecognitionIssue(error instanceof Error ? error.message : "Microphone unavailable");
+      setPermissionDenied(true);
+      activeRef.current = false;
+      setAudioState("idle");
+      wakeLock.release();
     }
-  }, [emitTranscript]);
+  }, [emitTranscript, wakeLock]);
 
   const stopMeter = useCallback(() => {
     stopEarRef.current?.();
@@ -442,14 +416,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
   const enable = useCallback(async () => {
     if (activeRef.current) return;
-    const SRClass = speechRecognizer();
     const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-    if (!SRClass && !canMic) return;
+    if (!canMic) return;
     activeRef.current = true;
     setPermissionDenied(false);
     setRecognitionIssue(null);
-    lastEventRef.current = Date.now();
-    srDelayRef.current = 150;
     // Mid-conversation the screen must not sleep, or the mic is suspended.
     wakeLock.acquire();
     // Opened and resumed here, still inside the tap: Safari only runs an
@@ -458,140 +429,21 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     let ctx: AudioContext | undefined;
     try { ctx = new AudioContext(); void ctx.resume(); } catch { /* no Web Audio */ }
 
-    // Open the capture stream before the browser recognizer. Starting
-    // SpeechRecognition first, then getUserMedia, leaves Chrome's recognizer
-    // with a dead mic: it stays on "listening" and never returns words.
+    // All transcription now comes from speech-gated PCM segments.
     await startMeter(ctx);
-    if (!activeRef.current || !SRClass) return;
-
-    const startRec = () => {
-      if (!activeRef.current) return;
-      const rec = new SRClass();
-      recRef.current = rec;
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.maxAlternatives = 1;
-      // An empty lang is what Chrome sends to its speech service as a blank
-      // locale, which comes back as a network error and no transcript. The
-      // composer starts with lang "" until the user picks one.
-      const requested = (cbRef.current.lang || "").trim();
-      rec.lang = requested || (typeof navigator !== "undefined" ? navigator.language : "") || "en-US";
-
-      rec.onstart = () => {
-        lastEventRef.current = Date.now();
-        setAudioState("waiting");
-      };
-
-      rec.onspeechstart = () => {
-        lastEventRef.current = Date.now();
-        setRecognitionIssue(null);
-        // While the assistant speaks, the recognizer hears its voice and fires
-        // this too; stopping the reply here cut every reply off at its first
-        // word. Talking over it is detected by the echo-aware barge detector.
-        if (cbRef.current.shouldSuppress?.()) return;
-        cbRef.current.onSpeechStart?.();
-        setAudioState("speaking");
-      };
-
-      rec.onspeechend = () => {
-        cbRef.current.onSpeechEnd?.();
-        setAudioState("transcribing");
-        armStuck();
-      };
-
-      rec.onresult = (event: any) => {
-        lastEventRef.current = Date.now();
-        setRecognitionIssue(null);
-        if (cbRef.current.shouldSuppress?.()) return;
-        let interim = "";
-        let final = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        srDelayRef.current = 150;
-        if (interim.trim()) cbRef.current.onInterim?.(interim.trim());
-        if (final.trim() && serverFirst.current && !cbRef.current.lang) {
-          const held = heldFinal.current.text ? `${heldFinal.current.text} ${final.trim()}` : final.trim();
-          if (heldFinal.current.timer) clearTimeout(heldFinal.current.timer);
-          cbRef.current.onInterim?.(held);
-          const fallback = (waited = 0) => {
-            if (serverBusy.current && waited < 8_000) { heldFinal.current.timer = setTimeout(() => fallback(waited + 500), 500); return; }
-            if (heldFinal.current.text) emitTranscript(heldFinal.current.text);
-          };
-          heldFinal.current = { text: held, timer: setTimeout(() => fallback(), 3_500) };
-        } else if (final.trim()) {
-          webFinalAt.current = Date.now();
-          emitTranscript(final.trim());
-          setAudioState("waiting");
-        }
-      };
-
-      rec.onerror = (e: any) => {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          // Speech recognition can be refused while the capture stream is live.
-          // Only treat that as a blocked microphone when we never got a stream.
-          if (!streamRef.current) {
-            setPermissionDenied(true);
-            activeRef.current = false;
-            setAudioState("idle");
-            return;
-          }
-          setRecognitionIssue("network");
-          srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
-        } else if (e.error === "network" || e.error === "audio-capture") {
-          setRecognitionIssue(e.error);
-          srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
-        }
-        setAudioState("waiting");
-      };
-
-      rec.onend = () => {
-        if (!activeRef.current) { setAudioState("idle"); return; }
-        setTimeout(startRec, srDelayRef.current);
-      };
-
-      try { rec.start(); } catch { setTimeout(startRec, 500); }
-    };
-
-    startRecRef.current = startRec;
-    startRec();
-  }, [startMeter, wakeLock, emitTranscript]);
+    // Browser SpeechRecognition is intentionally not started: it receives raw
+    // microphone audio outside the speech gate.
+    if (activeRef.current && streamRef.current) setAudioState("waiting");
+  }, [startMeter, wakeLock]);
 
   const disable = useCallback(() => {
     activeRef.current = false;
     clearStuck();
-    try { recRef.current?.abort(); } catch {}
-    recRef.current = null;
     stopMeter();
     setAudioState("idle");
     setRecognitionIssue(null);
     wakeLock.release();
   }, [stopMeter, wakeLock]);
-
-  // Recovery: same failure mode as useWakeWord — a hidden tab or a network
-  // blip can kill recognition without onend ever firing.
-  const forceRestart = useCallback(() => {
-    if (!activeRef.current) return;
-    const old = recRef.current;
-    recRef.current = null;
-    // Detach before abort(), otherwise the old onend relaunches and races
-    // the fresh instance (two recognizers fighting over one mic).
-    if (old) {
-      old.onstart = null;
-      old.onspeechstart = null;
-      old.onspeechend = null;
-      old.onresult = null;
-      old.onerror = null;
-      old.onend = null;
-      try { old.abort(); } catch {}
-    }
-    lastEventRef.current = Date.now();
-    startRecRef.current();
-  }, []);
 
   useEffect(() => {
     if (!supported) return;
@@ -604,21 +456,13 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         stopMeter();
         void startMeter();
       }
-      forceRestart();
     };
     document.addEventListener("visibilitychange", onVisible);
 
-    const watchdog = setInterval(() => {
-      if (!activeRef.current) return;
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - lastEventRef.current > STT_WATCHDOG_MS) forceRestart();
-    }, STT_WATCHDOG_MS / 2);
-
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      clearInterval(watchdog);
     };
-  }, [supported, forceRestart, startMeter, stopMeter]);
+  }, [supported, startMeter, stopMeter]);
 
   return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, enable, disable };
 }

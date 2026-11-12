@@ -11,6 +11,7 @@ describe("useVoiceSTT on an iPhone home-screen app", () => {
       constructor() { order.push("AudioContext"); }
       resume() { order.push("resume"); return Promise.resolve(); }
       close() { return Promise.resolve(); }
+      createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
       createMediaStreamSource() { return { connect() {} }; }
       createAnalyser() { return { fftSize: 512, getByteTimeDomainData() {} }; }
     }
@@ -40,6 +41,7 @@ describe("useVoiceSTT on an iPhone home-screen app", () => {
       destination = {};
       resume() { return Promise.resolve(); }
       close() { return Promise.resolve(); }
+      createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
       createMediaStreamSource() { return { connect() {} }; }
       createAnalyser() {
         return { fftSize: 512, context: this, connect() {}, disconnect() {},

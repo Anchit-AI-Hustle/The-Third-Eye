@@ -346,7 +346,7 @@ export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()
   const outOfCredit = /credit balance|insufficient_quota|\bbilling\b|payment required/i.test(raw);
   const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
   const overloaded = /\b503\b|UNAVAILABLE|overloaded/i.test(raw);
-  if (outOfCredit) return "I'm temporarily unable to respond right now. Please try again in a little while.";
+  if (outOfCredit) return "The configured AI providers are out of credits or need billing attention. Check the provider keys and billing settings, then try again.";
   if (rateLimited) return "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute.";
   if (overloaded) return "I'm at capacity right now. This should clear on its own within a minute or two, so please try again shortly.";
   return "Something went wrong on my end. Please try again in a moment.";
