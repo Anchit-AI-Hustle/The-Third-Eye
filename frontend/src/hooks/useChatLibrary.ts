@@ -65,8 +65,9 @@ export function useChatLibrary() {
   useEffect(() => {
     let alive = true;
     Promise.all([dataList<ChatSummary>("conversations"), dataList<Project>("projects")]).then(([c, p]) => {
-      // A background refresh that can't reach the server keeps the server-backed list.
-      if (!alive || (tick && remoteRef.current && !c.remote)) return;
+      // A background refresh that can't reach the server keeps the server-backed
+      // list; a 401 (the session ended) still switches to this browser's copy.
+      if (!alive || (tick && remoteRef.current && c.unreachable)) return;
       remoteRef.current = c.remote;
       setRemote(c.remote);
       const local = readLocal<SavedChat>(LOCAL_CHATS).map(summary);
