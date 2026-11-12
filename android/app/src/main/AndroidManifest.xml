@@ -94,6 +94,8 @@
     <!-- Life Log "always listen": a microphone foreground service keeps capture going with the screen off. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- "Hey JARVIS" with the phone locked opens the assistant over the lock screen. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Location while the app is open: local weather, traffic, nearby search. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

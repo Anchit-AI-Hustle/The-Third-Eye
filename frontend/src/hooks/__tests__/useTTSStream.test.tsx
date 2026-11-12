@@ -107,3 +107,12 @@ describe("humanVoice for the selected assistant", () => {
     expect(humanVoice([v("Google UK English Male"), v("Google UK English Female")], "nobody", "en-GB", "female")?.name).toBe("Google UK English Female");
   });
 });
+
+describe("stripEcho", () => {
+  it("removes the assistant's own reply heard back and keeps what the user added", async () => {
+    const { stripEcho } = await import("@/hooks/useVoice");
+    const said = "Before I build anything, sir, I couldn't find a brand for you in your documents or on the web.";
+    expect(stripEcho("I couldn't find a brand for you in your documents yes go with Lenskart", said)).toBe("yes go with Lenskart");
+    expect(stripEcho("send the brand report to Priya", said)).toBe("send the brand report to Priya");
+  });
+});

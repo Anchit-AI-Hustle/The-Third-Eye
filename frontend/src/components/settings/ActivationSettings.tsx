@@ -158,6 +158,7 @@ export function ActivationSettings() {
                 className="w-full h-1.5 bg-background-elevated rounded-input appearance-none cursor-pointer accent-[#4FC3F7]"
               />
             </div>
+            <ClosedAppWake />
           </div>
         )}
       </section>
@@ -362,5 +363,72 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
         enabled ? "translate-x-4" : "translate-x-0.5"
       )} />
     </button>
+  );
+}
+
+type WakeNative = {
+  setWakeWord: (o: { on: boolean }) => Promise<unknown>;
+  listeningStatus: () => Promise<{ wake?: boolean; wakeReady?: boolean; error?: string | null }>;
+};
+const capacitor = () => (globalThis as { Capacitor?: { getPlatform?: () => string; Plugins?: Record<string, unknown> } }).Capacitor;
+
+// "Hey JARVIS" with the app closed. Android spots the name on the phone in the
+// background; iOS lets only Siri listen while apps are closed; a computer runs
+// the small helper from /wake, which opens talk mode when it hears the name.
+function ClosedAppWake() {
+  const [platform, setPlatform] = useState<"android" | "ios" | "desktop" | null>(null);
+  const [on, setOn] = useState(false);
+  const [ready, setReady] = useState(true);
+  const native = () => capacitor()?.Plugins?.DeviceControl as Partial<WakeNative> | undefined;
+
+  useEffect(() => {
+    const p = capacitor()?.getPlatform?.();
+    if (p === "android" && native()?.setWakeWord) setPlatform("android");
+    else if (p === "ios" || /iPhone|iPad|iPod/i.test(navigator.userAgent)) setPlatform("ios");
+    else if (!/Android|Mobile/i.test(navigator.userAgent)) setPlatform("desktop");
+  }, []);
+
+  useEffect(() => {
+    if (platform !== "android") return;
+    const poll = () => void native()?.listeningStatus?.().then((st) => { setOn(!!st.wake); setReady(st.wakeReady !== false); }).catch(() => {});
+    poll();
+    const t = setInterval(poll, 4_000);
+    return () => clearInterval(t);
+  }, [platform]);
+
+  if (!platform) return null;
+  const host = typeof location !== "undefined" ? location.origin : "";
+  return (
+    <div className="pt-3 border-t border-border-default space-y-2">
+      <p className="text-xs font-medium text-text-primary">When the app is closed</p>
+      {platform === "android" && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-text-muted">
+            {on && !ready ? "Getting the on-device voice model ready (36 MB, once)…" : "Listen for “Hey JARVIS” on this phone, screen off or app closed. Only the name is recognised, on the phone itself."}
+          </p>
+          <Toggle enabled={on} onChange={(v) => { setOn(v); void native()?.setWakeWord?.({ on: v }); }} />
+        </div>
+      )}
+      {platform === "ios" && (
+        <p className="text-xs text-text-muted">
+          iPhone lets only Siri listen while apps are closed. Say <span className="text-text-primary">“Hey Siri, talk to Jarvis”</span> and The Third Eye opens ready to talk.
+        </p>
+      )}
+      {platform === "desktop" && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-text-muted">
+            Install the small helper once and “Hey JARVIS” opens talk mode even with no tab open. It recognises only the name, offline, on this computer.
+          </p>
+          <p className="text-xs text-text-muted">Mac - paste in Terminal:</p>
+          <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
+            curl -fsSL {host}/wake/install-mac.sh | bash
+          </code>
+          <p className="text-xs text-text-muted">Windows - paste in PowerShell:</p>
+          <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
+            irm {host}/wake/install-windows.ps1 | iex
+          </code>
+        </div>
+      )}
+    </div>
   );
 }

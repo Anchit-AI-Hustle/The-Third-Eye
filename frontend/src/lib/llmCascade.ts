@@ -1004,33 +1004,52 @@ interface WhisperSegment { text: string; no_speech_prob?: number; avg_logprob?: 
  * probably silent and decoded with low confidence is room noise turned into
  * words, and one that repeats itself (high compression) is a decoding loop.
  */
+// Whisper stuck in a loop on noise repeats one phrase: "I know. I know. I know."
+// One copy is what was said, if anything was.
+export function collapseRepeats(text: string): string {
+  const parts = text.match(/[^.!?।]+[.!?।]*/g) ?? [];
+  const norm = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const out: string[] = [];
+  for (const raw of parts) {
+    const p = raw.trim();
+    if (p && norm(p) !== norm(out[out.length - 1] ?? "")) out.push(p);
+  }
+  return out.join(" ").replace(/\b(\p{L}+(?:\s+\p{L}+){0,3})(?:[\s,]+\1\b){2,}/giu, "$1").trim();
+}
+
 export function spokenText(body: { text?: string; segments?: WhisperSegment[] }): string {
-  if (!Array.isArray(body.segments)) return (body.text ?? "").trim();
-  return body.segments
+  if (!Array.isArray(body.segments)) return collapseRepeats((body.text ?? "").trim());
+  return collapseRepeats(body.segments
     .filter((s) => !((s.no_speech_prob ?? 0) > 0.6 && (s.avg_logprob ?? 0) < -0.7) && (s.compression_ratio ?? 0) < 2.4)
     .map((s) => s.text)
     .join("")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim());
 }
 
 // A phrase comes back in a second or two, so a stalled provider is dropped
 // quickly for the next one; long recordings get time in proportion to size.
-async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = Math.min(60_000, 12_000 + audio.size / 50)): Promise<{ ok: boolean; text?: string; status?: number; quota?: boolean }> {
+// Biases Whisper toward how people here actually talk: English, Hindi and the
+// two mixed, with Hindi words kept in Roman script as typed in chats.
+const STT_PROMPT = "Hi JARVIS, kal ki meeting ka reminder laga do. Send the report to Priya, aur WhatsApp pe bata dena.";
+
+async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = Math.min(60_000, 12_000 + audio.size / 50)): Promise<{ ok: boolean; text?: string; language?: string; status?: number; quota?: boolean }> {
   const { signal, clear } = withTimeout(timeoutMs);
   try {
     const fd = new FormData();
     fd.append("file", transcriptionFile(audio).file);
     fd.append("model", model);
     if (lang) fd.append("language", lang.split("-")[0]);
+    if (!lang || /^(en|hi)/i.test(lang)) fd.append("prompt", STT_PROMPT);
     fd.append("temperature", "0");
     fd.append("response_format", "verbose_json");
     const r = await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd, signal });
     if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false, status: r.status, quota: isQuotaError(r.status, err) }; }
     const body = await r.text();
     let text = body.trim();
-    try { text = spokenText(JSON.parse(body)); } catch { /* a gateway that answered in plain text */ }
-    return { ok: true, text };
+    let language: string | undefined;
+    try { const j = JSON.parse(body); text = spokenText(j); language = typeof j.language === "string" ? j.language.toLowerCase() : undefined; } catch { /* a gateway that answered in plain text */ }
+    return { ok: true, text, language };
   } catch { return { ok: false, status: 0 }; }
   finally { clear(); }
 }
@@ -1068,8 +1087,8 @@ async function transcribeGemini(key: string, audio: Blob, lang?: string): Promis
     const buf = Buffer.from(await audio.arrayBuffer());
     if (buf.length < 400) return { ok: false, status: 0 };
     const prompt = lang
-      ? `Transcribe this audio (${lang}). Return only the transcript.`
-      : "Transcribe this audio. Return only the transcript.";
+      ? `Transcribe this audio (${lang}) exactly as spoken. Return only the transcript.`
+      : "Transcribe this audio exactly as spoken, in whatever language or mix of languages is used. Hindi or Hinglish: write Hindi words in Roman script as they sound and English words in English. Return only the transcript, or nothing if there is no speech.";
     const r = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(modelFor("gemini"))}:generateContent?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1105,19 +1124,36 @@ const HALLUCINATIONS = new Set([
 
 export function isHallucination(text: string): boolean {
   const t = text.toLowerCase().replace(/[^\p{L}\p{N}\s.:/-]/gu, "").replace(/[.\s]+$/, "").trim();
-  return !t || HALLUCINATIONS.has(t);
+  // Whisper repeats its prompt back when it hears nothing.
+  return !t || HALLUCINATIONS.has(t) || (t.length > 8 && STT_PROMPT.toLowerCase().includes(t));
 }
 
-export async function transcribeCascade(audio: Blob, lang?: string): Promise<TranscribeCascadeResult> {
+const ISO_NAMES: Record<string, string> = { en: "english", hi: "hindi", ur: "urdu", bn: "bengali", ta: "tamil", te: "telugu", mr: "marathi", gu: "gujarati", kn: "kannada", ml: "malayalam", pa: "punjabi", es: "spanish", fr: "french", de: "german" };
+
+/**
+ * `lang` forces a language the user picked. Otherwise Whisper detects it, which
+ * is what Hindi and Hinglish need (forcing the browser's "en" turned them into
+ * English nonsense), and `hint` - the device language - is the fallback when
+ * detection lands on a language nobody here speaks, which is noise.
+ */
+export async function transcribeCascade(audio: Blob, lang?: string, hint?: string): Promise<TranscribeCascadeResult> {
   const keys = loadKeys();
   const errors: string[] = [];
+  const expected = new Set(["english", "hindi", ISO_NAMES[(hint ?? "").slice(0, 2).toLowerCase()] ?? ""]);
+  const settle = async (base: string, key: string, model: string) => {
+    const res = await transcribeOne(base, key, model, audio, lang);
+    if (!res.ok || lang || !res.language || expected.has(res.language)) return res;
+    // Hinglish is often detected as Urdu (and written in its script).
+    const retry = await transcribeOne(base, key, model, audio, res.language === "urdu" ? "hi" : (hint || "en"));
+    return retry.ok ? retry : res;
+  };
   if (keys.groq) {
-    const res = await transcribeOne(GROQ_BASE, keys.groq, "whisper-large-v3", audio, lang);
+    const res = await settle(GROQ_BASE, keys.groq, "whisper-large-v3");
     if (res.ok) return { text: res.text ?? "", provider: "groq", model: "whisper-large-v3" };
     errors.push(`groq:${res.status}`);
   }
   for (const key of keys.openai) {
-    const res = await transcribeOne(OPENAI_BASE, key, "whisper-1", audio, lang);
+    const res = await settle(OPENAI_BASE, key, "whisper-1");
     if (res.ok) return { text: res.text ?? "", provider: "openai", model: "whisper-1" };
     errors.push(`openai:${res.status}`);
     if (!res.quota) break;
@@ -1125,7 +1161,7 @@ export async function transcribeCascade(audio: Blob, lang?: string): Promise<Tra
   const gemini = usableGeminiKey();
   if (gemini) {
     const res = await transcribeGemini(gemini, audio, lang);
-    if (res.ok) return { text: res.text ?? "", provider: "gemini", model: modelFor("gemini") };
+    if (res.ok) return { text: collapseRepeats(res.text ?? ""), provider: "gemini", model: modelFor("gemini") };
     errors.push(`gemini:${res.status}`);
   }
   throw new Error(`All transcription providers failed (${errors.join(", ") || "no keys configured"}).`);

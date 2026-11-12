@@ -119,6 +119,10 @@ enum AssistantLink {
         go("assistant", [URLQueryItem(name: "ask", value: message)])
     }
 
+    static func talk() {
+        go("assistant", [URLQueryItem(name: "talk", value: "1")])
+    }
+
     static func share(_ text: String) {
         go("share", [URLQueryItem(name: "text", value: text)])
     }
@@ -141,6 +145,21 @@ struct AskThirdEyeIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         AssistantLink.open(question)
+        return .result()
+    }
+}
+
+// "Hey Siri, talk to Jarvis": the assistant opens already listening, the
+// closest iOS allows to a wake word while the app is closed.
+@available(iOS 16.0, *)
+struct TalkToThirdEyeIntent: AppIntent {
+    static var title: LocalizedStringResource = "Talk to The Third Eye"
+    static var description = IntentDescription("Opens The Third Eye in talk mode, listening.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AssistantLink.talk()
         return .result()
     }
 }
@@ -181,7 +200,8 @@ struct SaveToThirdEyeIntent: AppIntent {
 @available(iOS 16.0, *)
 struct ThirdEyeShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: AskThirdEyeIntent(), phrases: ["Ask \(.applicationName)", "Talk to \(.applicationName)"])
+        AppShortcut(intent: TalkToThirdEyeIntent(), phrases: ["Talk to \(.applicationName)", "Hey \(.applicationName)", "Wake up \(.applicationName)"])
+        AppShortcut(intent: AskThirdEyeIntent(), phrases: ["Ask \(.applicationName)"])
         AppShortcut(intent: MorningBriefingIntent(), phrases: ["Morning briefing in \(.applicationName)", "Brief me with \(.applicationName)"])
         AppShortcut(intent: SaveToThirdEyeIntent(), phrases: ["Save to \(.applicationName)", "Note this in \(.applicationName)"])
     }
