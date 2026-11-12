@@ -46,7 +46,8 @@ export function listDates(): string[] {
 
 /** Merge cloud-stored days into this device (best-effort): days recorded on
  * another device, or by the Android app's background recorder, show up here. */
-export async function syncFromCloud(): Promise<void> {
+export async function syncFromCloud(): Promise<string[]> {
+  const changed: string[] = [];
   try {
     const r = await dataList<any>(ENTITY).catch(() => ({ rows: [] as any[] }));
     for (const row of r.rows ?? []) {
@@ -56,14 +57,16 @@ export async function syncFromCloud(): Promise<void> {
         diary: row.diary ?? [], summary: row.summary ?? "", updatedAt: Date.parse(row.updated_at) || Date.now(),
       };
       const raw = localStorage.getItem(KEY(row.date));
-      if (!raw) { localStorage.setItem(KEY(row.date), JSON.stringify(cloud)); continue; }
+      if (!raw) { localStorage.setItem(KEY(row.date), JSON.stringify(cloud)); changed.push(row.date); continue; }
       const mine: DayLog = { ...emptyDay(row.date), ...JSON.parse(raw) };
       if (cloud.updatedAt <= mine.updatedAt) continue;
       localStorage.setItem(KEY(row.date), JSON.stringify(mergeDays(mine, cloud)));
+      changed.push(row.date);
     }
     const cloudDates = (r.rows ?? []).map((x: any) => x.date).filter(Boolean);
     if (cloudDates.length) writeIndex([...readIndex(), ...cloudDates]);
   } catch { /* noop */ }
+  return changed;
 }
 
 // The newer cloud copy wins for the timeline and summary; recordings and diary

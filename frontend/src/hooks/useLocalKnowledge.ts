@@ -75,7 +75,8 @@ export function useLocalKnowledge() {
     window.addEventListener("jarvis:knowledge", onUpdate);
 
     dataList<KnowledgeDoc>("knowledge_docs").then((r) => {
-      if (cancelled) return;
+      // A background refresh that can't reach the server keeps the server-backed list.
+      if (cancelled || (tick && remote.current && !r.remote)) return;
       remote.current = r.remote;
       // With a database, its rows are the list: merging the cache back in is
       // what brought deleted documents back on the next load.
