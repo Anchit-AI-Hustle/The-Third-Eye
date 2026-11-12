@@ -20,7 +20,7 @@ import { resolveIntent } from "@/lib/intents";
 import { retrieveMemories, searchChunks, rememberExchange } from "@/lib/cortex";
 import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
-import { getGoogleAccessToken, googleCapabilities } from "@/lib/googleToken";
+import { refreshGoogleToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
 import { cascadeOrder, LlmCascadeError, nativeGeminiFirst, userFacingOutage } from "@/lib/llmCascade";
 import { RIDE_SERVICES, rideLinks, type RideService } from "@/lib/rides";
@@ -317,8 +317,18 @@ async function getWeather(location: string): Promise<string> {
   }
 }
 
-async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7, maxResults = 10): Promise<string> {
-  if (!accessToken) return "Google Calendar isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Calendar access) to enable this.";
+// What to say when there is no Google token: never "not connected" when the
+// grant exists but Google refused it, since only reconnecting fixes that.
+function googleUnavailable(state: RunContext["googleState"], what: "Gmail" | "Google Calendar"): string {
+  if (state === "expired") return `${what} access has expired or was revoked at Google. Open Settings → Connections and choose "Reconnect / update permissions" to restore it.`;
+  if (state === "error") return `${what} couldn't be reached right now (Google didn't accept the stored access). Try again shortly, or reconnect in Settings → Connections.`;
+  return what === "Gmail"
+    ? "Gmail isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Gmail access) to enable this. Basic sign-in alone does not grant mail access."
+    : "Google Calendar isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Calendar access) to enable this.";
+}
+
+async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7, maxResults = 10, state?: RunContext["googleState"]): Promise<string> {
+  if (!accessToken) return googleUnavailable(state, "Google Calendar");
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + daysAhead * 86400000).toISOString();
   try {
@@ -346,8 +356,8 @@ async function getCalendarEvents(accessToken: string | undefined, daysAhead = 7,
   }
 }
 
-async function readEmails(accessToken: string | undefined, query = "is:unread", maxResults = 5): Promise<string> {
-  if (!accessToken) return "Gmail isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Gmail access) to enable this. Basic sign-in alone does not grant mail access.";
+async function readEmails(accessToken: string | undefined, query = "is:unread", maxResults = 5, state?: RunContext["googleState"]): Promise<string> {
+  if (!accessToken) return googleUnavailable(state, "Gmail");
   try {
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?${new URLSearchParams({ q: query, maxResults: String(maxResults) })}`,
@@ -428,6 +438,8 @@ interface RunContext {
   expenses: Array<{ id?: string; amount: number; category?: string; note?: string; gst_rate?: number | null; spent_on?: string }>;
   contacts?: Array<{ id?: string; name: string; phone?: string; email?: string; relationship?: string; notes?: string }>;
   accessToken?: string;
+  /** Why there is no Google access token: not connected, or Google refused the stored grant. */
+  googleState?: "none" | "expired" | "error" | "ok";
   location?: { latitude: number; longitude: number; label?: string };
   tier: Tier;
   email?: string;
@@ -670,7 +682,7 @@ async function runTool(
         };
       }
       // get
-      return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10) };
+      return { result: await getCalendarEvents(ctx.accessToken, input.days_ahead ?? 7, input.max_results ?? 10, ctx.googleState) };
     }
 
     case "manage_contacts": {
@@ -877,7 +889,7 @@ async function runTool(
         };
       }
       if (action === "read_emails") {
-        return { result: await readEmails(ctx.accessToken, input.query ?? "is:unread", input.max_results ?? 5) };
+        return { result: await readEmails(ctx.accessToken, input.query ?? "is:unread", input.max_results ?? 5, ctx.googleState) };
       }
       // email (premium-gated)
       if (ctx.tier !== "premium") return { result: PAYWALL_MESSAGE };
@@ -2140,9 +2152,10 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
 
   // Use the stored Google grant when it carries Gmail or Calendar scopes.
   let googleScope: string | undefined;
+  let googleState: RunContext["googleState"] = "none";
   // Independent lookups run together. Recall (an embedding call) and connector
   // discovery are capped: a slow one costs its own context, not the reply's start.
-  const googleP = getGoogleAccessToken(email);
+  const googleP = refreshGoogleToken(email);
   const gateP = consume(email, "chatPerDay");
   const memoryP = loadMemory(email);
   // Awaited below in turn; a rejection while an earlier one is pending must not go unhandled.
@@ -2152,7 +2165,8 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const storedP = storedLists(email).catch(() => null);
   try {
     const connected = await googleP;
-    if (connected?.accessToken) {
+    googleState = connected.state;
+    if (connected.state === "ok") {
       accessToken = connected.accessToken;
       googleScope = connected.scope;
     }
@@ -2365,7 +2379,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   const sideEffects: { type: string; data: any }[] = [];
   const stored = await storedP;
   const ctx: RunContext = {
-    memoryStore, docs, contacts: allContacts, accessToken, location, tier: effectiveTier, email,
+    memoryStore, docs, contacts: allContacts, accessToken, googleState, location, tier: effectiveTier, email,
     tasks: stored?.tasks ?? [...tasks], notes: stored?.notes ?? [...notes], goals: stored?.goals ?? [...goals], expenses: stored?.expenses ?? [...expenses],
     attachedText: attachedText(attachments), timezone: timezone || req.headers.get("x-vercel-ip-timezone") || "UTC",
   };
@@ -2701,7 +2715,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           // (e.g. a "tool_code": "print(open_app(...))" block) and then claims
           // the action succeeded. Override that explicitly rather than let a
           // weaker fallback model hallucinate both the call and its result.
-          const fallbackSystemInstruction = `${systemInstruction}\n\n## Degraded mode - no tool access\nYour normal tool-calling connection is temporarily down. Every tool named above is UNAVAILABLE right now - ignore those instructions entirely.\n- Never output anything that looks like a function or tool call: no JSON, no "tool_code", no "Tool Call:" labels, no code blocks pretending to invoke a function.\n- Never claim to have opened an app, sent a message, made a call, controlled a device, or performed any other action. You cannot.\n- If the request needs Gmail or Calendar (reading/sending email, checking events) AND ${accessToken ? "a Google account IS connected" : "no Google account is connected"}: ${accessToken ? "say that action is temporarily unavailable and to try again shortly." : "say plainly that Gmail/Calendar isn't connected yet - go to Settings → Connections and use \"Connect Google\" (basic sign-in alone doesn't grant mail/calendar access). This is a one-time setup step, not a retry-shortly situation."}\n- For any other action (not Gmail/Calendar), say plainly that live actions are temporarily unavailable and to try again shortly. Answer only the informational part of the question, if any.`;
+          const fallbackSystemInstruction = `${systemInstruction}\n\n## Degraded mode - no tool access\nYour normal tool-calling connection is temporarily down. Every tool named above is UNAVAILABLE right now - ignore those instructions entirely.\n- Never output anything that looks like a function or tool call: no JSON, no "tool_code", no "Tool Call:" labels, no code blocks pretending to invoke a function.\n- Never claim to have opened an app, sent a message, made a call, controlled a device, or performed any other action. You cannot.\n- If the request needs Gmail or Calendar (reading/sending email, checking events) AND ${accessToken ? "a Google account IS connected" : "no Google account is connected"}: ${accessToken ? "say that action is temporarily unavailable and to try again shortly." : googleState === "expired" ? "say plainly that Google access has expired or was revoked and to reconnect in Settings → Connections (\"Reconnect / update permissions\")." : "say plainly that Gmail/Calendar isn't connected yet - go to Settings → Connections and use \"Connect Google\" (basic sign-in alone doesn't grant mail/calendar access). This is a one-time setup step, not a retry-shortly situation."}\n- For any other action (not Gmail/Calendar), say plainly that live actions are temporarily unavailable and to try again shortly. Answer only the informational part of the question, if any.`;
           const out = await llmCascade({
             system: fallbackSystemInstruction,
             messages: fbMessages,

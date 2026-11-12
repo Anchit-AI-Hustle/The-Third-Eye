@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const USER = "user@example.com";
 
-let row: { scope?: string; updated_at?: string } | null = null;
+let row: { scope?: string; updated_at?: string; refresh_token_enc?: string } | null = null;
 
 const upsert = vi.fn().mockResolvedValue({ error: null });
 
@@ -58,7 +58,9 @@ const IDENTITY = "openid email profile";
 const WITH_GMAIL = "openid email profile https://www.googleapis.com/auth/gmail.readonly";
 
 describe('what Settings is told "connected" means', () => {
-  async function status() {
+  // Google's answer to the refresh that checks the stored grant still works.
+  async function status(google: { ok: boolean; body: object } = { ok: true, body: { access_token: "ya29.t" } }) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: google.ok, status: google.ok ? 200 : 400, json: () => Promise.resolve(google.body) }));
     const { GET } = await import("@/app/api/connect/google/status/route");
     return (await GET()).json();
   }
@@ -76,15 +78,24 @@ describe('what Settings is told "connected" means', () => {
   });
 
   it("is connected once a feature scope is actually granted", async () => {
-    row = { scope: WITH_GMAIL };
+    row = { scope: WITH_GMAIL, refresh_token_enc: "1//rt" };
     const body = await status();
     expect(body.connected).toBe(true);
     expect(body.capabilities).toMatchObject({ gmailRead: true, gmailSend: false });
   });
 
+  // A grant on file that Google no longer honours read "Connected" while every
+  // Gmail and Calendar call failed.
+  it("says expired, not connected, when Google refuses the stored grant", async () => {
+    row = { scope: WITH_GMAIL, refresh_token_enc: "1//rt" };
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const body = await status({ ok: false, body: { error: "invalid_grant", error_description: "Token has been expired or revoked." } });
+    expect(body).toMatchObject({ connected: false, expired: true });
+  });
+
   it("reports partial grants honestly rather than as all-or-nothing", async () => {
     // Someone who unticked Gmail on the connect screen but allowed Calendar.
-    row = { scope: "openid email https://www.googleapis.com/auth/calendar.readonly" };
+    row = { scope: "openid email https://www.googleapis.com/auth/calendar.readonly", refresh_token_enc: "1//rt" };
     const body = await status();
     expect(body.connected).toBe(true);
     expect(body.capabilities).toMatchObject({ gmailRead: false, gmailSend: false, calendarRead: true });

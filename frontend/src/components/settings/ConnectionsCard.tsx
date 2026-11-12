@@ -8,6 +8,9 @@ interface Status {
   scopes?: string[];
   available?: boolean;
   updatedAt?: string | null;
+  expired?: boolean;
+  problem?: string | null;
+  needsReconsent?: boolean;
 }
 
 function scopeLabels(scopes: string[]): string[] {
@@ -22,7 +25,7 @@ function scopeLabels(scopes: string[]): string[] {
 
 export function ConnectionsCard() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [github, setGithub] = useState<{ connected: boolean; login?: string | null; configured?: boolean } | null>(null);
+  const [github, setGithub] = useState<{ connected: boolean; login?: string | null; configured?: boolean; expired?: boolean } | null>(null);
   const [banner, setBanner] = useState<
     "connected" | "error" | "store_error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_store_error" | "github_disconnected" | null
   >(null);
@@ -147,6 +150,25 @@ export function ConnectionsCard() {
         </div>
       )}
 
+      {status?.expired && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-warning">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Google&apos;s permission has expired or was revoked, so Gmail and Calendar aren&apos;t working. Reconnect below to restore them.</span>
+        </div>
+      )}
+      {!status?.expired && status?.problem && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-accent-red">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Google access isn&apos;t working right now ({status.problem}). Try Reconnect below.</span>
+        </div>
+      )}
+      {connected && status?.needsReconsent && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-text-muted">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Some Gmail or Calendar permissions weren&apos;t granted. Reconnect and allow them for every feature to work.</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mb-4">
         {connected ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-mono text-success">
@@ -174,7 +196,7 @@ export function ConnectionsCard() {
           href="/api/connect/google"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
         >
-          {connected ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
+          {connected || status?.expired || status?.problem ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
         </a>
         {connected && (
           <button
@@ -211,6 +233,9 @@ export function ConnectionsCard() {
         )}
         {banner === "github_error" && (
           <div className="flex items-center gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} /> Couldn&apos;t connect GitHub.</div>
+        )}
+        {github?.expired && (
+          <div className="flex items-start gap-2 mb-3 text-xs text-warning"><AlertCircle size={13} className="mt-px shrink-0" /> <span>GitHub no longer accepts the saved access (revoked or expired). Reconnect below.</span></div>
         )}
         <div className="flex items-center gap-3 mb-4">
           {github?.connected ? (
