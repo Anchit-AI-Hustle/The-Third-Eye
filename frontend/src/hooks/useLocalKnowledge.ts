@@ -62,6 +62,7 @@ export function useLocalKnowledge() {
   const [ready, setReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const remote = useRef(false);
+  const loadedFor = useRef<string | null | undefined>(undefined);
 
   // Re-read on every live-sync tick, so documents added elsewhere show up.
   const tick = useLiveTick();
@@ -75,7 +76,10 @@ export function useLocalKnowledge() {
     window.addEventListener("jarvis:knowledge", onUpdate);
 
     dataList<KnowledgeDoc>("knowledge_docs").then((r) => {
-      if (cancelled) return;
+      // A background refresh for the same account that can't reach the server
+      // keeps the server-backed list; a sign-out or account change does not.
+      if (cancelled || (loadedFor.current === userId && remote.current && !r.remote)) return;
+      loadedFor.current = userId;
       remote.current = r.remote;
       // With a database, its rows are the list: merging the cache back in is
       // what brought deleted documents back on the next load.

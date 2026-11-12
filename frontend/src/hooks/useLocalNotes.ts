@@ -27,6 +27,7 @@ export function useLocalNotes() {
   const [notes, setNotes] = useState<LocalNote[]>([]);
   const [ready, setReady] = useState(false);
   const remote = useRef(false);
+  const loadedFor = useRef<string | null | undefined>(undefined);
 
   // Re-read on every live-sync tick, so changes from other devices show up.
   const tick = useLiveTick();
@@ -34,7 +35,10 @@ export function useLocalNotes() {
     let cancelled = false;
     if (!tick) setReady(false);
     dataList<LocalNote>("notes").then((r) => {
-      if (cancelled) return;
+      // A background refresh for the same account that can't reach the server
+      // keeps the server-backed list; a sign-out or account change does not.
+      if (cancelled || (loadedFor.current === userId && remote.current && !r.remote)) return;
+      loadedFor.current = userId;
       remote.current = r.remote;
       setNotes(r.remote ? r.rows : ls());
       setReady(true);

@@ -31,6 +31,7 @@ export function useLocalGoals() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [ready, setReady] = useState(false);
   const remote = useRef(false);
+  const loadedFor = useRef<string | null | undefined>(undefined);
   // Read by adjust(): a value computed inside a setState updater is not there
   // yet when React defers the updater, so the database write was skipped.
   const goalsRef = useRef(goals);
@@ -42,7 +43,10 @@ export function useLocalGoals() {
     let cancelled = false;
     if (!tick) setReady(false);
     dataList<Goal>("goals").then((r) => {
-      if (cancelled) return;
+      // A background refresh for the same account that can't reach the server
+      // keeps the server-backed list; a sign-out or account change does not.
+      if (cancelled || (loadedFor.current === userId && remote.current && !r.remote)) return;
+      loadedFor.current = userId;
       remote.current = r.remote;
       setGoals(r.remote ? r.rows : ls());
       setReady(true);

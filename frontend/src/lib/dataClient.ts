@@ -13,6 +13,8 @@
 export interface ListResult<T> {
   remote: boolean;
   rows: T[];
+  /** The server couldn't be reached at all (as opposed to answering 401/501). */
+  unreachable?: boolean;
 }
 
 async function req(entity: string, init?: RequestInit): Promise<Response | null> {
@@ -34,7 +36,7 @@ function isLocalOnly(res: Response | null): boolean {
 
 export async function dataList<T>(entity: string): Promise<ListResult<T>> {
   const res = await req(entity, { method: "GET" });
-  if (isLocalOnly(res)) return { remote: false, rows: [] };
+  if (isLocalOnly(res)) return { remote: false, rows: [], unreachable: !res };
   if (!res!.ok) return { remote: true, rows: [] }; // remote but errored — don't clobber with local
   const json = await res!.json().catch(() => ({ rows: [] }));
   return { remote: true, rows: (json.rows as T[]) ?? [] };

@@ -84,7 +84,9 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
       dataList<LocalTask>("tasks"),
       dataList<TeamMember>("team_members"),
     ]).then(([t, m]) => {
-      if (cancelled) return;
+      // A background refresh that can't reach the server (a dropped
+      // connection) keeps the server-backed list rather than switching to local.
+      if (cancelled || (!markReady && remote.current && !t.remote)) return;
       remote.current = t.remote;
       if (t.remote) {
         setTasks(t.rows);
