@@ -70,7 +70,10 @@ final class WakeWord {
             if (model == null) {
                 File dir = new File(ctx.getFilesDir(), "vosk");
                 File ready = new File(dir, ".ready");
-                if (!ready.exists()) { download(dir); ready.createNewFile(); }
+                if (!ready.exists()) {
+                    download(dir);
+                    if (!ready.createNewFile()) throw new IllegalStateException("model marker not written");
+                }
                 model = new Model(modelRoot(dir).getAbsolutePath());
             }
             Recognizer r = new Recognizer(model, 16_000f, grammar());
@@ -120,7 +123,8 @@ final class WakeWord {
             byte[] buf = new byte[64 * 1024];
             for (ZipEntry e; (e = zip.getNextEntry()) != null; ) {
                 File out = new File(dir, e.getName());
-                if (!out.getCanonicalPath().startsWith(dir.getCanonicalPath())) continue;
+                // Zip-slip guard: the separator stops "vosk-evil/" passing as inside "vosk".
+                if (!out.getCanonicalPath().startsWith(dir.getCanonicalPath() + File.separator)) continue;
                 if (e.isDirectory()) { out.mkdirs(); continue; }
                 out.getParentFile().mkdirs();
                 try (FileOutputStream f = new FileOutputStream(out)) {

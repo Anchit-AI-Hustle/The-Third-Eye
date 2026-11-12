@@ -73,7 +73,7 @@ def open_talk():
             if out.stdout.strip() == "ok":
                 return
         except Exception:
-            pass
+            pass  # Chrome not scriptable (or not installed): open the default browser below.
     webbrowser.open(url)
 
 
