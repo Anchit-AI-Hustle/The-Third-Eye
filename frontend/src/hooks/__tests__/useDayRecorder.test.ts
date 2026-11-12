@@ -1,53 +1,47 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const capture = vi.hoisted(() => ({ options: [] as any[], stops: 0 }));
+vi.mock("@/lib/speechCapture", () => ({
+  startSpeechCapture: vi.fn(async (options) => {
+    capture.options.push(options);
+    return { stop: () => { capture.stops++; } };
+  }),
+  transcribeSpeechSegment: vi.fn(async () => "hello there"),
+}));
+vi.mock("@/lib/lifelog/audioStore", () => ({ putAudio: vi.fn(async () => true) }));
+
 import { useDayRecorder } from "@/hooks/useDayRecorder";
+import { startSpeechCapture, transcribeSpeechSegment } from "@/lib/speechCapture";
 
-class FakeRecorder {
-  static isTypeSupported = () => true;
-  state = "inactive";
-  ondataavailable: ((e: { data: Blob }) => void) | null = null;
-  onstop: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  start() { this.state = "recording"; }
-  stop() { this.state = "inactive"; void this.onstop?.(); }
-}
-class FakeAudioContext {
-  state = "running";
-  createAnalyser() { return { fftSize: 512, getByteTimeDomainData: (b: Uint8Array) => b.fill(128) }; }
-  createMediaStreamSource() { return { connect: () => {} }; }
-  close() { return Promise.resolve(); }
-}
-
-function setup() {
-  const tracks: { onended: (() => void) | null; stop: () => void }[] = [];
-  const getUserMedia = vi.fn(async () => {
-    const t = { onended: null as (() => void) | null, stop: vi.fn() };
-    tracks.push(t);
-    return { getTracks: () => [t] };
-  });
-  vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia } });
-  vi.stubGlobal("MediaRecorder", FakeRecorder);
-  vi.stubGlobal("AudioContext", FakeAudioContext);
-  return { getUserMedia, tracks };
-}
-
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  capture.options = [];
+  capture.stops = 0;
+});
 
 describe("useDayRecorder", () => {
-  it("picks the mic back up by itself when it drops, until stopped", async () => {
-    vi.useFakeTimers();
-    const { getUserMedia, tracks } = setup();
+  it("stores and transcribes only gated speech segments", async () => {
+    const onSegment = vi.fn();
+    const { result } = renderHook(() => useDayRecorder(onSegment));
+    await act(async () => { await result.current.start(); });
+    expect(result.current.recording).toBe(true);
+    expect(startSpeechCapture).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await capture.options[0].onSegment(new Blob([new Uint8Array(1500)]));
+    });
+    expect(transcribeSpeechSegment).toHaveBeenCalledTimes(1);
+    expect(onSegment).toHaveBeenCalledWith(expect.objectContaining({ transcript: "hello there", hasAudio: true }));
+  });
+
+  it("reopens capture after a microphone track ends and stops cleanly", async () => {
     const { result } = renderHook(() => useDayRecorder(() => {}));
     await act(async () => { await result.current.start(); });
-    expect(getUserMedia).toHaveBeenCalledTimes(1);
-
-    await act(async () => { tracks[0].onended?.(); await vi.advanceTimersByTimeAsync(2_000); });
-    expect(getUserMedia).toHaveBeenCalledTimes(2);
-    expect(result.current.recording).toBe(true);
-
+    await act(async () => { capture.options[0].onTrackEnded(); await Promise.resolve(); });
+    expect(startSpeechCapture).toHaveBeenCalledTimes(2);
     act(() => result.current.stop());
-    await act(async () => { tracks[1].onended?.(); await vi.advanceTimersByTimeAsync(60_000); });
-    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(capture.stops).toBe(1);
     expect(result.current.recording).toBe(false);
   });
 });

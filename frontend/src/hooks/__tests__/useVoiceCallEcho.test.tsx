@@ -1,37 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
-import { act, renderHook } from "@testing-library/react";
-import { useVoiceSTT } from "@/hooks/useVoice";
+import { describe, expect, it } from "vitest";
+import { isEchoOf } from "@/hooks/useVoice";
 
-describe("call mode while the assistant is speaking", () => {
-  it("doesn't take the browser recognizer hearing the assistant's own voice as the user starting to talk", async () => {
-    const recs: { onspeechstart?: () => void; start(): void; stop(): void; abort(): void }[] = [];
-    class Rec { constructor() { recs.push(this as never); } start() {} stop() {} abort() {} }
-    class Ctx {
-      state = "running";
-      resume() { return Promise.resolve(); }
-      close() { return Promise.resolve(); }
-      createMediaStreamSource() { return { connect() {} }; }
-      createAnalyser() { return { fftSize: 512, context: this, connect() {}, getByteTimeDomainData() {} }; }
-    }
-    vi.stubGlobal("SpeechRecognition", Rec);
-    vi.stubGlobal("AudioContext", Ctx);
-    vi.stubGlobal("requestAnimationFrame", () => 1);
-    vi.stubGlobal("cancelAnimationFrame", () => {});
-    vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia: async () => ({ getTracks: () => [], getAudioTracks: () => [] }) } });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
-    let speaking = true;
-    const onSpeechStart = vi.fn();
-    const { result } = renderHook(() => useVoiceSTT({ onTranscript: () => {}, onSpeechStart, shouldSuppress: () => speaking }));
-    await act(async () => { await result.current.enable(); });
-    const rec = recs.at(-1)!;
+describe("assistant voice echo guard", () => {
+  it("rejects a transcript that repeats the assistant's reply", () => {
+    expect(isEchoOf("you have three open tasks and the q3 report is due friday", "You have three open tasks. The Q3 report is due Friday."))
+      .toBe(true);
+  });
 
-    act(() => rec.onspeechstart?.());
-    expect(onSpeechStart).not.toHaveBeenCalled();
-
-    speaking = false;
-    act(() => rec.onspeechstart?.());
-    expect(onSpeechStart).toHaveBeenCalledTimes(1);
-    result.current.disable();
-    vi.unstubAllGlobals();
+  it("keeps a user response that adds their own words", () => {
+    expect(isEchoOf("yes send the email to John", "Should I send the email to John Smith?"))
+      .toBe(false);
   });
 });

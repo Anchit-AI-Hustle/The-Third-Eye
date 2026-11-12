@@ -3,16 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Square } from "lucide-react";
 import { dictatable, insertDictation, type DictationField } from "@/lib/dictation";
-import { speechRecognizer } from "@/lib/speechRecognizer";
-import { downsample, encodeWav, PcmClip, TARGET_RATE } from "@/lib/pcmClip";
+import { startSpeechCapture, transcribeSpeechSegment, type SpeechCapture } from "@/lib/speechCapture";
 
 type State = "idle" | "listening" | "transcribing";
 
 /**
- * A mic beside whichever text field has focus, anywhere in the app: tap,
- * speak, and the words land at the cursor. The browser's recognizer is used
- * where it works; elsewhere (iPhone apps, Firefox) the speech is recorded and
- * transcribed on the server.
+ * A mic beside whichever text field has focus, anywhere in the app. Speech is
+ * gated before a segment is sent to transcription.
  */
 export function DictationButton() {
   const [field, setField] = useState<DictationField | null>(null);
@@ -20,6 +17,8 @@ export function DictationButton() {
   const [state, setState] = useState<State>("idle");
   const fieldRef = useRef<DictationField | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
+  const captureRef = useRef<SpeechCapture | null>(null);
+  const pendingRef = useRef(0);
 
   const place = useCallback(() => {
     const el = fieldRef.current;
@@ -66,66 +65,41 @@ export function DictationButton() {
     fieldRef.current?.focus();
   }, []);
 
-  const withRecognizer = useCallback((Rec: any, el: DictationField) => {
-    const rec = new Rec();
-    rec.lang = navigator.language || "en-US";
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) insertDictation(el, e.results[i][0].transcript);
-      }
-    };
-    rec.onend = finish;
-    rec.onerror = finish;
-    stopRef.current = () => { try { rec.stop(); } catch { finish(); } };
-    rec.start();
-    setState("listening");
-  }, [finish]);
-
-  const withRecorder = useCallback(async (el: DictationField) => {
-    let stream: MediaStream;
+  const startCapture = useCallback(async (el: DictationField) => {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
-    } catch { finish(); return; }
-    const ctx = new AudioContext();
-    const source = ctx.createMediaStreamSource(stream);
-    const tap = ctx.createScriptProcessor(4096, 1, 1);
-    const clip = new PcmClip(ctx.sampleRate, 0);
-    clip.start();
-    tap.onaudioprocess = (e) => clip.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-    source.connect(tap);
-    tap.connect(ctx.destination);
-    setState("listening");
-    stopRef.current = async () => {
-      stopRef.current = null;
-      tap.onaudioprocess = null;
-      source.disconnect();
-      tap.disconnect();
-      stream.getTracks().forEach((t) => t.stop());
-      const wav = encodeWav(downsample(clip.stop(), ctx.sampleRate, TARGET_RATE), TARGET_RATE);
-      void ctx.close();
-      setState("transcribing");
-      try {
-        const fd = new FormData();
-        fd.append("audio", wav, "speech.wav");
-        fd.append("hint", navigator.language || "en");
-        const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
-        const text = res.ok ? String((await res.json().catch(() => ({})))?.text ?? "") : "";
-        if (text) insertDictation(el, text);
-      } catch { /* nothing heard or offline: the field stays as it was */ }
-      finish();
-    };
+      setState("listening");
+      const capture = await startSpeechCapture({
+        onSegment: async (audio) => {
+          pendingRef.current++;
+          setState("transcribing");
+          try {
+            const text = await transcribeSpeechSegment(audio, navigator.language || "en");
+            if (text) insertDictation(el, text);
+          } catch { /* preserve the field after a transient failure */ }
+          finally {
+            pendingRef.current--;
+            if (captureRef.current) setState("listening");
+            else if (pendingRef.current === 0) finish();
+          }
+        },
+      });
+      captureRef.current = capture;
+      stopRef.current = () => {
+        stopRef.current = null;
+        captureRef.current = null;
+        capture.stop();
+        if (pendingRef.current === 0) finish();
+        else setState("transcribing");
+      };
+    } catch { finish(); }
   }, [finish]);
 
   const toggle = useCallback(() => {
     if (stopRef.current) { stopRef.current(); return; }
     const el = fieldRef.current;
     if (!el || state !== "idle") return;
-    const Rec = speechRecognizer();
-    if (Rec) withRecognizer(Rec, el);
-    else void withRecorder(el);
-  }, [state, withRecognizer, withRecorder]);
+    void startCapture(el);
+  }, [state, startCapture]);
 
   if (!field || !pos) return null;
   const label = state === "listening" ? "Stop dictation" : state === "transcribing" ? "Transcribing" : "Dictate into this field";

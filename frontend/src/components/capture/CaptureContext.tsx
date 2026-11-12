@@ -8,6 +8,7 @@ import { dataInsert, dataDelete } from "@/lib/dataClient";
 import { getPolicy, PERM_POLICY_EVENT } from "@/lib/consent";
 import { matchSystemsCommand } from "@/lib/systems";
 import { logAgentAction } from "@/lib/agentControl";
+import { startSpeechCapture, transcribeSpeechSegment, type SpeechCapture } from "@/lib/speechCapture";
 
 export type ConvType = "meeting" | "brainstorm" | "work" | "personal" | "learning" | "other";
 
@@ -86,7 +87,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [autoAdded, setAutoAdded] = useState<AutoAdded[]>([]);
   const [wakeActive, setWakeActive] = useState(false);
 
-  const recRef = useRef<any>(null);
+  const recRef = useRef<SpeechCapture | null>(null);
   const activeRef = useRef(false);
   const transcriptRef = useRef("");
   const lastExtractLenRef = useRef(0);
@@ -96,8 +97,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const wakeRef = useRef<any>(null);
 
   useEffect(() => {
-    const SR = typeof window !== "undefined" && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-    setSupported(!!SR);
+    setSupported(!!navigator?.mediaDevices?.getUserMedia && !!(window.AudioContext || (window as any).webkitAudioContext));
     setSessions(loadSessions());
     const pref = localStorage.getItem("te_capture_autocreate");
     const on = pref === null ? true : pref === "1";
@@ -192,48 +192,39 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
 
   const stop = useCallback(() => {
     activeRef.current = false;
-    try { recRef.current?.abort(); } catch { /* noop */ }
+    recRef.current?.stop();
     recRef.current = null;
     setListening(false);
     setInterim("");
     void releaseWake();
   }, [releaseWake]);
 
-  // Continuous recognition with auto-restart (browsers time out ~60s).
+  // Continuous speech-gated transcription; quiet audio never reaches a provider.
   const start = useCallback(() => {
-    const SRClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SRClass || activeRef.current) return;
+    if (!supported || activeRef.current) return;
     activeRef.current = true;
     setListening(true);
     void acquireWake();
-    const launch = () => {
-      if (!activeRef.current) return;
-      const rec = new SRClass();
-      recRef.current = rec;
-      rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
-      rec.onresult = (e: any) => {
-        let finalTxt = "", interimTxt = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i];
-          if (r.isFinal) finalTxt += r[0].transcript + " ";
-          else interimTxt += r[0].transcript;
-        }
-        if (finalTxt) {
-          // Ambient voice command: "all systems online" / "<system> status".
+    void startSpeechCapture({
+      onSpeechStart: () => setInterim("Listening to speech…"),
+      onSpeechEnd: () => setInterim(""),
+      onSegment: async (audio) => {
+        try {
+          const text = await transcribeSpeechSegment(audio, "en-US");
+          if (!text) return;
+          const finalTxt = `${text} `;
           const cmd = matchSystemsCommand(finalTxt);
-          if (cmd && typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("te:systems-online", { detail: cmd }));
-          }
+          if (cmd && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("te:systems-online", { detail: cmd }));
           setTranscript((prev) => (prev + finalTxt).slice(-20000));
-        }
-        setInterim(interimTxt);
-      };
-      rec.onerror = (e: any) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") stop(); };
-      rec.onend = () => { setInterim(""); if (activeRef.current) setTimeout(launch, 300); };
-      try { rec.start(); } catch { setTimeout(launch, 500); }
-    };
-    launch();
-  }, [stop, acquireWake]);
+        } catch { /* continue listening after a failed segment */ }
+        setInterim("");
+      },
+      onError: () => stop(),
+    }).then((capture) => {
+      if (activeRef.current) recRef.current = capture;
+      else capture.stop();
+    }).catch(() => stop());
+  }, [supported, stop, acquireWake]);
 
   // Re-acquire the wake lock when the tab returns to the foreground (the browser
   // auto-releases it when hidden). Recognition itself resumes via onend restart.
@@ -273,7 +264,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, [listening, analyzing, extract]);
 
-  useEffect(() => () => { try { recRef.current?.abort(); } catch { /* noop */ } void releaseWake(); }, [releaseWake]);
+  useEffect(() => () => { recRef.current?.stop(); void releaseWake(); }, [releaseWake]);
 
   const addTask = useCallback(async (i: number) => {
     const t = tasks[i];
