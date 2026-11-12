@@ -1,11 +1,13 @@
 import type { Db } from "@/lib/db";
 import { sendPush } from "@/lib/push";
+import { ASK_CHAT_ID } from "@/lib/askChatId";
+
+export { ASK_CHAT_ID };
 
 // Anything the assistant needs from the person - a decision, a detail, a step
 // only they can take - is asked as a message from the assistant in chat, in
 // one running conversation, so answering it there carries the work on.
 
-export const ASK_CHAT_ID = "jarvis-needs-you";
 const TITLE = "JARVIS needs you";
 const KEEP = 200;
 

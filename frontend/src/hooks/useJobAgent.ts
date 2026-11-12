@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 import type { CandidateFact, CareerProfile, NormalizedJob } from "@/lib/jobAgent/types";
 
@@ -69,8 +68,6 @@ export function useJobAgent() {
   }, []);
 
   useEffect(() => load(), [userId, load]);
-  const tick = useLiveTick();
-  useEffect(() => { if (tick) load(); }, [tick, load]);
 
   const saveProfile = useCallback(async (next: CareerProfile) => {
     setProfileState(next);

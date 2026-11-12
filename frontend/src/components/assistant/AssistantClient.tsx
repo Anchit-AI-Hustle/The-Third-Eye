@@ -7,6 +7,8 @@ import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Se
 import { ChatsPanel } from "./ChatsPanel";
 import { RecentChats } from "./RecentChats";
 import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
+import { useLiveTick } from "@/lib/liveSync";
+import { ASK_CHAT_ID } from "@/lib/askChatId";
 import { useChatTaskSync } from "@/hooks/useChatTaskSync";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
@@ -931,6 +933,19 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setProjectId(chat.project_id);
     setShowChats(false);
   }
+
+  // Questions the server adds to the "JARVIS needs you" chat appear in it
+  // while it is open, between turns.
+  const liveTick = useLiveTick();
+  useEffect(() => {
+    if (!liveTick || chatId !== ASK_CHAT_ID || isStreamingRef.current) return;
+    void library.openChat<Message, HistoryEntry>(ASK_CHAT_ID).then((chat) => {
+      if (!chat || isStreamingRef.current || chat.messages.length <= messagesRef.current.length) return;
+      setMessages(settleMessages(chat.messages));
+      historyRef.current = chat.history;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
 
   // A task in the tracker links back here with ?chat=<id>; a phone
   // notification (the morning briefing) with ?ask=<message>.

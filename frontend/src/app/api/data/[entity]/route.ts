@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb, type Db } from "@/lib/db";
+import { ASK_CHAT_ID } from "@/lib/askChatId";
 
 export const runtime = "nodejs";
 
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ entity: 
   if (rows.length === 0) return Response.json({ rows: [] });
   let scrubbed = rows.map((r) => scrub(r as Record<string, unknown>, c.email));
   if (c.cfg.table === "lifelog_days") scrubbed = await mergeStoredDays(c.sb, c.email, scrubbed);
+  if (c.cfg.table === "conversations") scrubbed = await keepAskedQuestions(c.sb, c.email, scrubbed);
   const t = c.sb.from(c.cfg.table);
   const { data, error } = await (c.cfg.upsertOn ? t.upsert(scrubbed, { onConflict: c.cfg.upsertOn }) : t.insert(scrubbed)).select("*");
   if (error) {
@@ -192,4 +194,22 @@ async function mergeStoredDays<T extends Row>(sb: Db, email: string, days: T[]):
       summary: d.summary || s.summary,
     };
   });
+}
+
+// The "JARVIS needs you" chat gets questions added on the server while a
+// device may have it open with an older copy; saving that copy must not drop
+// them. Messages the device doesn't have are kept, after its own.
+async function keepAskedQuestions<T extends Row>(sb: Db, email: string, chats: T[]): Promise<T[]> {
+  const ask = chats.find((c) => c.id === ASK_CHAT_ID);
+  if (!ask || !Array.isArray(ask.messages)) return chats;
+  const { data } = await sb.from("conversations").select("messages").eq("user_id", email).eq("id", ASK_CHAT_ID).maybeSingle();
+  const have = new Set((ask.messages as Row[]).map((m) => String(m.id)));
+  const missing = (((data as { messages?: Row[] } | null)?.messages) ?? []).filter((m) => !have.has(String(m.id)));
+  if (!missing.length) return chats;
+  const merged = {
+    ...ask,
+    messages: [...(ask.messages as Row[]), ...missing],
+    history: [...(Array.isArray(ask.history) ? ask.history : []), ...missing.map((m) => ({ role: m.role, content: m.content }))],
+  };
+  return chats.map((c) => (c === ask ? merged : c));
 }
