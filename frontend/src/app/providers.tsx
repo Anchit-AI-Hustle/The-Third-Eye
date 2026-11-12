@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveSync } from "@/lib/liveSync";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -94,6 +95,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <GetAppNudge />
             <HandoffBridge />
             <AccountSync />
+            <LiveSync />
            </LifeLogRecorderProvider>
           </CaptureProvider>
         </PermissionProvider>

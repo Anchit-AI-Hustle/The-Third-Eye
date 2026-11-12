@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataDelete, dataInsert, dataList } from "@/lib/dataClient";
 import type { Attachment } from "@/lib/attachments";
 
@@ -58,6 +59,8 @@ export function useChatLibrary() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
 
+  // Chats started on another device appear on the next live-sync tick.
+  const tick = useLiveTick();
   useEffect(() => {
     let alive = true;
     Promise.all([dataList<ChatSummary>("conversations"), dataList<Project>("projects")]).then(([c, p]) => {
@@ -68,7 +71,7 @@ export function useChatLibrary() {
       setProjects(c.remote ? p.rows : readLocal<Project>(LOCAL_PROJECTS).sort(byRecent));
     });
     return () => { alive = false; };
-  }, []);
+  }, [tick]);
 
   const openChat = useCallback(async <M, H>(id: string): Promise<SavedChat<M, H> | null> => {
     const local = readLocal<SavedChat<M, H>>(LOCAL_CHATS).find((c) => c.id === id) ?? null;

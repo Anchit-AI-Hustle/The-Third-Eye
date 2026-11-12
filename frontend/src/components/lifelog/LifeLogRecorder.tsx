@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { Radio, X } from "lucide-react";
 import { loadDay, saveDay, syncFromCloud } from "@/lib/lifelog/store";
 import { localDateKey, type DayLog, type LogEvent, type LogSegment, type SavedAction } from "@/lib/lifelog/types";
+import { LIVE_SYNC } from "@/lib/liveSync";
 import { useDayRecorder, type DayRecorder } from "@/hooks/useDayRecorder";
 
 // The day recorder lives in the app shell so listening carries on across every
@@ -38,9 +39,14 @@ const STATUS_MS = 5_000;
 
 // The computer listener (public/wake) answers here while it logs the day, so
 // an open tab on the same computer doesn't record it a second time.
+// Asked only on a computer where the listener was set up: Chrome shows a
+// "access other apps and services on this device" prompt for every such check.
 const HELPER = "http://127.0.0.1:47321/status";
-const helperLogging = () =>
-  fetch(HELPER, { signal: AbortSignal.timeout(800) }).then((r) => r.json()).then((j: { logging?: boolean }) => !!j.logging).catch(() => false);
+export const LISTENER_HERE = "te_computer_listener";
+const helperLogging = () => {
+  try { if (localStorage.getItem(LISTENER_HERE) !== "1") return Promise.resolve(false); } catch { return Promise.resolve(false); }
+  return fetch(HELPER, { signal: AbortSignal.timeout(800) }).then((r) => r.json()).then((j: { logging?: boolean }) => !!j.logging).catch(() => false);
+};
 
 function useNativeDayRecorder(on: boolean): DayRecorder {
   const [st, setSt] = useState<NativeStatus>({});
@@ -193,6 +199,15 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
       window.removeEventListener("te:stop-listening", stop);
     };
   }, [status, stopListening]);
+
+  // Chunks filed by the phone or the computer listener, and timelines rebuilt
+  // on the server, reach this device on every live-sync tick.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const pull = () => void syncFromCloud().then(() => window.dispatchEvent(new CustomEvent(LIFELOG_UPDATED, { detail: localDateKey(new Date()) })));
+    window.addEventListener(LIVE_SYNC, pull);
+    return () => window.removeEventListener(LIVE_SYNC, pull);
+  }, [status]);
 
   // In a browser a locked phone stops the mic, so the screen is kept awake
   // while listening (the Android app's service covers that there instead).

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataDelete } from "@/lib/dataClient";
 import { chunkText, DOC_TYPES, getExt, IMAGE_TYPES, knowledgeDocFrom, TEXT_TYPES, type KnowledgeDoc } from "@/lib/knowledgeFile";
 
@@ -62,9 +63,11 @@ export function useLocalKnowledge() {
   const [uploading, setUploading] = useState(false);
   const remote = useRef(false);
 
+  // Re-read on every live-sync tick, so documents added elsewhere show up.
+  const tick = useLiveTick();
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
+    if (!tick) setReady(false);
 
     const onUpdate = (e: Event) => {
       setDocs((e as CustomEvent<KnowledgeDoc[]>).detail ?? ls());
@@ -89,7 +92,7 @@ export function useLocalKnowledge() {
       cancelled = true;
       window.removeEventListener("jarvis:knowledge", onUpdate);
     };
-  }, [userId]);
+  }, [userId, tick]);
 
   const upload = useCallback(async (files: FileList | File[]) => {
     setUploading(true);

@@ -7,6 +7,8 @@ import { Send, Cpu, Zap, RotateCcw, Volume2, Mic, MicOff, Globe, AlertCircle, Se
 import { ChatsPanel } from "./ChatsPanel";
 import { RecentChats } from "./RecentChats";
 import { settleMessages, useChatLibrary } from "@/hooks/useChatLibrary";
+import { useLiveTick } from "@/lib/liveSync";
+import { ASK_CHAT_ID } from "@/lib/askChatId";
 import { useChatTaskSync } from "@/hooks/useChatTaskSync";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
@@ -210,6 +212,8 @@ export function AssistantClient({ userName }: { userName?: string }) {
   const taskSync = useChatTaskSync();
   const [showChats, setShowChats] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
   const [projectId, setProjectId] = useState<string | null>(null);
   const project = library.projects.find((x) => x.id === projectId) ?? null;
   // Only a turn the user started marks the chat for saving, so opening an old
@@ -931,6 +935,23 @@ export function AssistantClient({ userName }: { userName?: string }) {
     setProjectId(chat.project_id);
     setShowChats(false);
   }
+
+  // Questions the server adds to the "JARVIS needs you" chat appear in it
+  // while it is open, between turns.
+  const liveTick = useLiveTick();
+  useEffect(() => {
+    if (!liveTick || chatId !== ASK_CHAT_ID || isStreamingRef.current) return;
+    void library.openChat<Message, HistoryEntry>(ASK_CHAT_ID).then((chat) => {
+      // The person may have switched chats or started a turn while this was read.
+      if (!chat || isStreamingRef.current || chatIdRef.current !== ASK_CHAT_ID) return;
+      const have = new Set(messagesRef.current.map((m) => m.id));
+      const added = chat.messages.filter((m) => !have.has(m.id));
+      if (!added.length) return;
+      setMessages((prev) => [...prev, ...settleMessages(added)]);
+      historyRef.current = [...historyRef.current, ...added.map((m) => ({ role: m.role, content: m.content }))];
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
 
   // A task in the tracker links back here with ?chat=<id>; a phone
   // notification (the morning briefing) with ?ask=<message>.

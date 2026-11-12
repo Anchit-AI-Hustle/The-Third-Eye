@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb, type Db } from "@/lib/db";
+import { ASK_CHAT_ID } from "@/lib/askChatId";
 
 export const runtime = "nodejs";
 
@@ -123,7 +124,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ entity: 
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   const rows = Array.isArray(body) ? body : [body];
   if (rows.length === 0) return Response.json({ rows: [] });
-  const scrubbed = rows.map((r) => scrub(r as Record<string, unknown>, c.email));
+  let scrubbed = rows.map((r) => scrub(r as Record<string, unknown>, c.email));
+  if (c.cfg.table === "lifelog_days") scrubbed = await mergeStoredDays(c.sb, c.email, scrubbed);
+  if (c.cfg.table === "conversations") scrubbed = await keepAskedQuestions(c.sb, c.email, scrubbed);
   const t = c.sb.from(c.cfg.table);
   const { data, error } = await (c.cfg.upsertOn ? t.upsert(scrubbed, { onConflict: c.cfg.upsertOn }) : t.insert(scrubbed)).select("*");
   if (error) {
@@ -164,4 +167,49 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ entity
     return Response.json({ error: "Delete failed" }, { status: 500 });
   }
   return Response.json({ ok: true });
+}
+
+type Row = Record<string, unknown>;
+const unionById = (stored: unknown, incoming: unknown, order: string) => {
+  const all = [...(Array.isArray(stored) ? stored : []), ...(Array.isArray(incoming) ? incoming : [])] as Row[];
+  return [...new Map(all.map((x) => [String(x.id), x])).values()].sort((a, b) => Number(a[order] ?? 0) - Number(b[order] ?? 0));
+};
+
+// A day is written whole by each device, but other devices (the phone's
+// service, the computer listener) add recordings to it on the server. Merging
+// keeps theirs: recordings and diary entries from both sides are kept, and a
+// device's empty timeline or summary never blanks the stored one.
+async function mergeStoredDays<T extends Row>(sb: Db, email: string, days: T[]): Promise<T[]> {
+  const ids = days.map((d) => String(d.id));
+  const { data } = await sb.from("lifelog_days").select("id, segments, diary, events, summary").eq("user_id", email).in("id", ids);
+  const stored = new Map(((data ?? []) as Row[]).map((r) => [String(r.id), r]));
+  return days.map((d) => {
+    const s = stored.get(String(d.id));
+    if (!s) return d;
+    return {
+      ...d,
+      segments: unionById(s.segments, d.segments, "startTs"),
+      diary: unionById(s.diary, d.diary, "ts"),
+      events: Array.isArray(d.events) && d.events.length ? d.events : s.events,
+      summary: d.summary || s.summary,
+    };
+  });
+}
+
+// The "JARVIS needs you" chat gets questions added on the server while a
+// device may have it open with an older copy; saving that copy must not drop
+// them. Messages the device doesn't have are kept, after its own.
+async function keepAskedQuestions<T extends Row>(sb: Db, email: string, chats: T[]): Promise<T[]> {
+  const ask = chats.find((c) => c.id === ASK_CHAT_ID);
+  if (!ask || !Array.isArray(ask.messages)) return chats;
+  const { data } = await sb.from("conversations").select("messages").eq("user_id", email).eq("id", ASK_CHAT_ID).maybeSingle();
+  const have = new Set((ask.messages as Row[]).map((m) => String(m.id)));
+  const missing = (((data as { messages?: Row[] } | null)?.messages) ?? []).filter((m) => !have.has(String(m.id)));
+  if (!missing.length) return chats;
+  const merged = {
+    ...ask,
+    messages: [...(ask.messages as Row[]), ...missing],
+    history: [...(Array.isArray(ask.history) ? ask.history : []), ...missing.map((m) => ({ role: m.role, content: m.content }))],
+  };
+  return chats.map((c) => (c === ask ? merged : c));
 }
