@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines, ShieldCheck } from "lucide-react";
 import { deviceReducesMotion, motionPref, setMotionPref } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { LISTENER_HERE } from "@/components/lifelog/LifeLogRecorder";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { maybeRequestShake } from "@/hooks/useJarvisTriggers";
 import {
@@ -430,7 +431,10 @@ function ComputerListener({ host }: { host: string }) {
     setBusy(true);
     const j = await fetch("/api/listener/token", { method: "POST" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     setBusy(false);
-    if (j?.token) setToken(j.token); else setNote("Couldn't create the command. Try again.");
+    if (!j?.token) { setNote("Couldn't create the command. Try again."); return; }
+    setToken(j.token);
+    // Only this computer then checks for its listener (lifelog/LifeLogRecorder).
+    try { localStorage.setItem(LISTENER_HERE, "1"); } catch { /* storage blocked: tab may log too */ }
   };
   const revoke = async () => {
     const ok = await fetch("/api/listener/token", { method: "DELETE" }).then((r) => r.ok).catch(() => false);

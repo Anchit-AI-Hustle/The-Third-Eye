@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export interface LocalNote {
@@ -27,9 +28,11 @@ export function useLocalNotes() {
   const [ready, setReady] = useState(false);
   const remote = useRef(false);
 
+  // Re-read on every live-sync tick, so changes from other devices show up.
+  const tick = useLiveTick();
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
+    if (!tick) setReady(false);
     dataList<LocalNote>("notes").then((r) => {
       if (cancelled) return;
       remote.current = r.remote;
@@ -37,7 +40,7 @@ export function useLocalNotes() {
       setReady(true);
     });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, tick]);
 
   const create = useCallback(async (title: string, content = "") => {
     const now = new Date().toISOString();

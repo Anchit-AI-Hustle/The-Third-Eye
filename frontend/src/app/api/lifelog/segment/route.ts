@@ -2,6 +2,7 @@ import { identify } from "@/lib/serverIdentity";
 import { getDb } from "@/lib/db";
 import { saveLifeActions } from "@/lib/lifelog/actions";
 import { extractDay } from "@/lib/lifelog/extract";
+import { askInChat } from "@/lib/askInChat";
 import { sendPush } from "@/lib/push";
 import type { LogEvent, LogSegment } from "@/lib/lifelog/types";
 
@@ -54,8 +55,9 @@ export async function POST(req: Request) {
       const saved = (await saveLifeActions(email, date, out.actions, tz).catch(() => [])).filter((a) => a.saved && !a.note);
       followUps = saved.length;
       const mine = saved.filter((a) => a.needsYou);
-      if (mine.length) await sendPush(email, "Needs you", mine.map((a) => a.title).join(" · "), "/tasks").catch(() => false);
-      else if (saved.length) await sendPush(email, "JARVIS is on it", `${saved.length} follow-up${saved.length === 1 ? "" : "s"} from your day added to Tasks.`, "/tasks").catch(() => false);
+      if (mine.length) {
+        await askInChat(sb, email, `From what I heard just now, these need you - I've added them to Tasks:\n\n${mine.map((a) => `- ${a.title}${a.when ? ` (${a.when.replace("T", " ")})` : ""}`).join("\n")}\n\nWant me to set reminders, draft anything, or plan them into your day?`).catch(() => {});
+      } else if (saved.length) await sendPush(email, "JARVIS is on it", `${saved.length} follow-up${saved.length === 1 ? "" : "s"} from your day added to Tasks.`, "/tasks").catch(() => false);
     }
   }
 

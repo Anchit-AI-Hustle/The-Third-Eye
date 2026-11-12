@@ -123,7 +123,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ entity: 
   try { body = await req.json(); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   const rows = Array.isArray(body) ? body : [body];
   if (rows.length === 0) return Response.json({ rows: [] });
-  const scrubbed = rows.map((r) => scrub(r as Record<string, unknown>, c.email));
+  let scrubbed = rows.map((r) => scrub(r as Record<string, unknown>, c.email));
+  if (c.cfg.table === "lifelog_days") scrubbed = await mergeStoredDays(c.sb, c.email, scrubbed);
   const t = c.sb.from(c.cfg.table);
   const { data, error } = await (c.cfg.upsertOn ? t.upsert(scrubbed, { onConflict: c.cfg.upsertOn }) : t.insert(scrubbed)).select("*");
   if (error) {
@@ -164,4 +165,31 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ entity
     return Response.json({ error: "Delete failed" }, { status: 500 });
   }
   return Response.json({ ok: true });
+}
+
+type Row = Record<string, unknown>;
+const unionById = (stored: unknown, incoming: unknown, order: string) => {
+  const all = [...(Array.isArray(stored) ? stored : []), ...(Array.isArray(incoming) ? incoming : [])] as Row[];
+  return [...new Map(all.map((x) => [String(x.id), x])).values()].sort((a, b) => Number(a[order] ?? 0) - Number(b[order] ?? 0));
+};
+
+// A day is written whole by each device, but other devices (the phone's
+// service, the computer listener) add recordings to it on the server. Merging
+// keeps theirs: recordings and diary entries from both sides are kept, and a
+// device's empty timeline or summary never blanks the stored one.
+async function mergeStoredDays<T extends Row>(sb: Db, email: string, days: T[]): Promise<T[]> {
+  const ids = days.map((d) => String(d.id));
+  const { data } = await sb.from("lifelog_days").select("id, segments, diary, events, summary").eq("user_id", email).in("id", ids);
+  const stored = new Map(((data ?? []) as Row[]).map((r) => [String(r.id), r]));
+  return days.map((d) => {
+    const s = stored.get(String(d.id));
+    if (!s) return d;
+    return {
+      ...d,
+      segments: unionById(s.segments, d.segments, "startTs"),
+      diary: unionById(s.diary, d.diary, "ts"),
+      events: Array.isArray(d.events) && d.events.length ? d.events : s.events,
+      summary: d.summary || s.summary,
+    };
+  });
 }

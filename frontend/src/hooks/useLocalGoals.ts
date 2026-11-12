@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export interface Goal {
@@ -35,9 +36,11 @@ export function useLocalGoals() {
   const goalsRef = useRef(goals);
   goalsRef.current = goals;
 
+  // Re-read on every live-sync tick, so changes from other devices show up.
+  const tick = useLiveTick();
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
+    if (!tick) setReady(false);
     dataList<Goal>("goals").then((r) => {
       if (cancelled) return;
       remote.current = r.remote;
@@ -45,7 +48,7 @@ export function useLocalGoals() {
       setReady(true);
     });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, tick]);
 
   const add = useCallback(async (goal: Omit<Goal, "id" | "created_at">) => {
     const g: Goal = { ...goal, id: crypto.randomUUID(), created_at: new Date().toISOString() };
