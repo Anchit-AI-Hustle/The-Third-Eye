@@ -40,11 +40,21 @@ export async function storeGoogleRefreshToken(
   return !error;
 }
 
-export async function getGoogleAccessToken(
-  email: string,
-): Promise<{ accessToken: string; scope?: string } | null> {
+export type GoogleTokenState =
+  | { state: "none" }
+  | { state: "expired"; reason: string }
+  | { state: "error"; reason: string }
+  | { state: "ok"; accessToken: string; scope?: string };
+
+/**
+ * Exchanges the stored refresh token for an access token, and says why when it
+ * can't. "expired" is Google refusing the grant (revoked, or the 7-day limit on
+ * refresh tokens while the consent screen is in Testing): only reconnecting
+ * fixes it, so the UI must say that rather than "Connected" or "not connected".
+ */
+export async function refreshGoogleToken(email: string): Promise<GoogleTokenState> {
   const sb = getDb();
-  if (!sb) return null;
+  if (!sb) return { state: "none" };
 
   const { data } = await sb
     .from("google_tokens")
@@ -52,11 +62,10 @@ export async function getGoogleAccessToken(
     .eq("user_id", email)
     .maybeSingle();
 
-  const enc = (data as { refresh_token_enc?: string; scope?: string } | null)?.refresh_token_enc;
-  if (!enc) return null;
-
-  const refreshToken = decrypt(enc);
-  if (!refreshToken) return null;
+  const row = data as { refresh_token_enc?: string; scope?: string } | null;
+  if (!row?.refresh_token_enc) return { state: "none" };
+  const refreshToken = decrypt(row.refresh_token_enc);
+  if (!refreshToken) return { state: "error", reason: "the stored token could not be decrypted (TOKEN_ENCRYPTION_KEY changed?)" };
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -67,12 +76,20 @@ export async function getGoogleAccessToken(
       grant_type: "refresh_token",
       refresh_token: refreshToken,
     }),
-  });
-  if (!res.ok) return null;
+  }).catch(() => null);
+  if (!res) return { state: "error", reason: "Google could not be reached" };
+  const json = (await res.json().catch(() => ({}))) as { access_token?: string; error?: string; error_description?: string };
+  if (res.ok && json.access_token) return { state: "ok", accessToken: json.access_token, scope: row.scope };
+  const reason = `${json.error ?? res.status}${json.error_description ? `: ${json.error_description}` : ""}`;
+  console.warn(`google token refresh failed: ${reason}`);
+  return json.error === "invalid_grant" ? { state: "expired", reason } : { state: "error", reason };
+}
 
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) return null;
-  return { accessToken: json.access_token, scope: (data as { scope?: string } | null)?.scope };
+export async function getGoogleAccessToken(
+  email: string,
+): Promise<{ accessToken: string; scope?: string } | null> {
+  const t = await refreshGoogleToken(email);
+  return t.state === "ok" ? { accessToken: t.accessToken, scope: t.scope } : null;
 }
 
 /**

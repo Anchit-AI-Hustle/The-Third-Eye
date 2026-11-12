@@ -1,6 +1,6 @@
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
-import { getGoogleAccessToken } from "@/lib/googleToken";
+import { refreshGoogleToken } from "@/lib/googleToken";
 import { emailRecipients, gmailComposeUrl, gmailSendError } from "@/lib/liveActions";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
@@ -20,9 +20,11 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
   // The send needs a token carrying gmail.send. Google sign-in asks for it,
   // and Settings → Connections can grant it again if it was declined.
   let accessToken: string | undefined;
+  let googleExpired = false;
   try {
-    const connected = await getGoogleAccessToken(email);
-    if (connected?.accessToken) accessToken = connected.accessToken;
+    const connected = await refreshGoogleToken(email);
+    if (connected.state === "ok") accessToken = connected.accessToken;
+    googleExpired = connected.state === "expired";
   } catch { /* not connected - reported below */ }
 
   // Mirror the chat route's premium gate so the paywall can't be bypassed via the
@@ -57,7 +59,7 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
         return {
           ok: false,
           openUrl: compose,
-          result: `Gmail isn't connected for a direct send. No email was sent. Open the Gmail draft below to send to ${to} yourself. To send from here next time: Settings → Connections → "Connect Google".`,
+          result: `${googleExpired ? "Google access has expired or was revoked, so Gmail can't send." : "Gmail isn't connected for a direct send."} No email was sent. Open the Gmail draft below to send to ${to} yourself. To send from here next time: Settings → Connections → "Connect Google".`,
         };
       }
       const sent = await sendGmail(accessToken, to, subject, body);
