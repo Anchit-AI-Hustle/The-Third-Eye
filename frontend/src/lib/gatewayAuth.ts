@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 // gateway process, and anything else that needs to act as one user without a
 // cookie. Scoped so a token minted for speech cannot also write to the data API.
 
-export const GATEWAY_SCOPES = ["chat", "transcribe", "data"] as const;
+export const GATEWAY_SCOPES = ["chat", "transcribe", "data", "lifelog"] as const;
 export type GatewayScope = (typeof GATEWAY_SCOPES)[number];
 
 const PREFIX = "te_gw_";

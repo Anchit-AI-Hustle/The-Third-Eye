@@ -9,7 +9,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https: wss:",
+  // 127.0.0.1:47321: the computer listener's status (public/wake), so a tab doesn't log the day twice.
+  "connect-src 'self' https: wss: http://127.0.0.1:47321",
   "media-src 'self' blob: data: https:",
   "worker-src 'self' blob:",
   "frame-src 'self' https://js.stripe.com https://checkout.stripe.com https://api.razorpay.com https://checkout.razorpay.com",

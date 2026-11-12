@@ -57,6 +57,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+        <receiver android:name=".BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".WhatsAppSender"
             android:exported="true"
@@ -88,6 +94,7 @@
     <!-- The web layer already takes a wake lock so the screen cannot sleep out
          from under SpeechRecognition; this is its native counterpart. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Device control: alarms and timers in the Clock app, Do Not Disturb (granted in Settings). -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />

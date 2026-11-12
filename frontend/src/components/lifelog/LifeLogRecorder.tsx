@@ -36,6 +36,12 @@ const native = (): Native | null => {
 
 const STATUS_MS = 5_000;
 
+// The computer listener (public/wake) answers here while it logs the day, so
+// an open tab on the same computer doesn't record it a second time.
+const HELPER = "http://127.0.0.1:47321/status";
+const helperLogging = () =>
+  fetch(HELPER, { signal: AbortSignal.timeout(800) }).then((r) => r.json()).then((j: { logging?: boolean }) => !!j.logging).catch(() => false);
+
 function useNativeDayRecorder(on: boolean): DayRecorder {
   const [st, setSt] = useState<NativeStatus>({});
   const seen = useRef(0);
@@ -164,12 +170,15 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
   // back (reopened, unlocked, back online), it picks up again by itself.
   useEffect(() => {
     if (status !== "authenticated") return;
-    const resume = () => {
-      // The Android app's service resumes itself (MainActivity.onResume).
-      if (native() || !alwaysListen() || recRef.current.recording || document.visibilityState !== "visible") return;
+    const resume = async () => {
+      if (!alwaysListen() || recRef.current.recording || document.visibilityState !== "visible") return;
+      // "Always listen" follows the account: switched on on another device,
+      // the Android app starts its own service here too.
+      if (native()) { await recRef.current.start(); return; }
+      if (await helperLogging()) return;
       void recRef.current.start();
     };
-    resume();
+    void resume();
     const stop = () => stopListening();
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("focus", resume);
