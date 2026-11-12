@@ -204,7 +204,8 @@ export function LifeLogRecorderProvider({ children }: { children: React.ReactNod
   // on the server, reach this device on every live-sync tick.
   useEffect(() => {
     if (status !== "authenticated") return;
-    const pull = () => void syncFromCloud().then(() => window.dispatchEvent(new CustomEvent(LIFELOG_UPDATED, { detail: localDateKey(new Date()) })));
+    // One event per day that changed, so a past day on screen refreshes too.
+    const pull = () => void syncFromCloud().then((dates) => dates.forEach((d) => window.dispatchEvent(new CustomEvent(LIFELOG_UPDATED, { detail: d }))));
     window.addEventListener(LIVE_SYNC, pull);
     return () => window.removeEventListener(LIVE_SYNC, pull);
   }, [status]);

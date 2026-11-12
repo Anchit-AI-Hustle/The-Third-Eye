@@ -34,7 +34,8 @@ export function useLocalNotes() {
     let cancelled = false;
     if (!tick) setReady(false);
     dataList<LocalNote>("notes").then((r) => {
-      if (cancelled) return;
+      // A background refresh that can't reach the server keeps the server-backed list.
+      if (cancelled || (tick && remote.current && !r.remote)) return;
       remote.current = r.remote;
       setNotes(r.remote ? r.rows : ls());
       setReady(true);

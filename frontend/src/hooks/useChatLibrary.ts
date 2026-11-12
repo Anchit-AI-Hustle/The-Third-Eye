@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLiveTick } from "@/lib/liveSync";
 import { dataDelete, dataInsert, dataList } from "@/lib/dataClient";
 import type { Attachment } from "@/lib/attachments";
@@ -56,6 +56,7 @@ function mergeChats(server: ChatSummary[], local: ChatSummary[]): ChatSummary[] 
 
 export function useChatLibrary() {
   const [remote, setRemote] = useState<boolean | null>(null);
+  const remoteRef = useRef(false);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
 
@@ -64,7 +65,9 @@ export function useChatLibrary() {
   useEffect(() => {
     let alive = true;
     Promise.all([dataList<ChatSummary>("conversations"), dataList<Project>("projects")]).then(([c, p]) => {
-      if (!alive) return;
+      // A background refresh that can't reach the server keeps the server-backed list.
+      if (!alive || (tick && remoteRef.current && !c.remote)) return;
+      remoteRef.current = c.remote;
       setRemote(c.remote);
       const local = readLocal<SavedChat>(LOCAL_CHATS).map(summary);
       setChats(mergeChats(c.remote ? c.rows : [], local));
