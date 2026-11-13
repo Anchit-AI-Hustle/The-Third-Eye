@@ -22,6 +22,10 @@ export async function GET() {
     grok:      !!clean(env.XAI_API_KEY),
     groq:      !!clean(env.GROQ_API_KEY),
     cerebras:  !!clean(env.CEREBRAS_API_KEY),
+    openrouter: !!clean(env.OPENROUTER_API_KEY),
+    mistral:    !!clean(env.MISTRAL_API_KEY),
+    huggingface: !!clean(env.HF_TOKEN),
+    anthropic: !!clean(env.ANTHROPIC_API_KEY),
     ollama:    env.OLLAMA_ENABLED === "1",
   };
 
@@ -33,9 +37,7 @@ export async function GET() {
     token_encryption: !!clean(env.TOKEN_ENCRYPTION_KEY),
   };
 
-  const llm_available =
-    providers.openai > 0 || providers.gemini ||
-    providers.grok || providers.groq || providers.cerebras || providers.ollama;
+  const llm_available = Object.values(providers).some(Boolean);
 
   // VERCEL_GIT_COMMIT_SHA is a system env var, so it is only populated when the
   // Git integration built the deployment. CLI deploys pass the sha in as a

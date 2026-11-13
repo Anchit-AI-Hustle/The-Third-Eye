@@ -53,6 +53,12 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Start here") {
+                    NavigationLink { HowToUseView() } label: {
+                        Label("How to use the app", systemImage: "questionmark.circle")
+                    }
+                    .listRowBackground(Theme.surface.opacity(0.7))
+                }
                 ForEach(moreMenu) { group in
                     Section(group.title) {
                         ForEach(group.items) { item in

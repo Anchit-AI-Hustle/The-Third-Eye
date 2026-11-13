@@ -10,7 +10,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.media.AudioFormat
+import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.Build
 import android.os.IBinder
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,7 +47,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -50,20 +54,21 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import java.io.File
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.sqrt
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Records the day in 45-second chunks like the website (hooks/useDayRecorder): each chunk is
- * sent to /api/transcribe unless it was near-silent, then deleted from the phone. A foreground
- * service keeps the microphone open with the screen off.
+ * Records the day in 45-second chunks. Device noise reduction and a speech gate
+ * run before audio is retained or sent to transcription.
  */
 object DayRecorder {
     const val CHUNK_MS = 45_000L
-    // The website's silence peak (0.012 of full scale) on MediaRecorder's 0..32767 amplitude.
-    const val SILENT_PEAK = 393
+    private const val RATE = 16_000
 
     var recording by mutableStateOf(false)
         private set
@@ -81,7 +86,7 @@ object DayRecorder {
         app.startForegroundService(Intent(app, DayRecordingService::class.java))
         error = null
         recording = true
-        scope.launch { while (recording) chunk(app) }
+        scope.launch { while (recording) chunk() }
     }
 
     fun stop() {
@@ -89,50 +94,109 @@ object DayRecorder {
         app?.let { it.stopService(Intent(it, DayRecordingService::class.java)) }
     }
 
-    private suspend fun chunk(app: Context) {
-        val file = File.createTempFile("lifelog", ".m4a", app.cacheDir)
-        @Suppress("DEPRECATION")
-        val rec = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(app) else MediaRecorder()
-        try {
-            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
-            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            rec.setAudioSamplingRate(16_000)
-            rec.setAudioEncodingBitRate(32_000)
-            rec.setAudioChannels(1)
-            rec.setOutputFile(file.absolutePath)
-            rec.prepare()
-            rec.start()
-        } catch (e: Exception) {
-            rec.release()
-            file.delete()
-            error = "Couldn't start the microphone."
+    private suspend fun chunk() {
+        val capture = withContext(Dispatchers.IO) { captureChunk() }
+        if (capture == null) {
+            error = "Couldn't start the microphone. Check microphone access and try again."
             stop()
             return
         }
-        val start = System.currentTimeMillis()
-        var peak = 0
-        withTimeoutOrNull(CHUNK_MS) { while (recording) { delay(500); peak = maxOf(peak, rec.maxAmplitude) } }
-        peak = maxOf(peak, rec.maxAmplitude)
-        runCatching { rec.stop() }
-        rec.release()
-        val end = System.currentTimeMillis()
-        // Transcribed while the next chunk records.
-        scope.launch { deliver(file, start, end, silent = peak < SILENT_PEAK) }
+        scope.launch { deliver(capture.start, capture.end, capture.wav, capture.silent) }
     }
 
-    private suspend fun deliver(file: File, start: Long, end: Long, silent: Boolean) {
+    private data class Capture(val start: Long, val end: Long, val wav: ByteArray?, val silent: Boolean)
+
+    private fun captureChunk(): Capture? {
+        val min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        var recorder: AudioRecord? = null
+        var ns: NoiseSuppressor? = null
+        var agc: AutomaticGainControl? = null
+        var aec: AcousticEchoCanceler? = null
+        val start = System.currentTimeMillis()
+        val pcm = ByteArrayOutputStream()
+        try {
+            recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(min, RATE))
+            if (recorder.state != AudioRecord.STATE_INITIALIZED) return null
+            ns = if (NoiseSuppressor.isAvailable()) runCatching { NoiseSuppressor.create(recorder.audioSessionId) }.getOrNull() else null
+            agc = if (AutomaticGainControl.isAvailable()) runCatching { AutomaticGainControl.create(recorder.audioSessionId) }.getOrNull() else null
+            aec = if (AcousticEchoCanceler.isAvailable()) runCatching { AcousticEchoCanceler.create(recorder.audioSessionId) }.getOrNull() else null
+            runCatching { ns?.enabled = true }; runCatching { agc?.enabled = true }; runCatching { aec?.enabled = true }
+            recorder.startRecording()
+            val preRoll = ArrayDeque<ShortArray>()
+            val frame = ShortArray(RATE / 10)
+            var voiceFrames = 0
+            var quietFrames = 0
+            var speechOpen = false
+            while (recording && System.currentTimeMillis() - start < CHUNK_MS) {
+                val count = recorder.read(frame, 0, frame.size)
+                if (count <= 0) continue
+                val copy = frame.copyOf(count)
+                preRoll.addLast(copy)
+                while (preRoll.size > 4) preRoll.removeFirst()
+                if (speechLike(copy)) {
+                    voiceFrames++
+                    quietFrames = 0
+                    if (!speechOpen && voiceFrames >= 2) {
+                        speechOpen = true
+                        preRoll.forEach { appendPcm(pcm, it) }
+                    } else if (speechOpen) appendPcm(pcm, copy)
+                } else {
+                    voiceFrames = 0
+                    if (speechOpen && ++quietFrames <= 8) appendPcm(pcm, copy)
+                    if (quietFrames > 8) speechOpen = false
+                }
+            }
+            val end = System.currentTimeMillis()
+            val silent = pcm.size() < RATE * 2 / 3
+            return Capture(start, end, if (silent) null else wav(pcm.toByteArray()), silent)
+        } catch (_: Exception) {
+            return null
+        } finally {
+            runCatching { recorder?.stop() }
+            recorder?.release()
+            ns?.release(); agc?.release(); aec?.release()
+        }
+    }
+
+    private fun speechLike(samples: ShortArray): Boolean {
+        if (samples.size < 2) return false
+        var energy = 0.0
+        var crossings = 0
+        var previous = samples[0]
+        for (sample in samples) {
+            energy += sample.toDouble() * sample
+            if ((sample < 0) != (previous < 0)) crossings++
+            previous = sample
+        }
+        val rate = crossings.toDouble() / samples.size
+        return sqrt(energy / samples.size) >= 420 && rate in 0.015..0.32
+    }
+
+    private fun appendPcm(out: ByteArrayOutputStream, samples: ShortArray) {
+        val bytes = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+        samples.forEach(bytes::putShort)
+        out.write(bytes.array())
+    }
+
+    private fun wav(pcm: ByteArray): ByteArray {
+        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        header.put("RIFF".toByteArray()).putInt(36 + pcm.size).put("WAVE".toByteArray())
+            .put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1)
+            .putInt(RATE).putInt(RATE * 2).putShort(2).putShort(16)
+            .put("data".toByteArray()).putInt(pcm.size)
+        return header.array() + pcm
+    }
+
+    private suspend fun deliver(start: Long, end: Long, wav: ByteArray?, silent: Boolean) {
         var transcript = ""
         var provider: String? = null
-        if (!silent && file.length() > 2000) {
+        if (!silent && wav != null) {
             runCatching {
-                val bytes = withContext(Dispatchers.IO) { file.readBytes() }
-                val reply = json.parseToJsonElement(Api.backend.upload("/api/transcribe", "audio", listOf(UploadFile("chunk.m4a", "audio/mp4", bytes)))).jsonObject
+                val reply = json.parseToJsonElement(Api.backend.upload("/api/transcribe", "audio", listOf(UploadFile("speech.wav", "audio/wav", wav)))).jsonObject
                 transcript = reply["text"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
                 provider = reply["provider"]?.jsonPrimitive?.contentOrNull
             }
         }
-        file.delete()
         lastChunkAt = end
         onSegment?.invoke(LifeLogDay.Segment("$start", start.toDouble(), end.toDouble(), transcript, false, provider, silent))
     }

@@ -116,7 +116,7 @@ const DEFAULT_MODELS = {
   openai: "gpt-4o-mini",
   gemini: "gemini-2.5-flash",
   geminiPro: "gemini-2.5-pro",
-  grok: "grok-2-latest",
+  grok: "grok-4.7",
   groq: "openai/gpt-oss-120b",
   cerebras: "gpt-oss-120b",
   mistral: "mistral-small-latest",
@@ -124,7 +124,7 @@ const DEFAULT_MODELS = {
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
   // The paid backups, used once the free tiers are spent.
   openrouterPaid: "openai/gpt-oss-120b",
-  anthropic: "claude-opus-5-5",
+  anthropic: "claude-opus-5",
   ollama: "llama3.1:8b",
 } as const;
 type ModelProvider = keyof typeof DEFAULT_MODELS;

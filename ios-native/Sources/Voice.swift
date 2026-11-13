@@ -52,7 +52,8 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         self.onFinal = onFinal
         do {
             let audio = AVAudioSession.sharedInstance()
-            try audio.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+            // Use iOS voice processing for echo cancellation and speech-focused input.
+            try audio.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
             try audio.setActive(true, options: .notifyOthersOnDeactivation)
 
             let request = SFSpeechAudioBufferRecognitionRequest()
@@ -65,6 +66,7 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
             let input = engine.inputNode
             input.removeTap(onBus: 0)
+            try? input.setVoiceProcessingEnabled(true)
             input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
                 request.append(buffer)
             }
@@ -123,7 +125,7 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         let clean = Voice.speakable(text)
         guard !clean.isEmpty else { then?(); return }
         stopListening()
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? AVAudioSession.sharedInstance().setActive(true)
         onSpoken = then
         let utterance = AVSpeechUtterance(string: clean)

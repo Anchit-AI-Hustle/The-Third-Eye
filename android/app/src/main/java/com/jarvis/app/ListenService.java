@@ -12,6 +12,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.AutomaticGainControl;
+import android.media.audiofx.NoiseSuppressor;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
@@ -27,6 +30,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayDeque;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
@@ -161,9 +165,15 @@ public class ListenService extends Service {
     private boolean listen() {
         int min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
         AudioRecord rec;
+        NoiseSuppressor noiseSuppressor = null;
+        AutomaticGainControl gainControl = null;
+        AcousticEchoCanceler echoCanceler = null;
         try {
             rec = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(min, RATE));
             if (rec.getState() != AudioRecord.STATE_INITIALIZED) { rec.release(); throw new IllegalStateException(); }
+            if (NoiseSuppressor.isAvailable()) noiseSuppressor = NoiseSuppressor.create(rec.getAudioSessionId());
+            if (AutomaticGainControl.isAvailable()) gainControl = AutomaticGainControl.create(rec.getAudioSessionId());
+            if (AcousticEchoCanceler.isAvailable()) echoCanceler = AcousticEchoCanceler.create(rec.getAudioSessionId());
             rec.startRecording();
         } catch (Exception e) {
             error = "The microphone isn't available right now. Retrying…";
@@ -174,8 +184,11 @@ public class ListenService extends Service {
         long wokeAt = 0;
         short[] buf = new short[RATE / 10];
         ByteArrayOutputStream chunk = new ByteArrayOutputStream();
+        ArrayDeque<byte[]> preRoll = new ArrayDeque<>();
         long start = System.currentTimeMillis();
-        int peak = 0;
+        int voiceFrames = 0;
+        int quietFrames = 0;
+        boolean speechOpen = false;
         try {
             while (active) {
                 int n = rec.read(buf, 0, buf.length);
@@ -185,27 +198,64 @@ public class ListenService extends Service {
                     if (wake == null) { wake = WakeWord.open(this); wakeReady = wake != null; }
                     if (wake != null && wake.feed(buf, n) && System.currentTimeMillis() - wokeAt > WAKE_COOLDOWN_MS) { wokeAt = System.currentTimeMillis(); woke(); }
                 }
-                if (!logging(this)) { chunk.reset(); start = System.currentTimeMillis(); peak = 0; continue; }
+                if (!logging(this)) { chunk.reset(); preRoll.clear(); start = System.currentTimeMillis(); voiceFrames = 0; quietFrames = 0; speechOpen = false; continue; }
                 ByteBuffer bytes = ByteBuffer.allocate(n * 2).order(ByteOrder.LITTLE_ENDIAN);
-                for (int i = 0; i < n; i++) { bytes.putShort(buf[i]); peak = Math.max(peak, Math.abs(buf[i])); }
-                chunk.write(bytes.array(), 0, n * 2);
+                for (int i = 0; i < n; i++) bytes.putShort(buf[i]);
+                byte[] frame = bytes.array();
+                preRoll.addLast(frame);
+                while (preRoll.size() > 4) preRoll.removeFirst(); // 400 ms to preserve the first word
+                if (speechLike(buf, n)) {
+                    voiceFrames++;
+                    quietFrames = 0;
+                    if (!speechOpen && voiceFrames >= 2) {
+                        speechOpen = true;
+                        for (byte[] earlier : preRoll) chunk.write(earlier, 0, earlier.length);
+                    } else if (speechOpen) chunk.write(frame, 0, frame.length);
+                } else {
+                    voiceFrames = 0;
+                    if (speechOpen && ++quietFrames <= 8) chunk.write(frame, 0, frame.length); // 800 ms post-roll
+                    if (quietFrames > 8) speechOpen = false;
+                }
                 long now = System.currentTimeMillis();
                 if (now - start >= CHUNK_MS) {
                     byte[] pcm = chunk.toByteArray();
                     long from = start, to = now;
-                    boolean silent = peak < SILENT_PEAK;
+                    boolean silent = pcm.length < RATE * 2 / 3; // discard clips shorter than 330 ms of gated speech
                     uploads.execute(() -> deliver(pcm, from, to, silent));
                     chunk.reset();
+                    preRoll.clear();
                     start = now;
-                    peak = 0;
+                    voiceFrames = 0;
+                    quietFrames = 0;
+                    speechOpen = false;
                 }
             }
         } finally {
             try { rec.stop(); } catch (Exception ignored) { /* already stopped */ }
             rec.release();
+            if (noiseSuppressor != null) noiseSuppressor.release();
+            if (gainControl != null) gainControl.release();
+            if (echoCanceler != null) echoCanceler.release();
             if (wake != null) wake.close();
         }
         return true;
+    }
+
+    /** A lightweight speech gate: energy plus speech-like zero-crossing rate, after platform noise suppression. */
+    private static boolean speechLike(short[] samples, int count) {
+        if (count < 2) return false;
+        long energy = 0;
+        int crossings = 0;
+        short previous = samples[0];
+        for (int i = 0; i < count; i++) {
+            int sample = samples[i];
+            energy += (long) sample * sample;
+            if ((sample < 0) != (previous < 0)) crossings++;
+            previous = (short) sample;
+        }
+        double rms = Math.sqrt((double) energy / count);
+        double crossingRate = (double) crossings / count;
+        return rms >= 420 && crossingRate >= 0.015 && crossingRate <= 0.32;
     }
 
     // The name was heard: open the assistant in talk mode, over the lock screen if need be.

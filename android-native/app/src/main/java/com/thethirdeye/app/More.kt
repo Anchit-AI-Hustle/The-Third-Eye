@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Diamond
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.Policy
@@ -116,6 +117,7 @@ sealed interface Dest {
     data class Day(val day: LifeLogDay) : Dest
     data object Today : Dest
     data object KolabStudio : Dest
+    data object HowToUse : Dest
 }
 
 class Nav {
@@ -130,6 +132,7 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
     BackHandler(nav.stack.isNotEmpty()) { nav.back() }
     when (val top = nav.stack.lastOrNull()) {
         null -> ListScreen("More", loaded = true, refresh = {}) {
+            item("how-to-use") { MenuRow("How to use the app", Icons.AutoMirrored.Outlined.HelpOutline) { nav.push(Dest.HowToUse) } }
             moreMenu.forEach { (group, items) ->
                 item(group) { SectionLabel(group, Palette.muted) }
                 items.forEach { item -> item(item.path) { MenuRow(item.title, item.icon) { nav.push(Dest.Screen(item)) } } }
@@ -167,6 +170,7 @@ fun MoreScreen(session: Session, app: AppState, nav: Nav = remember { Nav() }) {
         is Dest.Day -> LifeLogDayScreen(top.day, nav::back)
         Dest.Today -> LifeLogTodayScreen(nav::back)
         Dest.KolabStudio -> KolabStudioScreen(nav)
+        Dest.HowToUse -> HowToUseScreen(nav::back)
     }
 }
 

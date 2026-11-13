@@ -3,22 +3,35 @@ package com.thethirdeye.app
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Locale
+import kotlin.math.sqrt
 
-// Native voice: Android's speech recognizer for what the person says (it ends
-// on a pause by itself), and the system text-to-speech for replies. Listening
-// stops while a reply is spoken so the assistant never hears itself.
-class Voice(private val context: Context) : RecognitionListener {
+// Native voice: device noise reduction and a speech gate run before audio is
+// sent to the transcription API. Listening stops while a reply is spoken.
+class Voice(private val context: Context) {
     var listening by mutableStateOf(false)
         private set
     var speaking by mutableStateOf(false)
@@ -28,7 +41,10 @@ class Voice(private val context: Context) : RecognitionListener {
     var error by mutableStateOf<String?>(null)
 
     private val main = Handler(Looper.getMainLooper())
-    private var recognizer: SpeechRecognizer? = null
+    @Volatile private var captureActive = false
+    @Volatile private var activeRecorder: AudioRecord? = null
+    private val requests = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var transcriptionJob: Job? = null
     private var onFinal: ((String) -> Unit)? = null
     private var onSpoken: (() -> Unit)? = null
     private var isReady = false
@@ -67,39 +83,36 @@ class Voice(private val context: Context) : RecognitionListener {
         next?.invoke()
     }
 
-    /** Listens until the person pauses, then hands over what they said (empty when they said nothing). */
+    /** Captures only speech-like segments, then sends the gated WAV to transcription. */
     fun listen(onFinal: (String) -> Unit) {
         if (listening) return
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            error = "Speech recognition isn't available on this phone."
-            return
-        }
         stopSpeaking()
         error = null
-        partial = ""
+        partial = "Listening…"
         this.onFinal = onFinal
-        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(context, otherRecognizer(context)).also { it.setRecognitionListener(this); recognizer = it }
         listening = true
-        r.startListening(
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag()),
-        )
+        captureActive = true
+        Thread({ captureAndTranscribe() }, "third-eye-speech-capture").start()
     }
 
     private fun finish(text: String?) {
         if (!listening) return
         listening = false
+        partial = ""
+        transcriptionJob = null
         val deliver = onFinal
         onFinal = null
         if (text != null) deliver?.invoke(text.trim())
     }
 
     fun stopListening() {
-        recognizer?.cancel()
+        captureActive = false
+        runCatching { activeRecorder?.stop() }
+        transcriptionJob?.cancel()
+        transcriptionJob = null
         onFinal = null
         listening = false
+        partial = ""
     }
 
     /** How a voice sounds: a language tag such as en-GB, its gender, and its own pitch and speed. */
@@ -128,39 +141,118 @@ class Voice(private val context: Context) : RecognitionListener {
     }
 
     fun release() {
-        recognizer?.destroy()
-        recognizer = null
+        stopListening()
+        requests.cancel()
         tts.shutdown()
     }
 
-    override fun onPartialResults(results: Bundle) {
-        results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { partial = it }
-    }
+    private fun captureAndTranscribe() {
+        val rate = 16_000
+        val frameSize = 320 // 20 ms
+        var recorder: AudioRecord? = null
+        var ns: NoiseSuppressor? = null
+        var agc: AutomaticGainControl? = null
+        var aec: AcousticEchoCanceler? = null
+        val speech = ByteArrayOutputStream()
+        try {
+            val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, rate * 2))
+            check(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone unavailable" }
+            activeRecorder = recorder
+            ns = if (NoiseSuppressor.isAvailable()) runCatching { NoiseSuppressor.create(recorder.audioSessionId) }.getOrNull() else null
+            agc = if (AutomaticGainControl.isAvailable()) runCatching { AutomaticGainControl.create(recorder.audioSessionId) }.getOrNull() else null
+            aec = if (AcousticEchoCanceler.isAvailable()) runCatching { AcousticEchoCanceler.create(recorder.audioSessionId) }.getOrNull() else null
+            runCatching { ns?.enabled = true }
+            runCatching { agc?.enabled = true }
+            runCatching { aec?.enabled = true }
+            recorder.startRecording()
 
-    override fun onResults(results: Bundle) {
-        finish(results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: partial)
-    }
-
-    override fun onError(code: Int) {
-        when (code) {
-            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> finish("")
-            else -> {
-                error = when (code) {
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Allow the microphone for The Third Eye in Settings."
-                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech needs a connection right now."
-                    else -> "Couldn't hear that. Try again."
+            val preRoll = ArrayDeque<ShortArray>()
+            val frame = ShortArray(frameSize)
+            var activeFrames = 0
+            var quietFrames = 0
+            var speechStarted = false
+            val startAt = System.currentTimeMillis()
+            while (captureActive && System.currentTimeMillis() - startAt < MAX_CAPTURE_MS) {
+                val count = recorder.read(frame, 0, frame.size)
+                if (count <= 0) continue
+                val copy = frame.copyOf(count)
+                preRoll.addLast(copy)
+                while (preRoll.size > PRE_ROLL_FRAMES) preRoll.removeFirst()
+                if (speechLike(copy)) {
+                    activeFrames++
+                    quietFrames = 0
+                    if (!speechStarted && activeFrames >= VOICE_START_FRAMES) {
+                        speechStarted = true
+                        preRoll.forEach { appendPcm(speech, it) }
+                    } else if (speechStarted) appendPcm(speech, copy)
+                } else {
+                    activeFrames = 0
+                    if (speechStarted && ++quietFrames <= POST_ROLL_FRAMES) appendPcm(speech, copy)
+                    if (quietFrames > POST_ROLL_FRAMES) break
                 }
-                finish(null)
+            }
+        } catch (e: Exception) {
+            if (captureActive) main.post { error = e.message ?: "Couldn't start the microphone." }
+        } finally {
+            captureActive = false
+            runCatching { recorder?.stop() }
+            recorder?.release()
+            ns?.release(); agc?.release(); aec?.release()
+            activeRecorder = null
+        }
+        if (!listening) return
+        if (speech.size() < MIN_SPEECH_BYTES) {
+            main.post { finish("") }
+            return
+        }
+        main.post { partial = "Transcribing…" }
+        transcriptionJob = requests.launch {
+            try {
+                val wav = wav(speech.toByteArray(), rate)
+                val response = Api.backend.upload("/api/transcribe", "audio", listOf(UploadFile("speech.wav", "audio/wav", wav)))
+                val text = json.parseToJsonElement(response).jsonObject["text"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+                main.post { if (listening) finish(text) }
+            } catch (e: Exception) {
+                main.post {
+                    if (listening) {
+                        error = e.message ?: "Speech transcription failed. Try again."
+                        finish("")
+                    }
+                }
             }
         }
     }
 
-    override fun onReadyForSpeech(params: Bundle?) {}
-    override fun onBeginningOfSpeech() {}
-    override fun onRmsChanged(rmsdB: Float) {}
-    override fun onBufferReceived(buffer: ByteArray?) {}
-    override fun onEndOfSpeech() {}
-    override fun onEvent(eventType: Int, params: Bundle?) {}
+    private fun speechLike(samples: ShortArray): Boolean {
+        if (samples.size < 2) return false
+        var energy = 0.0
+        var crossings = 0
+        var previous = samples[0]
+        for (sample in samples) {
+            energy += sample.toDouble() * sample
+            if ((sample < 0) != (previous < 0)) crossings++
+            previous = sample
+        }
+        val rms = sqrt(energy / samples.size)
+        val crossingRate = crossings.toDouble() / samples.size
+        return rms >= VOICE_RMS_THRESHOLD && crossingRate in 0.015..0.32
+    }
+
+    private fun appendPcm(output: ByteArrayOutputStream, samples: ShortArray) {
+        val bytes = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+        samples.forEach(bytes::putShort)
+        output.write(bytes.array())
+    }
+
+    private fun wav(pcm: ByteArray, sampleRate: Int): ByteArray {
+        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        header.put("RIFF".toByteArray()).putInt(36 + pcm.size).put("WAVE".toByteArray())
+            .put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1)
+            .putInt(sampleRate).putInt(sampleRate * 2).putShort(2).putShort(16)
+            .put("data".toByteArray()).putInt(pcm.size)
+        return header.array() + pcm
+    }
 
     // Remembered once found; the engine lists no voices until it has started.
     private fun voiceFor(accent: Accent): android.speech.tts.Voice? = chosen[accent] ?: run {
@@ -172,6 +264,12 @@ class Voice(private val context: Context) : RecognitionListener {
     data class VoiceInfo(val name: String, val tag: String, val local: Boolean, val quality: Int)
 
     companion object {
+        private const val MAX_CAPTURE_MS = 30_000L
+        private const val VOICE_RMS_THRESHOLD = 420.0
+        private const val VOICE_START_FRAMES = 5
+        private const val PRE_ROLL_FRAMES = 20
+        private const val POST_ROLL_FRAMES = 40
+        private const val MIN_SPEECH_BYTES = 16_000 * 2 / 3
         /** JARVIS's own voice: the British man the website and the agent roll-call use (frontend/src/lib/systems.ts). */
         val JARVIS = Accent("en-GB", 0.92f, 1f, "male")
 

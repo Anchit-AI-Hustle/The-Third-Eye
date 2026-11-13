@@ -84,7 +84,7 @@ final class DayRecorder: ObservableObject {
             return
         }
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers])
+            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             self.error = "Couldn't start the microphone: \(error.localizedDescription)"
