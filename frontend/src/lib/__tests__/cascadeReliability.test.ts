@@ -85,9 +85,9 @@ describe("free first, paid credit as backup", () => {
     stubWithClaude({ "api.groq.com": rateLimited }, [claude([{ type: "thinking", thinking: "", signature: "s" }, { type: "text", text: "from claude" }])]);
     const { llmCascade } = await import("@/lib/llmCascade");
     const out = await llmCascade({ system: "Be brief.", messages: [{ role: "user", content: "x" }], temperature: 0.7 });
-    expect(out).toMatchObject({ provider: "anthropic", model: "claude-opus-5", text: "from claude" });
+    expect(out).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", text: "from claude" });
     expect(calls.map((c) => c.host)).toEqual(["api.groq.com", "api.anthropic.com"]);
-    expect(claudeBodies[0]).toMatchObject({ model: "claude-opus-5", system: "Be brief.", output_config: { effort: "low" } });
+    expect(claudeBodies[0]).toMatchObject({ model: "claude-opus-5-5", system: "Be brief.", output_config: { effort: "low" } });
     expect(claudeBodies[0]).not.toHaveProperty("temperature");
   });
 
