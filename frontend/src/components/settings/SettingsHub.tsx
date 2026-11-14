@@ -24,10 +24,16 @@ export function SettingsHub({ user }: Props) {
   const [tab, setTab] = useState<"device" | "account" | "agent">("device");
   // Follows the link, so the menu's "Account & Connections" opens that tab even
   // when Settings is already showing.
-  const q = useSearchParams()?.get("tab");
+  const params = useSearchParams();
+  const q = params?.get("tab");
+  // /api/connect/* return to /settings?connect=<result>. That result is shown by
+  // ConnectionsCard, which lives on the Account tab, so open it - otherwise the
+  // user lands on Device with no message and it looks like a silent loop.
+  const connectResult = params?.get("connect");
   useEffect(() => {
     if (q === "device" || q === "account" || q === "agent") setTab(q);
-  }, [q]);
+    else if (connectResult) setTab("account");
+  }, [q, connectResult]);
 
   return (
     <>
