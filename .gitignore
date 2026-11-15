@@ -20,3 +20,7 @@ supabase/.temp/
 
 # Native app builds output
 dist-apps/
+
+# OAuth verification recordings can contain sensitive Google account data
+scripts/oauth-demo/out/
+out/
