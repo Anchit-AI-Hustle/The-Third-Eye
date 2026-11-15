@@ -181,7 +181,7 @@ async function record() {
   };
   const ask = async (text) => {
     await app.goto(`${APP}/assistant`);
-    const box = app.getByPlaceholder(/Message JARVIS|Or type here/);
+    const box = app.getByPlaceholder(/Ask The Third Eye|Message JARVIS|Or type here/);
     await waitFor(app, "Assistant message box", box);
     await box.click();
     await box.pressSequentially(text, { delay: 35 });
@@ -206,7 +206,7 @@ async function record() {
     // 3 — the consent flow under review
     log("Scene 3: consent");
     await app.goto(`${APP}/settings`);
-    const card = app.getByText("// Connections");
+    const card = app.getByRole("heading", { name: "Google account" });
     await waitFor(app, "Connections card", card);
     await card.scrollIntoViewIfNeeded();
     const disconnect = app.getByRole("button", { name: /^Disconnect$/ });
@@ -254,7 +254,7 @@ async function record() {
     log("Verified all three Google scopes are granted and the refresh token is usable.");
     // Exact match: the "Google connected successfully" banner alone doesn't prove the grant was saved.
     await waitFor(app, "Connected", app.getByText("Connected", { exact: true }));
-    await app.getByText("// Connections").scrollIntoViewIfNeeded().catch(() => {});
+    await app.getByRole("heading", { name: "Google account" }).scrollIntoViewIfNeeded().catch(() => {});
     await say("connected");
 
     // 4 — gmail.readonly: source mail, Scan now, Assistant search
@@ -271,7 +271,9 @@ async function record() {
     await waitFor(app, "Live Capture & Sources", panel);
     if (!(await app.getByRole("button", { name: /Scan now/ }).first().isVisible().catch(() => false))) await panel.first().click();
     await click(app, "Scan now", app.getByRole("button", { name: /Scan now/ }));
-    await waitFor(app, "the scan result", app.getByText(/Gmail: \d+ new|Scan complete/));
+    const successfulScan = app.getByText(/Gmail: [1-9]\d* new/);
+    await successfulScan.first().waitFor({ state: "visible", timeout: 45000 });
+    log("Verified that the test Gmail inbox produced at least one new task.");
     await say("scan");
     await app.mouse.wheel(0, 600); await sleep(2500);
     await ask("Do I have any email about the Q3 report? Summarise it.");
@@ -307,7 +309,7 @@ async function record() {
     // 7 — revoke
     log("Scene 7: revoke");
     await app.goto(`${APP}/settings`);
-    await app.getByText("// Connections").scrollIntoViewIfNeeded().catch(() => {});
+    await app.getByRole("heading", { name: "Google account" }).scrollIntoViewIfNeeded().catch(() => {});
     await click(app, "Disconnect", app.getByRole("button", { name: /^Disconnect$/ }));
     await waitFor(app, "Disconnected", app.getByText(/Disconnected\. Access was revoked/), 20000);
     await say("revoke");
