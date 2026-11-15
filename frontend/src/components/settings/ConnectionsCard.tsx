@@ -125,7 +125,7 @@ export function ConnectionsCard() {
       )}
       {banner === "pending" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-text-muted">
-          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app - it opens to everyone once approved.
+          <AlertCircle size={13} /> Google connection is currently limited to approved test accounts while verification is pending. The account you signed in with is not allowed to start this consent flow. Use the reviewer test account supplied to Google or add this account to GOOGLE_CONNECT_USERS on the production deployment.
         </div>
       )}
       {banner === "no_scopes" && (
@@ -192,12 +192,14 @@ export function ConnectionsCard() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <a
+        {status?.available === false ? (
+          <span className="text-xs text-warning" role="status">Google connection is limited to approved accounts during verification. Use the reviewer test account specified in the verification reply.</span>
+        ) : <a
           href="/api/connect/google"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
         >
           {connected || status?.expired || status?.problem ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
-        </a>
+        </a>}
         {connected && (
           <button
             type="button"
