@@ -25,6 +25,7 @@ import { chromium } from "playwright-core";
 const MODE = process.argv[2];
 const APP = (process.env.APP_URL ?? "https://the-third-eye.anchit-tandon.com").replace(/\/$/, "");
 const TEST_EMAIL = process.env.TEST_EMAIL;
+const googleAccountPath = () => encodeURIComponent(TEST_EMAIL ?? "");
 const RECIPIENT = process.env.RECIPIENT;
 const EXPECTED_CLIENT_PREFIX = process.env.EXPECTED_CLIENT_PREFIX ?? "529553308976-";
 const REQUIRED_FEATURE_SCOPES = [
@@ -61,7 +62,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (m) => console.log(`\x1b[36m▶ ${m}\x1b[0m`);
 
 function need(cond, msg) {
-  if (!cond) { console.error(`✗ ${msg}`); process.exit(1); }
+  if (!cond) throw new Error(`✗ ${msg}`);
 }
 
 async function launch() {
@@ -260,7 +261,7 @@ async function record() {
     // 4 — gmail.readonly: source mail, Scan now, Assistant search
     log("Scene 4: gmail.readonly");
     const mail = await ctx.newPage();
-    await mail.goto(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent('subject:"Q3 report" in:inbox')}`);
+    await mail.goto(`https://mail.google.com/mail/u/${googleAccountPath()}/#search/${encodeURIComponent('subject:"Q3 report" in:inbox')}`);
     const row = mail.locator("tr.zA").filter({ hasText: /Q3 report/i });
     await click(mail, "the Q3 report email", row);
     await say("sourceMail");
@@ -289,7 +290,7 @@ async function record() {
     await click(app, "Confirm & do it", app.getByRole("button", { name: /Confirm & do it/ }));
     await sleep(5000);
     await mail.bringToFront();
-    await mail.goto("https://mail.google.com/mail/u/0/#sent");
+    await mail.goto(`https://mail.google.com/mail/u/${googleAccountPath()}/#sent`);
     const sentRow = mail.locator("tr.zA").filter({ hasText: /Q3 report/i });
     await sentRow.first().waitFor({ state: "visible", timeout: 30000 });
     await sentRow.first().click();
@@ -298,7 +299,7 @@ async function record() {
 
     // 6 — calendar.events.owned.readonly
     log("Scene 6: calendar");
-    await mail.goto("https://calendar.google.com/calendar/u/0/r/week");
+    await mail.goto(`https://calendar.google.com/calendar/u/${googleAccountPath()}/r/week`);
     await sleep(4000);
     await say("calendarSource");
     await app.bringToFront();
