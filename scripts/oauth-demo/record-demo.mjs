@@ -18,7 +18,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { chromium } from "playwright-core";
 
@@ -33,7 +34,8 @@ const REQUIRED_FEATURE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.owned.readonly",
 ];
 const VOICE = process.env.VOICE ?? "Samantha";
-const OUT = resolve(process.env.OUT ?? "out");
+// Keep files beside this script, regardless of the shell working directory.
+const OUT = resolve(process.env.OUT ?? join(dirname(fileURLToPath(import.meta.url)), "out"));
 const PROFILE = process.env.PROFILE ?? join(homedir(), ".third-eye-demo-chrome");
 // Address-bar region to enlarge on the consent screen, as fractions of the screen: x,y,w,h.
 const ZOOM_BOX = (process.env.ZOOM_BOX ?? "0,0.03,0.6,0.09").split(",").map(Number);
@@ -119,16 +121,49 @@ function screenDevice() {
 }
 
 function startRecorder(file) {
+  const device = screenDevice();
+  log(`Starting FFmpeg screen capture from display ${device} → ${file}`);
   const ff = spawn("ffmpeg", ["-hide_banner", "-y", "-f", "avfoundation", "-capture_cursor", "1", "-framerate", "30",
-    "-i", `${screenDevice()}:none`, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20", "-pix_fmt", "yuv420p", file],
+    "-i", `${device}:none`, "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20", "-pix_fmt", "yuv420p", file],
   { stdio: ["pipe", "ignore", "pipe"] });
   return new Promise((ok, fail) => {
     let started = false;
+    let errors = "";
     ff.stderr.on("data", (d) => {
-      if (!started && /frame=\s*\d+/.test(String(d))) { started = true; ok({ ff, t0: Date.now() }); }
+      const chunk = String(d);
+      errors = (errors + chunk).slice(-8000);
+      if (!started && /frame=\s*[1-9]\d*/.test(errors)) {
+        started = true;
+        log("FFmpeg reported captured frames (this alone does not prove that the screen is visible).");
+        ok({ ff, t0: Date.now() });
+      }
     });
-    ff.on("exit", (c) => { if (!started) fail(new Error(`ffmpeg exited ${c} before recording started`)); });
+    ff.on("error", (err) => { if (!started) fail(new Error(`Unable to start FFmpeg: ${err.message}`)); });
+    ff.on("exit", (c) => {
+      if (!started) fail(new Error(`FFmpeg exited ${c} before capturing a frame. Check macOS Screen Recording permission, display selection and FFmpeg:\n${errors}`));
+    });
   });
+}
+
+async function stopRecorder(ff) {
+  if (ff.exitCode !== null) return;
+  const done = new Promise((resolve) => ff.once("exit", resolve));
+  ff.stdin.write("q");
+  await done;
+}
+
+function previewRecording(videoPath, previewPath) {
+  const probe = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0",
+    "-show_entries", "stream=width,height,duration", "-of", "json", videoPath], { encoding: "utf8" });
+  need(probe.status === 0, `Screen capture is not a playable video: ${probe.stderr || videoPath}`);
+  const streams = JSON.parse(probe.stdout || "{}").streams ?? [];
+  need(streams[0]?.width > 0 && streams[0]?.height > 0,
+    "FFmpeg did not produce a playable display image. Check Screen Recording permissions.");
+  const still = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", videoPath,
+    "-frames:v", "1", previewPath], { encoding: "utf8" });
+  need(still.status === 0 && existsSync(previewPath),
+    `Could not extract a screen preview: ${still.stderr || "unknown ffmpeg error"}`);
+  return previewPath;
 }
 
 // ─── record ──────────────────────────────────────────────────────────────────
@@ -152,13 +187,22 @@ async function record() {
 
   // macOS asks once per session whether this terminal may capture the screen. A
   // throwaway second of capture raises that prompt here, off camera.
-  const warm = await startRecorder(join(OUT, "warmup.mp4"));
-  await rl.question("\x1b[33m⚠ If macOS asked to allow screen recording, click Allow, then press Enter… \x1b[0m");
-  warm.ff.stdin.write("q");
-  await new Promise((r) => warm.ff.on("exit", r));
+  const warmupPath = join(OUT, "warmup.mp4");
+  const warm = await startRecorder(warmupPath);
+  log("Screen capture is controlled by FFmpeg; no macOS recording toolbar is expected.");
+  await sleep(1600);
+  await stopRecorder(warm.ff);
+  const previewPath = previewRecording(warmupPath, join(OUT, "capture-preview.png"));
+  spawnSync("open", [previewPath], { stdio: "ignore" });
+  log(`Inspect the captured screenshot: ${previewPath}`);
+  const approval = (await rl.question("\x1b[33mDoes the preview CLEARLY show Chrome and its address bar, not a black screen or desktop? Type YES to begin the real recording: \x1b[0m")).trim().toUpperCase();
+  need(approval === "YES", `Screen recording was not verified. Check Screen Recording permissions and SCREEN device index. Preview: ${previewPath}`);
+  await app.bringToFront();
+  await sleep(800);
 
   const raw = join(OUT, "raw.mp4");
   const { ff, t0 } = await startRecorder(raw);
+  log(`RECORDING LIVE — full display is being written to ${raw}. Do not close the terminal.`);
   const timeline = [];
   const marks = {};
   const now = () => Date.now() - t0;
@@ -315,8 +359,8 @@ async function record() {
     await waitFor(app, "Disconnected", app.getByText(/Disconnected\. Access was revoked/), 20000);
     await say("revoke");
   } finally {
-    ff.stdin.write("q");
-    await new Promise((r) => ff.on("exit", r));
+    await stopRecorder(ff);
+    log(`Partial or full raw capture saved to: ${raw}`);
     await ctx.close();
     rl.close();
   }
