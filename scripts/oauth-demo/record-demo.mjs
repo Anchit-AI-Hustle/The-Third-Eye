@@ -26,6 +26,12 @@ const MODE = process.argv[2];
 const APP = (process.env.APP_URL ?? "https://the-third-eye.anchit-tandon.com").replace(/\/$/, "");
 const TEST_EMAIL = process.env.TEST_EMAIL;
 const RECIPIENT = process.env.RECIPIENT;
+const EXPECTED_CLIENT_PREFIX = process.env.EXPECTED_CLIENT_PREFIX ?? "529553308976-";
+const REQUIRED_FEATURE_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/calendar.events.owned.readonly",
+];
 const VOICE = process.env.VOICE ?? "Samantha";
 const OUT = resolve(process.env.OUT ?? "out");
 const PROFILE = process.env.PROFILE ?? join(homedir(), ".third-eye-demo-chrome");
@@ -214,6 +220,12 @@ async function record() {
       await click(app, "Go to the-third-eye… (unsafe)", app.getByText(/^Go to .*\(unsafe\)$/), app.getByRole("button", { name: /^Continue$/ }));
     }
     await waitFor(app, "the consent screen", app.getByText(/wants (access|additional access)|Select all|Send email on your behalf/i));
+    // Hard evidence gate: do not produce a polished video of a skipped OAuth screen.
+    const consentUrl = new URL(app.url());
+    const consentClientId = consentUrl.searchParams.get("client_id");
+    need(consentUrl.hostname === "accounts.google.com" && !!consentClientId?.startsWith(EXPECTED_CLIENT_PREFIX),
+      "Consent proof missing: Google must show an accounts.google.com consent URL with the expected client_id in the address bar. Stop and correct the OAuth review flow.");
+    log("Verified live Google consent URL and matching project client ID.");
     marks.zoomFrom = now();
     await say("clientId");
     marks.zoomTo = now();
@@ -231,7 +243,15 @@ async function record() {
     }
     await say("consent");
     await click(app, "Continue / Allow", app.getByRole("button", { name: /^(Continue|Allow)$/ }));
-    await app.waitForURL(/\/settings/, { timeout: 60000 }).catch(() => {});
+    await app.waitForURL(/\/settings/, { timeout: 60000 });
+    // Verify the actual backend grant, not just a success banner or a page redirect.
+    const statusRes = await app.request.get(`${APP}/api/connect/google/status`);
+    need(statusRes.ok(), "Cannot read Google connection status after consent.");
+    const status = await statusRes.json();
+    const missingScopes = REQUIRED_FEATURE_SCOPES.filter((s) => !status.scopes?.includes(s));
+    need(status.connected && missingScopes.length === 0,
+      `Google did not save a usable grant for all three scopes. Missing: ${missingScopes.join(", ") || "none"}; reason: ${status.problem ?? "unknown"}`);
+    log("Verified all three Google scopes are granted and the refresh token is usable.");
     // Exact match: the "Google connected successfully" banner alone doesn't prove the grant was saved.
     await waitFor(app, "Connected", app.getByText("Connected", { exact: true }));
     await app.getByText("// Connections").scrollIntoViewIfNeeded().catch(() => {});
@@ -268,7 +288,10 @@ async function record() {
     await sleep(5000);
     await mail.bringToFront();
     await mail.goto("https://mail.google.com/mail/u/0/#sent");
-    await click(mail, "the newest Sent message", mail.locator("tr.zA").filter({ hasText: /Q3 report/i }));
+    const sentRow = mail.locator("tr.zA").filter({ hasText: /Q3 report/i });
+    await sentRow.first().waitFor({ state: "visible", timeout: 30000 });
+    await sentRow.first().click();
+    log("Verified a matching message exists in the source Google account Sent folder.");
     await say("sent");
 
     // 6 — calendar.events.owned.readonly
