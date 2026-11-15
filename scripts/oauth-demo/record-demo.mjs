@@ -55,7 +55,7 @@ const LINES = {
   sent: "Here is the effect on my Google account. The message is now in my Gmail Sent folder, sent from my own address. The app also uses gmail dot send to email me reminders and a daily task briefing I switch on. gmail dot send is the narrowest scope that can send.",
   calendarSource: "These are the events on my own Google Calendar this week.",
   calendar: "calendar dot events dot owned dot readonly lets the Assistant answer questions about my schedule. It lists events on calendars I own, with titles, times and locations, which free busy data does not include. It is read-only. The app never creates, edits or deletes events.",
-  revoke: "Users can disconnect at any time. That revokes the token at Google and deletes it from our servers. That is every scope The Third Eye requests, and every feature that uses them. Thank you.",
+  revoke: "Users can disconnect at any time using this control. If they choose to disconnect, the app revokes the grant at Google and deletes the locally stored token. For this demonstration, I am leaving the test account connected so reviewers can inspect it. Thank you.",
 };
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -169,6 +169,8 @@ function previewRecording(videoPath, previewPath) {
 // ─── record ──────────────────────────────────────────────────────────────────
 async function record() {
   need(TEST_EMAIL && RECIPIENT, "Set TEST_EMAIL (Google test account) and RECIPIENT (a second address you can open).");
+  need(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(RECIPIENT) && !RECIPIENT.toLowerCase().endsWith("@example.com"),
+    "RECIPIENT must be a real inbox you control, not an example.com placeholder.");
   need(existsSync(PROFILE), "Run `npm run setup` first to sign in to Google.");
   need(spawnSync("which", ["ffmpeg"]).status === 0, "Install ffmpeg: brew install ffmpeg");
   mkdirSync(OUT, { recursive: true });
@@ -383,11 +385,10 @@ async function record() {
     await sleep(9000);
     await say("calendar");
 
-    // 7 — revoke
-    log("Scene 7: revoke");
+    // 7 — show user control without revoking a real account during review.
+    log("Scene 7: disconnect control");
     await goAccountSettings();
-    await click(app, "Disconnect", app.getByRole("button", { name: /^Disconnect$/ }));
-    await waitFor(app, "Disconnected", app.getByText(/Disconnected\. Access was revoked/), 20000);
+    await waitFor(app, "Disconnect control", app.getByRole("button", { name: /^Disconnect$/ }), 20000);
     await say("revoke");
   } finally {
     await stopRecorder(ff);
