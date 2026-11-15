@@ -221,8 +221,37 @@ async function record() {
     try { await loc.first().waitFor({ state: "visible", timeout: ms }); await loc.first().click(); } catch { /* not shown */ }
   };
   const waitFor = async (page, label, loc, timeout = 45000) => {
-    try { await loc.first().waitFor({ state: "visible", timeout }); }
-    catch { await rl.question(`\x1b[33m⚠ Waiting for "${label}". When it's on screen, press Enter… \x1b[0m`); }
+    try {
+      await loc.first().waitFor({ state: "visible", timeout });
+    } catch {
+      const shot = join(OUT, `failed-scene-${Date.now()}.png`);
+      try { await page.screenshot({ path: shot }); } catch { /* page may be closed */ }
+      throw new Error(`Required screen "${label}" did not appear at ${page.url()}. Screenshot (local only): ${shot}. Recording stopped rather than fabricating evidence.`);
+    }
+  };
+  const assertSignedIn = async () => {
+    let observedEmail = "";
+    for (let i = 0; i < 40; i++) {
+      const response = await app.request.get(`${APP}/api/auth/session`).catch(() => null);
+      if (response?.ok()) {
+        const body = await response.json().catch(() => ({}));
+        observedEmail = String(body?.user?.email ?? "").toLowerCase();
+        if (observedEmail === TEST_EMAIL.toLowerCase()) return;
+        if (observedEmail) throw new Error(`The app signed in as ${observedEmail}, but TEST_EMAIL is ${TEST_EMAIL}. Use the same Google test account in Chrome and the app.`);
+      }
+      await sleep(1500);
+    }
+    throw new Error(`The Third Eye Google sign-in never completed for ${TEST_EMAIL}. Finish the real sign-in in Chrome before recording consent. Current URL: ${app.url()}`);
+  };
+  const goAccountSettings = async () => {
+    await app.goto(`${APP}/settings?tab=account`);
+    const accountTab = app.getByRole("button", { name: /Account & Connections/i });
+    await waitFor(app, "Account & Connections tab", accountTab, 20000);
+    await accountTab.click();
+    const googleCard = app.getByRole("heading", { name: "Google account" });
+    await waitFor(app, "Google account connection card", googleCard, 20000);
+    await googleCard.scrollIntoViewIfNeeded();
+    return googleCard;
   };
   const ask = async (text) => {
     await app.goto(`${APP}/assistant`);
@@ -246,16 +275,19 @@ async function record() {
     await maybe(app.getByText(TEST_EMAIL, { exact: false }));
     await maybe(app.getByRole("button", { name: /^(Continue|Allow)$/ }));
     await say("signin");
-    await app.waitForURL(new RegExp(`^${APP.replace(/[.]/g, "\\.")}`), { timeout: 60000 }).catch(() => {});
+    await assertSignedIn();
+    log(`Verified The Third Eye is signed in as ${TEST_EMAIL}.`);
 
     // 3 — the consent flow under review
     log("Scene 3: consent");
-    await app.goto(`${APP}/settings`);
-    const card = app.getByRole("heading", { name: "Google account" });
-    await waitFor(app, "Connections card", card);
-    await card.scrollIntoViewIfNeeded();
-    const disconnect = app.getByRole("button", { name: /^Disconnect$/ });
-    if (await disconnect.first().isVisible().catch(() => false)) { await disconnect.first().click(); await sleep(2500); await app.reload(); }
+    await goAccountSettings();
+    const statusBefore = await app.request.get(`${APP}/api/connect/google/status`);
+    need(statusBefore.ok(), "Unable to read Google connector status before consent.");
+    const gate = await statusBefore.json();
+    need(gate.available !== false,
+      `The test account ${TEST_EMAIL} is excluded by GOOGLE_CONNECT_USERS. Add the account to the production verification allowlist before recording.`);
+    // /api/connect/google already forces prompt=consent, even for connected
+    // accounts. Never revoke a working grant merely to demonstrate the flow.
     await say("connect");
     await click(app, "Connect Google", app.getByRole("link", { name: /Connect Google|Reconnect/ }));
     await maybe(app.getByText(TEST_EMAIL, { exact: false }));
@@ -353,8 +385,7 @@ async function record() {
 
     // 7 — revoke
     log("Scene 7: revoke");
-    await app.goto(`${APP}/settings`);
-    await app.getByRole("heading", { name: "Google account" }).scrollIntoViewIfNeeded().catch(() => {});
+    await goAccountSettings();
     await click(app, "Disconnect", app.getByRole("button", { name: /^Disconnect$/ }));
     await waitFor(app, "Disconnected", app.getByText(/Disconnected\. Access was revoked/), 20000);
     await say("revoke");
