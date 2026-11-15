@@ -208,7 +208,12 @@ async function record() {
   const timeline = [];
   const marks = {};
   const now = () => Date.now() - t0;
-  const say = async (key) => { timeline.push({ key, at: now() }); await sleep(dur[key] + 400); };
+  const say = async (key) => {
+    need(ff.exitCode === null, `FFmpeg stopped before scene "${key}". Partial recording: ${raw}`);
+    timeline.push({ key, at: now() });
+    await sleep(dur[key] + 400);
+    need(ff.exitCode === null, `FFmpeg stopped during scene "${key}". Partial recording: ${raw}`);
+  };
 
   // Clicks the first locator that appears; otherwise asks you to click it.
   // The recording keeps running, so a manual click is still one continuous take.
