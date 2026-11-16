@@ -56,6 +56,7 @@ import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 import { fileFeatureRequest } from "@/lib/featureRequests";
 import { refundCredits, spendCredits } from "@/lib/credits";
 import { applyEffects } from "@/lib/nativeClient";
+import { providerAllowed } from "@/lib/freeOnly";
 import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
 
 export const runtime = "nodejs";
@@ -2136,7 +2137,8 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // key is absent, we DON'T hard-fail — we fall through to the multi-provider
   // cascade (Groq/OpenAI/etc.) for a plain-text answer, so the assistant stays
   // usable on free keys alone. The cascade path is in the stream's catch below.
-  const apiKey = currentOwnKeys()?.gemini || process.env.GEMINI_API_KEY;
+  // Free-only: native Gemini is off until FREE_TIER_CONFIRMED lists it; the free cascade answers instead.
+  const apiKey = providerAllowed("gemini") ? currentOwnKeys()?.gemini || process.env.GEMINI_API_KEY : undefined;
 
   const body = (await req.json()) as ChatRequest;
   const {
