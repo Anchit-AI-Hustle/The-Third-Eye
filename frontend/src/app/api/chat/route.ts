@@ -484,11 +484,6 @@ async function runTool(
           due_date: input.due_date,
           description: input.description,
         };
-        // A retry (or a repeated request) must not add the same open task twice: an identical
-        // open task already on the list is reported as existing, with nothing new to save.
-        const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
-        const same = ctx.tasks.find((t) => t.status !== "done" && norm(t.title) === norm(task.title) && norm(t.due_date) === norm(task.due_date));
-        if (same) return { result: JSON.stringify({ success: true, already_exists: true, note: "An identical open task is already on the list, so nothing new was added.", task: same }) };
         ctx.tasks.unshift({ ...task, status: "todo" });
         return {
           result: JSON.stringify({ success: true, task }),
@@ -2456,7 +2451,20 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
       const toolOutcomes: { name: string; outcome: string }[] = [];
       // One reply: models already rejected are not retried, and total outbound tool-cascade calls are capped.
       const rejectedModels = new Set<string>();
-      const callBudget = { left: 40 };
+      // Plain chat gets a small allowance (8 rounds plus a few fallbacks, and /models lookups count);
+      // an explicit multi-step checklist raises it once, when the plan is accepted.
+      const callBudget = { left: 12 };
+      let budgetRaised = false;
+      // Identical write calls inside one reply run once: a model loop repeating the same call must not
+      // act twice, and a call that failed or has an unknown outcome is not re-run automatically.
+      const ranWrites = new Set<string>();
+      const writeKey = (name: string, args: any): string | null => {
+        const action = typeof args?.action === "string" ? args.action : "";
+        const write = isSensitive(name, args) || (name.startsWith("manage_") && ["create", "update", "delete"].includes(action));
+        if (!write) return null;
+        const stable = (v: any): any => Array.isArray(v) ? v.map(stable) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, stable(v[k])])) : v;
+        return `${name}:${JSON.stringify(stable(args ?? {}))}`;
+      };
 
       // Checklist calls are answered by the ledger, not runTool, and ordered
       // around the real tools in the same batch: plan/start first so the work is
@@ -2479,6 +2487,14 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
               return;
             }
             toolsRun.push(c.name);
+            const opKey = bad ? null : writeKey(c.name, c.args);
+            if (opKey) {
+              if (ranWrites.has(opKey)) {
+                out[i] = { result: `${c.name} already ran with these exact arguments in this reply, so it was not run again. Do not repeat it.` };
+                return;
+              }
+              ranWrites.add(opKey);
+            }
             if (bad) {
               out[i] = { result: `${c.name} failed: invalid arguments: ${bad}. Nothing was run. Fix the arguments and call it again; do not claim it ran.` };
             } else if (isSensitive(c.name, c.args) && actsOnRequest && explicitlyRequested(message, c.name, c.args ?? {})) {
@@ -2513,6 +2529,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             checklist.record(outcome);
           }));
           if (p === 1 && checklist.planned) send("checklist", { steps: checklist.snapshot() });
+          if (checklist.planned && !budgetRaised) { budgetRaised = true; callBudget.left += 28; }
         }
         return out;
       };
