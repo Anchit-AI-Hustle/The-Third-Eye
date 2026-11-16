@@ -351,6 +351,9 @@ function failureKind(a: LlmCascadeResult["attempts"][number]): string {
  * short wait.
  */
 export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()): string {
+  if (/no AI provider key is configured/i.test(raw)) {
+    return "No free AI model is turned on for you right now. If you added your own key in Settings, tick \"Use this key for my chats\"; otherwise the shared free model isn't available yet.";
+  }
   const wait = shortestRetryWait(raw);
   if (wait !== null && wait >= 120_000) {
     const at = new Date(now.getTime() + wait).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone });
