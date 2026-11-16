@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { mintToken } from "@/lib/gatewayAuth";
+import { originFromRequest } from "@/lib/googleToken";
 import { llmStatus } from "@/lib/llmCascade";
 import { NO_PROVIDER, runThroughChat, workOrder } from "@/lib/taskAutopilot";
 import { claimTask, dueForRun, OPEN_STATUSES, recordRun, TASK_COLUMNS, type TaskRow } from "@/lib/taskAutopilotServer";
@@ -25,8 +26,8 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   const sb = getDb();
-  const origin = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
-  if (!sb || !origin) return Response.json({ error: "Autopilot needs the database and NEXTAUTH_URL." }, { status: 501 });
+  const origin = (process.env.NEXTAUTH_URL || originFromRequest(req)).replace(/\/$/, "");
+  if (!sb || !origin) return Response.json({ error: "Autopilot needs the database and a public origin." }, { status: 501 });
 
   const waiting = `${NO_PROVIDER} right now; tasks wait for the next run.`;
   if ((await llmStatus()).status === "down") return Response.json({ worked: [], waiting });

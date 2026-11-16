@@ -29,7 +29,6 @@ export default function robots(): MetadataRoute.Robots {
           "/notes",
           "/goals",
           "/tools",
-          "/capabilities",
           "/audit",
           "/models",
           "/connectors",

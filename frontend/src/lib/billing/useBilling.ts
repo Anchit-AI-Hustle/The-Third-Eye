@@ -6,7 +6,7 @@ import {
   isTestUnlocked, unlockTest, clearTestUnlock,
   type Subscription,
 } from "./wallet";
-import { costOf, userLevel, type BillingPeriod, type Tier } from "./plans";
+import { costOf, userLevel, WELCOME_CREDITS, type BillingPeriod, type Tier } from "./plans";
 
 // Credits live on the server, one wallet per account (/api/billing/credits).
 // The plan shown and the test unlock are kept on the device.
@@ -52,8 +52,11 @@ export function useBilling() {
     const r = await fetch("/api/billing/credits").catch(() => null);
     const d = r?.ok ? await r.json() : null;
     if (d) {
+      if (d.tier && d.tier !== "basic" && !getSubscription()) {
+        setSubscription(d.tier as Tier, "monthly");
+      }
       serverRef.current = {
-        balance: d.balance ?? 0,
+        balance: d.balance ?? WELCOME_CREDITS,
         unlimited: Boolean(d.unlimited),
         usage: Number(d.used ?? 0),
         ledger: (d.ledger ?? []).map((e: { delta: number; reason: string; balance_after: number; created_at: string }) => ({ at: e.created_at, delta: e.delta, reason: e.reason, balance: e.balance_after })),
@@ -86,10 +89,19 @@ export function useBilling() {
     serverRef.current.unlimited || serverRef.current.balance >= costOf(action), []);
 
   const tryUnlock = useCallback(async (code: string) => {
-    const ok = await unlockTest(code); if (ok) refresh(); return ok;
-  }, [refresh]);
+    const ok = await unlockTest(code);
+    if (ok) {
+      await load();
+      refresh();
+    }
+    return ok;
+  }, [load, refresh]);
 
-  const lock = useCallback(() => { clearTestUnlock(); refresh(); }, [refresh]);
+  const lock = useCallback(() => {
+    clearTestUnlock();
+    void fetch("/api/billing/unlock", { method: "DELETE" }).catch(() => null);
+    refresh();
+  }, [refresh]);
 
   return {
     ...snap,

@@ -98,7 +98,12 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(52, w() / h(), 0.1, 200);
-        camera.position.z = 7.4;
+        const baseCameraZ = () => {
+          const aspect = w() / h();
+          // Re-frame on portrait phones (e.g. 390px) so the outer iris rings stay inside the viewport.
+          return aspect < 1 ? 7.4 / Math.max(aspect, 0.58) : 7.4;
+        };
+        camera.position.z = baseCameraZ();
 
         const ACCENT = 0x4fc3f7;
         const VIOLET = 0x7b5cf0;
@@ -222,11 +227,23 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
 
         const onResize = () => {
           camera.aspect = w() / h();
+          camera.position.z = baseCameraZ();
           camera.updateProjectionMatrix();
           renderer.setSize(w(), h());
         };
         window.addEventListener("resize", onResize);
         teardown.push(() => window.removeEventListener("resize", onResize));
+
+        // Smoothed scroll progress drives subtle camera/iris depth as the visitor scrolls.
+        let scrollTarget = 0;
+        let scrollEased = 0;
+        const onScroll = () => {
+          const max = Math.max(1, h());
+          scrollTarget = Math.min(1, Math.max(0, window.scrollY / max));
+        };
+        onScroll();
+        window.addEventListener("scroll", onScroll, { passive: true });
+        teardown.push(() => window.removeEventListener("scroll", onScroll));
 
         // ── Run only when actually on screen and visible ──────────
         let raf = 0;
@@ -259,17 +276,22 @@ export function HeroCanvas({ onFallback }: { onFallback?: () => void }) {
 
         const clock = new THREE.Clock();
         const draw = (t: number) => {
-          // Exponential smoothing toward the pointer target.
+          // Exponential smoothing toward the pointer target and scroll progress.
           eased.x += (target.x - eased.x) * 0.045;
           eased.y += (target.y - eased.y) * 0.045;
+          scrollEased += (scrollTarget - scrollEased) * 0.06;
 
-          root.rotation.y = t * 0.1 + eased.x;
-          root.rotation.x = Math.sin(t * 0.14) * 0.12 + eased.y;
+          root.rotation.y = t * 0.1 + eased.x + scrollEased * 0.45;
+          root.rotation.x = Math.sin(t * 0.14) * 0.12 + eased.y - scrollEased * 0.25;
+          camera.position.z = baseCameraZ() + scrollEased * 1.4;
 
           // Counter-rotation is what reads as separate mechanical layers.
           rings[0].rotation.z = t * 0.22;
           rings[1].rotation.z = -t * 0.34;
           rings[2].rotation.z = t * 0.16;
+          rings.forEach((ring, idx) => {
+            ring.scale.setScalar(1 + scrollEased * (0.08 + idx * 0.04));
+          });
 
           core.rotation.y = -t * 0.18;
           core.rotation.x = t * 0.09;

@@ -624,6 +624,11 @@ export function AssistantClient({ userName }: { userName?: string }) {
 
     const controller = new AbortController();
       let voiced = false;
+      let wasHidden = document.visibilityState === "hidden";
+      const onStreamVis = () => {
+        if (document.visibilityState === "hidden") wasHidden = true;
+      };
+      document.addEventListener("visibilitychange", onStreamVis);
       abortRef.current = controller;
       isStreamingRef.current = true;
 
@@ -837,12 +842,17 @@ export function AssistantClient({ userName }: { userName?: string }) {
     } catch (err: any) {
       if (err?.name === "AbortError") return;
       if (voiced) tts.end();
-      const errMsg = err?.message ?? "Unknown error";
+      const rawErr = err?.message ?? "Unknown error";
+      const bgDrop = wasHidden || /load failed|failed to fetch|network|connection|body stream/i.test(rawErr);
+      const errMsg = bgDrop
+        ? "Connection paused while the app was in the background. Tap Retry or send \"continue\" to pick up."
+        : rawErr;
       setApiError(errMsg);
       setMessages((prev) => prev.map((m) =>
-        m.id === assistantId ? { ...m, content: "", error: errMsg, streaming: false } : m
+        m.id === assistantId ? { ...m, content: m.content || "", error: errMsg, streaming: false } : m
       ));
     } finally {
+      document.removeEventListener("visibilitychange", onStreamVis);
       if (abortRef.current === controller) {
         isStreamingRef.current = false;
         setIsStreaming(false);

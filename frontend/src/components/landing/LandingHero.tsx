@@ -34,21 +34,19 @@ export function LandingHero() {
 
           <h1
             data-reveal
-            className="font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl"
+            className="font-display text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl md:text-6xl"
           >
-            Your tasks are already in your inbox.
+            Your tasks live in your inbox.
             <br />
-            <span className="gradient-text">The Third Eye pulls them out for you.</span>
+            <span className="gradient-text">We pull them out.</span>
           </h1>
 
-          <p data-reveal className="mt-6 text-base leading-relaxed text-text-secondary md:text-lg">
-            No typing, no re-entry - your Gmail gets scanned automatically and turned into a
-            tracked list. Notes you'll never lose, answers pulled straight from your own documents,
-            all in one private workspace that remembers and acts for you - not just another list to
-            maintain.
+          <p data-reveal className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-text-secondary md:text-lg">
+            One private AI workspace that turns mail into tracked tasks, searches your documents
+            with citations, and acts across web, iPhone, and Android.
           </p>
 
-          <div data-reveal className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div data-reveal className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
             <Link
               href="/auth/signin"
               className="group flex h-12 w-full items-center justify-center gap-2 rounded-input bg-accent-blue px-7 text-sm font-semibold text-background-base shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-interaction hover:brightness-110 active:scale-[0.98] sm:w-auto"
@@ -58,9 +56,10 @@ export function LandingHero() {
             </Link>
             <Link
               href="/get"
-              className="flex h-12 w-full items-center justify-center rounded-input border border-accent-blue/40 px-7 text-sm font-semibold text-accent-blue transition-colors duration-interaction hover:bg-accent-blue/10 sm:w-auto"
+              className="group inline-flex min-h-[44px] items-center justify-center gap-1.5 text-sm font-medium text-text-secondary transition-colors duration-interaction hover:text-accent-blue"
             >
               Get the phone app
+              <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
             </Link>
           </div>
 

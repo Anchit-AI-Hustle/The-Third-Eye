@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { visionCascade } from "@/lib/llmCascade";
+import { chargedRoute } from "@/lib/credits";
+import { currentOwnKeys } from "@/lib/providerKeys";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -9,17 +11,22 @@ export const maxDuration = 30;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // ~8 MB decoded — plenty for a frame
 
 // E.D.I.T.H. vision: analyze a captured frame (screen share or webcam) with a
-// question. Uses a multimodal provider cascade (Gemini → OpenAI → OpenRouter)
+// question. Uses a multimodal provider cascade (Gemini → Groq → Mistral → OpenAI → OpenRouter)
 // so it keeps working when the primary provider is rate-limited or out of
 // credit. Auth-gated (it spends provider credits); the client sends one still
 // frame as a data URL.
-export async function POST(req: NextRequest) {
+async function analyze(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
-    return Response.json({ error: "No vision provider configured (set GEMINI_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)" }, { status: 503 });
+  const own = currentOwnKeys();
+  const hasVisionKey =
+    own?.gemini || own?.groq || own?.mistral || own?.openai || own?.openrouter ||
+    process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GROQ_API_KEY ||
+    process.env.MISTRAL_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!hasVisionKey) {
+    return Response.json({ error: "No vision provider configured (set GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)" }, { status: 503 });
   }
 
   let body: { image?: string; prompt?: string };
@@ -53,3 +60,5 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Vision analysis failed" }, { status: 500 });
   }
 }
+
+export const POST = chargedRoute("vision.analyze", analyze);
