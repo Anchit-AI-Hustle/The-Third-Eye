@@ -31,7 +31,7 @@ export function isPaidLlmProvider(p: string): boolean {
 /** Owner instruction (16 Nov): OpenRouter is not used at all, free models included. */
 export const OWNER_EXCLUDED = ["openrouter"] as const;
 
-const NEEDS_CONFIRMATION = new Set(["groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface", "serper"]);
+const NEEDS_CONFIRMATION = new Set(["groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface", "cloudflare", "serper"]);
 
 function confirmed(): Set<string> {
   return new Set((process.env.FREE_TIER_CONFIRMED ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean).map((s) => (s === "gemini-lite" ? "gemini" : s)));
