@@ -22,6 +22,8 @@ import { loadMemory, saveMemory } from "@/lib/memoryStore";
 import { getHabits, getInsights, learnPattern } from "@/lib/patterns";
 import { refreshGoogleToken, googleCapabilities } from "@/lib/googleToken";
 import { getGithubAccessToken, runGithub } from "@/lib/github";
+import { clipToolResult, COMPACT_BUDGET_TOKENS, compactSystem, selectTools, trimHistory } from "@/lib/compactChat";
+import { estimateTokens } from "@/lib/llmCascade";
 import { cascadeOrder, LlmCascadeError, nativeGeminiFirst, userFacingOutage } from "@/lib/llmCascade";
 import { RIDE_SERVICES, rideLinks, type RideService } from "@/lib/rides";
 import { getTool, STUDIO_TOOLS } from "@/lib/studioTools";
@@ -56,7 +58,7 @@ import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 import { fileFeatureRequest } from "@/lib/featureRequests";
 import { refundCredits, spendCredits } from "@/lib/credits";
 import { applyEffects } from "@/lib/nativeClient";
-import { providerAllowed, gatedKey } from "@/lib/freeOnly";
+import { providerAllowed, gatedKey, freeOnly } from "@/lib/freeOnly";
 import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
 
 export const runtime = "nodejs";
@@ -2233,6 +2235,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // The assistant has to know what product it lives in before anything else,
   // or it denies features this app ships and asks which website is meant.
   let systemInstruction = `${SYSTEM_PROMPT}\n\n${appInventory()}\n\n${todayBlock(timezone)}`;
+  const baseLen = systemInstruction.length;
   // Selected agent persona actually shapes tone/address (not just a label).
   // All intelligence, tool-use, honesty and security rules above still apply.
   if (agentPersona) {
@@ -2659,11 +2662,18 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         let tier2Handled = false;
         try {
           const { toolCallCascade, geminiToolsToOpenAI } = await import("@/lib/llmCascade");
-          const openAiTools = geminiToolsToOpenAI(tools[0].functionDeclarations);
+          const allDecls = tools[0].functionDeclarations as { name: string; description?: string; parameters?: unknown }[];
+          // Free tiers cap one request at a few thousand tokens; the full prompt plus every tool is far larger.
+          const light = freeOnly() && estimateTokens([systemInstruction, allDecls]) > COMPACT_BUDGET_TOKENS;
+          const picked = light ? selectTools(message, allDecls) : allDecls;
+          const openAiTools = geminiToolsToOpenAI(picked);
+          const tierSystem = light
+            ? compactSystem({ persona: SYSTEM_PROMPT, today: todayBlock(timezone), extras: systemInstruction.slice(baseLen), attached: picked.map((d) => d.name), totalTools: allDecls.length })
+            : systemInstruction;
           type ToolMsg = import("@/lib/llmCascade").OpenAIChatMessage;
           const toolMessages: ToolMsg[] = [
-            { role: "system", content: systemInstruction },
-            ...history
+            { role: "system", content: tierSystem },
+            ...(light ? trimHistory(history.map((h) => ({ ...h, content: typeof h.content === "string" ? h.content : "" }))) : history)
               .map((h): ToolMsg => ({
                 role: h.role === "assistant" ? "assistant" : "user",
                 content: typeof h.content === "string" ? h.content : "",
@@ -2695,7 +2705,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
                   if (tr.sideEffect.type === "batch" && Array.isArray(tr.sideEffect.data)) sideEffects.push(...tr.sideEffect.data);
                   else sideEffects.push(tr.sideEffect);
                 }
-                toolMessages.push({ role: "tool", tool_call_id: out.tool_calls![i].id, content: tr.result });
+                toolMessages.push({ role: "tool", tool_call_id: out.tool_calls![i].id, content: light ? clipToolResult(tr.result) : tr.result });
               });
               continue;
             }
@@ -2748,7 +2758,10 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           // (e.g. a "tool_code": "print(open_app(...))" block) and then claims
           // the action succeeded. Override that explicitly rather than let a
           // weaker fallback model hallucinate both the call and its result.
-          const fallbackSystemInstruction = `${systemInstruction}\n\n## Degraded mode - no tool access\nYour normal tool-calling connection is temporarily down. Every tool named above is UNAVAILABLE right now - ignore those instructions entirely.\n- Never output anything that looks like a function or tool call: no JSON, no "tool_code", no "Tool Call:" labels, no code blocks pretending to invoke a function.\n- Never claim to have opened an app, sent a message, made a call, controlled a device, or performed any other action. You cannot.\n- If the request needs Gmail or Calendar (reading/sending email, checking events) AND ${accessToken ? "a Google account IS connected" : "no Google account is connected"}: ${accessToken ? "say that action is temporarily unavailable and to try again shortly." : googleState === "expired" ? "say plainly that Google access has expired or was revoked and to reconnect in Settings → Connections (\"Reconnect / update permissions\")." : "say plainly that Gmail/Calendar isn't connected yet - go to Settings → Connections and use \"Connect Google\" (basic sign-in alone doesn't grant mail/calendar access). This is a one-time setup step, not a retry-shortly situation."}\n- For any other action (not Gmail/Calendar), say plainly that live actions are temporarily unavailable and to try again shortly. Answer only the informational part of the question, if any.`;
+          const textBase = freeOnly() && estimateTokens(systemInstruction) > COMPACT_BUDGET_TOKENS
+            ? compactSystem({ persona: SYSTEM_PROMPT, today: todayBlock(timezone), extras: systemInstruction.slice(baseLen), attached: [], totalTools: 0 })
+            : systemInstruction;
+          const fallbackSystemInstruction = `${textBase}\n\n## Degraded mode - no tool access\nYour normal tool-calling connection is temporarily down. Every tool named above is UNAVAILABLE right now - ignore those instructions entirely.\n- Never output anything that looks like a function or tool call: no JSON, no "tool_code", no "Tool Call:" labels, no code blocks pretending to invoke a function.\n- Never claim to have opened an app, sent a message, made a call, controlled a device, or performed any other action. You cannot.\n- If the request needs Gmail or Calendar (reading/sending email, checking events) AND ${accessToken ? "a Google account IS connected" : "no Google account is connected"}: ${accessToken ? "say that action is temporarily unavailable and to try again shortly." : googleState === "expired" ? "say plainly that Google access has expired or was revoked and to reconnect in Settings → Connections (\"Reconnect / update permissions\")." : "say plainly that Gmail/Calendar isn't connected yet - go to Settings → Connections and use \"Connect Google\" (basic sign-in alone doesn't grant mail/calendar access). This is a one-time setup step, not a retry-shortly situation."}\n- For any other action (not Gmail/Calendar), say plainly that live actions are temporarily unavailable and to try again shortly. Answer only the informational part of the question, if any.`;
           const out = await llmCascade({
             system: fallbackSystemInstruction,
             messages: fbMessages,
