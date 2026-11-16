@@ -271,7 +271,7 @@ describe("llmCascade: Cloudflare Workers AI backup (free-only gate)", () => {
     process.env.CLOUDFLARE_ACCOUNT_ID = ID; process.env.CLOUDFLARE_API_TOKEN = "cf-synthetic"; process.env.FREE_TIER_CONFIRMED = "cloudflare";
     process.env.CLOUDFLARE_MODEL = "@cf/moonshotai/kimi-k2.6";
     const bodies: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { body?: string }) => { bodies.push(`${url} ${init?.body ?? ""}`); return { ok: false, status: 404, json: async () => ({}), text: async () => "{}" }; }));
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { body?: string }): Promise<any> => { bodies.push(`${url} ${init?.body ?? ""}`); return { ok: false, status: 404, json: async () => ({}), text: async () => "{}" }; }));
     await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toBeTruthy();
     expect(bodies.every((b) => !b.includes("kimi"))).toBe(true);
     expect(bodies.some((b) => b.includes("@cf/zai-org/glm-4.7-flash"))).toBe(true);
@@ -301,5 +301,43 @@ describe("llmCascade: Cloudflare Workers AI backup (free-only gate)", () => {
     const r2 = await llmCascade({ messages: [{ role: "user", content: "again" }] });
     expect(r2.provider).toBe("cloudflare");
     expect(calls.filter((u) => hostIs(u, GROQ_HOST)).length).toBe(groqBefore);
+  });
+});
+
+describe("toolCallCascade: one reply's rejected models and call allowance", () => {
+  const chatBody = (init?: { body?: string }) => JSON.parse(init?.body ?? "{}");
+  function stub(rejectModel: string) {
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { body?: string }): Promise<any> => {
+      if (url.endsWith("/models")) return { ok: true, status: 200, json: async () => ({ data: [{ id: "openai/gpt-oss-120b" }, { id: "qwen/qwen3.8-27b" }] }), text: async () => "{}" };
+      const m = chatBody(init).model as string;
+      sent.push(m);
+      if (m === rejectModel) return { ok: false, status: 429, json: async () => ({ error: { message: "Rate limit reached for model" } }), text: async (): Promise<string> => "{}" };
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "ok", tool_calls: [] } }] }), text: async () => "{}" };
+    }));
+    return sent;
+  }
+  const msgs = [{ role: "user" as const, content: "hi" }];
+
+  it("does not send a model that already returned 429 earlier in the same reply", async () => {
+    process.env.GROQ_API_KEY = "test-groq-key"; process.env.FREE_TIER_CONFIRMED = "groq"; process.env.PAID_PATH_TESTS = "0";
+    const sent = stub("openai/gpt-oss-120b");
+    const rejected = new Set<string>(); const budget = { left: 8 };
+    await toolCallCascade({ messages: msgs, tools: [], rejected, budget });
+    expect(sent).toEqual(["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]);
+    expect(rejected.has("groq:openai/gpt-oss-120b")).toBe(true);
+    resetCooldowns();
+    await toolCallCascade({ messages: msgs, tools: [], rejected, budget });
+    expect(sent).toEqual(["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.8-27b"]); // 120b not sent again
+    expect(budget.left).toBe(5);
+    process.env.PAID_PATH_TESTS = "1";
+  });
+
+  it("stops sending once the reply's call allowance is used", async () => {
+    process.env.GROQ_API_KEY = "test-groq-key"; process.env.FREE_TIER_CONFIRMED = "groq"; process.env.PAID_PATH_TESTS = "0";
+    const sent = stub("none");
+    await expect(toolCallCascade({ messages: msgs, tools: [], budget: { left: 0 } })).rejects.toBeTruthy();
+    expect(sent.length).toBe(0);
+    process.env.PAID_PATH_TESTS = "1";
   });
 });
