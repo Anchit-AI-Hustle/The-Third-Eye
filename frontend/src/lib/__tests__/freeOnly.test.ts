@@ -101,3 +101,33 @@ describe("serper gate", () => {
     expect(m.gatedKey("serper", "k")).toBe("k");
   });
 });
+
+describe("user-owned keys", () => {
+  const saved = { ...process.env };
+  beforeEach(() => { vi.resetModules(); Object.assign(process.env, ENV); delete process.env.PAID_PATH_TESTS; delete process.env.FREE_TIER_CONFIRMED; delete process.env.LLM_PRIMARY_PROVIDER; });
+  afterEach(() => { process.env = { ...saved }; });
+
+  it("are off until that user consents to that provider (legacy keys default-safe)", async () => {
+    const { userKeyAllowed } = await import("@/lib/freeOnly");
+    for (const p of ["groq", "gemini", "mistral", "cerebras", "huggingface", "openai"]) {
+      expect(userKeyAllowed(p, { })).toBe(false);
+      expect(userKeyAllowed(p, { paid_consent: "[]" })).toBe(false);
+      expect(userKeyAllowed(p, { paid_consent: "not json" })).toBe(false);
+    }
+    expect(userKeyAllowed("groq", { paid_consent: '["groq"]' })).toBe(true);
+    expect(userKeyAllowed("gemini", { paid_consent: '["groq"]' })).toBe(false);
+  });
+  it("never admit OpenRouter, even with consent", async () => {
+    const { userKeyAllowed } = await import("@/lib/freeOnly");
+    expect(userKeyAllowed("openrouter", { paid_consent: '["openrouter"]' })).toBe(false);
+  });
+  it("a consented user's key reaches the cascade; the owner's env key and other users stay gated", async () => {
+    const { configuredProviders } = await import("@/lib/llmCascade");
+    const { withKeys } = await import("@/lib/providerKeys");
+    expect(configuredProviders()).toEqual([]);
+    const on = await withKeys({ userId: "u", groq: "gq-own", paid_consent: '["groq"]' } as never, async () => configuredProviders());
+    expect(on).toEqual(["groq"]);
+    const off = await withKeys({ userId: "u2", groq: "gq-own" } as never, async () => configuredProviders());
+    expect(off).toEqual([]);
+  });
+});
