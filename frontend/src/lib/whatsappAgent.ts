@@ -31,7 +31,7 @@ async function chatTurn(token: string, message: string, link: WhatsAppLink) {
   if (!res.ok || !res.body) return { text: "I couldn't reach my brain just now - try again in a minute.", confirm: null, effects: [] as Effect[] };
 
   let text = "";
-  let confirm: { id?: string; tool: string; args: unknown; summary: string } | null = null;
+  let confirm: { id?: string; proof?: string; tool: string; args: unknown; summary: string } | null = null;
   let effects: Effect[] = [];
   for (const block of (await res.text()).split("\n\n")) {
     const event = block.match(/^event: (\w+)/m)?.[1];
@@ -39,7 +39,7 @@ async function chatTurn(token: string, message: string, link: WhatsAppLink) {
     if (!event || !raw) continue;
     const data = JSON.parse(raw);
     if (event === "text") text += data.text ?? "";
-    else if (event === "confirm" && !confirm && !data.clientAction) confirm = { id: typeof data.id === "string" ? data.id : undefined, tool: data.tool, args: data.args, summary: data.summary };
+    else if (event === "confirm" && !confirm && !data.clientAction) confirm = { proof: data.proof, id: typeof data.id === "string" ? data.id : undefined, tool: data.tool, args: data.args, summary: data.summary };
     else if (event === "done") effects = data.sideEffects ?? [];
     else if (event === "error") text += `\n\n${data.message ?? "Something went wrong."}`;
   }
@@ -50,7 +50,7 @@ async function act(token: string, pending: NonNullable<WhatsAppLink["pending"]>)
   const res = await fetch(`${origin()}/api/act`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ tool: pending.tool, args: pending.args, actionId: (pending as { id?: string }).id }),
+    body: JSON.stringify({ tool: pending.tool, args: pending.args, actionId: (pending as { id?: string }).id, proof: (pending as { proof?: string }).proof }),
   });
   const body = await res.json().catch(() => ({}));
   return [body.result ?? (res.ok ? "Done." : "That didn't go through."), body.openUrl ? `Draft: ${body.openUrl}` : ""].filter(Boolean).join("\n");
