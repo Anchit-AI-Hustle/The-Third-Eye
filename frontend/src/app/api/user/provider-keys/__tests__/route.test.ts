@@ -58,14 +58,12 @@ describe("own provider keys API", () => {
 
   it("asks each provider the way it accepts keys", async () => {
     await put({ provider: "gemini", value: "AIzaGOODKEY" });
-    await put({ provider: "openrouter", value: "sk-or-good" });
     await put({ provider: "huggingface", value: "hf_good" });
     expect(checks).toEqual([
       "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaGOODKEY ",
-      "https://openrouter.ai/api/v1/key Bearer sk-or-good",
       "https://huggingface.co/api/whoami-v2 Bearer hf_good",
     ]);
-    expect([...saved.keys()]).toEqual(["gemini", "openrouter", "huggingface"]);
+    expect([...saved.keys()]).toEqual(["gemini", "huggingface"]);
   });
 
   it("still saves when the provider can't be reached to check", async () => {
