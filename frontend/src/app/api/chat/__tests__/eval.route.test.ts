@@ -232,14 +232,14 @@ describe("Jarvis reliability evaluation", () => {
     expect(r.text).toMatch(/waiting for your Confirm/);
   });
 
-  it("13b asked directly: the email runs at once, and a failed send is reported, not claimed", async () => {
+  it("13b asked directly: email still requires review of the exact words", async () => {
     script = [
       { calls: [{ name: "communicate", args: { action: "email", to: "priya@example.com", subject: "Deck", body: "Attached." } }] },
       { text: "Done." },
     ];
     const r = await chat("email priya@example.com the deck");
-    expect(r.confirms).toHaveLength(0);
-    expect(r.results()[0]).toMatch(/No email was sent/);
+    expect(r.confirms).toHaveLength(1);
+    expect(r.results()[0]).toMatch(/Proposed to the user/);
   });
 
   it("13c autopilot proposes instead of sending, even when the task says email", async () => {
@@ -336,7 +336,7 @@ describe("Jarvis reliability evaluation", () => {
 describe("native apps", () => {
   it("writes the assistant's new task for a native app and says it landed", async () => {
     script = [{ calls: [{ name: "manage_tasks", args: { action: "create", title: "Call the bank", priority: "high" } }] }, { text: "Added." }];
-    const r = await chat("add a task to call the bank", { native: true });
+    const r = await chat("add a task to call the bank", { native: true, requestId: "native-test-request-1" });
     expect(r.done.applied).toEqual([{ type: "task_create", ok: true }]);
     expect(tables.tasks).toEqual([expect.objectContaining({ user_id: "u@x.com", title: "Call the bank", priority: "high", status: "todo" })]);
   });
