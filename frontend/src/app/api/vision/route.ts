@@ -9,7 +9,7 @@ export const maxDuration = 30;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // ~8 MB decoded — plenty for a frame
 
 // E.D.I.T.H. vision: analyze a captured frame (screen share or webcam) with a
-// question. Uses a multimodal provider cascade (Gemini → OpenAI → OpenRouter)
+// question. Uses a multimodal provider cascade (Gemini → OpenAI)
 // so it keeps working when the primary provider is rate-limited or out of
 // credit. Auth-gated (it spends provider credits); the client sends one still
 // frame as a data URL.
@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
-  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
-    return Response.json({ error: "No vision provider configured (set GEMINI_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)" }, { status: 503 });
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+    return Response.json({ error: "No vision provider configured (set GEMINI_API_KEY, OPENAI_API_KEY)" }, { status: 503 });
   }
 
   let body: { image?: string; prompt?: string };
