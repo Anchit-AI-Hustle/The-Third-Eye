@@ -12,7 +12,7 @@ export type OwnKeyProvider = (typeof OWN_KEY_PROVIDERS)[number];
 // How that Ollama is used, stored alongside it: its tunnel password, the model
 // to run (one for everyone, or one per assistant as JSON), and "off" in
 // local_first when the user wants the cloud tried before their own machine.
-export const LOCAL_SETTINGS = ["ollama_token", "ollama_model", "ollama_models", "local_first"] as const;
+export const LOCAL_SETTINGS = ["ollama_token", "ollama_model", "ollama_models", "local_first", "paid_consent"] as const;
 // A Hugging Face sign-in keeps what it needs to renew its short-lived token:
 // JSON { refresh, client, expires }.
 export const HF_OAUTH = "huggingface_oauth";
@@ -22,12 +22,14 @@ export type OwnKeys = Partial<Record<Stored, string>> & { userId: string };
 
 const store = new AsyncLocalStorage<OwnKeys>();
 const persona = new AsyncLocalStorage<string>();
-const CACHE_MS = 60_000;
+// Not cached across requests: a key, and the consent that lets it be billed, are authorisation
+// decisions, so every request re-reads them (a revoke takes effect on every server instance at once).
+const CACHE_MS = 0;
 const cache = new Map<string, { at: number; keys: OwnKeys }>();
 
 export async function loadOwnKeys(userId: string): Promise<OwnKeys> {
   const hit = cache.get(userId);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.keys;
+  if (CACHE_MS > 0 && hit && Date.now() - hit.at < CACHE_MS) return hit.keys;
   const keys: OwnKeys = { userId };
   const db = getDb();
   if (db) {
@@ -172,6 +174,13 @@ export async function saveOwnKey(userId: string, provider: Stored, value: string
   const { error } = await db.from("user_provider_keys").upsert({ user_id: userId, provider, key_enc: enc, updated_at: new Date().toISOString() }, { onConflict: "user_id,provider" });
   cache.delete(userId);
   return !error;
+}
+
+export async function withdrawConsent(userId: string, provider: string): Promise<void> {
+  const own = await loadOwnKeys(userId);
+  let list: unknown = [];
+  try { list = JSON.parse(own.paid_consent ?? "[]"); } catch { /* treated as none */ }
+  if (Array.isArray(list) && list.includes(provider)) await saveOwnKey(userId, "paid_consent", JSON.stringify(list.filter((p) => p !== provider)));
 }
 
 export async function deleteOwnKey(userId: string, provider: Stored): Promise<void> {
