@@ -96,7 +96,7 @@ function loadKeys() {
     grok:      g("grok", clean(process.env.XAI_API_KEY)),
     groq:      g("groq", clean(own?.groq) || clean(process.env.GROQ_API_KEY)),
     cerebras:  g("cerebras", clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY)),
-    openrouter: clean(own?.openrouter) || clean(process.env.OPENROUTER_API_KEY),
+    openrouter: g("openrouter", ""),
     mistral:   g("mistral", clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY)),
     huggingface: g("huggingface", clean(own?.huggingface) || clean(process.env.HF_TOKEN)),
     anthropic: g("anthropic", clean(process.env.ANTHROPIC_API_KEY)),
