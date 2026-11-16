@@ -142,6 +142,7 @@ describe("verified checklist in /api/chat", () => {
     const r = await chat({ message: "add book dentist then plan my week" });
     expect(r.done.stop_reason).toBe("partial");
     expect(r.done.sideEffects.filter((e: { type: string }) => e.type === "task_create")).toHaveLength(1);
-    expect(r.text).toMatch(/Done so far: manage_tasks/);
+    expect(r.text).toMatch(/reported success: manage_tasks/);
+    expect(r.text).not.toMatch(/Done so far/);
   });
 });
