@@ -33,7 +33,7 @@ const ROWS: Row[] = [
     id: "camera",
     what: "Camera and screen (Analyze camera / Analyze screen in the assistant)",
     captured: "One still frame (JPEG, up to 1280 px wide). The camera or screen share stops straight after.",
-    leaves: "Yes. Sent to our server and to an AI provider to describe it - Google Gemini, OpenAI or OpenRouter.",
+    leaves: "Yes. Sent to our server and to an AI provider to describe it - Google Gemini or OpenAI.",
     stored: "The image is not kept. Your question and the answer are saved in the chat.",
     remove: "Delete the chat.",
   },
