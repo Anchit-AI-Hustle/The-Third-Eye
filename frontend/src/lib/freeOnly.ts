@@ -46,6 +46,29 @@ export function providerAllowed(p: string): boolean {
   return true;
 }
 
+/** Which paid providers this user has agreed to, stored with their own keys as a JSON list. */
+export function paidConsented(own: { paid_consent?: string } | undefined, p: string): boolean {
+  try {
+    const list = JSON.parse(own?.paid_consent ?? "[]");
+    return Array.isArray(list) && list.includes(p);
+  } catch { return false; }
+}
+
+/**
+ * A user's OWN key bills that user's own account, never the owner's, so the owner's
+ * FREE_TIER_CONFIRMED list does not apply to it. It is used only after that user turns it on
+ * for that provider ("my account may be billed"); pasting a key is not consent, and keys saved
+ * before this setting existed stay off.
+ * OpenRouter stays excluded for everyone.
+ */
+export function userKeyAllowed(p: string, own: { paid_consent?: string } | undefined): boolean {
+  if (!freeOnly()) return true;
+  if ((OWNER_EXCLUDED as readonly string[]).includes(p)) return false;
+  // Every user key needs that user's own consent for that provider: whether THEIR account is
+  // free or billed is unknown to us (the owner's FREE_TIER_CONFIRMED says nothing about it).
+  return paidConsented(own, p);
+}
+
 /** Returns the key when the provider is allowed, otherwise "". */
 export function gatedKey(p: string, key: string): string {
   return providerAllowed(p) ? key : "";
