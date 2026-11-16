@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const sub = (await req.json().catch(() => null)) as
     | { endpoint?: string; keys?: { p256dh?: string; auth?: string } }
     | null;
-  if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+  if (!sub?.endpoint || !pushService(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) {
     return json({ error: "Invalid subscription" }, 400);
   }
 
@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
     { onConflict: "user_id,endpoint" },
   );
   return json({ ok: true });
+}
+
+// The server later POSTs to this URL, so only the browsers' push services are accepted.
+const PUSH_HOSTS = /(^|\.)(fcm\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/;
+function pushService(endpoint: string): boolean {
+  try { const u = new URL(endpoint); return u.protocol === "https:" && PUSH_HOSTS.test(u.hostname); } catch { return false; }
 }
 
 function json(body: unknown, status = 200) {

@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const email = session?.user?.email;
   if (!email) return new NextResponse("Not authenticated", { status: 401 });
   if (!canConnectGoogle(email)) {
-    return NextResponse.redirect(`${originFromRequest(req)}/settings?connect=google_pending`);
+    return NextResponse.redirect(`${originFromRequest(req)}/settings?tab=account&connect=google_pending`);
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;

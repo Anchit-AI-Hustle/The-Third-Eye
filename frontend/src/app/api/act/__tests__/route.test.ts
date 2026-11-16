@@ -34,8 +34,8 @@ vi.mock("@/lib/usage", () => ({ getTier: () => Promise.resolve(tier) }));
 
 let googleToken: string | null = "ya29.token";
 vi.mock("@/lib/googleToken", () => ({
-  getGoogleAccessToken: () =>
-    Promise.resolve(googleToken ? { accessToken: googleToken, scope: "" } : null),
+  refreshGoogleToken: () =>
+    Promise.resolve(googleToken ? { state: "ok", accessToken: googleToken, scope: "" } : { state: "none" }),
 }));
 
 const callMcpTool = vi.fn().mockResolvedValue("mcp ok");

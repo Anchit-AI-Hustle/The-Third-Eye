@@ -19,7 +19,12 @@ async def main() -> None:
     settings = get_settings()
     if settings.db_schema == "public":
         return
-    engine = create_async_engine(settings.database_url)
+    from app.database import build_engine_kwargs
+
+    engine = create_async_engine(
+        settings.database_url,
+        **build_engine_kwargs(settings.database_url, settings.environment, settings.db_schema),
+    )
     try:
         async with engine.connect() as conn:
             await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.db_schema}"'))

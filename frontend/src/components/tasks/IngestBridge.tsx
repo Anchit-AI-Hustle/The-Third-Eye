@@ -36,7 +36,7 @@ export function IngestBridge() {
     run();
     const onVisible = () => { if (document.visibilityState === "visible") run(); };
     document.addEventListener("visibilitychange", onVisible);
-    const id = setInterval(run, POLL_MS);
+    const id = setInterval(() => { if (document.visibilityState === "visible") run(); }, POLL_MS);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(id);

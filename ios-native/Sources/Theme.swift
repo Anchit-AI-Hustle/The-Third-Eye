@@ -21,6 +21,8 @@ enum Theme {
     static let secondary = Color(red: 0xB0 / 255, green: 0xB8 / 255, blue: 0xC8 / 255)
     static let muted = Color(red: 0x7F / 255, green: 0x87 / 255, blue: 0xA8 / 255)
     static let red = Color(red: 0xEF / 255, green: 0x44 / 255, blue: 0x44 / 255)
+    static let green = Color(red: 0x34 / 255, green: 0xD3 / 255, blue: 0x99 / 255)
+    static let amber = Color(red: 0xF5 / 255, green: 0x9E / 255, blue: 0x0B / 255)
     static let gradient = LinearGradient(colors: [blue, violet], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
@@ -71,5 +73,29 @@ struct StatusPill: View {
         .padding(.horizontal, 12).padding(.vertical, 5)
         .background(Theme.blue.opacity(0.1), in: Capsule())
         .overlay(Capsule().stroke(Theme.blue.opacity(0.3)))
+    }
+}
+
+extension Color {
+    /// "#RRGGBB" from the server's catalog; anything else falls back to the accent blue.
+    init(hex: String) {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else {
+            self = Theme.blue
+            return
+        }
+        self.init(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
+    }
+}
+
+struct Badge: View {
+    let text: String
+    let color: Color
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(color.opacity(0.15), in: Capsule())
     }
 }

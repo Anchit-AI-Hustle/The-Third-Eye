@@ -5,6 +5,7 @@
 // the target app pre-filled on the confirming tap (see lib/intents.ts).
 
 import { isMcpWrite, summarizeMcpAction } from "@/lib/mcp/permissions";
+import { summarizeRoutine } from "@/lib/routines";
 
 /** Local copy of the namespace test — keeps this module free of the MCP client. */
 function isMcpTool(tool: string): boolean {
@@ -17,6 +18,8 @@ export const SENSITIVE_ACTIONS = new Set<string>([
   "pay", "send_whatsapp", "make_call", "send_sms",
   // Creates a public repo on the user's GitHub.
   "build_app",
+  // Posts publicly as the user on their social accounts.
+  "social_post",
 ]);
 
 /**
@@ -40,6 +43,9 @@ function isSensitiveWithArgs(tool: string, args: any): boolean {
   if (tool === "communicate") return (args?.action ?? "email") === "email";
   // ANCHOR publishes to the user's public channels; only reading its status is free.
   if (tool === "anchor") return (args?.action ?? "status") !== "status";
+  // A saved routine runs later on its name alone, so the user approves its
+  // exact steps once: text the assistant read must not plant one.
+  if (tool === "manage_routines") return args?.action === "save";
   return false;
 }
 
@@ -54,6 +60,8 @@ export function summarizeAction(tool: string, args: any): string {
   switch (tool) {
     case "manage_contacts":
       return `Access device contacts (${args?.action ?? "search"})`;
+    case "manage_routines":
+      return summarizeRoutine(String(args?.name ?? ""), Array.isArray(args?.steps) ? args.steps.map(String) : []);
     case "communicate":
       return `Send an email to ${args?.to ?? "?"} - subject "${args?.subject ?? ""}"`;
     case "send_email":
@@ -69,6 +77,8 @@ export function summarizeAction(tool: string, args: any): string {
         : `Run today's ANCHOR drop${args?.now ? " and publish immediately" : " (posts at 17:30 UTC)"}`;
     case "build_app":
       return `Build "${args?.name ?? "app"}" and publish it as a public repo on your GitHub with a GitHub Pages site: ${String(args?.description ?? "").slice(0, 200)}`;
+    case "social_post":
+      return `Post on ${(Array.isArray(args?.platforms) ? args.platforms : [args?.platforms ?? "?"]).join(", ")}: "${String(args?.text ?? "").slice(0, 200)}"${args?.image_url ? " (with an image)" : ""}`;
     case "make_call":
       return `Call ${args?.number ?? "?"}`;
     case "send_sms":

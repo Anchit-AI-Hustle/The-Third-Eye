@@ -1,19 +1,14 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { naturalVoiceOn, speakNatural, stopNatural } from "@/lib/naturalVoice";
-import { speechRecognizer } from "@/lib/speechRecognizer";
+import { kokoroVoice, loadNaturalVoice, naturalVoiceOn, naturalVoiceReady, speakNatural, stopNatural } from "@/lib/naturalVoice";
 import { downsample, encodeWav, PcmClip, TARGET_RATE } from "@/lib/pcmClip";
 
 import { useWakeLock } from "./useWakeLock";
 
-// Mirrors WATCHDOG_MS in useWakeWord: if the recognizer goes quiet for this
-// long while it should be listening, assume it died silently and restart.
-const STT_WATCHDOG_MS = 10_000;
-
 export type AudioState = "idle" | "waiting" | "speaking" | "transcribing";
 
-// ─── Voice STT (Web Speech API + AudioContext level meter) ───────────────────
+// ─── Voice STT (speech-gated AudioContext capture) ───────────────────────────
 
 export interface VoiceSTTCallbacks {
   onTranscript: (text: string) => void;
@@ -71,6 +66,25 @@ export function isEchoOf(transcript: string, spoken: string): boolean {
   return heard.length - prev[said.length] <= Math.floor(heard.length * 0.1);
 }
 
+/**
+ * The user's words with the assistant's own heard back removed: any run of
+ * five or more words that also occurs, in order, in what it just said. What is
+ * left is what the user added ("…sir, did you mean Lenskart? Yes, go ahead").
+ */
+export function stripEcho(transcript: string, spoken: string): string {
+  const tokens = transcript.split(/\s+/).filter(Boolean);
+  const said = words(spoken).join(" ");
+  if (!said || tokens.length < 5) return transcript;
+  const key = (t: string) => words(t).join(" ");
+  const keep = new Array(tokens.length).fill(true);
+  for (let i = 0; i < tokens.length; i++) {
+    let j = i;
+    while (j < tokens.length && ` ${said} `.includes(` ${tokens.slice(i, j + 1).map(key).filter(Boolean).join(" ")} `)) j++;
+    if (j - i >= 5) { for (let k = i; k < j; k++) keep[k] = false; i = j - 1; }
+  }
+  return tokens.filter((_, i) => keep[i]).join(" ").replace(/^[\s,.;:!?-]+/, "").trim();
+}
+
 // What the assistant last said, when it started, and until when a transcript
 // of it counts as echo (Infinity while it is still speaking). The recognizer
 // hands back its last words within a second or so of the voice stopping.
@@ -81,6 +95,8 @@ const SPEECH_START_TIMEOUT_MS = 3_000;
 const SPEECH_MS_PER_CHAR = 90;
 const SPEECH_END_GRACE_MS = 4_000;
 const lastSpoken = { text: "", startedAt: 0, until: 0 };
+// A reply heard back after a long tail of room echo still counts for this long.
+const ECHO_STRIP_MS = 30_000;
 const ttsSpeaking = () => lastSpoken.until === Infinity;
 
 export function createBargeDetector(now: () => number = Date.now) {
@@ -148,9 +164,12 @@ function armUtteranceRecorder(
   // Raw samples rather than a MediaRecorder: see lib/pcmClip.ts.
   const clip = new PcmClip(ctx.sampleRate, Math.round(ctx.sampleRate * PRE_ROLL_S));
   const tap = ctx.createScriptProcessor(4096, 1, 1);
+  const mute = ctx.createGain();
+  mute.gain.value = 0;
   tap.onaudioprocess = (e) => { if (!stopped) clip.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
   analyser.connect(tap);
-  tap.connect(ctx.destination);
+  tap.connect(mute);
+  mute.connect(ctx.destination);
 
   const drop = () => {
     clip.drop();
@@ -167,6 +186,7 @@ function armUtteranceRecorder(
       fd.append("audio", blob, "speech.wav");
       const code = lang();
       if (code) fd.append("lang", code);
+      fd.append("hint", navigator.language || "en");
       const res = await fetch("/api/transcribe", { method: "POST", body: fd, signal: AbortSignal.timeout(25_000) });
       const data = await res.json().catch(() => ({}));
       const text = res.ok && typeof data?.text === "string" ? data.text.trim() : "";
@@ -237,7 +257,7 @@ function armUtteranceRecorder(
     cancelAnimationFrame(raf);
     drop();
     tap.onaudioprocess = null;
-    try { analyser.disconnect(tap); tap.disconnect(); } catch { /* already disconnected */ }
+    try { analyser.disconnect(tap); tap.disconnect(); mute.disconnect(); } catch { /* already disconnected */ }
   };
 }
 
@@ -255,14 +275,10 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   const cbRef = useRef(cb);
   useEffect(() => { cbRef.current = cb; }, [cb]);
 
-  const recRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
-  const lastEventRef = useRef(0);
-  const startRecRef = useRef<() => void>(() => {});
   const lastTranscriptRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
-  const webFinalAt = useRef(0);
   const stuckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeLock = useWakeLock();
 
@@ -272,7 +288,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     // leave the composer on "thinking" after the server has also had its turn.
     stuckTimer.current = setTimeout(() => {
       stuckTimer.current = null;
-      if (Date.now() - webFinalAt.current > 2500) cbRef.current.onInterim?.("");
+      cbRef.current.onInterim?.("");
     }, 9000);
   };
   const clearStuck = () => {
@@ -280,9 +296,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   };
 
   const emitTranscript = useCallback((text: string) => {
-    const t = text.trim();
+    let t = text.trim();
     if (!t || cbRef.current.shouldSuppress?.()) return;
     if (Date.now() < lastSpoken.until && isEchoOf(t, lastSpoken.text)) return;
+    if (lastSpoken.text && Date.now() - lastSpoken.until < ECHO_STRIP_MS) t = stripEcho(t, lastSpoken.text);
+    if (words(t).length === 0) return;
     const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
     const now = Date.now();
     if (norm(t) && norm(t) === norm(lastTranscriptRef.current.text) && now - lastTranscriptRef.current.at < 6000) return;
@@ -294,9 +312,8 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
   }, []);
 
   useEffect(() => {
-    const SR = speechRecognizer();
     const mic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-    setSupported(!!SR || mic);
+    setSupported(mic);
 
     // Check Whisper (200 = available + key set, 503 = no key)
     fetch("/api/transcribe", { method: "POST", body: new FormData() })
@@ -306,22 +323,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
   const stopEarRef = useRef<(() => void) | null>(null);
   const resumeCtxRef = useRef<(() => void) | null>(null);
-  const srDelayRef = useRef(150);
-
   const startMeter = useCallback(async (opened?: AudioContext) => {
     if (streamRef.current) { void opened?.close().catch(() => {}); return; }
-    const synthetic = () => {
-      const tick = () => {
-        if (!activeRef.current) return;
-        const level = 25 + Math.round(Math.sin(Date.now() / 200) * 20 + 20);
-        cbRef.current.onLevel?.(level);
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
       });
       if (!activeRef.current) {
         stream.getTracks().forEach((t) => t.stop());
@@ -356,9 +362,10 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         analyser,
         () => activeRef.current,
         () => !!cbRef.current.shouldSuppress?.(),
-        // Unset, Whisper guesses the language per clip and "hears" Ukrainian or
-        // Portuguese in noise; the browser language is the right default.
-        () => cbRef.current.lang || navigator.language,
+        // Only a language the user picked is forced; otherwise the server
+        // detects it (Hindi and Hinglish forced to "en" came back as English
+        // nonsense) and falls back to the device language for noise.
+        () => cbRef.current.lang || undefined,
         emitTranscript,
         () => {
           cbRef.current.onSpeechEnd?.();
@@ -371,7 +378,7 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
           cbRef.current.onInterim?.("");
         },
         () => setRecognitionIssue("server"),
-        () => Date.now() - webFinalAt.current < 2500,
+        () => false,
       );
       const tick = () => {
         if (!activeRef.current) return;
@@ -381,11 +388,15 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
-    } catch {
+    } catch (error) {
       void opened?.close().catch(() => {});
-      synthetic();
+      setRecognitionIssue(error instanceof Error ? error.message : "Microphone unavailable");
+      setPermissionDenied(true);
+      activeRef.current = false;
+      setAudioState("idle");
+      wakeLock.release();
     }
-  }, [emitTranscript]);
+  }, [emitTranscript, wakeLock]);
 
   const stopMeter = useCallback(() => {
     stopEarRef.current?.();
@@ -405,14 +416,11 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 
   const enable = useCallback(async () => {
     if (activeRef.current) return;
-    const SRClass = speechRecognizer();
     const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
-    if (!SRClass && !canMic) return;
+    if (!canMic) return;
     activeRef.current = true;
     setPermissionDenied(false);
     setRecognitionIssue(null);
-    lastEventRef.current = Date.now();
-    srDelayRef.current = 150;
     // Mid-conversation the screen must not sleep, or the mic is suspended.
     wakeLock.acquire();
     // Opened and resumed here, still inside the tap: Safari only runs an
@@ -421,128 +429,21 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
     let ctx: AudioContext | undefined;
     try { ctx = new AudioContext(); void ctx.resume(); } catch { /* no Web Audio */ }
 
-    // Open the capture stream before the browser recognizer. Starting
-    // SpeechRecognition first, then getUserMedia, leaves Chrome's recognizer
-    // with a dead mic: it stays on "listening" and never returns words.
+    // All transcription now comes from speech-gated PCM segments.
     await startMeter(ctx);
-    if (!activeRef.current || !SRClass) return;
-
-    const startRec = () => {
-      if (!activeRef.current) return;
-      const rec = new SRClass();
-      recRef.current = rec;
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.maxAlternatives = 1;
-      // An empty lang is what Chrome sends to its speech service as a blank
-      // locale, which comes back as a network error and no transcript. The
-      // composer starts with lang "" until the user picks one.
-      const requested = (cbRef.current.lang || "").trim();
-      rec.lang = requested || (typeof navigator !== "undefined" ? navigator.language : "") || "en-US";
-
-      rec.onstart = () => {
-        lastEventRef.current = Date.now();
-        setAudioState("waiting");
-      };
-
-      rec.onspeechstart = () => {
-        lastEventRef.current = Date.now();
-        setRecognitionIssue(null);
-        cbRef.current.onSpeechStart?.();
-        if (cbRef.current.shouldSuppress?.()) return;
-        setAudioState("speaking");
-      };
-
-      rec.onspeechend = () => {
-        cbRef.current.onSpeechEnd?.();
-        setAudioState("transcribing");
-        armStuck();
-      };
-
-      rec.onresult = (event: any) => {
-        lastEventRef.current = Date.now();
-        setRecognitionIssue(null);
-        if (cbRef.current.shouldSuppress?.()) return;
-        let interim = "";
-        let final = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        srDelayRef.current = 150;
-        if (interim.trim()) cbRef.current.onInterim?.(interim.trim());
-        if (final.trim()) {
-          webFinalAt.current = Date.now();
-          emitTranscript(final.trim());
-          setAudioState("waiting");
-        }
-      };
-
-      rec.onerror = (e: any) => {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          // Speech recognition can be refused while the capture stream is live.
-          // Only treat that as a blocked microphone when we never got a stream.
-          if (!streamRef.current) {
-            setPermissionDenied(true);
-            activeRef.current = false;
-            setAudioState("idle");
-            return;
-          }
-          setRecognitionIssue("network");
-          srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
-        } else if (e.error === "network" || e.error === "audio-capture") {
-          setRecognitionIssue(e.error);
-          srDelayRef.current = Math.min(8_000, Math.max(1_500, srDelayRef.current * 2));
-        }
-        setAudioState("waiting");
-      };
-
-      rec.onend = () => {
-        if (!activeRef.current) { setAudioState("idle"); return; }
-        setTimeout(startRec, srDelayRef.current);
-      };
-
-      try { rec.start(); } catch { setTimeout(startRec, 500); }
-    };
-
-    startRecRef.current = startRec;
-    startRec();
-  }, [startMeter, wakeLock, emitTranscript]);
+    // Browser SpeechRecognition is intentionally not started: it receives raw
+    // microphone audio outside the speech gate.
+    if (activeRef.current && streamRef.current) setAudioState("waiting");
+  }, [startMeter, wakeLock]);
 
   const disable = useCallback(() => {
     activeRef.current = false;
     clearStuck();
-    try { recRef.current?.abort(); } catch {}
-    recRef.current = null;
     stopMeter();
     setAudioState("idle");
     setRecognitionIssue(null);
     wakeLock.release();
   }, [stopMeter, wakeLock]);
-
-  // Recovery: same failure mode as useWakeWord — a hidden tab or a network
-  // blip can kill recognition without onend ever firing.
-  const forceRestart = useCallback(() => {
-    if (!activeRef.current) return;
-    const old = recRef.current;
-    recRef.current = null;
-    // Detach before abort(), otherwise the old onend relaunches and races
-    // the fresh instance (two recognizers fighting over one mic).
-    if (old) {
-      old.onstart = null;
-      old.onspeechstart = null;
-      old.onspeechend = null;
-      old.onresult = null;
-      old.onerror = null;
-      old.onend = null;
-      try { old.abort(); } catch {}
-    }
-    lastEventRef.current = Date.now();
-    startRecRef.current();
-  }, []);
 
   useEffect(() => {
     if (!supported) return;
@@ -555,21 +456,13 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
         stopMeter();
         void startMeter();
       }
-      forceRestart();
     };
     document.addEventListener("visibilitychange", onVisible);
 
-    const watchdog = setInterval(() => {
-      if (!activeRef.current) return;
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - lastEventRef.current > STT_WATCHDOG_MS) forceRestart();
-    }, STT_WATCHDOG_MS / 2);
-
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      clearInterval(watchdog);
     };
-  }, [supported, forceRestart, startMeter, stopMeter]);
+  }, [supported, startMeter, stopMeter]);
 
   return { audioState, supported, permissionDenied, recognitionIssue, whisperAvailable, enable, disable };
 }
@@ -578,6 +471,29 @@ export function useVoiceSTT(cb: VoiceSTTCallbacks) {
 export const useWhisperSTT = useVoiceSTT;
 
 // ─── TTS ─────────────────────────────────────────────────────────────────────
+
+const ABBREVIATION = /\b(?:mr|mrs|ms|dr|st|vs|etc|e\.g|i\.e|no|approx)\.$/i;
+
+/**
+ * Splits streamed reply text into the sentences that are complete so far, so
+ * the first one can be spoken while the rest is still being written. Text
+ * inside an unfinished code block waits for the block to close.
+ */
+export function takeSentences(text: string): { sentences: string[]; rest: string } {
+  const sentences: string[] = [];
+  let start = 0;
+  const end = /([.!?…]["')\]]*)(\s+)|\n+/g;
+  let m: RegExpExecArray | null;
+  while ((m = end.exec(text))) {
+    const cut = m.index + (m[1]?.length ?? 0);
+    const piece = text.slice(start, cut);
+    if ((piece.match(/```/g)?.length ?? 0) % 2) continue;
+    if (m[1] && ABBREVIATION.test(piece.trimEnd())) continue;
+    if (piece.trim()) sentences.push(piece.trim());
+    start = m.index + m[0].length;
+  }
+  return { sentences, rest: text.slice(start) };
+}
 
 function stripMarkdown(text: string): string {
   return text
@@ -651,7 +567,48 @@ async function waitForVoices(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> 
 
 const TTS_KEY = "jarvis_tts_enabled_v2";
 
-export function useTTS(voicePreference?: string) {
+// Neural and network voices sound like a person; the old desktop SAPI voices
+// and eSpeak sound like a machine.
+const HUMAN = /natural|neural|online|premium|enhanced|siri|google/i;
+const ROBOTIC = /\b(david|mark|zira|hazel|george|susan|espeak|compact|novelty|bad news|bells|boing|bubbles|cellos|whisper|zarvox|trinoids|albert|jester|organ|superstar|wobble)\b/i;
+
+const FEMALE = /female|samantha|victoria|zira|karen|moira|tessa|kate|serena|susan|hazel|fiona|veena|allison|\bava\b|heera|kalpana|lekha|neerja|swara|aria|jenny|sonia|libby|natasha|emma|isabella|google us english/i;
+const MALE = /\bmale\b|daniel|alex|david|mark|arthur|oliver|\bfred\b|rishi|aaron|\btom\b|gordon|\blee\b|ravi|hemant|prabhat|madhur|\bguy\b|ryan|thomas|william|eric|christopher/i;
+
+export function voiceGender(v: SpeechSynthesisVoice | undefined): "male" | "female" | undefined {
+  if (!v) return undefined;
+  if (FEMALE.test(v.name)) return "female";
+  return MALE.test(v.name) ? "male" : undefined;
+}
+
+export type VoiceGender = "male" | "female" | "neutral";
+
+/** The agent's chosen voice (its first listed name that exists here), else the most human voice of its gender. */
+export function humanVoice(voices: SpeechSynthesisVoice[], preference: string | undefined, language: string, gender?: VoiceGender): SpeechSynthesisVoice | undefined {
+  const lang = (language || "en").slice(0, 2).toLowerCase();
+  const pool = voices.filter((v) => v.lang?.toLowerCase().startsWith(lang));
+  const candidates = pool.length ? pool : voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
+  for (const alt of (preference ?? "").split("|").map((s) => s.trim()).filter(Boolean)) {
+    let re: RegExp;
+    // A custom profile's preference is typed by hand and may not be a valid pattern.
+    try { re = new RegExp(alt, "i"); } catch { continue; }
+    const hit = candidates.find((v) => re.test(v.name));
+    if (hit) return hit;
+  }
+  const want = gender === "male" || gender === "female" ? gender : undefined;
+  const score = (v: SpeechSynthesisVoice) =>
+    (HUMAN.test(v.name) ? 10 : 0) - (ROBOTIC.test(v.name) ? 10 : 0) + (v.localService === false ? 2 : 0) +
+    (v.lang?.toLowerCase() === language.toLowerCase() ? 1 : 0) +
+    (want ? (voiceGender(v) === want ? 6 : voiceGender(v) ? -6 : 0) : 0);
+  return [...candidates].sort((a, b) => score(b) - score(a))[0] ?? voices[0];
+}
+
+export interface TTSVoice { id?: string; voicePreference?: string; gender?: VoiceGender; naturalVoice?: string }
+
+export function useTTS(agent?: TTSVoice) {
+  const voicePreference = agent?.voicePreference;
+  const gender = agent?.gender;
+  const natural = kokoroVoice(agent);
   const [speaking, setSpeaking] = useState(false);
   const [supported, setSupported] = useState(false);
   // Replies are text by default; reading them aloud is opt-in. A new key, so the
@@ -702,76 +659,100 @@ export function useTTS(voicePreference?: string) {
     }
   }, []);
 
-  const speak = useCallback(async (text: string, onEnd?: () => void, force = false) => {
-    if (!supported) { onEnd?.(); return; }
-    if (!enabled && !force) { onEnd?.(); return; }   // force = one-shot Narrate, ignores the ambient toggle
-    const clean = stripMarkdown(text);
-    if (!clean.trim()) { onEnd?.(); return; }
+  // One reply can arrive in pieces, spoken while its text still streams in.
+  // The pieces play back to back as one reply: "speaking", the echo guard and
+  // onEnd span all of them, so the mic stays shut between sentences.
+  const replyRef = useRef({
+    id: 0, parts: [] as string[], open: false, playing: false, begun: false,
+    text: "", volume: 1, onEnd: undefined as (() => void) | undefined,
+  });
 
-    try { window.speechSynthesis.cancel(); } catch { /* noop */ }
-    try { window.speechSynthesis.resume(); } catch { /* noop */ }
-    // A cancelled utterance may never fire onend, which would leave the
-    // "still speaking" marker set.
-    if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+  const finish = useCallback((id: number) => {
+    const r = replyRef.current;
+    if (r.id !== id) return;
+    r.playing = false;
+    if (r.begun) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
+    setSpeaking(false);
+    stopKeepalive();
+    const cb = r.onEnd;
+    r.onEnd = undefined;
+    cb?.();
+  }, [stopKeepalive]);
 
-    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
-    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
-    if (w.__jarvisDnd && !force) { onEnd?.(); return; }
-    const volume = typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1;
-    const started = () => {
-      lastSpoken.text = clean;
-      lastSpoken.startedAt = Date.now();
-      lastSpoken.until = Infinity;
-      setSpeaking(true);
-    };
-    let over = false;
-    let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const finished = () => {
-      if (over) return;
-      over = true;
-      clearTimeout(watchdog);
-      if (lastSpoken.text === clean) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
-      setSpeaking(false);
-      stopKeepalive();
-      onEnd?.();
-    };
-    if (naturalVoiceOn() && (await speakNatural(clean, { volume, onStart: started, onEnd: finished }))) return;
-
+  const playOne = useCallback(async (clean: string, volume: number, onStart: () => void): Promise<void> => {
+    // The natural voice speaks once it has loaded; until then (and while it
+    // downloads in the background) the device's most human voice answers, so
+    // a reply never waits on a download.
+    if (naturalVoiceOn()) {
+      if (naturalVoiceReady()) { if (await speakNatural(clean, { voice: natural, volume, onStart })) return; }
+      else void loadNaturalVoice();
+    }
     const voices = await waitForVoices(1500);
-    const u = new SpeechSynthesisUtterance(clean);
-    u.rate = isIOS ? 1.0 : 1.05;
-    u.pitch = 0.9;
-    u.volume = volume;
-    const pattern = voicePreference ? new RegExp(voicePreference, "i") : /david|mark|google uk english male|daniel/i;
-    const preferred =
-      voices.find((v) => pattern.test(v.name)) ??
-      voices.find((v) => v.lang?.startsWith("en") && /male/i.test(v.name)) ??
-      voices.find((v) => v.lang === "en-US") ??
-      voices.find((v) => v.lang?.startsWith("en")) ??
-      voices[0];
-    if (preferred) u.voice = preferred;
+    await new Promise<void>((resolve) => {
+      const u = new SpeechSynthesisUtterance(clean);
+      u.rate = 1.05;
+      u.volume = volume;
+      const preferred = humanVoice(voices, voicePreference, typeof navigator !== "undefined" ? navigator.language : "en", gender);
+      if (preferred) { u.voice = preferred; u.lang = preferred.lang; }
+      // No voice of the agent's gender on this device: shift the pitch toward it.
+      const off = (gender === "male" || gender === "female") && voiceGender(preferred) !== gender;
+      u.pitch = off ? (gender === "male" ? 0.8 : 1.2) : 1.0;
 
-    // iOS can drop an utterance without onstart, or play it without onend.
-    // Either leaves "speaking" set, the mic muted and call mode stuck after
-    // one reply, so both are timed out.
-    let begun = false;
-    u.onstart = () => {
-      begun = true;
-      started();
-      startKeepalive();
-      clearTimeout(watchdog);
-      watchdog = setTimeout(finished, clean.length * SPEECH_MS_PER_CHAR + SPEECH_END_GRACE_MS);
-    };
-    u.onend = finished;
-    u.onerror = finished;
+      // iOS can drop an utterance without onstart, or play it without onend.
+      // Either leaves "speaking" set, the mic muted and call mode stuck after
+      // one reply, so both are timed out.
+      let begun = false;
+      let over = false;
+      let watchdog: ReturnType<typeof setTimeout> | undefined;
+      const done = () => {
+        if (over) return;
+        over = true;
+        clearTimeout(watchdog);
+        resolve();
+      };
+      u.onstart = () => {
+        begun = true;
+        onStart();
+        startKeepalive();
+        clearTimeout(watchdog);
+        watchdog = setTimeout(done, clean.length * SPEECH_MS_PER_CHAR + SPEECH_END_GRACE_MS);
+      };
+      u.onend = done;
+      u.onerror = done;
+      setTimeout(() => {
+        try { window.speechSynthesis.speak(u); } catch { done(); return; }
+        if (!begun) watchdog = setTimeout(done, SPEECH_START_TIMEOUT_MS);
+      }, isIOS ? 80 : 0);
+    });
+  }, [voicePreference, gender, natural, startKeepalive]);
 
-    setTimeout(() => {
-      try { window.speechSynthesis.speak(u); } catch { finished(); return; }
-      if (!begun) watchdog = setTimeout(finished, SPEECH_START_TIMEOUT_MS);
-    }, isIOS ? 80 : 0);
-  }, [enabled, supported, voicePreference, startKeepalive, stopKeepalive]);
+  const pump = useCallback(async () => {
+    const r = replyRef.current;
+    if (r.playing) return;
+    const id = r.id;
+    r.playing = true;
+    while (r.id === id && r.parts.length) {
+      const part = r.parts.shift()!;
+      await playOne(part, r.volume, () => {
+        if (r.id !== id) return;
+        lastSpoken.text = r.text;
+        if (!r.begun) { r.begun = true; lastSpoken.startedAt = Date.now(); }
+        lastSpoken.until = Infinity;
+        setSpeaking(true);
+      });
+    }
+    if (r.id !== id) return;
+    r.playing = false;
+    if (!r.open) finish(id);
+  }, [playOne, finish]);
 
-  const stop = useCallback(() => {
+  // Ends the reply outright: sentences still streaming in for it are dropped,
+  // so a reply the user cut off does not start talking again.
+  const halt = useCallback(() => {
+    replyRef.current.id++;
+    replyRef.current.parts = [];
+    replyRef.current.playing = false;
+    replyRef.current.open = false;
     stopNatural();
     if (supported) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
@@ -780,6 +761,54 @@ export function useTTS(voicePreference?: string) {
     stopKeepalive();
     setSpeaking(false);
   }, [supported, stopKeepalive]);
+
+  /** Starts a reply that is added to piece by piece; false when nothing will be spoken. */
+  const begin = useCallback((onEnd?: () => void, force = false): boolean => {
+    if (!supported || (!enabled && !force)) return false;   // force = one-shot, ignores the ambient toggle
+    // "Set volume" and "do not disturb" in the browser act on JARVIS's own voice.
+    const w = window as Window & { __jarvisVolume?: number; __jarvisDnd?: boolean };
+    if (w.__jarvisDnd && !force) return false;
+    const prev = replyRef.current.onEnd;
+    replyRef.current.onEnd = undefined;
+    halt();
+    prev?.();
+    try { window.speechSynthesis.resume(); } catch { /* noop */ }
+    const r = replyRef.current;
+    replyRef.current = {
+      id: r.id + 1, parts: [], open: true, playing: false, begun: false, text: "",
+      volume: typeof w.__jarvisVolume === "number" ? w.__jarvisVolume : 1, onEnd,
+    };
+    return true;
+  }, [supported, enabled, halt]);
+
+  const add = useCallback((text: string) => {
+    const r = replyRef.current;
+    const clean = stripMarkdown(text);
+    if (!r.open || !clean) return;
+    r.parts.push(clean);
+    r.text = r.text ? `${r.text} ${clean}` : clean;
+    void pump();
+  }, [pump]);
+
+  const end = useCallback(() => {
+    const r = replyRef.current;
+    if (!r.open) return;
+    r.open = false;
+    if (!r.playing && !r.parts.length) finish(r.id);
+  }, [finish]);
+
+  const speak = useCallback(async (text: string, onEnd?: () => void, force = false) => {
+    if (!stripMarkdown(text) || !begin(onEnd, force)) { onEnd?.(); return; }
+    add(text);
+    end();
+  }, [begin, add, end]);
+
+  const stop = useCallback(() => {
+    const cb = replyRef.current.onEnd;
+    replyRef.current.onEnd = undefined;
+    halt();
+    cb?.();
+  }, [halt]);
 
   const toggle = useCallback(() => {
     setEnabled((v) => {
@@ -790,5 +819,5 @@ export function useTTS(voicePreference?: string) {
     });
   }, []);
 
-  return { speaking, enabled, supported, speak, stop, toggle };
+  return { speaking, enabled, supported, speak, begin, add, end, stop, toggle };
 }

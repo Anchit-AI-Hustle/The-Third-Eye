@@ -28,6 +28,8 @@ const ALLOWED_HOSTS = new Set([
 const releasePath = (path: string) => path.toLowerCase().startsWith(`/${ANCHOR_REPO.toLowerCase()}/releases/download/`);
 const ASSET_HOSTS = new Set(["objects.githubusercontent.com", "release-assets.githubusercontent.com"]);
 
+const MEDIA_TYPE = /^(audio\/|video\/|image\/(png|jpeg|webp|gif)\b|application\/(octet-stream|ogg)\b|binary\/octet-stream\b)/i;
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return new Response("Not authenticated", { status: 401 });
@@ -54,17 +56,18 @@ export async function GET(req: NextRequest) {
 
   const q = new URL(req.url).searchParams;
   const type = upstream.headers.get("content-type") ?? "application/octet-stream";
+  // Served from this origin, so anything that could render as a page (HTML,
+  // SVG) from a public bucket would run with the viewer's session.
+  if (!MEDIA_TYPE.test(type)) return new Response("not a media file", { status: 415 });
   const headers: Record<string, string> = {
     "Content-Type": type,
     "Cache-Control": "private, max-age=3600",
-    "Access-Control-Allow-Origin": "*",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox; default-src 'none'",
   };
   // Playback stays inline. A download must not open the browser's media player,
   // so the file is served as an attachment named for what it actually is.
-  if (q.get("dl") === "1") {
-    headers["Content-Disposition"] = contentDisposition(mediaFilename(q.get("name") ?? "", type, parsed.pathname));
-    headers["X-Content-Type-Options"] = "nosniff";
-  }
+  if (q.get("dl") === "1") headers["Content-Disposition"] = contentDisposition(mediaFilename(q.get("name") ?? "", type, parsed.pathname));
 
   return new Response(upstream.body, { status: 200, headers });
 }

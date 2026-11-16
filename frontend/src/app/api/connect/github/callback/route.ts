@@ -52,7 +52,7 @@ export async function GET(req: Request) {
   } catch { /* login is display-only */ }
 
   const stored = await storeGithubToken(email, tok.access_token, login);
-  const done = NextResponse.redirect(`${base}/settings?connect=${stored ? "github_connected" : "github_error"}`);
+  const done = NextResponse.redirect(`${base}/settings?connect=${stored ? "github_connected" : "github_store_error"}`);
   done.cookies.delete("gh_connect_state");
   return done;
 }

@@ -11,7 +11,7 @@ import { useConsentBundle } from "@/hooks/useConsent";
 // first impression and an obstacle to anyone reviewing the document, including
 // Google's OAuth reviewers, who open these URLs directly. The demo promises it
 // captures nothing, so it must not ask for the camera or microphone either.
-const NO_PROMPT_PATHS = ["/privacy", "/terms_of_service", "/auth", "/install", "/get", "/demo", "/calculators", "/upgrade"];
+const NO_PROMPT_PATHS = ["/privacy", "/terms_of_service", "/auth", "/install", "/get", "/calculators", "/upgrade"];
 
 interface ConsentItem {
   key: ConsentKey;
@@ -45,11 +45,14 @@ export function ConsentDialog() {
   });
 
   useEffect(() => {
-    if (!bundleAsked && !suppressed) {
+    // The dashboard's first-run guide asks for the same permissions; don't stack two prompts.
+    let guiding = false;
+    try { guiding = pathname === "/dashboard" && localStorage.getItem("te_first_run_done") !== "1"; } catch { /* no storage */ }
+    if (!bundleAsked && !suppressed && !guiding) {
       const t = setTimeout(() => setOpen(true), 600);
       return () => clearTimeout(t);
     }
-  }, [bundleAsked, suppressed]);
+  }, [bundleAsked, suppressed, pathname]);
 
   if (!open) return null;
 

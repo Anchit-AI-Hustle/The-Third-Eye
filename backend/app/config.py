@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # Let the research agent answer via Gemini's google_search tool when no
     # SERPER_API_KEY is configured, instead of degrading to "search unavailable".
     enable_google_grounding: bool = True
+    # Serper web search. Empty → grounded Gemini search when enable_google_grounding.
+    # Must live on Settings (not os.getenv) so values from .env are actually read.
+    serper_api_key: str = ""
 
     # Rate limiting
     ai_rate_limit_rpm: int = 60

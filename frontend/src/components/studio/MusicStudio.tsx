@@ -27,9 +27,9 @@ const GENRES = [
   "Metal", "Punk", "Hardcore", "Emo", "Post-rock", "Shoegaze", "Grunge",
   "EDM", "House", "Deep house", "Tech house", "Techno", "Hard Techno", "Trance", "Psytrance",
   "Full-on psytrance", "Dark psytrance", "Forest psytrance", "Hi-tech psytrance", "Psycore", "Goa trance",
-  "Acid rave", "Acid techno", "Gabber", "Frenchcore", "Speedcore",
+  "Acid rave", "Acid techno", "Hardtek", "Gabber", "Frenchcore", "Speedcore",
   "Dubstep", "Drum & bass", "Jungle", "Garage/UK garage", "Grime", "Hardstyle", "Hyperpop",
-  "Trap", "Drill", "Boom bap", "Lo-fi", "Ambient", "Downtempo", "Chillout", "New age", "Vaporwave",
+  "Rap", "Trap", "Drill", "Boom bap", "Lo-fi", "Ambient", "Downtempo", "Chillout", "New age", "Vaporwave",
   "Synthwave", "Cinematic", "Orchestral", "Video game/chiptune", "Industrial", "Experimental",
   "Afrobeats", "Afrobeat", "Highlife", "Soukous", "Amapiano", "Reggae", "Dub", "Dancehall", "Soca",
   "Latin", "Reggaeton", "Salsa", "Cumbia", "Bachata", "Bossa nova", "Samba", "Tango", "Flamenco",
@@ -94,7 +94,8 @@ type Fields = {
   title: string; description: string; genres: string[]; subgenre: string; moods: string[];
   tempo: number; duration: number; vocals: boolean; vocalStyles: string[]; vocalLanguages: string[];
   vocalIntensity: number; vocalEffects: string[];
-  lyricsMode: "auto" | "manual" | "none"; lyricsText: string; artistInspiration: string[];
+  lyricsMode: "auto" | "manual" | "none"; lyricsText: string; lyricsTheme: string;
+  artistInspiration: string[];
   instruments: string[]; energy: number; structure: string; makeVideoUpfront: boolean;
 };
 
@@ -107,7 +108,7 @@ const NUMBER_RANGES: Partial<Record<keyof Fields, [number, number]>> = {
 const FIELD_DEFAULTS: Partial<Record<keyof Fields, Fields[keyof Fields]>> = {
   title: "", description: "", genres: [], subgenre: "", moods: [],
   tempo: 120, duration: 30, vocalStyles: [], vocalLanguages: [],
-  vocalIntensity: 5, vocalEffects: [], lyricsText: "", artistInspiration: [],
+  vocalIntensity: 5, vocalEffects: [], lyricsText: "", lyricsTheme: "", artistInspiration: [],
   instruments: [], energy: 6, structure: "",
 };
 
@@ -128,18 +129,25 @@ function fmtDuration(s: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+const INSTRUMENTAL_LANG = /instrumental\s*\/\s*no lyrics/i;
+
 // The form as the generator (and the daily drop) reads it: lists as comma strings.
 function payloadOf(f: Fields) {
   const { makeVideoUpfront: _video, ...rest } = f;
+  const langs = f.vocalLanguages.filter((l) => !INSTRUMENTAL_LANG.test(l));
+  const forceInstrumental = f.vocalLanguages.some((l) => INSTRUMENTAL_LANG.test(l));
   return {
     ...rest,
     genre: f.genres.join(", "),
     mood: f.moods.join(", "),
     vocalStyle: f.vocalStyles.join(", "),
-    vocalLanguage: f.vocalLanguages.join(", "),
+    vocalLanguage: langs.join(", "),
     vocalEffects: f.vocalEffects.join(", "),
     instruments: f.instruments.join(", "),
     artistInspiration: f.artistInspiration.join(", "),
+    // "Instrumental / no lyrics" is not a language — force lyrics off.
+    vocals: forceInstrumental ? false : f.vocals,
+    lyricsMode: forceInstrumental ? "none" as const : f.lyricsMode,
   };
 }
 
@@ -257,9 +265,9 @@ function ChipInput({ id, value, onChange, options, placeholder }: {
 export function MusicStudio() {
   const [f, setF] = useState<Fields>({
     title: "", description: "", genres: [GENRES[0]], subgenre: "", moods: [MOODS[0]],
-    tempo: 120, duration: 30, vocals: true, vocalStyles: [VOCAL_STYLES[0]], vocalLanguages: [LANGUAGES[0]],
+    tempo: 120, duration: 30, vocals: true, vocalStyles: [], vocalLanguages: [LANGUAGES[0]],
     vocalIntensity: 5, vocalEffects: [],
-    lyricsMode: "auto", lyricsText: "", artistInspiration: [], instruments: [], energy: 6, structure: structuresFor([GENRES[0]])[0],
+    lyricsMode: "auto", lyricsText: "", lyricsTheme: "", artistInspiration: [], instruments: [], energy: 6, structure: structuresFor([GENRES[0]])[0],
     makeVideoUpfront: false,
   });
   const set = useCallback(<K extends keyof Fields>(k: K, v: Fields[K]) => setF((p) => ({ ...p, [k]: v })), []);
@@ -292,6 +300,7 @@ export function MusicStudio() {
   const [savedNote, setSavedNote] = useState(false);
   const fFor = useRef(f); fFor.current = f;
   const pRef = useRef(""); const lRef = useRef("");
+  const voiceRef = useRef(""); // the voice the song was sung in, when the form left it to the musicologist
 
   // Library is localStorage-backed with cloud best-effort, so it works even
   // before the music_tracks table exists, and upgrades to cloud once it does.
@@ -340,7 +349,7 @@ export function MusicStudio() {
         { label: "Genres", value: cur.genres.join(", ") }, { label: "Moods", value: cur.moods.join(", ") },
         { label: "Tempo", value: `${cur.tempo} BPM` }, { label: "Structure", value: cur.structure },
         { label: "Instruments", value: cur.instruments.join(", ") }, { label: "Artist vibe", value: cur.artistInspiration.join(", ") },
-        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyles.join(", ")} (${cur.vocalIntensity}/10)` : "instrumental" },
+        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyles.join(", ") || voiceRef.current} (${cur.vocalIntensity}/10)` : "instrumental" },
         { label: "Vocal languages", value: cur.vocalLanguages.join(", ") },
         { label: "Vocal effects", value: cur.vocalEffects.join(", ") },
       ].filter((x) => x.value),
@@ -395,7 +404,7 @@ export function MusicStudio() {
         moods: x.mood ? matchOptions(x.mood, MOODS, 5, /[,&/]|\band\b/i) : p.moods,
         tempo: Number(x.tempo) >= BPM_MIN && Number(x.tempo) <= BPM_MAX ? Math.round(x.tempo) : p.tempo,
         energy: Number(x.energy) >= 1 && Number(x.energy) <= 10 ? Math.round(x.energy) : p.energy,
-        duration: Number(x.duration) >= 10 && Number(x.duration) <= 120 ? Math.round(x.duration) : p.duration,
+        duration: Number(x.duration) >= 10 && Number(x.duration) <= MAX_DURATION ? Math.round(x.duration) : p.duration,
         structure: x.structure || p.structure,
         instruments: x.instruments ? matchOptions(x.instruments, INSTRUMENTS, 10) : p.instruments,
         artistInspiration: x.artistInspiration ? matchOptions(x.artistInspiration, ARTIST_INSPIRATION, 4) : p.artistInspiration,
@@ -404,6 +413,7 @@ export function MusicStudio() {
         vocalLanguages: x.vocalLanguage ? matchOptions(x.vocalLanguage, LANGUAGES, 5) : p.vocalLanguages,
         vocalIntensity: Number(x.vocalIntensity) >= 1 && Number(x.vocalIntensity) <= 10 ? Math.round(x.vocalIntensity) : p.vocalIntensity,
         vocalEffects: x.vocalEffects ? matchOptions(x.vocalEffects, VOCAL_EFFECTS, 6) : p.vocalEffects,
+        lyricsTheme: typeof x.lyricsTheme === "string" && x.lyricsTheme.trim() ? x.lyricsTheme.trim() : p.lyricsTheme,
       }));
     } catch { setError("Auto-fill network error."); }
     finally { setFilling(false); }
@@ -491,6 +501,7 @@ export function MusicStudio() {
       if (!res.ok) { setPhase("error"); setError(d.error ?? `HTTP ${res.status}`); setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); return; }
       setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); pRef.current = d.prompt ?? ""; lRef.current = d.lyrics ?? "";
       setBrief(d.brief ?? null);
+      voiceRef.current = d.brief?.vocalStyle ?? "";
       setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       const notes: string[] = [];
@@ -519,13 +530,31 @@ export function MusicStudio() {
     // A job a provider never finishes would otherwise be polled for as long as the page is open.
     const giveUp = Date.now() + 10 * 60_000;
     pollRef.current = setInterval(async () => {
-      if (Date.now() > giveUp) { stopPoll(); setPhase("error"); setError("Still not finished after 10 minutes. The provider may be stuck; try again."); return; }
+      if (Date.now() > giveUp) {
+        stopPoll();
+        setPhase("error");
+        setError("Still not finished after 10 minutes. The provider may be stuck; try again.");
+        // Ask the poll endpoint once more so a stuck job can still refund if the provider failed.
+        void fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`).catch(() => null);
+        return;
+      }
       try {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();
         if (d.status) setStatus(`Composing audio… (${d.status})`);
         if (d.status === "succeeded" && d.audioUrl) { stopPoll(); onAudioReady(d.audioUrl); }
-        else if (d.status === "failed" || d.status === "canceled" || d.error) { stopPoll(); setPhase("error"); setError(d.error || "Generation failed."); }
+        else if (d.status === "succeeded" && !d.audioUrl) {
+          stopPoll();
+          setPhase("error");
+          setError(d.error || "The render finished without an audio file.");
+          if (d.refunded) setNote("Credits for this failed job were returned.");
+        }
+        else if (d.status === "failed" || d.status === "canceled" || (d.error && d.status !== "starting" && d.status !== "processing")) {
+          stopPoll();
+          setPhase("error");
+          setError(d.error || "Generation failed.");
+          if (d.refunded) setNote("Credits for this failed job were returned.");
+        }
       } catch { /* keep polling */ }
     }, 3000);
   }
@@ -689,7 +718,7 @@ export function MusicStudio() {
           <>
             <div>
               <Label name="vocalStyles">Vocal style(s)</Label>
-              <TagPicker id="music-vocalStyles" values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Search vocal styles…" max={4} />
+              <TagPicker id="music-vocalStyles" values={f.vocalStyles} onChange={(v) => set("vocalStyles", v)} options={VOCAL_STYLES} placeholder="Auto: a voice picked to fit the song, or search styles…" max={4} />
             </div>
             <div>
               <Label name="vocalLanguages">Vocal language(s)</Label>

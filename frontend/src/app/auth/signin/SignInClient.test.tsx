@@ -13,6 +13,7 @@ describe("SignInClient", () => {
     getCsrfToken.mockReset();
     getCsrfToken.mockResolvedValue("csrf-test");
     localStorage.setItem("te_welcome_seen", "1");
+    localStorage.removeItem("te_webclip");
     // jsdom has no matchMedia; the welcome and sign-in backdrop reads reduced motion.
     window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
   });
@@ -53,7 +54,7 @@ describe("SignInClient", () => {
     await waitFor(() => expect(getCsrfToken).toHaveBeenCalled());
   });
 
-  it("in the iPhone home-screen app, signs in through Safari and picks the session up when approved", async () => {
+  it("in the iPhone home-screen app, signs in through Safari once the confirmation Safari shows is typed in", async () => {
     Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const assign = vi.fn();
@@ -76,13 +77,33 @@ describe("SignInClient", () => {
     // Opened before any network wait: iOS blocks a window opened after the tap's moment has passed.
     expect(open.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]);
     expect(screen.getByText(code.slice(0, 4).toUpperCase())).toBeTruthy();
+    // If iOS swallowed the window, there is still something to tap.
+    expect(screen.getByRole("link", { name: /Open Safari to sign in/i })).toHaveAttribute("href", `/auth/handoff?code=${code}`);
 
-    approved = true;
+    // Nothing signs in until the confirmation Safari shows is typed here.
     await act(async () => { await vi.advanceTimersByTimeAsync(2500); });
+    expect(assign).not.toHaveBeenCalled();
+    approved = true;
+    fireEvent.change(screen.getByLabelText("Code from Safari"), { target: { value: "abc234" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Sign in" })); });
+    expect(fetchMock).toHaveBeenLastCalledWith(`/api/auth/handoff?code=${code}&confirm=abc234`);
     expect(assign).toHaveBeenCalledWith("/dashboard");
 
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    open.mockRestore();
+    delete (window.navigator as { standalone?: boolean }).standalone;
+  });
+
+  it("in the installed iPhone web clip, signs in with Google right inside the app", async () => {
+    Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<SignInClient callbackUrl="/dashboard?app=webclip" initialError={null} />);
+    const button = await screen.findByRole("button", { name: "Continue with Google" });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(button.closest("form")).toHaveAttribute("action", "/api/auth/signin/google");
+    fireEvent.click(button);
+    expect(open).not.toHaveBeenCalled();
     open.mockRestore();
     delete (window.navigator as { standalone?: boolean }).standalone;
   });

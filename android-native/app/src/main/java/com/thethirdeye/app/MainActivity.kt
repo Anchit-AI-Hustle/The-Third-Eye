@@ -1,7 +1,9 @@
 package com.thethirdeye.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -68,10 +70,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
-        val data = intent?.data ?: return
-        if (data.scheme == "thethirdeye" && data.host == "auth") {
+        intent ?: return
+        val data = intent.data
+        if (data != null && data.scheme == "thethirdeye" && data.host == "auth") {
             claimed = true
             session.claim(data.getQueryParameter("code"), data.getQueryParameter("state"))
+            return
+        }
+        when (val launch = Launch.of(intent.action, data?.toString(), intent.getStringExtra(Intent.EXTRA_TEXT))) {
+            Launch.Call -> app.startCall()
+            Launch.Assistant -> app.tab = AppState.Tab.Assistant
+            is Launch.Ask -> app.ask(launch.text)
+            null -> {}
         }
     }
 }
@@ -92,6 +102,14 @@ class AppState : ViewModel() {
 
     fun ask(text: String) {
         pendingAsk = text
+        tab = Tab.Assistant
+    }
+
+    /** Set by the Talk shortcut and the assistant gesture; the Assistant starts a hands-free call and clears it. */
+    var pendingCall by mutableStateOf(false)
+
+    fun startCall() {
+        pendingCall = true
         tab = Tab.Assistant
     }
 }
@@ -115,9 +133,28 @@ fun Root(session: Session, app: AppState) {
                 scope.launch { Reminders.sync(context) }
                 onPauseOrDispose {}
             }
+            LaunchedEffect(session.email) {
+                val prefs = context.getSharedPreferences("welcome", Context.MODE_PRIVATE)
+                welcomeLine(prefs, session.email, session.name)?.let { line ->
+                    val voice = Voice(context)
+                    voice.speakWhenReady(line, started = { markWelcomed(prefs, session.email) }) { voice.release() }
+                }
+            }
             MainTabs(session, app)
         }
     }
+}
+
+/** The assistant greets each account aloud the first time it signs in on this device. */
+fun welcomeLine(prefs: SharedPreferences, email: String?, name: String?, agent: String = "JARVIS"): String? {
+    if (email == null || prefs.getBoolean("welcomed:$email", false)) return null
+    val first = name?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.takeIf { it.isNotEmpty() }
+    return "Welcome to The Third Eye${first?.let { ", $it" } ?: ""}. I'm $agent, your assistant. Ask me anything, any time."
+}
+
+/** Recorded once the welcome is heard, so a phone whose speech engine failed tries again next time. */
+fun markWelcomed(prefs: SharedPreferences, email: String?) {
+    if (email != null) prefs.edit().putBoolean("welcomed:$email", true).apply()
 }
 
 // The same five tabs as the website's phone layout.

@@ -105,7 +105,8 @@ export async function GET(req: Request) {
       "google connect: grant not stored",
       { refreshToken: !!tok.refresh_token, encryptionKey: !!process.env.TOKEN_ENCRYPTION_KEY, database: !!process.env.DATABASE_URL },
     );
-    const failed = NextResponse.redirect(`${base}/settings?connect=google_error`);
+    // Google said yes; the save is what failed, so the page must not blame the sign-in.
+    const failed = NextResponse.redirect(`${base}/settings?connect=google_store_error`);
     failed.cookies.delete("g_connect_state");
     return failed;
   }

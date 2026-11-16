@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Mic, Smartphone, Keyboard, Sparkles, Check, AudioLines, ShieldCheck } from "lucide-react";
 import { deviceReducesMotion, motionPref, setMotionPref } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { LISTENER_HERE } from "@/components/lifelog/LifeLogRecorder";
 import { useActivationConfig } from "@/hooks/useActivationConfig";
 import { maybeRequestShake } from "@/hooks/useJarvisTriggers";
 import {
@@ -158,6 +159,7 @@ export function ActivationSettings() {
                 className="w-full h-1.5 bg-background-elevated rounded-input appearance-none cursor-pointer accent-[#4FC3F7]"
               />
             </div>
+            <ClosedAppWake />
           </div>
         )}
       </section>
@@ -362,5 +364,113 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
         enabled ? "translate-x-4" : "translate-x-0.5"
       )} />
     </button>
+  );
+}
+
+type WakeNative = {
+  setWakeWord: (o: { on: boolean }) => Promise<unknown>;
+  listeningStatus: () => Promise<{ wake?: boolean; wakeReady?: boolean; error?: string | null }>;
+};
+const capacitor = () => (globalThis as { Capacitor?: { getPlatform?: () => string; Plugins?: Record<string, unknown> } }).Capacitor;
+
+// "Hey JARVIS" with the app closed. Android spots the name on the phone in the
+// background; iOS lets only Siri listen while apps are closed; a computer runs
+// the small helper from /wake, which opens talk mode when it hears the name.
+function ClosedAppWake() {
+  const [platform, setPlatform] = useState<"android" | "ios" | "desktop" | null>(null);
+  const [on, setOn] = useState(false);
+  const [ready, setReady] = useState(true);
+  const native = () => capacitor()?.Plugins?.DeviceControl as Partial<WakeNative> | undefined;
+
+  useEffect(() => {
+    const p = capacitor()?.getPlatform?.();
+    if (p === "android" && native()?.setWakeWord) setPlatform("android");
+    else if (p === "ios" || /iPhone|iPad|iPod/i.test(navigator.userAgent)) setPlatform("ios");
+    else if (!/Android|Mobile/i.test(navigator.userAgent)) setPlatform("desktop");
+  }, []);
+
+  useEffect(() => {
+    if (platform !== "android") return;
+    const poll = () => void native()?.listeningStatus?.().then((st) => { setOn(!!st.wake); setReady(st.wakeReady !== false); }).catch(() => {});
+    poll();
+    const t = setInterval(poll, 4_000);
+    return () => clearInterval(t);
+  }, [platform]);
+
+  if (!platform) return null;
+  const host = typeof location !== "undefined" ? location.origin : "";
+  return (
+    <div className="pt-3 border-t border-border-default space-y-2">
+      <p className="text-xs font-medium text-text-primary">When the app is closed</p>
+      {platform === "android" && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-text-muted">
+            {on && !ready ? "Getting the on-device voice model ready (36 MB, once)…" : "Listen for “Hey JARVIS” on this phone, screen off or app closed. Only the name is recognised, on the phone itself."}
+          </p>
+          <Toggle enabled={on} onChange={(v) => { setOn(v); void native()?.setWakeWord?.({ on: v }); }} />
+        </div>
+      )}
+      {platform === "ios" && (
+        <p className="text-xs text-text-muted">
+          iPhone lets only Siri listen while apps are closed. Say <span className="text-text-primary">“Hey Siri, talk to Jarvis”</span> and The Third Eye opens ready to talk.
+        </p>
+      )}
+      {platform === "desktop" && <ComputerListener host={host} />}
+    </div>
+  );
+}
+
+// The install command carries a token that lets this computer file its Life
+// Log chunks (transcribe + lifelog scopes only), so it logs the day with the
+// browser closed, as well as answering to "Hey JARVIS".
+function ComputerListener({ host }: { host: string }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const mint = async () => {
+    setBusy(true);
+    const j = await fetch("/api/listener/token", { method: "POST" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    setBusy(false);
+    if (!j?.token) { setNote("Couldn't create the command. Try again."); return; }
+    setToken(j.token);
+    // Only this computer then checks for its listener (lifelog/LifeLogRecorder).
+    try { localStorage.setItem(LISTENER_HERE, "1"); } catch { /* storage blocked: tab may log too */ }
+  };
+  const revoke = async () => {
+    const ok = await fetch("/api/listener/token", { method: "DELETE" }).then((r) => r.ok).catch(() => false);
+    setToken(null);
+    setNote(ok ? "Computers stopped logging. “Hey JARVIS” still works there." : "Couldn't stop them. Try again.");
+  };
+  const arg = token ?? "";
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-text-muted">
+        Install the listener once and this computer listens all day with no tab open: “Hey JARVIS” opens talk mode, and what you say is logged to your Life Log, where tasks and reminders are picked up. The name is spotted offline; speech is sent for transcription in 45-second pieces, silence skipped.
+      </p>
+      {!token ? (
+        <div className="flex gap-2">
+          <button type="button" disabled={busy} onClick={() => void mint()}
+            className="px-3 py-1.5 rounded-input text-xs font-medium bg-accent-blue/15 border border-accent-blue/50 text-accent-blue disabled:opacity-50">
+            {busy ? "Creating…" : "Set up this computer"}
+          </button>
+          <button type="button" onClick={() => void revoke()}
+            className="px-3 py-1.5 rounded-input text-xs border border-border-default text-text-muted hover:text-text-primary">
+            Stop logging on computers
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-text-muted">Mac - paste in Terminal (shown once; it holds this computer&apos;s key):</p>
+          <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
+            curl -fsSL {host}/wake/install-mac.sh | bash -s -- {arg}
+          </code>
+          <p className="text-xs text-text-muted">Windows - paste in PowerShell:</p>
+          <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
+            {"& ([scriptblock]::Create((irm " + host + "/wake/install-windows.ps1))) " + arg}
+          </code>
+        </>
+      )}
+      {note && <p className="text-xs text-text-muted">{note}</p>}
+    </div>
   );
 }

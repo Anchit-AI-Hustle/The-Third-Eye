@@ -1,0 +1,13 @@
+.git
+.claude
+ios
+ios-native
+android
+android-native
+backend
+node_modules
+**/node_modules
+**/.next
+**/build
+**/.coverage
+.vercel

@@ -1,26 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Check, Sparkles, Wallet, Zap, TrendingUp, KeyRound, ShieldCheck, X } from "lucide-react";
 import { useBilling } from "@/lib/billing/useBilling";
+import { buyPack, takeReturn } from "@/lib/billing/razorpayCheckout";
 import {
   TIERS, TIER_ORDER, PERIODS, BUNDLES, priceFor, pricePer100,
   type BillingPeriod, type Tier,
 } from "@/lib/billing/plans";
 
-// The plans / paywall / wallet surface. Test-mode: subscribe & buy simulate the
-// purchase (real build swaps in a gateway callback). A test code unlocks paid
-// features without payment.
-export function PlansClient() {
+// The plans / paywall / wallet surface. Credit packs are bought with Razorpay
+// in India (`razorpay`); plans are still test purchases. A test code unlocks
+// paid features without payment.
+export function PlansClient({ razorpay }: { razorpay: boolean }) {
   const b = useBilling();
+  const user = useSession().data?.user?.email ?? null;
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [code, setCode] = useState("");
   const [codeMsg, setCodeMsg] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2200); };
+  const flash = (m: string, ms = 2200) => { setToast(m); setTimeout(() => setToast(null), ms); };
 
-  // No payment gateway is connected yet: owner test accounts buy for free, everyone else is told.
+  useEffect(() => {
+    const back = takeReturn();
+    if (!back) return;
+    const what = back.pending ? `${back.pending.label} pack` : "your pack";
+    flash(back.paid ? `Payment received: ${what}, credits added.` : `The payment for ${what} did not go through. Nothing was charged.`, 5000);
+    void b.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Plans have no payment gateway yet: owner test accounts buy for free, everyone else is told.
   const notLive = () => flash("Payments are not live yet. Nothing was charged and no credits were added.");
   const doSubscribe = async (tier: Tier) => {
     if (tier === "basic") return;
@@ -29,6 +41,11 @@ export function PlansClient() {
     flash(r.ok ? `Test purchase: ${TIERS[tier].label} plan active, +${r.added.toLocaleString()} credits (no payment)` : r.error);
   };
   const doBuy = async (id: string) => {
+    if (razorpay) {
+      const r = await buyPack(id, user);
+      if (r.ok) await b.reload();
+      return flash(r.ok ? "Payment received, credits added." : r.message, 4000);
+    }
     if (!b.unlimited) return notLive();
     const r = await b.testPurchase({ bundle: id });
     flash(r.ok ? `Test purchase: +${r.added.toLocaleString()} credits (no payment)` : r.error);
@@ -66,7 +83,7 @@ export function PlansClient() {
         </div>
       </div>
       {b.unlimited && (
-        <p className="text-xs font-mono text-[#34D399] -mt-5">Owner test account: packs and plans are free to buy here, and creations are never charged.</p>
+        <p className="text-xs font-mono text-[#34D399] -mt-5">Owner test account: {razorpay ? "plans are" : "packs and plans are"} free to buy here, and creations are never charged.</p>
       )}
 
       {/* Subscription tiers */}
@@ -145,7 +162,7 @@ export function PlansClient() {
       <section>
         <span className="hud-label text-accent-blue">Pay as you go</span>
         <h2 className="font-display text-xl font-semibold text-text-primary">Credit packs</h2>
-        <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups - no subscription required. Bigger packs = cheaper per credit.</p>
+        <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups - no subscription required. Bigger packs = cheaper per credit.{razorpay && " Pay in rupees with UPI, cards or netbanking (Razorpay)."}</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {BUNDLES.map((bundle) => (
             <div key={bundle.id} className={`holo-card p-4 flex flex-col ${bundle.best ? "ring-1 ring-accent-blue/60" : ""}`}>

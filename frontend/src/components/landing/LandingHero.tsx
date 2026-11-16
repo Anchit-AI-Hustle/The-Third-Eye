@@ -50,22 +50,22 @@ export function LandingHero() {
 
           <div data-reveal className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/demo"
+              href="/auth/signin"
               className="group flex h-12 w-full items-center justify-center gap-2 rounded-input bg-accent-blue px-7 text-sm font-semibold text-background-base shadow-[0_0_30px_rgba(79,195,247,0.35)] transition-all duration-interaction hover:brightness-110 active:scale-[0.98] sm:w-auto"
             >
-              Try the demo
+              Open the app
               <span className="transition-transform group-hover:translate-x-0.5">→</span>
             </Link>
             <Link
-              href="/auth/signin"
+              href="/get"
               className="flex h-12 w-full items-center justify-center rounded-input border border-accent-blue/40 px-7 text-sm font-semibold text-accent-blue transition-colors duration-interaction hover:bg-accent-blue/10 sm:w-auto"
             >
-              Get started
+              Get the phone app
             </Link>
           </div>
 
           <p data-reveal className="mt-4 text-xs text-text-muted">
-            The demo runs on sample data - no sign-in, nothing saved.{" "}
+            Works in your browser on any device, or as an app on iPhone and Android.{" "}
             <Link href="/privacy" className="underline hover:text-text-secondary">
               What we keep when you sign in
             </Link>

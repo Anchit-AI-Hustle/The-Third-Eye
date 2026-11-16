@@ -22,6 +22,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const { data: track } = await db.from("music_daily_tracks").select("size, audio_type, status").eq("id", id).eq("user_id", email).maybeSingle();
   if (!track || track.status !== "done" || !track.size) return new Response("Not found", { status: 404 });
   const size = Number(track.size);
+  const ranged = req.headers.has("range");
 
   const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range") ?? "bytes=0-");
   if (!m || (!m[1] && !m[2])) return new Response("Bad range", { status: 416, headers: { "Content-Range": `bytes */${size}` } });
@@ -37,12 +38,13 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   if (error || !chunks?.length) return new Response("Audio unavailable", { status: 502 });
   const joined = Buffer.concat((chunks as { data: Buffer }[]).map((c) => c.data));
   const body = joined.subarray(start - first * CHUNK, end - first * CHUNK + 1);
+  const whole = !ranged && start === 0 && end === size - 1;
 
   return new Response(new Uint8Array(body), {
-    status: 206,
+    status: whole ? 200 : 206,
     headers: {
       "Content-Type": String(track.audio_type || "audio/mpeg"),
-      "Content-Range": `bytes ${start}-${end}/${size}`,
+      ...(whole ? {} : { "Content-Range": `bytes ${start}-${end}/${size}` }),
       "Content-Length": String(body.length),
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, max-age=86400",

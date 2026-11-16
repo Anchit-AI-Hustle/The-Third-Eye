@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 import { localDay } from "@/lib/localDay";
 
@@ -83,7 +84,9 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
       dataList<LocalTask>("tasks"),
       dataList<TeamMember>("team_members"),
     ]).then(([t, m]) => {
-      if (cancelled) return;
+      // A background refresh that can't reach the server (a dropped
+      // connection) keeps the server-backed list rather than switching to local.
+      if (cancelled || (!markReady && remote.current && !t.remote)) return;
       remote.current = t.remote;
       if (t.remote) {
         setTasks(t.rows);
@@ -98,6 +101,9 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
   }, []);
 
   useEffect(() => load(), [userId, load]);
+  // Changes made on another device (or by the server) show up here too.
+  const tick = useLiveTick();
+  useEffect(() => { if (tick) load(false); }, [tick, load]);
 
   // Refresh when foreground ingestion (Gmail → tasks) reports new work.
   useEffect(() => {

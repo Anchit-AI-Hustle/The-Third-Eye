@@ -1,28 +1,27 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { Archivo, Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { authOptions } from "@/lib/auth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import "./kolab-studio.css";
 
-// Kolab Studio's own faces, ported from the standalone Kolab repo (CLAUDE.md: "Keep the
-// existing dark/lime visual language — Archivo / Inter / JetBrains Mono"). Loaded only in this
-// subtree so they never affect the rest of the app's font loading.
-const kolabArchivo = Archivo({
-  subsets: ["latin"],
-  weight: ["600", "700", "800", "900"],
+// Kolab Studio's own faces (Archivo / Inter / JetBrains Mono, OFL), kept in the repo so the
+// build never fetches from Google Fonts. Loaded only in this subtree.
+const kolabArchivo = localFont({
+  src: "./fonts/archivo-latin-wght-normal.woff2",
+  weight: "100 900",
   variable: "--font-kolab-archivo",
   display: "swap",
 });
-const kolabInter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const kolabInter = localFont({
+  src: "./fonts/inter-latin-wght-normal.woff2",
+  weight: "100 900",
   variable: "--font-kolab-inter",
   display: "swap",
 });
-const kolabMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["500", "700"],
+const kolabMono = localFont({
+  src: "./fonts/jetbrains-mono-latin-wght-normal.woff2",
+  weight: "100 800",
   variable: "--font-kolab-jetbrains",
   display: "swap",
 });

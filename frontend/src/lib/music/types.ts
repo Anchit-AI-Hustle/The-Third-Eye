@@ -18,7 +18,7 @@ export const BPM_MAX = 400;
 export interface MusicInput {
   title?: string; description?: string; genre?: string; subgenre?: string; mood?: string;
   tempo?: number; duration?: number; vocals?: boolean; vocalStyle?: string; vocalLanguage?: string;
-  lyricsMode?: "auto" | "manual" | "none"; lyricsText?: string; artistInspiration?: string;
+  lyricsMode?: "auto" | "manual" | "none"; lyricsText?: string; lyricsTheme?: string; artistInspiration?: string;
   instruments?: string; energy?: number; structure?: string;
   /** 1 (soft whisper) – 10 (powerful performance). */
   vocalIntensity?: number;

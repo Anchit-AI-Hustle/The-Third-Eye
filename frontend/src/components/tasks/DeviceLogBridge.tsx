@@ -15,7 +15,9 @@ import { useSession } from "next-auth/react";
 const BUF_PREFIX = "jarvis_device_log_buf_v1:";
 const SEAL_EVENT = "te:device-log-seal";
 const MIN_SEGMENT_S = 5;
-const FLUSH_MS = 60_000;
+// The buffer holds 200 events and pagehide sends whatever is left, so a
+// slow flush loses nothing and lets the database sleep between uploads.
+const FLUSH_MS = 5 * 60_000;
 const SYNC_MS = 30 * 60_000;
 
 interface LogEvent {
@@ -148,8 +150,9 @@ export function DeviceLogBridge() {
       } catch { /* transient */ }
     };
 
-    const flushId = setInterval(() => flushDeviceLogs(email), FLUSH_MS);
-    const syncId = setInterval(sync, SYNC_MS);
+    const visible = () => document.visibilityState === "visible";
+    const flushId = setInterval(() => { if (visible()) void flushDeviceLogs(email); }, FLUSH_MS);
+    const syncId = setInterval(() => { if (visible()) void sync(); }, SYNC_MS);
     const warmup = setTimeout(sync, 45_000); // fold in anything left from the last session
     window.addEventListener("pagehide", beacon);
     return () => {

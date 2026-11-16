@@ -1,18 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let table: Record<string, Record<string, unknown>> = {};
+let dbDown = false;
+const quota = { message: "Your account or project has exceeded the quota.", code: "53000" };
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
     from: () => ({
-      select: async () => ({ data: Object.values(table) }),
-      upsert: async (row: Record<string, unknown>) => { table[row.provider as string] = row; return { error: null }; },
+      select: async () => (dbDown ? { data: null, error: quota } : { data: Object.values(table) }),
+      upsert: async (row: Record<string, unknown>) => { if (dbDown) return { error: quota }; table[row.provider as string] = row; return { error: null }; },
     }),
   }),
 }));
 
 beforeEach(async () => {
   table = {};
-  (await import("@/lib/providerHealth")).resetHealthCache();
+  dbDown = false;
+  const h = await import("@/lib/providerHealth");
+  h.resetHealthCache();
+  h.forgetSeenHealth();
+});
+
+describe("with the database down", () => {
+  it("still shows what this server just saw, so a re-check isn't lost", async () => {
+    dbDown = true;
+    const { noteFailure, noteSuccess, healthMap, resetHealthCache, benchedReason } = await import("@/lib/providerHealth");
+    await noteSuccess("groq", "openai/gpt-oss-120b");
+    await noteFailure("cerebras", "m", 429, "You exceeded your current quota");
+    resetHealthCache();
+    const rows = await healthMap();
+    expect(rows.get("groq")).toMatchObject({ status: "ok", model: "openai/gpt-oss-120b" });
+    expect(await benchedReason("cerebras")).toMatch(/quota until/);
+  });
+
+  it("prefers the database's row when it is newer than this server's", async () => {
+    const { noteSuccess, healthMap, resetHealthCache } = await import("@/lib/providerHealth");
+    await noteSuccess("groq", "old-model");
+    table.groq = { provider: "groq", status: "rate_limited", model: "old-model", reason: "429", benched_until: new Date(Date.now() + 60_000).toISOString(), checked_at: new Date(Date.now() + 1000).toISOString() };
+    resetHealthCache();
+    expect((await healthMap()).get("groq")?.status).toBe("rate_limited");
+  });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 

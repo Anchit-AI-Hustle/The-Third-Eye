@@ -29,7 +29,7 @@ otherwise undocumented outside this file and the code itself.
 
 ## 2. Tech stack & platform
 
-- **Framework:** Next.js 14 (App Router, TypeScript, React) — `frontend/`.
+- **Framework:** Next.js 16 (App Router, TypeScript, React) — `frontend/`.
 - **Auth:** NextAuth v4, **Google only**, **JWT** sessions. The login request is
   identity only (`GOOGLE_SIGNIN_PARAMS`: `openid email profile`,
   `prompt=select_account`, `access_type=online`). The button is a form POST to
@@ -40,12 +40,17 @@ otherwise undocumented outside this file and the code itself.
   asking for them at sign-in blocks everyone who is not a test user. The identity
   the app keys on is `session.user.email` (the Google address). A refresh token is
   stored only when the connect step actually returns a feature scope.
-- **Data:** Supabase Postgres (project `hlcjghpzxzatgjfwcoav`) with **pgvector** for
-  memory/RAG, reached server-side through `lib/db.ts` (`pg`). The browser never talks
+- **Data:** Supabase Postgres **only, never Neon**, with **pgvector** for
+  memory/RAG, reached server-side through `lib/db.ts` (`pg`) at `DATABASE_URL`
+  (pooled) and `DATABASE_URL_UNPOOLED` (direct, used by the build's migrations).
+  Both must be the Supabase project's connection strings; a production build warns
+  when they aren't. The `SUPABASE_*` API keys are not used. The browser never talks
   to the database, and Supabase's Data API is locked out of it (see §4).
-- **LLM:** a server-side cascade (`lib/llmCascade.ts`), free tiers first: groq,
-  gemini-lite, gemini, cerebras, openrouter, mistral, then the paid openai,
-  anthropic and grok, then ollama. Each provider is benched for as long as its
+- **LLM:** a server-side cascade (`lib/llmCascade.ts`), free first, paid credit
+  as backup: groq, cerebras, openrouter (:free), mistral, gemini-lite, gemini, then
+  openrouter-paid (`OPENROUTER_PAID_MODEL` on the same key), anthropic
+  (`ANTHROPIC_MODEL`, Anthropic SDK, also in the tool loop), openai and grok, then
+  ollama. Unattended work never uses the paid tiers. Each provider is benched for as long as its
   429 or retry-after says; `LLM_PRIMARY_PROVIDER` moves one to the front. Chat
   runs its tool loop on the first tool-capable provider (Groq by default) and
   uses native Gemini function-calling first only for images and other media,
@@ -148,46 +153,14 @@ server route**, `app/api/data/[entity]/route.ts`:
   `docker run -d -p 54322:5432 -e POSTGRES_PASSWORD=pw supabase/postgres:17.6.1.104`,
   then `DATABASE_URL=postgres://postgres:pw@localhost:54322/postgres node scripts/migrate.mjs`.
 
-### 4a. Moving an existing workspace onto a phone identity
+### 4a. Auth identity (Google only)
 
-**Read this before signing in by number on a deployment that has real data.**
+Sign-in is **Google only** (`lib/auth.ts`). Phone + PIN was removed from the
+provider list; `/api/auth/phone` returns 410. `user_id` in Postgres is the
+Google account email from `session.user.email`.
 
-`user_id` is whatever sign-in put in `session.user.email`. Under Google that was
-an email address; under phone sign-in it is an E.164 number. They are *different
-identities*, so a phone account starts empty and **the data keyed by the old
-email is not reachable from it** — and since Google is no longer a sign-in
-provider, once the existing 24-hour JWT expires there is nothing that can produce
-the email identity again either.
-
-There is no automatic link, on purpose: silently merging two identities is a
-worse failure than an obvious empty workspace. Re-key deliberately instead, once,
-against the database (Supabase SQL editor), **before** putting anything into the
-new account so nothing collides:
-
-```sql
--- Substitute your own two values. Run once.
-DO $$
-DECLARE t text;
-BEGIN
-  FOR t IN
-    SELECT table_name FROM information_schema.columns
-     WHERE table_schema = 'public' AND column_name = 'user_id'
-  LOOP
-    EXECUTE format('update public.%I set user_id = $1 where user_id = $2', t)
-      USING '+919876543210', 'you@example.com';
-  END LOOP;
-END $$;
-```
-
-It walks every `public` table with a `user_id` column, so it covers tables added
-since this was written. Two things to know:
-
-- **Order matters.** `google_tokens.user_id` is a primary key and several tables
-  are unique on `(user_id, …)`, so if the phone identity already has rows the
-  update raises a conflict. Re-key first, use the account after.
-- **Stripe.** `profiles.stripe_customer_id` moves with the row, so an existing
-  subscription follows; but the `metadata.email` on the Stripe subscription
-  itself still holds the old address, which only matters if you reconcile by it.
+Historical note: phone-identity migrations and `phoneAuth` helpers remain in
+the tree for tests/docs of the old design, but they cannot mint a live session.
 
 ---
 
@@ -331,9 +304,11 @@ the self-built ones so they don't get buried in the third-party directory.
 
 ## 11. Front-end & dashboard
 
-- **Logo:** `components/layout/LogoMark` (segmented-arc eye with a "T" iris) is
-  the one app mark; `public/logo.svg` is it on the icon tile, and every web,
-  iOS and Android icon and splash PNG is rendered from that.
+- **Logo:** the chrome eye with a "T" iris (#496) is the one app mark. The app
+  icon (`public/icon-512.png`, the iOS AppIcon and Android launcher icons) is
+  the source; `public/logo-mark.png` (the eye cut from its tile, used by
+  `components/layout/LogoMark`), the splash screens and the native apps' launch
+  logos are rendered from it.
 - **Cinematic layer:** Three.js landing hero (`components/landing/HeroCanvas`)
   and GSAP scroll-reveals — lazy-imported,
   DPR-capped, disposed on unmount, `prefers-reduced-motion`-aware, paused on hidden
@@ -363,7 +338,9 @@ to the database.
   (session pooler, port 5432 — migrations take an advisory lock, which needs a
   session; the direct `db.<ref>.supabase.co` host is IPv6-only and unreachable
   from Vercel),
-  `TOKEN_ENCRYPTION_KEY`, `SERPER_API_KEY`.
+  `TOKEN_ENCRYPTION_KEY`, `SERPER_API_KEY`; credit packs in India need
+  `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` (flow in
+  README "Buying credits").
 - **OAuth redirect URIs** to whitelist in Google Console:
   `…/api/auth/callback/google` (sign-in) and `…/api/connect/google/callback`
   (Gmail/Chat connect).

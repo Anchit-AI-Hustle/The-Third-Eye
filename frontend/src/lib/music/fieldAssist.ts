@@ -4,6 +4,7 @@
 
 import { cleanList, cleanValue } from "./normalize";
 import { correctSpelling } from "@/lib/textPolish";
+import { coinedTitle } from "./originality";
 
 export interface GenreDefaults {
   subgenre: string; instruments: string; artists: string;
@@ -107,37 +108,8 @@ function hash(s: string): number {
   return h;
 }
 
-const TITLES: Record<string, string[]> = {
-  psy: ["Acid Horizon", "Night Frequency", "Squelch Ritual", "Rolling Dawn", "Forest Signal", "Ion Temple"],
-  techno: ["Warehouse Hours", "Iron Pulse", "Concrete Loop", "After the Kick"],
-  trance: ["Open Skyline", "Second Sunrise", "Glass Cathedral"],
-  dnb: ["Liquid Alloy", "Break the Surface", "Night Bus"],
-  hiphop: ["Pocket Watch", "Late Checkout", "Gold Teeth"],
-  rock: ["Live Wire", "Paper Crown", "Last Call"],
-  ambient: ["Slow Weather", "Room Tone", "Low Tide"],
-  pop: ["Sugar Static", "City Lights", "Soft Alarm"],
-  cinematic: ["Held Breath", "Wide Frame", "Iron Choir"],
-  default: ["Open Frequency", "Second Light", "Quiet Voltage", "Paper Moon"],
-};
-
-function titleKey(genre: string): string {
-  const g = genre.toLowerCase();
-  if (/psy|acid|goa/.test(g)) return "psy";
-  if (/techno|house|edm|dubstep|hardcore/.test(g)) return "techno";
-  if (/trance/.test(g)) return "trance";
-  if (/drum|dnb|bass/.test(g)) return "dnb";
-  if (/hip|rap|trap/.test(g)) return "hiphop";
-  if (/rock|metal|punk/.test(g)) return "rock";
-  if (/ambient|lo-fi|jazz|folk/.test(g)) return "ambient";
-  if (/cinematic|orchestral/.test(g)) return "cinematic";
-  if (/pop/.test(g)) return "pop";
-  return "default";
-}
-
 export function evocativeTitle(description: string, genre: string, salt = 0): string {
-  const pool = TITLES[titleKey(genre)] ?? TITLES.default;
-  const i = (hash(norm(description) || genre) + salt) % pool.length;
-  return pool[i];
+  return coinedTitle(`${norm(description) || genre}|${salt}`, genre);
 }
 
 export function snapMoodList(text: string): string[] {

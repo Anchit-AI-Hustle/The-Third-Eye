@@ -10,12 +10,10 @@ export async function POST(req: Request) {
     if (!gate.ok) return gate.response;
     const input = scheduleCreateSchema.parse(await req.json());
 
-    const scheduledAt =
-      input.date && input.time
-        ? new Date(`${input.date}T${input.time}:00`).toISOString()
-        : input.date
-          ? new Date(`${input.date}T00:00:00`).toISOString()
-          : null;
+    // The form's time is IST; an offset-free string would parse in the server's (UTC) zone.
+    const scheduledAt = input.date
+      ? new Date(`${input.date}T${input.time ?? "00:00"}:00+05:30`).toISOString()
+      : null;
 
     const ins = await gate.db.from("scheduled_posts").insert({
       user_id: gate.user.id,

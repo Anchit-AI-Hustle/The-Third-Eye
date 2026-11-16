@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/replicate", () => ({ replicateConfigured: () => false, createPrediction: vi.fn(), getPrediction: vi.fn(), audioUrlFrom: vi.fn() }));
 vi.mock("@/lib/push", () => ({ sendPush: vi.fn(async () => true) }));
 vi.mock("@/lib/llmCascade", () => ({ llmCascade: vi.fn(async () => ({ text: '{"title":"Monsoon Drive","description":"warm night rain"}' })) }));
+vi.mock("@/lib/music/originality", async (orig) => ({ ...(await orig<typeof import("@/lib/music/originality")>()), titleTaken: vi.fn(async () => false) }));
 vi.mock("@/lib/music/agents", () => ({
   planSong: vi.fn(async () => ({
     brief: { bpm: 92, energy: 4, moods: ["warm"] },
@@ -11,7 +12,7 @@ vi.mock("@/lib/music/agents", () => ({
   })),
 }));
 
-import { runDaily } from "@/lib/music/daily";
+import { runDaily, today } from "@/lib/music/daily";
 import { createPrediction } from "@/lib/replicate";
 
 type Row = Record<string, unknown>;
@@ -43,7 +44,7 @@ function fakeDb(tables: Record<string, Row[]>) {
 describe("Daily Drop without a music model", () => {
   it("composes today's track in code, stores it and marks it done", async () => {
     const tables: Record<string, Row[]> = { music_daily: [{ user_id: "u", preset: { description: "lofi", duration: 30 }, refs: "" }] };
-    const r = await runDaily(fakeDb(tables) as never, "u", "2026-10-17");
+    const r = await runDaily(fakeDb(tables) as never, "u", today());
     expect(r).toBe("started");
     expect(createPrediction).not.toHaveBeenCalled();
     const track = tables.music_daily_tracks[0];

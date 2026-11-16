@@ -150,6 +150,40 @@ export function isMcpTool(name: string): boolean {
   return name.startsWith(PREFIX);
 }
 
+// Outside Gemini's schema subset (it has no `examples` or `const`).
+const DROPPED_KEYS = new Set(["title", "additionalProperties", "$schema", "examples", "const"]);
+// Values, not schemas: copied as they are.
+const LITERAL_KEYS = new Set(["default", "enum", "required"]);
+
+/**
+ * Python servers (FastMCP via pydantic) emit `title` on every node and
+ * `anyOf: [X, {type: "null"}]` for optional arguments; Gemini rejects the
+ * whole request over fields outside its schema subset, so one such connector
+ * would take chat down. Types go uppercase as Gemini declares them;
+ * geminiToolsToOpenAI lowers them again for the OpenAI-format fallbacks.
+ */
+function geminiSchema(schema: any): any {
+  if (Array.isArray(schema)) return schema.map(geminiSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const options = Array.isArray(schema.anyOf) ? schema.anyOf : null;
+  const nonNull = options?.filter((o: any) => o?.type !== "null");
+  if (options && nonNull.length === 1) {
+    const { anyOf, ...rest } = schema;
+    return geminiSchema({ ...rest, ...nonNull[0], nullable: true });
+  }
+  const out: any = {};
+  for (const [k, v] of Object.entries(schema)) {
+    if (DROPPED_KEYS.has(k) || (k === "default" && v === null)) continue;
+    // Gemini only takes string enums.
+    if (k === "enum" && !(Array.isArray(v) && v.every((e) => typeof e === "string"))) continue;
+    out[k] = LITERAL_KEYS.has(k) ? v
+      : k === "type" && typeof v === "string" ? v.toUpperCase()
+      : k === "properties" ? Object.fromEntries(Object.entries((v ?? {}) as object).map(([p, s]) => [p, geminiSchema(s)]))
+      : geminiSchema(v);
+  }
+  return out;
+}
+
 /**
  * Declarations in Gemini's functionDeclarations shape, ready to concatenate
  * onto the built-in ones.
@@ -161,7 +195,7 @@ export async function mcpToolDeclarations(userEmail?: string): Promise<
   return found.map(({ server, tool }) => ({
     name: qualifiedName(server.name, tool.name),
     description: tool.description ?? `${tool.name} (via ${server.name})`,
-    parameters: (tool.inputSchema as Record<string, unknown>) ?? { type: "OBJECT", properties: {} },
+    parameters: tool.inputSchema ? geminiSchema(tool.inputSchema) : { type: "OBJECT", properties: {} },
   }));
 }
 

@@ -79,7 +79,9 @@ export function TaskAutopilot() {
     window.addEventListener("te:tasks-updated", onChange);
     window.addEventListener("te:task-created", onChange);
     window.addEventListener("focus", onChange);
-    const t = setInterval(onChange, POLL_MS);
+    // Only while someone is looking: a hidden tab polling every minute keeps
+    // the database awake around the clock, and on Neon that is billed time.
+    const t = setInterval(() => { if (document.visibilityState === "visible") onChange(); }, POLL_MS);
     void scan();
     return () => {
       clearInterval(t);

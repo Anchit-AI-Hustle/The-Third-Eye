@@ -18,6 +18,10 @@ export interface ProviderHealth {
 const MINUTE = 60_000;
 const TTL_MS = 30_000;
 let cache: { at: number; rows: Map<string, ProviderHealth> } | null = null;
+// What this instance has seen itself, kept regardless of the database: when the
+// database can't be read (down, over quota) the checks still show, and a write
+// that failed there isn't lost here.
+const seen = new Map<string, ProviderHealth>();
 
 /** How long a failure should keep a provider out of rotation, and why. */
 export function classifyFailure(status: number, body: string): { status: ProviderStatus; ms: number } | null {
@@ -35,9 +39,12 @@ export function classifyFailure(status: number, body: string): { status: Provide
 export async function healthMap(): Promise<Map<string, ProviderHealth>> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.rows;
   const db = getDb();
-  if (!db) return new Map();
-  const { data } = await db.from("provider_health").select("*");
+  const { data } = db ? await db.from("provider_health").select("*") : { data: null };
   const rows = new Map(((data ?? []) as ProviderHealth[]).map((r) => [r.provider, r]));
+  for (const [provider, mine] of seen) {
+    const stored = rows.get(provider);
+    if (!stored || stored.checked_at < mine.checked_at) rows.set(provider, mine);
+  }
   cache = { at: Date.now(), rows };
   return rows;
 }
@@ -68,6 +75,7 @@ export async function storedModel(provider: string): Promise<string | null> {
 
 async function write(row: Omit<ProviderHealth, "checked_at">) {
   const full = { ...row, checked_at: new Date().toISOString() };
+  seen.set(row.provider, full);
   cache?.rows.set(row.provider, full);
   const db = getDb();
   if (!db) return;
@@ -91,4 +99,9 @@ export async function noteSuccess(provider: string, model: string) {
 
 export function resetHealthCache() {
   cache = null;
+}
+
+/** Tests only: forget what this instance has seen. */
+export function forgetSeenHealth() {
+  seen.clear();
 }

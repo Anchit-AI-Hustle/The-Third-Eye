@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getSubscription, isSubscribed, currentTier, cancelSubscription as cancelWallet, setSubscription,
-  isTestUnlocked, unlockTest, clearTestUnlock, userLevel,
+  isTestUnlocked, unlockTest, clearTestUnlock,
   type Subscription,
 } from "./wallet";
-import { costOf, type BillingPeriod, type Tier } from "./plans";
+import { costOf, userLevel, type BillingPeriod, type Tier } from "./plans";
 
 // Credits live on the server, one wallet per account (/api/billing/credits).
 // The plan shown and the test unlock are kept on the device.

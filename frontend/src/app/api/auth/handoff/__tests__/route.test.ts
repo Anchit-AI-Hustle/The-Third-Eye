@@ -11,6 +11,12 @@ vi.mock("@/lib/authHandoff", async (orig) => ({
   startHandoff: async (_db: unknown, c: string) => { store.started.add(c); },
   approveHandoff: async (_db: unknown, c: string, e: string) => (store.started.has(c) && !store.approved.has(c) ? (store.approved.set(c, e), true) : false),
   claimHandoff: async (_db: unknown, c: string) => (store.approved.has(c) && !store.claimed.has(c) ? (store.claimed.add(c), store.approved.get(c)!) : null),
+  claimBrowserHandoff: async (_db: unknown, c: string, typed: string) => {
+    const k = `web:${c}`;
+    if (!store.approved.has(k) || store.claimed.has(k)) return null;
+    store.claimed.add(k);
+    return typed === "RIGHT1" ? store.approved.get(k)! : null;
+  },
 }));
 
 const code = "c".repeat(64);
@@ -31,18 +37,19 @@ describe("sign-in handoff routes", () => {
   it("starts a handoff only for a well-formed code", async () => {
     expect((await POST(new Request("https://app.test/api/auth/handoff", { method: "POST", body: JSON.stringify({ code: "x" }) }))).status).toBe(400);
     expect((await POST(new Request("https://app.test/api/auth/handoff", { method: "POST", body: JSON.stringify({ code }) }))).status).toBe(204);
-    expect(store.started.has(code)).toBe(true);
+    expect(store.started.has(`web:${code}`)).toBe(true);
+    expect(store.started.has(code)).toBe(false);
   });
 
   it("needs a signed-in person, on this site, to approve", async () => {
-    store.started.add(code);
+    store.started.add(`web:${code}`);
     expect((await approve()).status).toBe(401);
     session = { user: { email: "a@x.test" } };
     expect((await approve("https://evil.test")).status).toBe(403);
     const res = await approve();
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe(`https://app.test/auth/handoff?code=${code}&done=1`);
-    expect(store.approved.get(code)).toBe("a@x.test");
+    expect(store.approved.get(`web:${code}`)).toBe("a@x.test");
   });
 
   it("gives the waiting app a session cookie for the approved account, once", async () => {
@@ -58,5 +65,15 @@ describe("sign-in handoff routes", () => {
     const token = await decode({ token: cookie.split(";")[0].split("=")[1], secret: "s3cret" });
     expect(token?.email).toBe("a@x.test");
     expect(await (await poll()).json()).toEqual({ signedIn: false });
+  });
+
+  it("signs a browser-started code in only with its confirmation", async () => {
+    store.started.add(`web:${code}`);
+    store.approved.set(`web:${code}`, "a@x.test");
+    const claim = (confirm: string) => GET(new Request(`https://app.test/api/auth/handoff?code=${code}&confirm=${confirm}`));
+    expect(await (await GET(new Request(`https://app.test/api/auth/handoff?code=${code}`))).json()).toEqual({ signedIn: false });
+    const res = await claim("RIGHT1");
+    expect(await res.json()).toEqual({ signedIn: true });
+    expect(res.headers.get("set-cookie")).toMatch(/session-token=/);
   });
 });

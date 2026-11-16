@@ -31,7 +31,13 @@ export async function assistantMediaStatus(user: string, ticket: string) {
   const prediction = await getPrediction(job.id);
   const output = prediction.status === "succeeded" ? videoUrlFrom(prediction.output) ?? audioUrlFrom(prediction.output) : null;
   const url = output?.startsWith("https://") ? output : null;
-  return { kind: job.kind, status: prediction.status, url, error: prediction.error ?? (prediction.status === "succeeded" && !url ? "Provider returned no downloadable output" : null) };
+  return {
+    id: job.id,
+    kind: job.kind,
+    status: prediction.status,
+    url,
+    error: prediction.error ?? (prediction.status === "succeeded" && !url ? "Provider returned no downloadable output" : null),
+  };
 }
 
 // With no video model, video is drawn and recorded in the browser by Video

@@ -1,4 +1,4 @@
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { getDb } from "@/lib/db";
 
 let configured = false;
@@ -9,7 +9,7 @@ function ensureConfigured(): boolean {
   const subject = process.env.VAPID_SUBJECT || "mailto:admin@jarvis.app";
   if (!pub || !priv) return false;
   if (!configured) {
-    webpush.setVapidDetails(subject, pub, priv);
+    setVapidDetails(subject, pub, priv);
     configured = true;
   }
   return true;
@@ -27,7 +27,7 @@ export async function sendPush(userId: string, title: string, body: string, url 
   await Promise.all(
     data.map(async (s) => {
       try {
-        await webpush.sendNotification(
+        await sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payload,
         );

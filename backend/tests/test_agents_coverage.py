@@ -261,7 +261,7 @@ async def test_research_handles_its_task_types():
 
 @pytest.mark.asyncio
 async def test_research_explains_when_no_api_key_and_no_grounding(monkeypatch):
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "")
     monkeypatch.setattr(research_mod.settings, "enable_google_grounding", False)
 
     result = await research_agent.run(_task("who won?"), _context())
@@ -272,7 +272,7 @@ async def test_research_explains_when_no_api_key_and_no_grounding(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_research_falls_back_to_grounded_search_without_a_key(monkeypatch):
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "")
     monkeypatch.setattr(research_mod.settings, "enable_google_grounding", True)
 
     called = {}
@@ -290,7 +290,7 @@ async def test_research_falls_back_to_grounded_search_without_a_key(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_research_reports_a_failed_search(monkeypatch):
-    monkeypatch.setenv("SERPER_API_KEY", "k")
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "k")
 
     async def boom(self, *, query, api_key):
         raise RuntimeError("serper is down")
@@ -304,7 +304,7 @@ async def test_research_reports_a_failed_search(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_research_reports_an_empty_result_set(monkeypatch):
-    monkeypatch.setenv("SERPER_API_KEY", "k")
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "k")
 
     async def none(self, *, query, api_key):
         return []
@@ -318,7 +318,7 @@ async def test_research_reports_an_empty_result_set(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_research_synthesizes_hits_and_lists_sources(monkeypatch):
-    monkeypatch.setenv("SERPER_API_KEY", "k")
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "k")
     _stub_completion(monkeypatch, research_mod, "They won [1].")
 
     async def two_hits(self, *, query, api_key):

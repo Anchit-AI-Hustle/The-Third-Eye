@@ -50,4 +50,14 @@ describe("/api/tools/book", () => {
     cascade.mockResolvedValue({ text: "not json" });
     expect((await post({ action: "listing", book })).status).toBe(502);
   });
+  it("packs written chapters as an EPUB for the phone apps", async () => {
+    const res = await post({ action: "epub", meta: { title: "The Last Signal", subtitle: "", author: "A. N. Other" }, chapters: [{ title: "Chapter 1: Static", text: prose(120) }] });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/epub+zip");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(String.fromCharCode(...bytes.slice(0, 2))).toBe("PK");
+    expect(new TextDecoder().decode(bytes)).toContain("application/epub+zip");
+    expect((await post({ action: "epub", meta: { title: "x" }, chapters: [] })).status).toBe(400);
+    expect(cascade).not.toHaveBeenCalled();
+  });
 });

@@ -20,6 +20,9 @@ export const runtime = "nodejs";
 const TABLES = [
   "tasks", "team_members", "notes", "goals", "knowledge_docs", "expenses", "music_tracks",
   "lifelog_days",
+  // Settings and on-device app data synced to the account, connected social
+  // accounts (encrypted tokens), and laptop-to-phone handoffs.
+  "user_prefs", "social_accounts", "device_handoffs", "handoff_phones",
   "job_agent_profiles", "career_preferences", "candidate_documents", "candidate_facts",
   "saved_jobs", "job_matches", "resume_documents", "cover_letters", "answer_library",
   "applications", "application_answers", "application_events", "agent_runs",

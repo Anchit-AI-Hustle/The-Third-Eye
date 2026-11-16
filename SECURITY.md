@@ -17,9 +17,11 @@ code quality but have no production blast radius today.
 - World-changing assistant tools (e.g. sending email) require explicit
   user confirmation before running; an append-only audit log and a global
   kill switch cover agent actions (`/activity`).
-- Dependabot for dependency updates (`.github/dependabot.yml` currently
-  ignores major-version bumps — tracked as a known gap in
-  [AUDIT.md](AUDIT.md), finding F-10).
+- Dependabot for dependency updates (`.github/dependabot.yml` ignores majors
+  only for typescript, vitest, and tailwindcss — each needs a deliberate
+  migration). `.github/workflows/npm-audit.yml` fails on new high/critical
+  production advisories; known dev-only ones live in
+  `frontend/audit-baseline.json` (AUDIT F-10 fixed).
 
 ## Reporting a Vulnerability
 

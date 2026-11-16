@@ -238,8 +238,9 @@ struct AssistantView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { composer }
-            .onAppear(perform: takePendingAsk)
+            .onAppear { takePendingAsk(); takePendingCall() }
             .onChange(of: app.pendingAsk) { _, _ in takePendingAsk() }
+            .onChange(of: app.pendingCall) { _, _ in takePendingCall() }
             .navigationTitle("Assistant")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -321,6 +322,12 @@ struct AssistantView: View {
         guard let ask = app.pendingAsk else { return }
         app.pendingAsk = nil
         chat.send(ask, onFinish: replied)
+    }
+
+    private func takePendingCall() {
+        guard app.pendingCall else { return }
+        app.pendingCall = false
+        if !callMode { toggleCall() }
     }
 
     private func sendDraft() {

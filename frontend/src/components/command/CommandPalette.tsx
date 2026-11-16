@@ -39,10 +39,13 @@ const NAV: Cmd[] = [
   { id: "nav-kolab",       label: "Kolab",           group: "Go to", href: "/kolab" },
   { id: "nav-apps",        label: "Apps",            group: "Go to", href: "/apps" },
   { id: "nav-finance",     label: "Finance",         group: "Go to", href: "/finance", keywords: "money expenses calculators tax" },
-  { id: "nav-plans",       label: "Plans & Credits", group: "Go to", href: "/plans", keywords: "billing upgrade" },
+  { id: "nav-plans",       label: "Plans & Credits", group: "Go to", href: "/plans", keywords: "billing credits razorpay" },
+  { id: "nav-upgrade",     label: "Premium", group: "Go to", href: "/upgrade", keywords: "billing upgrade stripe" },
   { id: "nav-capabilities",label: "Capabilities",    group: "Go to", href: "/capabilities" },
   { id: "nav-activity",    label: "Agent Activity",  group: "Go to", href: "/activity" },
   { id: "nav-audit",       label: "App Audit",       group: "Go to", href: "/audit" },
+  { id: "nav-models",      label: "AI Models",       group: "Go to", href: "/models", keywords: "providers keys openrouter hugging face ollama" },
+  { id: "nav-connectors",  label: "Connectors",      group: "Go to", href: "/connectors", keywords: "google gmail calendar github integrations" },
   { id: "nav-settings",    label: "Settings",        group: "Go to", href: "/settings", keywords: "permissions preferences account" },
 ];
 

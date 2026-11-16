@@ -2,7 +2,7 @@ import AVFoundation
 import Speech
 
 // Native voice: Apple's speech recognizer (on the iPhone when it can) for what
-// the person says, and the system voice for replies. Listening stops while a
+// the person says, and JARVIS's British voice for replies. Listening stops while a
 // reply is spoken so the assistant never hears itself.
 @MainActor
 final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
@@ -52,7 +52,8 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         self.onFinal = onFinal
         do {
             let audio = AVAudioSession.sharedInstance()
-            try audio.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+            // Use iOS voice processing for echo cancellation and speech-focused input.
+            try audio.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
             try audio.setActive(true, options: .notifyOthersOnDeactivation)
 
             let request = SFSpeechAudioBufferRecognitionRequest()
@@ -65,6 +66,7 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
             let input = engine.inputNode
             input.removeTap(onBus: 0)
+            try? input.setVoiceProcessingEnabled(true)
             input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
                 request.append(buffer)
             }
@@ -123,13 +125,12 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         let clean = Voice.speakable(text)
         guard !clean.isEmpty else { then?(); return }
         stopListening()
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? AVAudioSession.sharedInstance().setActive(true)
         onSpoken = then
         let utterance = AVSpeechUtterance(string: clean)
-        // Voices are named by BCP 47 tags (en-IN); Locale identifiers use an underscore (en_IN).
-        let tag = [Locale.current.language.languageCode?.identifier, Locale.current.region?.identifier].compactMap { $0 }.joined(separator: "-")
-        utterance.voice = AVSpeechSynthesisVoice(language: tag) ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.voice = Voice.best(language: "en-GB", gender: .male)
+        utterance.pitchMultiplier = 0.92
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         speaking = true
         synthesizer.speak(utterance)
@@ -148,6 +149,15 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
             self.onSpoken = nil
             next?()
         }
+    }
+
+    /// The best installed voice for an accent, preferring the gender asked for, then premium and enhanced
+    /// voices over compact ones. JARVIS is a British man (en-GB, male), as on the website (frontend/src/lib/systems.ts).
+    nonisolated static func best(language: String, gender: AVSpeechSynthesisVoiceGender) -> AVSpeechSynthesisVoice? {
+        let accent = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == language }
+        let matching: [AVSpeechSynthesisVoice] = gender == .unspecified ? [] : accent.filter { $0.gender == gender }
+        return (matching.isEmpty ? accent : matching).max { $0.quality.rawValue < $1.quality.rawValue }
+            ?? AVSpeechSynthesisVoice(language: language)
     }
 
     /// Markdown and links read badly aloud: speak the words only.

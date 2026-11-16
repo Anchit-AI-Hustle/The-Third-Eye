@@ -28,10 +28,26 @@ export async function embed(text: string): Promise<number[] | null> {
   }
 }
 
+// One request per 100 texts (Gemini's batch limit) instead of one per text,
+// so a large import or document embeds in seconds.
 export async function embedBatch(texts: string[]): Promise<(number[] | null)[]> {
-  // Gemini has a batch endpoint, but sequential keeps it simple and rate-safe
-  // for the modest chunk counts of a personal knowledge base.
+  const key = apiKey();
+  if (!key) return texts.map(() => null);
   const out: (number[] | null)[] = [];
-  for (const t of texts) out.push(await embed(t));
+  for (let i = 0; i < texts.length; i += 100) {
+    const part = texts.slice(i, i + 100);
+    try {
+      const res = await fetch(`${BASE}/models/${MODEL}:batchEmbedContents?key=${encodeURIComponent(key)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: part.map((t) => ({ model: `models/${MODEL}`, content: { parts: [{ text: t.slice(0, 8000) }] } })) }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const values: (number[] | undefined)[] = (data?.embeddings ?? []).map((e: { values?: number[] }) => e.values);
+      out.push(...part.map((_, j) => values[j] ?? null));
+    } catch {
+      out.push(...part.map(() => null));
+    }
+  }
   return out;
 }

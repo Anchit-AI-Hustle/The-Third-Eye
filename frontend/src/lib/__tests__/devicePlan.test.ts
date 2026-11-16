@@ -53,3 +53,12 @@ describe("protocolActions", () => {
     expect(acts.some((a) => a.action === "notify")).toBe(true);
   });
 });
+
+describe("phone actions in the Android app", () => {
+  it("keeps 'lock the phone' on the phone, not the Home Hub", () => {
+    expect(planDeviceControl("lock", "phone").sideEffect).toEqual({ type: "device_action", data: { action: "screen_lock", device: "screen_lock", value: null } });
+    expect(planDeviceControl("lock", "front door").kind).toBe("smarthome");
+    expect(planDeviceControl("pause", "phone").sideEffect?.data).toMatchObject({ action: "pause", device: "media" });
+    expect(planDeviceControl("open", "app", "Spotify").sideEffect?.data).toMatchObject({ action: "open", device: "app", value: "Spotify" });
+  });
+});

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { canConnectGoogle, googleCapabilities } from "@/lib/googleToken";
+import { canConnectGoogle, googleCapabilities, needsReconsent, refreshGoogleToken } from "@/lib/googleToken";
 
 export const runtime = "nodejs";
 
@@ -41,9 +41,17 @@ export async function GET() {
   // capability from a single boolean. Derived from capabilities rather than the
   // current scope list so a grant of the pre-narrowing calendar.readonly still counts.
   const capabilities = googleCapabilities(row?.scope);
+  const granted = Object.values(capabilities).some(Boolean);
+  // A grant on file is only "connected" if Google still honours it: a revoked
+  // or expired refresh token left this card saying Connected while every
+  // Gmail and Calendar call failed.
+  const token = granted ? await refreshGoogleToken(email) : null;
   return Response.json(
     {
-      connected: Object.values(capabilities).some(Boolean),
+      connected: granted && token?.state === "ok",
+      expired: token?.state === "expired",
+      problem: token && token.state !== "ok" && token.state !== "none" ? token.reason : null,
+      needsReconsent: granted && needsReconsent(row?.scope),
       scopes,
       capabilities,
       available: canConnectGoogle(email),

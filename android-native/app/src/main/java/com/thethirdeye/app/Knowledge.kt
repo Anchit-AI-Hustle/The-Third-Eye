@@ -1,8 +1,12 @@
 package com.thethirdeye.app
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,19 +23,61 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 class KnowledgeModel : Records<KnowledgeDoc>("knowledge_docs") {
     override suspend fun fetch() = DataStore.rows<KnowledgeDoc>("knowledge_docs")
+
+    var uploading by mutableStateOf(false)
+        private set
+
+    /** Sends the files to the server, which reads PDF, Word and text files as the website does. */
+    suspend fun upload(files: List<UploadFile>) {
+        if (files.isEmpty()) return
+        uploading = true
+        try {
+            val created = json.decodeFromString(Uploaded.serializer(), Api.backend.upload("/api/knowledge/upload", "file", files)).docs
+            items = created + items
+            val failed = created.filter { it.processing_status == "failed" }
+            error = failed.takeIf { it.isNotEmpty() }?.joinToString("\n") { "${it.title}: ${it.error ?: "couldn't be read"}" }
+            DataStore.changed()
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            uploading = false
+        }
+    }
+
+    @Serializable
+    private data class Uploaded(val docs: List<KnowledgeDoc> = emptyList())
+}
+
+/** The picked documents' names, types and bytes, read off the main thread. */
+suspend fun readPicked(context: Context, uris: List<Uri>): List<UploadFile> = withContext(Dispatchers.IO) {
+    uris.mapNotNull { uri ->
+        val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: uri.lastPathSegment ?: "document"
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@mapNotNull null
+        UploadFile(name, context.contentResolver.getType(uri) ?: "application/octet-stream", bytes)
+    }
 }
 
 fun docDetails(doc: KnowledgeDoc): String {
@@ -44,6 +90,10 @@ fun docDetails(doc: KnowledgeDoc): String {
 @Composable
 fun KnowledgeScreen(app: AppState, nav: Nav, model: KnowledgeModel = remember { KnowledgeModel() }) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        scope.launch { model.upload(readPicked(context, uris)) }
+    }
     LaunchedEffect(Unit) { model.load() }
     ReloadOnDataChange { model.load() }
 
@@ -55,8 +105,10 @@ fun KnowledgeScreen(app: AppState, nav: Nav, model: KnowledgeModel = remember { 
                 TextButton(onClick = { app.ask("What's in my knowledge base? Give me a short overview.") }) {
                     Icon(Icons.AutoMirrored.Outlined.Chat, null); Text("  Ask about my documents")
                 }
-                // Uploading and text extraction stay on the website's tested pipeline.
-                TextButton(onClick = { nav.push(Dest.Web("Upload", "/knowledge")) }) { Icon(Icons.Outlined.UploadFile, null); Text("  Upload a document") }
+                // PDF, Word and text files are read on the server (lib/knowledgeFile, as on the website).
+                TextButton(onClick = { pick.launch(arrayOf("*/*")) }, enabled = !model.uploading) {
+                    Icon(Icons.Outlined.UploadFile, null); Text(if (model.uploading) "  Reading the document…" else "  Upload a document")
+                }
             }
         }
         item { SectionLabel("Documents") }
@@ -94,9 +146,27 @@ data class LifeLogDay(
     val diary: List<Diary>? = null,
     val summary: String? = null,
 ) {
-    @Serializable data class Segment(val id: String, val startTs: Flex? = null, val transcript: String? = null, val silent: Boolean? = null)
+    @Serializable data class Segment(
+        val id: String,
+        val startTs: Flex? = null,
+        val endTs: Flex? = null,
+        val transcript: String? = null,
+        val hasAudio: Boolean? = null,
+        val provider: String? = null,
+        val silent: Boolean? = null,
+    )
     @Serializable data class Event(val id: String, val ts: Flex? = null, val title: String, val kind: String? = null, val detail: String? = null)
     @Serializable data class Diary(val id: String, val ts: Flex? = null, val text: String, val mood: String? = null)
+
+    /** The row the website writes too (lib/lifelog/store.ts): one per day, id = date, audio kept off the server. */
+    fun row(): JsonObject = JsonObject(
+        json.encodeToJsonElement(serializer(), copy(segments = segments.orEmpty(), events = events.orEmpty(), diary = diary.orEmpty(), summary = summary.orEmpty())).jsonObject
+            + ("updated_at" to JsonPrimitive(java.time.Instant.now().toString())),
+    )
+
+    companion object {
+        fun empty(date: String) = LifeLogDay(date, date, emptyList(), emptyList(), emptyList(), "")
+    }
 }
 
 class LifeLogModel : Records<LifeLogDay>("lifelog_days") {
@@ -114,8 +184,7 @@ fun LifeLogScreen(nav: Nav, model: LifeLogModel = remember { LifeLogModel() }) {
     ReloadOnDataChange { model.load() }
     ListScreen("Life Log", model.loaded, refresh = { model.load() }, onBack = nav::back) {
         item { ErrorText(model.error) }
-        // Recording, transcription and the day summary run on the website's pipeline.
-        item { TextButton(onClick = { nav.push(Dest.Web("Today", "/lifelog")) }) { Text("Record or write today") } }
+        item { TextButton(onClick = { nav.push(Dest.Today) }) { Text(if (DayRecorder.recording) "Recording today…" else "Record or write today") } }
         item { SectionLabel("Days") }
         if (model.loaded && model.items.isEmpty()) item { Hint("Nothing logged yet. Record your day or write a diary entry and it shows here.") }
         model.items.forEach { day ->
@@ -134,45 +203,5 @@ fun LifeLogScreen(nav: Nav, model: LifeLogModel = remember { LifeLogModel() }) {
 
 @Composable
 fun LifeLogDayScreen(day: LifeLogDay, onBack: () -> Unit) {
-    ListScreen(day.date, loaded = true, refresh = {}, onBack = onBack) {
-        day.summary?.takeIf { it.isNotBlank() }?.let { s -> item { Panel { SectionLabel("Summary"); Text(s, fontSize = 14.sp) } } }
-        day.events?.takeIf { it.isNotEmpty() }?.let { events ->
-            item {
-                Panel {
-                    SectionLabel("Timeline")
-                    events.forEach { e ->
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Row { Text(e.title, Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.Medium); Text(clock(e.ts), fontSize = 12.sp, color = Palette.muted) }
-                            e.detail?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, color = Palette.secondary) }
-                        }
-                    }
-                }
-            }
-        }
-        day.diary?.takeIf { it.isNotEmpty() }?.let { diary ->
-            item {
-                Panel {
-                    SectionLabel("Diary")
-                    diary.forEach { d ->
-                        Column {
-                            Text(d.text, fontSize = 14.sp)
-                            Text(listOf(clock(d.ts), d.mood ?: "").filter { it.isNotBlank() }.joinToString(" · "), fontSize = 12.sp, color = Palette.muted)
-                        }
-                    }
-                }
-            }
-        }
-        val spoken = day.segments.orEmpty().filter { it.silent != true && !it.transcript.isNullOrBlank() }
-        if (spoken.isNotEmpty()) item {
-            Panel {
-                SectionLabel("Transcript")
-                spoken.forEach { s ->
-                    Column {
-                        Text(clock(s.startTs), fontSize = 11.sp, color = Palette.blue)
-                        SelectionContainer { Text(s.transcript ?: "", fontSize = 13.sp) }
-                    }
-                }
-            }
-        }
-    }
+    ListScreen(day.date, loaded = true, refresh = {}, onBack = onBack) { daySections(day) }
 }

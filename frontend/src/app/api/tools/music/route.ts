@@ -6,10 +6,10 @@ import { planSong } from "@/lib/music/agents";
 import { SONG_MODEL as VOCAL_MODEL, SONG_CLIP_MAX as VOCAL_CLIP_MAX } from "@/lib/music/models";
 import type { MusicInput } from "@/lib/music/types";
 import { elevenLabsConfigured, composeElevenLabs, elevenPrompt, clipSecondsFor } from "@/lib/music/elevenlabs";
-import { storeStudioAudio, audioPath } from "@/lib/music/studioAudio";
+import { storeStudioAudio, audioPath, persistStudioRemoteAudio } from "@/lib/music/studioAudio";
 import { renderWav } from "@/lib/music/synth";
 import { getDb } from "@/lib/db";
-import { chargedRoute } from "@/lib/credits";
+import { chargedRoute, refundable, refundMusicJobOnce } from "@/lib/credits";
 
 export const runtime = "nodejs";
 // Eleven Music returns the finished song in one call, which can take a few
@@ -166,11 +166,20 @@ async function create(req: NextRequest) {
   // (MusicGen) provider when a token is present; else return the prompt/lyrics.
   if (!replicateConfigured()) {
     const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
-    if (hf) return Response.json({ configured: true, done: true, audioUrl: hf, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
+    if (hf) {
+      const db = getDb();
+      let audioUrl = hf;
+      if (db) {
+        const stored = await persistStudioRemoteAudio(db, user, hf, { provider: "huggingface" });
+        if (stored) audioUrl = stored;
+      }
+      return Response.json({ configured: true, done: true, audioUrl, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
+    }
     const keySet = !!process.env.ELEVENLABS_API_KEY?.trim();
     if (keySet && !elevenLabsConfigured()) console.warn("ELEVENLABS_API_KEY is a key id, not the sk_ secret; songs fall back to instrumentals");
     // No music model is reachable: compose the instrumental in code so the
-    // Studio still plays a real track, and say exactly what it is.
+    // Studio still plays a real track. Refund credits — this is a free degraded
+    // fallback, not the paid generation the user was charged for.
     const db = getDb();
     const seconds = Math.min(clipSeconds, db ? SYNTH_CLIP_MAX : SYNTH_INLINE_MAX);
     const wav = Buffer.from(renderWav({ bpm: brief.bpm, seconds, energy: brief.energy, key: brief.key, moods: brief.moods, seed: `${description}|${prompt}` }));
@@ -179,11 +188,11 @@ async function create(req: NextRequest) {
       try { audioUrl = audioPath(await storeStudioAudio(db, user, wav, { audioType: "audio/wav", provider: "code" })); }
       catch { /* the inline copy still plays */ }
     }
-    return Response.json({
+    return refundable(Response.json({
       configured: true, done: true, audioUrl, model: "code:synth", provider: "code",
       prompt, tags, lyrics, sessionSeconds, clipSeconds: seconds, loop: sessionSeconds > seconds, ...briefMeta, ...elMeta,
       note: `This track is instrumental, with no vocals${sing ? " (the lyrics are below)" : ""}.`,
-    });
+    }));
   }
 
   // Route to a model that generates from text alone (no reference required).
@@ -232,8 +241,14 @@ async function create(req: NextRequest) {
     // user still gets audio when an alternate model is available.
     const hf = await tryHuggingFaceMusic(instrPromptText, clipSeconds);
     if (hf) {
+      const db = getDb();
+      let audioUrl = hf;
+      if (db) {
+        const stored = await persistStudioRemoteAudio(db, user, hf, { provider: "huggingface" });
+        if (stored) audioUrl = stored;
+      }
       return Response.json({
-        configured: true, done: true, audioUrl: hf,
+        configured: true, done: true, audioUrl,
         model: "huggingface:musicgen", provider: "huggingface",
         prompt, tags, lyrics, fellBackToInstrumental: sing,
         ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), ...briefMeta, ...elMeta,
@@ -244,12 +259,33 @@ async function create(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await email())) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const user = await email();
+  if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id || !/^[a-zA-Z0-9]+$/.test(id)) return Response.json({ error: "valid id required" }, { status: 400 });
   try {
     const p = await getPrediction(id);
-    return Response.json({ status: p.status, audioUrl: p.status === "succeeded" ? audioUrlFrom(p.output) : null, error: p.error });
+    if (p.status === "failed" || p.status === "canceled") {
+      const refunded = await refundMusicJobOnce(user, id);
+      return Response.json({ status: p.status, audioUrl: null, error: p.error || `Generation ${p.status}`, refunded });
+    }
+    if (p.status !== "succeeded") {
+      return Response.json({ status: p.status, audioUrl: null, error: p.error });
+    }
+    const remote = audioUrlFrom(p.output);
+    if (!remote) {
+      const refunded = await refundMusicJobOnce(user, id);
+      return Response.json({ status: "failed", audioUrl: null, error: "The render finished without an audio file.", refunded });
+    }
+    const db = getDb();
+    let audioUrl = remote;
+    if (db) {
+      const stored = await persistStudioRemoteAudio(db, user, remote, { provider: "replicate", songId: id });
+      if (stored) audioUrl = stored;
+      // If store failed, still return the ephemeral URL so the user can play once;
+      // library rows that keep it will expire — same as before for no-DB.
+    }
+    return Response.json({ status: "succeeded", audioUrl, error: null });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "poll failed" }, { status: 502 });
   }

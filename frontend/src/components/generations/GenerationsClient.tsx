@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Wand2, Music, Workflow, Briefcase, HeartPulse, MessageSquare, Video, Clapperboard, BookOpen, FileText, Trash2, Search, Inbox, type LucideIcon } from "lucide-react";
-import { GEN_APPS, deleteGeneration, listGenerations, timeAgo, type GenerationRecord } from "@/lib/generations";
+import { GEN_APPS, deleteGeneration, listAllGenerations, listGenerations, timeAgo, type GenerationRecord } from "@/lib/generations";
 
 const ICONS: Record<string, LucideIcon> = { Wand2, Music, Workflow, Briefcase, HeartPulse, MessageSquare, Video, Clapperboard, BookOpen };
 const PAGE_SIZE = 30;
@@ -15,7 +15,12 @@ export function GenerationsClient() {
   const [q, setQ] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
 
-  const refresh = () => setItems(listGenerations());
+  // This device's records show at once; the account's (other devices, the phone
+  // apps, the assistant, the music library) join them when they arrive.
+  const refresh = () => {
+    setItems(listGenerations());
+    void listAllGenerations().then(setItems);
+  };
   useEffect(() => {
     refresh(); setReady(true);
     const on = () => refresh();
@@ -35,6 +40,7 @@ export function GenerationsClient() {
   const handleDelete = (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This can't be undone.`)) return;
     deleteGeneration(id);
+    setItems((all) => all.filter((g) => g.id !== id));
   };
 
   if (!ready) return <div className="py-16 flex justify-center"><div className="w-5 h-5 border-2 border-accent-blue/20 border-t-accent-blue rounded-full animate-spin" /></div>;
@@ -44,7 +50,7 @@ export function GenerationsClient() {
       <div className="rounded-card border border-border-default bg-background-surface p-10 text-center">
         <Inbox size={26} className="mx-auto text-text-muted opacity-50 mb-3" />
         <p className="text-text-secondary text-sm">No generations yet.</p>
-        <p className="text-text-muted text-xs mt-1">Create something in Studio, Music, Kolab or Video Avatar and it'll appear here with a full input → output view.</p>
+        <p className="text-text-muted text-xs mt-1">Anything you make, in Studio, Music, Book, Video, Job Agent, Kolab or by asking the assistant, appears here with its full input and output, on every device you sign in on.</p>
       </div>
     );
   }

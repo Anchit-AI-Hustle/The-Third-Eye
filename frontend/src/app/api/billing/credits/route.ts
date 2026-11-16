@@ -19,11 +19,11 @@ export async function GET() {
   const balance = await creditBalance(email);
   const db = getDb();
   if (!db) return Response.json({ unlimited, balance, used: 0, ledger: [] });
-  // Creations made = spends minus refunds (the only credits added besides the gift).
+  // Creations made = spends minus refunds.
   const [ledger, spent, refunded] = await Promise.all([
     db.from("credit_ledger").select("delta, reason, balance_after, created_at").eq("user_id", email).order("created_at", { ascending: false }).limit(50),
     db.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", email).lt("delta", 0),
-    db.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", email).gt("delta", 0).neq("reason", "Sign-up gift"),
+    db.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", email).gt("delta", 0).like("reason", "Refund:%"),
   ]);
   return Response.json({ unlimited, balance, used: (spent.count ?? 0) - (refunded.count ?? 0), ledger: ledger.data ?? [] });
 }

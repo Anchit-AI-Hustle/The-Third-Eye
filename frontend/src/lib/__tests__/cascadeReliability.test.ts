@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Acceptance tests for the provider cascade: verified model IDs, an
@@ -5,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // retry-after honoured, and a plain final message.
 
 let health: Record<string, Record<string, unknown>> = {};
+let session: { user: { email: string } } | null = { user: { email: "u@x.test" } };
+vi.mock("next-auth", () => ({ getServerSession: async () => session }));
+vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
     from: () => ({
@@ -52,16 +56,96 @@ describe("model IDs come from the providers' current lists", () => {
   });
 });
 
-describe("Anthropic is not in the cascade", () => {
-  it("never calls Anthropic, even with ANTHROPIC_API_KEY set", async () => {
+describe("free first, paid credit as backup", () => {
+  const claudeBodies: Record<string, unknown>[] = [];
+  const claude = (content: unknown[], stop = "end_turn") => ({ status: 200, headers: { "content-type": "application/json" }, body: { id: "msg_1", type: "message", role: "assistant", model: "claude-opus-5-5", content, stop_reason: stop, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } } });
+  const rateLimited = { status: 429, body: { error: { message: "Rate limit reached" } } };
+
+  function stubWithClaude(byHost: Record<string, Reply>, claudeReplies: Reply[]) {
+    claudeBodies.length = 0;
+    const real = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = new URL(url);
+      if (u.hostname === "api.anthropic.com") {
+        claudeBodies.push(JSON.parse(String(init?.body)));
+        calls.push({ host: u.hostname, model: String(claudeBodies.at(-1)!.model), auth: null, path: u.pathname });
+        const r = claudeReplies.shift() ?? { status: 500, body: "no stub" };
+        return new Response(JSON.stringify(r.body), { status: r.status, headers: r.headers });
+      }
+      if (u.pathname.endsWith("/models")) return new Response(JSON.stringify({ data: [] }));
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      calls.push({ host: u.hostname, model: body.model, auth: new Headers(init?.headers).get("authorization"), path: u.pathname });
+      const r = byHost[u.hostname] ?? { status: 500, body: "no stub" };
+      return new Response(typeof r.body === "string" ? r.body : JSON.stringify(r.body), { status: r.status, headers: r.headers });
+    });
+    vi.stubGlobal("fetch", real);
+  }
+
+  it("answers with Claude only after the free tiers are spent, without sampling parameters", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.GROQ_API_KEY = "g";
-    stubFetch({ "api.groq.com": { status: 429, body: { error: { message: "Rate limit reached" } } } });
-    const { llmCascade, toolCallCascade, cascadeOrder, configuredProviders } = await import("@/lib/llmCascade");
-    await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch(() => {});
-    await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] }).catch(() => {});
+    stubWithClaude({ "api.groq.com": rateLimited }, [claude([{ type: "thinking", thinking: "", signature: "s" }, { type: "text", text: "from claude" }])]);
+    const { llmCascade } = await import("@/lib/llmCascade");
+    const out = await llmCascade({ system: "Be brief.", messages: [{ role: "user", content: "x" }], temperature: 0.7 });
+    expect(out).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", text: "from claude" });
+    expect(calls.map((c) => c.host)).toEqual(["api.groq.com", "api.anthropic.com"]);
+    expect(claudeBodies[0]).toMatchObject({ model: "claude-opus-5-5", system: "Be brief.", output_config: { effort: "low" } });
+    expect(claudeBodies[0]).not.toHaveProperty("temperature");
+  });
+
+  it("treats an empty Claude reply as a failure, so the next provider still answers", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENAI_API_KEY = "sk-oai";
+    stubWithClaude({ "api.openai.com": okChat }, [claude([{ type: "thinking", thinking: "", signature: "s" }], "max_tokens"), claude([{ type: "thinking", thinking: "", signature: "s" }], "max_tokens")]);
+    const { llmCascade, toolCallCascade } = await import("@/lib/llmCascade");
+    expect((await llmCascade({ messages: [{ role: "user", content: "x" }] })).provider).toBe("openai");
+    expect((await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] })).provider).toBe("openai");
+  });
+
+  it("tries OpenRouter's paid model on the same key once its free model is spent", async () => {
+    process.env.OPENROUTER_API_KEY = "o";
+    stubWithClaude({}, []);
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      if (new URL(url).pathname.endsWith("/models")) return new Response(JSON.stringify({ data: [] }));
+      calls.push({ host: new URL(url).hostname, model: body.model, auth: null, path: "" });
+      return n++ === 0 ? new Response(JSON.stringify(rateLimited.body), { status: 429 }) : new Response(JSON.stringify({ choices: [{ message: { content: "paid" } }] }));
+    }));
+    const { llmCascade } = await import("@/lib/llmCascade");
+    const out = await llmCascade({ messages: [{ role: "user", content: "x" }] });
+    expect(out).toMatchObject({ provider: "openrouter-paid", model: "openai/gpt-oss-120b", text: "paid" });
+    expect(calls.map((c) => c.model)).toEqual(["nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b"]);
+  });
+
+  it("never spends paid credit on unattended work", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENROUTER_API_KEY = "o"; process.env.GROQ_API_KEY = "g";
+    stubWithClaude({ "api.groq.com": rateLimited, "openrouter.ai": rateLimited }, []);
+    const { llmCascade } = await import("@/lib/llmCascade");
+    await llmCascade({ background: true, messages: [{ role: "user", content: "x" }] }).catch(() => {});
     expect(calls.some((c) => c.host === "api.anthropic.com")).toBe(false);
-    expect(cascadeOrder()).not.toContain("anthropic");
-    expect(configuredProviders()).toEqual(["groq"]);
+    expect(calls.some((c) => c.host === "openrouter.ai" && c.model === "openai/gpt-oss-120b")).toBe(false);
+  });
+
+  it("runs the assistant's tool loop on Claude, replaying its turn with the thinking blocks unchanged", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant";
+    const turn = [{ type: "thinking", thinking: "", signature: "sig-1" }, { type: "tool_use", id: "toolu_1", name: "manage_tasks", input: { action: "create", title: "Buy milk" } }];
+    stubWithClaude({}, [claude(turn, "tool_use"), claude([{ type: "text", text: "Added." }])]);
+    const { toolCallCascade } = await import("@/lib/llmCascade");
+    const tools = [{ type: "function", function: { name: "manage_tasks", description: "Tasks", parameters: { type: "object", properties: { action: { type: "string" } } } } }];
+    const first = await toolCallCascade({ messages: [{ role: "system", content: "sys" }, { role: "user", content: "add buy milk" }], tools });
+    expect(first.provider).toBe("anthropic");
+    expect(first.tool_calls).toEqual([{ id: "toolu_1", type: "function", function: { name: "manage_tasks", arguments: JSON.stringify({ action: "create", title: "Buy milk" }) } }]);
+    expect(claudeBodies[0]).toMatchObject({ system: "sys", tools: [{ name: "manage_tasks", input_schema: tools[0].function.parameters }] });
+
+    const second = await toolCallCascade({ tools, messages: [
+      { role: "system", content: "sys" }, { role: "user", content: "add buy milk" },
+      { role: "assistant", content: null, tool_calls: first.tool_calls },
+      { role: "tool", tool_call_id: "toolu_1", content: "{\"success\":true}" },
+    ] });
+    expect(second.content).toBe("Added.");
+    expect(claudeBodies[1].messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "add buy milk" }] },
+      { role: "assistant", content: turn },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "{\"success\":true}" }] },
+    ]);
   });
 });
 
@@ -83,7 +167,7 @@ describe("JSON mode reaches every OpenAI-compatible provider", () => {
 describe("free tiers first by default", () => {
   it("orders free providers by daily headroom, paid ones last", async () => {
     const { cascadeOrder } = await import("@/lib/llmCascade");
-    expect(cascadeOrder()).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"]);
+    expect(cascadeOrder()).toEqual(["groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"]);
   });
 
   it("sends tool calls to Groq before any paid key, with no env var set", async () => {
@@ -156,7 +240,7 @@ describe("a provider chosen by env goes first", () => {
   it("LLM_PRIMARY_PROVIDER moves that provider to the front, the free order follows", async () => {
     process.env.LLM_PRIMARY_PROVIDER = "openai";
     const { cascadeOrder } = await import("@/lib/llmCascade");
-    expect(cascadeOrder()).toEqual(["openai", "groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "grok"]);
+    expect(cascadeOrder()).toEqual(["openai", "groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "grok"]);
   });
 
   it("puts the primary first for tool calls too", async () => {
@@ -185,7 +269,7 @@ describe("every failure type falls through, then one clear message", () => {
     const { llmCascade, LlmCascadeError, userFacingLlmError } = await import("@/lib/llmCascade");
     const err = await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch((e) => e);
     expect(err).toBeInstanceOf(LlmCascadeError);
-    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai"]);
+    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "cerebras", "openrouter", "mistral", "gemini-lite", "gemini", "openrouter-paid", "openai"]);
     const msg = userFacingLlmError(err);
     expect(msg).toMatch(/^[A-Z][^{}[\]]+\.$/);
     expect(msg).not.toMatch(/\bat \w|Error:|\{/);
@@ -229,7 +313,7 @@ describe("/api/health", () => {
     const body = JSON.parse(text);
     expect(body.llm.status).toBe("degraded");
     expect(body.llm.providers.openai).toBe("quota");
-    expect(body.llm.providers).not.toHaveProperty("anthropic");
+    expect(body.llm.providers.anthropic).toBe("misconfigured");
     expect(body.llm.providers.groq).toBe("ok");
     expect(body.llm.providers.mistral).toBe("misconfigured");
   });
@@ -240,5 +324,14 @@ describe("/api/health", () => {
     const { GET } = await import("@/app/api/health/route");
     const body = await (await GET()).json();
     expect(body.llm.status).toBe("down");
+  });
+
+  it("tells a signed-out caller only whether the assistant is up and which commit is live", async () => {
+    process.env.GROQ_API_KEY = "g";
+    session = null;
+    const { GET } = await import("@/app/api/health/route");
+    const body = await (await GET()).json();
+    session = { user: { email: "u@x.test" } };
+    expect(Object.keys(body).sort()).toEqual(["ai", "commit", "commit_short", "llm_available", "ok", "timestamp"]);
   });
 });

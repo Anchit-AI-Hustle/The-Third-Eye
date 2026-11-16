@@ -12,6 +12,7 @@ import type { ApplicationKit, NormalizedJob } from "@/lib/jobAgent/types";
 import { resumeToHtml, resumeToMarkdown, resumeToText, coverLetterToHtml, coverLetterToText } from "@/lib/jobAgent/documents";
 import { documentFilename } from "@/lib/jobAgent/normalize";
 import { dataSave } from "@/lib/dataClient";
+import { recordGeneration } from "@/lib/generations";
 
 type Tab = "resume" | "cover" | "answers";
 
@@ -38,6 +39,11 @@ export function ApplicationKitReview({ job, onClose }: { job: NormalizedJob; onC
         if (cancelled) return;
         if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
         setKit(d.kit);
+        recordGeneration({
+          app: "jobagent", appLabel: "Job Agent · Tailored resume", title: `${job.company} - ${job.title}`, kind: "html",
+          inputs: [{ label: "Job", value: `${job.title} at ${job.company}` }, { label: "Source", value: job.sourceAttribution }],
+          output: `${resumeToHtml(d.kit.resume)}<hr>${coverLetterToHtml(d.kit.coverLetter)}`,
+        });
       } catch { if (!cancelled) setError("Generation failed - please try again."); }
       finally { if (!cancelled) setLoading(false); }
     })();

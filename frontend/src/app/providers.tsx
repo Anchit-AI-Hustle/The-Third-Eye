@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveSync } from "@/lib/liveSync";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -11,6 +12,11 @@ import { TaskAutopilot } from "@/components/tasks/TaskAutopilot";
 import { DeviceLogBridge } from "@/components/tasks/DeviceLogBridge";
 import { SystemsOnline } from "@/components/systems/SystemsOnline";
 import { CommandPalette } from "@/components/command/CommandPalette";
+import { DictationButton } from "@/components/voice/DictationButton";
+import { GetAppNudge } from "@/components/layout/GetAppNudge";
+import { HandoffBridge } from "@/components/layout/HandoffBridge";
+import { AccountSync } from "@/components/layout/AccountSync";
+import { LifeLogRecorderProvider } from "@/components/lifelog/LifeLogRecorder";
 import { getPolicy, getCurrentLocation } from "@/lib/consent";
 import { getDeviceInfo } from "@/lib/deviceInfo";
 
@@ -75,6 +81,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <PermissionProvider>
           <CaptureProvider>
+           <LifeLogRecorderProvider>
             {children}
             <ConsentDialog />
             <LocationBridge />
@@ -84,6 +91,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <DeviceLogBridge />
             <SystemsOnline />
             <CommandPalette />
+            <DictationButton />
+            <GetAppNudge />
+            <HandoffBridge />
+            <AccountSync />
+            <LiveSync />
+           </LifeLogRecorderProvider>
           </CaptureProvider>
         </PermissionProvider>
       </QueryClientProvider>

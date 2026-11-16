@@ -4,12 +4,11 @@ import {
   isSubscribed,
   currentTier,
   cancelSubscription,
-  userLevel,
   isTestUnlocked,
   unlockTest,
   clearTestUnlock,
-  LEVELS,
 } from "../wallet";
+import { LEVELS, userLevel } from "../plans";
 import { vaultSet } from "@/lib/deviceVault";
 
 beforeEach(() => localStorage.clear());

@@ -22,7 +22,7 @@ describe("test purchases", () => {
   it("adds a pack's credits and bonus to an owner account with no payment", async () => {
     const res = await buy({ bundle: "boost" });
     expect(await res.json()).toMatchObject({ ok: true, added: 1300 });
-    expect(balances["owner@x.test"]).toBe(106 + 1300);
+    expect(balances["owner@x.test"]).toBe(116 + 1300);
     expect(reasons).toEqual(["Test purchase: Boost pack (no payment)"]);
   });
 

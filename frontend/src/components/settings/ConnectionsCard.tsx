@@ -8,6 +8,9 @@ interface Status {
   scopes?: string[];
   available?: boolean;
   updatedAt?: string | null;
+  expired?: boolean;
+  problem?: string | null;
+  needsReconsent?: boolean;
 }
 
 function scopeLabels(scopes: string[]): string[] {
@@ -22,9 +25,9 @@ function scopeLabels(scopes: string[]): string[] {
 
 export function ConnectionsCard() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [github, setGithub] = useState<{ connected: boolean; login?: string | null; configured?: boolean } | null>(null);
+  const [github, setGithub] = useState<{ connected: boolean; login?: string | null; configured?: boolean; expired?: boolean } | null>(null);
   const [banner, setBanner] = useState<
-    "connected" | "error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_disconnected" | null
+    "connected" | "error" | "store_error" | "disconnected" | "no_scopes" | "pending" | "github_connected" | "github_error" | "github_store_error" | "github_disconnected" | null
   >(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [patInput, setPatInput] = useState("");
@@ -64,9 +67,11 @@ export function ConnectionsCard() {
     if (q === "google_connected") setBanner("connected");
     else if (q === "google_no_scopes") setBanner("no_scopes");
     else if (q === "google_error") setBanner("error");
+    else if (q === "google_store_error") setBanner("store_error");
     else if (q === "google_pending") setBanner("pending");
     else if (q === "github_connected") setBanner("github_connected");
     else if (q === "github_error") setBanner("github_error");
+    else if (q === "github_store_error") setBanner("github_store_error");
     if (q) window.history.replaceState({}, "", window.location.pathname);
 
     fetch("/api/connect/google/status")
@@ -120,7 +125,7 @@ export function ConnectionsCard() {
       )}
       {banner === "pending" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-text-muted">
-          <AlertCircle size={13} /> Gmail and Calendar access is still in Google&apos;s review for this app - it opens to everyone once approved.
+          <AlertCircle size={13} /> Google connection is currently limited to approved test accounts while verification is pending. The account you signed in with is not allowed to start this consent flow. Use the reviewer test account supplied to Google or add this account to GOOGLE_CONNECT_USERS on the production deployment.
         </div>
       )}
       {banner === "no_scopes" && (
@@ -133,9 +138,34 @@ export function ConnectionsCard() {
           </span>
         </div>
       )}
+      {banner === "store_error" && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-accent-red">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Google approved access, but the app couldn&apos;t save it on its side. Nothing is wrong with your Google account; this needs fixing in the app before connecting again will work.</span>
+        </div>
+      )}
       {banner === "error" && (
         <div className="flex items-center gap-2 mb-4 text-xs text-accent-red">
           <AlertCircle size={13} /> Couldn&apos;t connect - the sign-in was cancelled or the app isn&apos;t authorised for these scopes yet.
+        </div>
+      )}
+
+      {status?.expired && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-warning">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Google&apos;s permission has expired or was revoked, so Gmail and Calendar aren&apos;t working. Reconnect below to restore them.</span>
+        </div>
+      )}
+      {!status?.expired && status?.problem && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-accent-red">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Google access isn&apos;t working right now ({status.problem}). Try Reconnect below.</span>
+        </div>
+      )}
+      {connected && status?.needsReconsent && (
+        <div className="flex items-start gap-2 mb-4 text-xs text-text-muted">
+          <AlertCircle size={13} className="mt-px shrink-0" />
+          <span>Some Gmail or Calendar permissions weren&apos;t granted. Reconnect and allow them for every feature to work.</span>
         </div>
       )}
 
@@ -162,12 +192,14 @@ export function ConnectionsCard() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <a
+        {status?.available === false ? (
+          <span className="text-xs text-warning" role="status">Google connection is limited to approved accounts during verification. Use the reviewer test account specified in the verification reply.</span>
+        ) : <a
           href="/api/connect/google"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-input bg-[#4FC3F7]/10 border border-[#4FC3F7]/30 text-[#4FC3F7] text-sm font-medium hover:bg-[#4FC3F7]/20 transition-colors"
         >
-          {connected ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
-        </a>
+          {connected || status?.expired || status?.problem ? <><RefreshCw size={14} /> Reconnect / update permissions</> : <><Link2 size={14} /> Connect Google</>}
+        </a>}
         {connected && (
           <button
             type="button"
@@ -198,8 +230,14 @@ export function ConnectionsCard() {
         {banner === "github_disconnected" && (
           <div className="flex items-center gap-2 mb-3 text-xs text-success"><Check size={13} /> GitHub disconnected.</div>
         )}
+        {banner === "github_store_error" && (
+          <div className="flex items-start gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} className="mt-px shrink-0" /> <span>GitHub approved access, but the app couldn&apos;t save it on its side. Nothing is wrong with your GitHub account; this needs fixing in the app before connecting again will work.</span></div>
+        )}
         {banner === "github_error" && (
           <div className="flex items-center gap-2 mb-3 text-xs text-accent-red"><AlertCircle size={13} /> Couldn&apos;t connect GitHub.</div>
+        )}
+        {github?.expired && (
+          <div className="flex items-start gap-2 mb-3 text-xs text-warning"><AlertCircle size={13} className="mt-px shrink-0" /> <span>GitHub no longer accepts the saved access (revoked or expired). Reconnect below.</span></div>
         )}
         <div className="flex items-center gap-3 mb-4">
           {github?.connected ? (

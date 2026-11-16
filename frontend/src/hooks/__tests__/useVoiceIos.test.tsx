@@ -11,6 +11,7 @@ describe("useVoiceSTT on an iPhone home-screen app", () => {
       constructor() { order.push("AudioContext"); }
       resume() { order.push("resume"); return Promise.resolve(); }
       close() { return Promise.resolve(); }
+      createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
       createMediaStreamSource() { return { connect() {} }; }
       createAnalyser() { return { fftSize: 512, getByteTimeDomainData() {} }; }
     }
@@ -40,6 +41,7 @@ describe("useVoiceSTT on an iPhone home-screen app", () => {
       destination = {};
       resume() { return Promise.resolve(); }
       close() { return Promise.resolve(); }
+      createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
       createMediaStreamSource() { return { connect() {} }; }
       createAnalyser() {
         return { fftSize: 512, context: this, connect() {}, disconnect() {},
@@ -86,7 +88,8 @@ describe("useVoiceSTT on an iPhone home-screen app", () => {
     expect(audio.name).toBe("speech.wav");
     expect(audio.type).toBe("audio/wav");
     expect(audio.size).toBe(44 + 2 * (0.5 + 0.5) * 16000);
-    expect(sent[0].get("lang")).toBe("en-IN");
+    expect(sent[0].get("lang")).toBeNull();
+    expect(sent[0].get("hint")).toBe("en-IN");
     expect(heard).toEqual(["remind me to call mom"]);
 
     clock.mockRestore();

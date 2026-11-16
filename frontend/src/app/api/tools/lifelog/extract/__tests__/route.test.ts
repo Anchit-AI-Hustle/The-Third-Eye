@@ -37,3 +37,15 @@ describe("Life Log extraction", () => {
     for (const c of cascade.mock.calls) expect(c[0].messages[0].content.length).toBeLessThan(12500);
   });
 });
+
+describe("Life Log follow-ups", () => {
+  it("returns the follow-ups it heard, unsaved and honest about it without a database", async () => {
+    cascade.mockResolvedValue({ text: '{"events":[],"summary":"","actions":[{"type":"reminder","title":"Call mum","when":"18:00","needsYou":true},{"type":"task","title":"Draft the launch email","steps":["Outline","Write"],"needsYou":false},{"title":""}]}' });
+    const d = await (await post("[09:00] remind me to call mum at six, and draft the launch email")).json();
+    expect(d.actions).toEqual([
+      { type: "reminder", title: "Call mum", when: "2026-10-17T18:00", needsYou: true, saved: false, note: "Needs the database to save." },
+      { type: "task", title: "Draft the launch email", steps: ["Outline", "Write"], needsYou: false, saved: false, note: "Needs the database to save." },
+    ]);
+    expect(cascade.mock.calls[0][0].system).toContain("Never invent one");
+  });
+});

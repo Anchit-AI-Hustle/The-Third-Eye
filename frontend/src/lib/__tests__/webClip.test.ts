@@ -8,10 +8,14 @@ describe("the iPhone install profile", () => {
     expect(xml).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>/);
     expect(xml).toContain("<key>PayloadType</key><string>Configuration</string>");
     expect(xml).toContain("<key>PayloadType</key><string>com.apple.webClip.managed</string>");
-    expect(xml).toContain("<key>URL</key><string>https://the-third-eye.anchit-tandon.com/dashboard</string>");
+    expect(xml).toContain("<key>URL</key><string>https://the-third-eye.anchit-tandon.com/dashboard?app=webclip</string>");
     expect(xml).toContain("<key>Label</key><string>The Third Eye</string>");
     expect(xml).toContain("<key>FullScreen</key><true/>");
     expect(xml).toContain("<key>Icon</key><data>aWNvbg==</data>");
+  });
+
+  it("lets Google sign-in happen inside the app instead of handing off to Safari", () => {
+    expect(xml).toContain("<key>IgnoreManifestScope</key><true/>");
   });
 
   it("keeps the same identifiers, so installing again replaces the icon instead of adding a second", () => {

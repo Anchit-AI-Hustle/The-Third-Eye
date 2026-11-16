@@ -49,6 +49,7 @@ export function autopilotPrompt(t: AutopilotTask): string {
     `- Do the real work: research, write the drafts, documents or files, set the reminders, prepare the messages. Files you save go to my Knowledge base.`,
     `- Sending, paying or anything else that needs my approval: prepare it fully and propose it; it will wait for me.`,
     `- If part of it needs me in person, prepare everything you can and say exactly what is left for me.`,
+    `- If you need a decision or a detail only I have, ask it as a clear, direct question at the end of your report; it is sent to me in chat and my answer comes back to you.`,
     `- Do not create, update or complete this task in the tracker yourself; the app records the outcome.`,
     `- End with a short report: what you did, the result, and anything left for me. Never claim something you did not verify.`,
   ].filter((l) => l !== "").join("\n");

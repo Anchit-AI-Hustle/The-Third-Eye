@@ -1,8 +1,10 @@
+import { headers } from "next/headers";
 import { PlansClient } from "@/components/billing/PlansClient";
+import { razorpayFor } from "@/lib/razorpay";
 
 export const metadata = { title: "Plans & Credits - The Third Eye" };
 
-export default function PlansPage() {
+export default async function PlansPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-5">
@@ -12,7 +14,7 @@ export default function PlansPage() {
           Subscribe for personas & higher limits, or top up credits pay-as-you-go
         </p>
       </div>
-      <PlansClient />
+      <PlansClient razorpay={razorpayFor((await headers()).get("x-vercel-ip-country"))} />
     </div>
   );
 }

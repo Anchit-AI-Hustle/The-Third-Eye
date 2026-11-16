@@ -48,4 +48,17 @@ describe("sendFromDevice", () => {
     expect(deviceSendable(call)).toBe(true);
     expect(deviceSendable({ action: "whatsapp", url: "whatsapp://send?phone=919811122334" })).toBe(false);
   });
+
+  it("sends WhatsApp from the phone only when the app confirms send was pressed", async () => {
+    const wa = { action: "whatsapp", url: "https://wa.me/919811122334?text=hi", nativeUrl: "whatsapp://send?phone=919811122334&text=hi", to: "Priya" };
+    const sendWhatsApp = vi.fn().mockResolvedValue({ ok: true, sent: true });
+    android({ sendSms: vi.fn(), call: vi.fn(), sendWhatsApp });
+    expect(deviceSendable(wa)).toBe(true);
+    expect(await sendFromDevice(wa)).toEqual({ ok: true, text: "Sent on WhatsApp to Priya from your phone." });
+    expect(sendWhatsApp).toHaveBeenCalledWith({ url: wa.nativeUrl });
+
+    sendWhatsApp.mockResolvedValue({ ok: true, sent: false });
+    expect((await sendFromDevice(wa))!.text).toContain("tap send");
+  });
 });
+

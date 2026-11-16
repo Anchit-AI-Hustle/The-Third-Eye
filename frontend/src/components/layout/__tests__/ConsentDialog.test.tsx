@@ -25,16 +25,18 @@ vi.mock("@/hooks/useConsent", () => ({
 describe("ConsentDialog", () => {
   beforeEach(() => {
     pathname = "/dashboard";
+    localStorage.setItem("te_first_run_done", "1");
     vi.useFakeTimers();
     requestAll.mockClear();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
-  it("stays closed on the public demo, privacy, install and download pages", async () => {
-    for (const path of ["/install", "/get", "/demo", "/privacy", "/privacy_policy", "/calculators/sip-calculator"]) {
+  it("stays closed on the public privacy, install and download pages", async () => {
+    for (const path of ["/install", "/get", "/privacy", "/privacy_policy", "/calculators/sip-calculator"]) {
       pathname = path;
       const { unmount } = render(<ConsentDialog />);
       await act(async () => {
@@ -43,6 +45,13 @@ describe("ConsentDialog", () => {
       expect(screen.queryByText("Activate Assistant")).toBeNull();
       unmount();
     }
+  });
+
+  it("waits on the dashboard while the first-run guide is asking for the same permissions", async () => {
+    localStorage.removeItem("te_first_run_done");
+    render(<ConsentDialog />);
+    await act(async () => { vi.advanceTimersByTime(700); });
+    expect(screen.queryByText("Activate Assistant")).toBeNull();
   });
 
   it("stays closed inside the native iPhone app, which asks for permissions itself", async () => {

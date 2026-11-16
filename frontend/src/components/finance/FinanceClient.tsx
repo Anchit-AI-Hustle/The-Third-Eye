@@ -12,6 +12,7 @@ import { useModeTags, filterByMode } from "@/hooks/useModeTags";
 import { ModeScopeToggle } from "@/components/mode/ModeScopeToggle";
 import { localDay } from "@/lib/localDay";
 import { CaptureNote } from "@/components/privacy/CaptureNote";
+import { startSpeechCapture, transcribeSpeechSegment, type SpeechCapture } from "@/lib/speechCapture";
 
 const CATEGORIES = [
   "Food", "Groceries", "Transport", "Shopping", "Bills",
@@ -61,7 +62,8 @@ export function FinanceClient() {
   const [date, setDate] = useState(todayISO());
   const [listening, setListening] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const recRef = useRef<any>(null);
+  const recRef = useRef<SpeechCapture | null>(null);
+  const voiceActiveRef = useRef(false);
 
   function startEdit(e: Expense) {
     setEditingId(e.id);
@@ -111,19 +113,28 @@ export function FinanceClient() {
   }
 
   function startVoice() {
-    const SR = (typeof window !== "undefined") && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-    if (!SR) return;
-    const rec = new SR();
-    recRef.current = rec;
-    rec.lang = "en-IN"; rec.interimResults = false; rec.maxAlternatives = 1;
-    rec.onresult = (e: any) => { setNl(e.results[0][0].transcript); };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
+    if (voiceActiveRef.current) {
+      voiceActiveRef.current = false;
+      recRef.current?.stop();
+      recRef.current = null;
+      setListening(false);
+      return;
+    }
+    voiceActiveRef.current = true;
     setListening(true);
-    rec.start();
+    void startSpeechCapture({
+      onSegment: async (audio) => {
+        const text = await transcribeSpeechSegment(audio, "en-IN").catch(() => "");
+        if (text) setNl((previous) => `${previous.trim()} ${text}`.trim());
+      },
+      onError: () => { voiceActiveRef.current = false; setListening(false); },
+    }).then((capture) => {
+      if (voiceActiveRef.current) recRef.current = capture;
+      else capture.stop();
+    }).catch(() => { voiceActiveRef.current = false; setListening(false); });
   }
 
-  useEffect(() => () => { try { recRef.current?.stop(); } catch { /* noop */ } }, []);
+  useEffect(() => () => { voiceActiveRef.current = false; recRef.current?.stop(); }, []);
 
   async function submit() {
     const amt = Number(amount);

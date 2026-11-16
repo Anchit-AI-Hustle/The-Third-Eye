@@ -1,11 +1,14 @@
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
-import { getGoogleAccessToken } from "@/lib/googleToken";
+import { refreshGoogleToken } from "@/lib/googleToken";
 import { emailRecipients, gmailComposeUrl, gmailSendError } from "@/lib/liveActions";
 import { callMcpTool, isMcpTool } from "@/lib/mcp/client";
 import { runAnchor, anchorRequestFrom } from "@/lib/anchor";
 import { generateApp, publishApp } from "@/lib/appBuilder";
 import { getGithubAccessToken } from "@/lib/github";
+import { loadMemory, saveMemory } from "@/lib/memoryStore";
+import { saveRoutine } from "@/lib/routines";
+import { PLATFORMS, describeResults, listAccounts, postEverywhere, type Platform } from "@/lib/social";
 
 // Runs one world-changing action exactly as given: after the user confirms it
 // (/api/act), or straight away when the user's own message asked for it
@@ -17,15 +20,17 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
   // The send needs a token carrying gmail.send. Google sign-in asks for it,
   // and Settings → Connections can grant it again if it was declined.
   let accessToken: string | undefined;
+  let googleExpired = false;
   try {
-    const connected = await getGoogleAccessToken(email);
-    if (connected?.accessToken) accessToken = connected.accessToken;
+    const connected = await refreshGoogleToken(email);
+    if (connected.state === "ok") accessToken = connected.accessToken;
+    googleExpired = connected.state === "expired";
   } catch { /* not connected - reported below */ }
 
   // Mirror the chat route's premium gate so the paywall can't be bypassed via the
   // confirmation path when enforcement is on.
   if (premiumEnforced() && PREMIUM_TOOLS.has(tool) && (await getTier(email)) !== "premium") {
-    return { ok: false, result: "That action needs JARVIS Premium. Upgrade in Settings → Upgrade." };
+    return { ok: false, result: "That action needs Premium. Upgrade at /upgrade." };
   }
 
   switch (tool) {
@@ -40,7 +45,7 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
       // `communicate` to PREMIUM_TOOLS keeps whatsapp/sms/call/read_emails free,
       // which is what they were.
       if (premiumEnforced() && (await getTier(email)) !== "premium") {
-        return { ok: false, result: "Sending email needs JARVIS Premium. Upgrade in Settings → Upgrade." };
+        return { ok: false, result: "Sending email needs Premium. Upgrade at /upgrade." };
       }
       const recipients = emailRecipients(String(args?.to ?? ""));
       const to = recipients.join(", ");
@@ -54,7 +59,7 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
         return {
           ok: false,
           openUrl: compose,
-          result: `Gmail isn't connected for a direct send. No email was sent. Open the Gmail draft below to send to ${to} yourself. To send from here next time: Settings → Connections → "Connect Google".`,
+          result: `${googleExpired ? "Google access has expired or was revoked, so Gmail can't send." : "Gmail isn't connected for a direct send."} No email was sent. Open the Gmail draft below to send to ${to} yourself. To send from here next time: Settings → Connections → "Connect Google".`,
         };
       }
       const sent = await sendGmail(accessToken, to, subject, body);
@@ -79,9 +84,28 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
           : `Built ${files.length} files and pushed them to ${out.repoUrl}, but GitHub Pages could not be turned on (${out.pagesError}). Turn it on in the repo's Settings > Pages.`,
       };
     }
+    case "social_post": {
+      const text = String(args?.text ?? "").trim();
+      if (!text) return { ok: false, result: "There was nothing to post." };
+      const asked = (Array.isArray(args?.platforms) ? args.platforms : [args?.platforms]).map((p: unknown) => String(p ?? "").toLowerCase().replace("twitter", "x"));
+      const platforms = asked.includes("all")
+        ? [...new Set((await listAccounts(email)).map((a) => a.platform))]
+        : asked.filter((p: string): p is Platform => PLATFORMS.includes(p as Platform));
+      if (!platforms.length) return { ok: false, openUrl: "/settings?tab=account", result: "No connected social account to post to. Connect them in Settings → Account → Social accounts." };
+      const results = await postEverywhere(email, platforms, { text, imageUrl: args?.image_url ? String(args.image_url) : undefined, title: args?.title ? String(args.title) : undefined });
+      return { ok: results.some((r) => r.ok), result: describeResults(results) };
+    }
     case "anchor": {
       const out = await runAnchor(email, anchorRequestFrom(args));
       return { ok: out.ok, result: out.message };
+    }
+    case "manage_routines": {
+      const store = await loadMemory(email);
+      const before = { ...store };
+      const result = saveRoutine(store, String(args?.name ?? ""), Array.isArray(args?.steps) ? args.steps.map(String) : []);
+      const ok = !result.startsWith("A routine needs");
+      if (ok && !(await saveMemory(email, before, store))) return { ok: false, result: "The routine could not be saved. Try again." };
+      return { ok, result };
     }
     default:
       // Confirmed connector (MCP) write. `isSensitive` above already classified

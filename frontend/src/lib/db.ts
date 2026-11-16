@@ -182,6 +182,9 @@ class Query<D = any[]> implements PromiseLike<DbResult<D>> {
   lte(col: string, v: unknown) { return this.cmp("lte", col, v); }
   gt(col: string, v: unknown) { return this.cmp("gt", col, v); }
   gte(col: string, v: unknown) { return this.cmp("gte", col, v); }
+  like(col: string, pattern: string) {
+    return this.add(() => ({ sql: `${ident(col)} like $?`, params: [pattern] }));
+  }
   in(col: string, v: unknown[]) {
     return this.add(() => ({ sql: `${ident(col)} = any($?)`, params: [v] }));
   }

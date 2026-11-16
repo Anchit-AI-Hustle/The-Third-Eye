@@ -175,6 +175,45 @@ export const geminiTools = [
         },
       },
       {
+        name: "request_feature",
+        description: "When the user wants something The Third Eye cannot do yet, write the missing feature up for the owner's review (filed on GitHub and sent to the owner on WhatsApp). Nothing is built until the owner approves and merges it.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING", description: "Short feature name" },
+            goal: { type: "STRING", description: "What the user is trying to achieve and why" },
+            spec: { type: "STRING", description: "What to build: behaviour, screens or tools, data, edge cases, how to know it works" },
+            user_words: { type: "STRING", description: "The user's request in their own words" },
+          },
+          required: ["title", "goal", "spec"],
+        },
+      },
+      {
+        name: "social_post",
+        description: "Post publicly as the user on their own connected social accounts: facebook (their Pages), instagram (needs an image), threads, x, linkedin, reddit (their profile). Use 'all' for every connected account. The user confirms first unless they asked to post in their own words. Report each platform's result exactly.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            platforms: { type: "ARRAY", items: { type: "STRING", enum: ["all", "facebook", "instagram", "threads", "x", "linkedin", "reddit"] }, description: "Where to post" },
+            text: { type: "STRING", description: "The post, written for these platforms (X keeps the first 280 characters)" },
+            image_url: { type: "STRING", description: "Public image URL (required for Instagram)" },
+            title: { type: "STRING", description: "Reddit title (defaults to the first line)" },
+          },
+          required: ["platforms", "text"],
+        },
+      },
+      {
+        name: "life_log",
+        description: "Read the user's Life Log: what was said and what happened on a day, hour by hour (summary, events, transcript). Use it when the user asks what happened, what was discussed, or what someone said at a time or on a day.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            date: { type: "STRING", description: "Local day, YYYY-MM-DD (default today)" },
+            hour: { type: "NUMBER", description: "Local hour 0-23 to narrow to; omit for the whole day" },
+          },
+        },
+      },
+      {
         name: "manage_calendar",
         description: "Unified calendar manager: add events and get upcoming events. action='add' to create an event, 'get' to retrieve upcoming events.",
         parameters: {
@@ -348,6 +387,19 @@ export const geminiTools = [
             value: { type: "STRING" },
           },
           required: ["key", "value"],
+        },
+      },
+      {
+        name: "manage_routines",
+        description: "The user's own shortcuts: a name that stands for a list of steps, run later by saying the name. action='save' stores one (name + steps, each step a plain command such as 'open gmail', 'open calendar', 'turn on do not disturb', 'remind me to stretch in 1 hour'); 'list' shows them; 'delete' removes one. Saving replaces a routine with the same name.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            action: { type: "STRING", enum: ["save", "list", "delete"] },
+            name: { type: "STRING", description: "What the user will say to run it, e.g. 'Focus Mode'" },
+            steps: { type: "ARRAY", items: { type: "STRING" }, description: "The steps in order, one plain command each" },
+          },
+          required: ["action"],
         },
       },
       {
@@ -528,7 +580,7 @@ export const geminiTools = [
       },
       {
         name: "deep_research",
-        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), then synthesizes a comprehensive report with citations. Use for competitive analysis, market research, tech comparisons - not for a simple factual lookup, use web_search for that.",
+        description: "Iterative research: searches, judges whether results actually answer the topic, refines the query and searches again when they don't (up to 3 rounds), searches the open web and Google together, synthesizes a comprehensive report with citations in the structure that best fits it, then fact-checks the key claims and corrects them before returning. Use for competitive analysis, market research, tech comparisons - not for a simple factual lookup, use web_search for that.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -610,11 +662,11 @@ export const geminiTools = [
       },
       {
         name: "control_device",
-        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Always call this - the client executor applies it. Do not refuse.",
+        description: "Control THIS phone/browser (flashlight, vibrate, volume, brightness, DND, camera, location, notify, speak; in the Android app also: open an app by name [device=app, value=name], alarm [device=alarm, value='7:30 am'], timer [device=timer, value='10 min'], music [device=media, action=play/pause/next/previous], ringer [device=ringer, value=silent/vibrate/normal], lock screen, home, back, recents, screenshot, notifications, quick settings, a settings screen [device=settings, value=wifi/bluetooth/location/battery/display/sound/apps]) AND the JARVIS Home Hub (lights, thermostat, locks, TV, speakers, AC, blinds, plug). Each needs the permission the person gave; report exactly what the executor says. Always call this - the client executor applies it. Do not refuse.",
         parameters: {
           type: "OBJECT",
           properties: {
-            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight"], description: "Action to perform" },
+            action: { type: "STRING", enum: ["on", "off", "toggle", "dim", "lock", "unlock", "set_temperature", "set", "vibrate", "status", "notify", "speak", "open", "close", "flashlight", "play", "pause", "next", "previous", "screenshot", "home", "back"], description: "Action to perform" },
             device: { type: "STRING", description: "Device name or type - e.g. living room lights, front door, flashlight, phone" },
             value: { type: "STRING", description: "Value for dim/temperature/text/duration" },
           },

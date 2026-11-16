@@ -237,7 +237,7 @@ describe("Jarvis reliability evaluation", () => {
       { calls: [{ name: "communicate", args: { action: "email", to: "priya@example.com", subject: "Deck", body: "Attached." } }] },
       { text: "Done." },
     ];
-    const r = await chat("email priya the deck");
+    const r = await chat("email priya@example.com the deck");
     expect(r.confirms).toHaveLength(0);
     expect(r.results()[0]).toMatch(/No email was sent/);
   });

@@ -7,6 +7,8 @@ export interface AgentProfile {
   name: string;
   gender: "male" | "female" | "neutral";
   voicePreference: string;
+  /** Kokoro voice id for the neural voice; presets and gender pick one when unset. */
+  naturalVoice?: string;
   personality: string;
   greeting: string;
   avatar: "reactor" | "orb" | "shield" | "diamond" | "bolt" | "owl";

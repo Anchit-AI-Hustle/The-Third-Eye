@@ -31,12 +31,25 @@ export interface DiaryEntry {
   mood?: string;
 }
 
+// A follow-up heard in the day, saved as a task or reminder.
+export interface LifeAction {
+  type: "task" | "reminder";
+  title: string;
+  detail?: string;
+  steps?: string[];
+  when?: string;      // local "YYYY-MM-DDTHH:MM"
+  needsYou: boolean;
+}
+
+export interface SavedAction extends LifeAction { saved: boolean; note?: string }
+
 export interface DayLog {
   date: string;         // YYYY-MM-DD (local)
   segments: LogSegment[];
   events: LogEvent[];
   diary: DiaryEntry[];
   summary?: string;
+  actions?: SavedAction[]; // this device only; the tasks/reminders themselves are in the database
   updatedAt: number;
 }
 

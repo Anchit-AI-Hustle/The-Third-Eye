@@ -199,7 +199,7 @@ describe("toolCallCascade: tool-capable fallback (Groq/Cerebras/Mistral)", () =>
 describe("userFacingOutage", () => {
   it("does not tell someone an empty balance will clear in a couple of minutes", () => {
     const raw = "openai 429 insufficient_quota billing | gemini RESOURCE_EXHAUSTED";
-    expect(userFacingOutage(raw)).toBe("I'm temporarily unable to respond right now. Please try again in a little while.");
+    expect(userFacingOutage(raw)).toBe("The configured AI providers are out of credits or need billing attention. Check the provider keys and billing settings, then try again.");
     expect(userFacingOutage(raw)).not.toMatch(/couple of minutes/);
   });
 

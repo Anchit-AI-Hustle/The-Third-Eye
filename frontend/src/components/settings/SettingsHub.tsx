@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Settings as SettingsIcon, Bot, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SettingsClient } from "@/components/settings/SettingsClient";
@@ -12,6 +13,8 @@ import { ActivationSettings } from "@/components/settings/ActivationSettings";
 import { ProvidersCard } from "@/components/settings/ProvidersCard";
 import { WhatsAppCard } from "@/components/settings/WhatsAppCard";
 import { DeviceSyncCard } from "@/components/settings/DeviceSyncCard";
+import { WhatsAppAutoSendCard } from "@/components/settings/WhatsAppAutoSendCard";
+import { SocialAccountsCard } from "@/components/settings/SocialAccountsCard";
 
 interface Props {
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -19,15 +22,18 @@ interface Props {
 
 export function SettingsHub({ user }: Props) {
   const [tab, setTab] = useState<"device" | "account" | "agent">("device");
-
+  // Follows the link, so the menu's "Account & Connections" opens that tab even
+  // when Settings is already showing.
+  const params = useSearchParams();
+  const q = params?.get("tab");
+  // /api/connect/* return to /settings?connect=<result>. That result is shown by
+  // ConnectionsCard, which lives on the Account tab, so open it - otherwise the
+  // user lands on Device with no message and it looks like a silent loop.
+  const connectResult = params?.get("connect");
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const q = new URLSearchParams(window.location.search).get("tab");
-      if (q === "device" || q === "account" || q === "agent") {
-        setTab(q);
-      }
-    }
-  }, []);
+    if (q === "device" || q === "account" || q === "agent") setTab(q);
+    else if (connectResult) setTab("account");
+  }, [q, connectResult]);
 
   return (
     <>
@@ -61,12 +67,14 @@ export function SettingsHub({ user }: Props) {
       {tab === "device" ? (
         <div className="space-y-6">
           <PermissionsCard />
+          <WhatsAppAutoSendCard />
           <DeviceSyncCard />
         </div>
       ) : tab === "account" ? (
         <div className="space-y-6">
           <SettingsClient user={user} />
           <ConnectionsCard />
+          <SocialAccountsCard />
           <WhatsAppCard />
           <AutomationsCard />
         </div>

@@ -1,12 +1,13 @@
 "use client";
 
+import { routeToPhone } from "@/lib/handoff";
 import { confirmActionsOn } from "@/lib/explicitRequest";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Mic, MicOff, Volume2, VolumeX, X, Send, ChevronDown, Cpu, Paperclip, FileText, Radio, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useVoiceSTT, useTTS } from "@/hooks/useVoice";
+import { useVoiceSTT, useTTS, takeSentences } from "@/hooks/useVoice";
 import { useWakeWord, stripWakeTrigger, isNameTrigger } from "@/hooks/useWakeWord";
 import { useCapability } from "@/components/permission/PermissionProvider";
 import { useMicReady } from "@/hooks/useMicReady";
@@ -74,7 +75,7 @@ export function VoiceOverlay() {
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
   const requestCapability = useCapability();
-  const tts = useTTS(agent.voicePreference);
+  const tts = useTTS(agent);
   const {
     pendingActions,
     pendingOpens,
@@ -136,7 +137,13 @@ export function VoiceOverlay() {
       setLiveBubble(null);
       // A pending "confirm before I act" takes priority over a new question.
       if (handleVoiceConfirm(text)) return;
-      if (!isStreamingRef.current) sendRef.current(text);
+      // Words the user said replace a reply still being written, as in the Assistant.
+      if (isStreamingRef.current) {
+        abortRef.current?.abort();
+        isStreamingRef.current = false;
+        setIsStreaming(false);
+      }
+      sendRef.current(text);
     }, [handleVoiceConfirm]),
   });
 
@@ -317,6 +324,7 @@ export function VoiceOverlay() {
             agentId: agent.id,
             agentPersona: agent.personality,
             mode: modeId,
+            voice: micOn || handsFreeRef.current,
             deviceInfo: typeof window !== "undefined" ? (window as any).__teDevice : undefined,
             tasks: allTasks,
             docs: readyDocs,
@@ -334,6 +342,9 @@ export function VoiceOverlay() {
         let buffer = "";
         let fullText = "";
         let eventType = "";
+        // Each sentence is spoken as soon as it has streamed in.
+        const voiced = tts.begin();
+        let unspoken = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -351,6 +362,11 @@ export function VoiceOverlay() {
                 if (eventType === "text" && parsed.text !== undefined) {
                   fullText += parsed.text;
                   setResponse(fullText);
+                  if (voiced) {
+                    const { sentences, rest } = takeSentences(unspoken + parsed.text);
+                    sentences.forEach(tts.add);
+                    unspoken = rest;
+                  }
                 } else if (eventType === "tool" && parsed.name) {
                   setActiveTool(toolLabel(parsed.name, parsed.input));
                 } else if (eventType === "confirm" && parsed.tool) {
@@ -366,10 +382,14 @@ export function VoiceOverlay() {
                   // and the user is waiting on a reply that never comes.
                   if (micOn || handsFreeRef.current) tts.speak(`${parsed.summary}. Say confirm to proceed, or cancel.`);
                 } else if (eventType === "error") {
+                  if (voiced) tts.end();
                   setActiveTool(null);
                   setResponse((prev) => prev.trim() ? prev : `Error: ${parsed.message ?? "Unknown error"}`);
                 } else if (eventType === "done") {
                   setActiveTool(null);
+                  const routed = await routeToPhone(parsed.sideEffects);
+                  parsed.sideEffects = routed.effects;
+                  if (routed.note) { fullText = `${fullText.trim()}\n\n${routed.note}`; setResponse(fullText); }
                   if (parsed.memory) memoryRef.current = parsed.memory;
                   historyRef.current = [
                     ...historyRef.current,
@@ -389,15 +409,17 @@ export function VoiceOverlay() {
                     fullText = `${fullText}\n\n${media.join("\n")}`;
                     setResponse(fullText);
                   }
-                  if (fullText) tts.speak(fullText);
+                  if (voiced) { tts.add(unspoken); tts.end(); }
                 }
               } catch {}
               eventType = "";
             }
           }
         }
+        if (voiced) tts.end();
       } catch (err: any) {
         if (err?.name === "AbortError") return;
+        tts.end();
         setActiveTool(null);
         setResponse(`Error: ${err?.message ?? "Unknown error"}`);
       } finally {
@@ -657,6 +679,7 @@ export function VoiceOverlay() {
                 <Paperclip size={11} />
               </button>
               <input
+                data-no-dictate
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handsFreeRef.current = false; sendMessage(); } }}

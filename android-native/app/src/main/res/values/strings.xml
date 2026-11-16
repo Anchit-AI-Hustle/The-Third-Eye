@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_talk">Talk</string>
+    <string name="shortcut_talk_long">Talk to The Third Eye</string>
+    <string name="shortcut_ask">Ask</string>
+    <string name="shortcut_ask_long">Ask The Third Eye</string>
+    <string name="shortcut_briefing">Briefing</string>
+    <string name="shortcut_briefing_long">Morning briefing</string>
+</resources>

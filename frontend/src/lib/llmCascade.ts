@@ -13,9 +13,11 @@
 // function calling — this cascade is for translate / multi-agent reasoning /
 // other plain-text generations where any model will do.
 
+import Anthropic from "@anthropic-ai/sdk";
 import { usableGeminiKey } from "@/lib/providerReady";
-import { backgroundBlocked, benchedReason, classifyFailure, healthMap, noteFailure, noteSuccess } from "@/lib/providerHealth";
-import { currentOwnKeys } from "@/lib/providerKeys";
+import { backgroundBlocked, benchedReason, classifyFailure, forgetSeenHealth, healthMap, noteFailure, noteSuccess, resetHealthCache } from "@/lib/providerHealth";
+import { currentOwnKeys, localFirst, ownOllamaModel, tunnelAuth } from "@/lib/providerKeys";
+import { publicHost } from "@/lib/mcp/userConnectors";
 
 type LlmRole = "system" | "user" | "assistant";
 export interface LlmMessage { role: LlmRole; content: string }
@@ -52,8 +54,28 @@ const GROQ_BASE      = "https://api.groq.com/openai/v1";
 const CEREBRAS_BASE  = "https://api.cerebras.ai/v1";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MISTRAL_BASE   = "https://api.mistral.ai/v1";
+const HF_BASE        = "https://router.huggingface.co/v1";
 // A user's own Ollama (their Mac, through a tunnel) wins over the deployment's.
-const ollamaBase = () => (currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "");
+// Spoken to through its OpenAI-compatible /v1, so any local server with that
+// API (OpenJarvis `jarvis serve`, llama.cpp, vLLM) works the same way.
+const ollamaBase = () => `${(currentOwnKeys()?.ollama || process.env.OLLAMA_BASE || "http://localhost:11434").replace(/\/$/, "")}/v1`;
+// Ollama ignores the key; a server behind an authenticated tunnel needs one.
+// The deployment's key is only for the deployment's URL, never a user's own:
+// theirs carries the tunnel password they saved, as a full Authorization value.
+const ollamaKey = () => {
+  const own = currentOwnKeys();
+  if (own?.ollama) return own.ollama_token ? tunnelAuth(own.ollama_token) : "ollama";
+  return (process.env.OLLAMA_API_KEY ?? "").trim() || "ollama";
+};
+const ollamaModel = () => ownOllamaModel() ?? modelFor("ollama");
+// A user's address is checked again on every call: a name that was public when
+// saved can later resolve to the deployment's own network.
+const ownOllamaBlocked = async () => { const own = currentOwnKeys()?.ollama; return own ? publicHost(own) : null; };
+// A tunnel to a sleeping or closed laptop fails fast (Cloudflare answers 530);
+// skip it for a while rather than wait on it before every reply.
+const OLLAMA_AWAY_MS = 2 * 60_000;
+const ollamaAway = (status?: number) => !status || status === 502 || status === 503 || status === 504 || status === 530;
+const authorization = (key: string) => (/^(Basic|Bearer) /.test(key) ? key : `Bearer ${key}`);
 
 // Vercel env-var names are case-sensitive; we also strip BOM/zero-width chars
 // because Powershell-piped values sometimes inject them.
@@ -72,6 +94,8 @@ function loadKeys() {
     cerebras:  clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY),
     openrouter: clean(own?.openrouter) || clean(process.env.OPENROUTER_API_KEY),
     mistral:   clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY),
+    huggingface: clean(own?.huggingface) || clean(process.env.HF_TOKEN),
+    anthropic: clean(process.env.ANTHROPIC_API_KEY),
     ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
 }
@@ -80,7 +104,7 @@ function loadKeys() {
 // deployment's key for the same provider.
 function healthName(provider: string): string {
   const own = currentOwnKeys();
-  const base = provider === "gemini-lite" ? "gemini" : provider;
+  const base = provider === "gemini-lite" ? "gemini" : provider === "openrouter-paid" ? "openrouter" : provider;
   return own?.[base as keyof typeof own] ? `${provider}@${own.userId}` : provider;
 }
 
@@ -92,17 +116,22 @@ const DEFAULT_MODELS = {
   openai: "gpt-4o-mini",
   gemini: "gemini-2.5-flash",
   geminiPro: "gemini-2.5-pro",
-  grok: "grok-2-latest",
+  grok: "grok-4.7",
   groq: "openai/gpt-oss-120b",
   cerebras: "gpt-oss-120b",
   mistral: "mistral-small-latest",
+  huggingface: "openai/gpt-oss-120b",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
+  // The paid backups, used once the free tiers are spent.
+  openrouterPaid: "openai/gpt-oss-120b",
+  anthropic: "claude-opus-5-5",
   ollama: "llama3.1:8b",
 } as const;
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
   openai: "OPENAI_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
-  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
+  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", huggingface: "HF_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
+  openrouterPaid: "OPENROUTER_PAID_MODEL", anthropic: "ANTHROPIC_MODEL",
 };
 export function modelFor(provider: ModelProvider): string {
   return process.env[MODEL_ENV[provider]]?.trim() || DEFAULT_MODELS[provider];
@@ -117,6 +146,7 @@ const MODEL_PREFS: Record<string, RegExp[]> = {
   cerebras: [/gpt-oss-120b/, /qwen-3/, /zai-glm/],
   openrouter: [/nemotron-3-super.*:free$/, /gemma-4-31b.*:free$/, /nemotron-3-ultra.*:free$/, /gpt-oss.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /:free$/],
   "gemini-lite": [/^gemini-[\d.]+-flash-lite$/, /^gemini-flash-lite-latest$/, /flash-lite/],
+  huggingface: [/^openai\/gpt-oss-120b$/, /Llama-3\.3-70B-Instruct$/, /Qwen3-235B-A22B-Instruct/, /DeepSeek-V3/],
   mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^mistral-large-latest$/],
   grok: [/^grok-3-mini$/, /^grok-3$/, /^grok-4/, /grok/],
 };
@@ -210,30 +240,30 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["groq", "gemini-lite", "gemini", "cerebras", "openrouter", "mistral", "openai", "grok"] as const;
+const CLOUD_PROVIDERS = ["groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
-// Free tiers first, ordered by daily headroom: Groq's free plan serves
-// gpt-oss-120b with per-model quotas (withLiveModel rotates models on a 429);
-// Flash-Lite goes before Flash so Flash's small daily quota stays free for
-// images, which only the native Gemini path can read; Cerebras' trial and
-// OpenRouter's :free models (50 requests a day) and Mistral follow. Paid
-// providers come last, so a key without credit costs nothing until the free
-// ones are exhausted. LLM_PRIMARY_PROVIDER moves one provider to the front.
+// Free first, credits as backup. The free tiers in order of daily headroom:
+// Groq's free gpt-oss-120b (withLiveModel rotates models on a 429), Cerebras'
+// trial, OpenRouter's :free models, Mistral and Hugging Face's monthly credit. Gemini follows them, since a
+// key with billing on is charged for every call; Flash-Lite goes before Flash
+// so Flash's quota stays free for images, which only native Gemini reads. Then
+// the providers holding paid credit: an OpenRouter paid model on the same key,
+// Claude, OpenAI and Grok. LLM_PRIMARY_PROVIDER moves one provider to the front.
 export function cascadeOrder(): CloudProvider[] {
   const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
   return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
 }
 
-/** Chat starts on native Gemini only when it is the primary or the message has media only Gemini can read. */
+/** Chat starts on native Gemini only when it is the primary (and the user's own computer isn't set to answer first) or the message has media only Gemini can read. */
 export function nativeGeminiFirst(hasMedia: boolean): boolean {
-  return hasMedia || cascadeOrder()[0].startsWith("gemini");
+  return hasMedia || (!localFirst() && cascadeOrder()[0].startsWith("gemini"));
 }
 
 /** Providers with a key on this deployment. */
 export function configuredProviders(): string[] {
   const keys = loadKeys();
-  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : !!keys[p]));
+  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : p === "openrouter-paid" ? !!keys.openrouter : !!keys[p]));
 }
 
 export type LlmProviderState = "ok" | "quota" | "misconfigured";
@@ -316,7 +346,7 @@ export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()
   const outOfCredit = /credit balance|insufficient_quota|\bbilling\b|payment required/i.test(raw);
   const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
   const overloaded = /\b503\b|UNAVAILABLE|overloaded/i.test(raw);
-  if (outOfCredit) return "I'm temporarily unable to respond right now. Please try again in a little while.";
+  if (outOfCredit) return "The configured AI providers are out of credits or need billing attention. Check the provider keys and billing settings, then try again.";
   if (rateLimited) return "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute.";
   if (overloaded) return "I'm at capacity right now. This should clear on its own within a minute or two, so please try again shortly.";
   return "Something went wrong on my end. Please try again in a moment.";
@@ -402,8 +432,11 @@ function startCooldown(provider: string, retryAfter?: number): void {
 }
 
 /** Test-only: clear cooldown state between test cases. */
+/** Tests only: forget everything this instance knows about the providers. */
 export function resetCooldowns(): void {
   cooldownUntil.clear();
+  forgetSeenHealth();
+  resetHealthCache();
 }
 
 const MAX_TIMEOUT_MS = 120_000;
@@ -428,7 +461,7 @@ async function callOpenAI(key: string, model: string, opts: LlmCascadeOptions) {
     ];
     const r = await fetch(`${OPENAI_BASE}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model,
         messages,
@@ -491,8 +524,8 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
       ...opts.messages,
     ];
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      method: "POST", redirect: "error",
+      headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model, messages,
         max_tokens: opts.maxTokens ?? 2000,
@@ -512,37 +545,117 @@ async function callOpenAICompatible(base: string, key: string, model: string, op
   } finally { clear(); }
 }
 
-async function callOllama(model: string, opts: LlmCascadeOptions) {
-  const { signal, clear } = withTimeout(opts.timeoutMs ?? 60_000);
-  try {
-    const r = await fetch(`${ollamaBase()}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [
-          ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-          ...opts.messages,
-        ],
-        stream: false,
-        options: { temperature: opts.temperature ?? 0.7, num_predict: opts.maxTokens ?? 2000 },
-      }),
-      signal,
-    });
-    if (!r.ok) {
-      return { ...(await failed(r)), quota: false };
-    }
-    const data = await r.json();
-    return { ok: true as const, text: data.message?.content ?? "", model };
-  } catch (e) {
-    return { ok: false as const, status: 0, err: e instanceof Error ? e.message : String(e), quota: false, retryAfterMs: undefined as number | undefined };
-  } finally { clear(); }
-}
-
 // ─── Cascade entrypoint ──────────────────────────────────────────────────
 
+// ─── Claude (paid credit, a backup) ───────────────────────────────────────
+// Thinking is always on for current Claude models, so max_tokens leaves room
+// for it, and sampling parameters are not sent (they 400).
+const CLAUDE_MIN_TOKENS = 4000;
+
+function claudeClient(key: string, timeoutMs: number) {
+  return new Anthropic({ apiKey: key, timeout: timeoutMs, maxRetries: 0 });
+}
+
+function claudeFailure(e: unknown) {
+  const status = e instanceof Anthropic.APIError ? e.status ?? 0 : 0;
+  const err = e instanceof Error ? e.message : String(e);
+  return { ok: false as const, status, err, quota: isQuotaError(status, err), retryAfterMs: undefined as number | undefined };
+}
+
+// A refusal, or a turn that spent its budget thinking and said nothing, is not
+// an answer: report it as a failure so the next provider still gets the turn.
+function claudeNoAnswer(msg: Anthropic.Message) {
+  const said = msg.content.some((b) => (b.type === "text" && b.text.trim()) || b.type === "tool_use");
+  if (msg.stop_reason !== "refusal" && said) return null;
+  const err = msg.stop_reason === "refusal" ? "Claude declined this request" : `Claude returned no answer (${msg.stop_reason})`;
+  return { ok: false as const, status: 200, err, quota: false, retryAfterMs: undefined as number | undefined };
+}
+
+async function callClaude(key: string, model: string, opts: LlmCascadeOptions) {
+  const system = [opts.system, ...opts.messages.filter((m) => m.role === "system").map((m) => m.content), opts.jsonMode ? "Reply with JSON only." : ""].filter(Boolean).join("\n\n");
+  const turns = opts.messages.filter((m) => m.role !== "system");
+  const first = turns.findIndex((m) => m.role === "user");
+  try {
+    const msg = await claudeClient(key, opts.timeoutMs ?? 60_000).messages.create({
+      model,
+      max_tokens: Math.max(opts.maxTokens ?? 2000, CLAUDE_MIN_TOKENS),
+      ...(system ? { system } : {}),
+      messages: turns.slice(Math.max(first, 0)).map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      output_config: { effort: "low" },
+    });
+    const none = claudeNoAnswer(msg);
+    if (none) return none;
+    return { ok: true as const, text: msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(""), model };
+  } catch (e) {
+    return claudeFailure(e);
+  }
+}
+
+// Claude's tool turns carry thinking blocks that must be replayed unchanged on
+// the next call of the same loop; the chat route keeps OpenAI-shaped history,
+// so each turn's original content is kept here under its first tool call id.
+const claudeTurns = new Map<string, Anthropic.ContentBlock[]>();
+const CLAUDE_TURNS_KEPT = 200;
+
+function toClaude(messages: OpenAIChatMessage[]): { system: string; messages: Anthropic.MessageParam[] } {
+  const system: string[] = [];
+  const out: Anthropic.MessageParam[] = [];
+  const add = (role: "user" | "assistant", blocks: Anthropic.ContentBlockParam[]) => {
+    const last = out.at(-1);
+    if (last?.role === role && Array.isArray(last.content)) last.content.push(...blocks);
+    else out.push({ role, content: blocks });
+  };
+  for (const m of messages) {
+    if (m.role === "system") system.push(m.content);
+    else if (m.role === "user") { if (m.content) add("user", [{ type: "text", text: m.content }]); }
+    else if (m.role === "assistant") {
+      const kept = m.tool_calls?.[0] && claudeTurns.get(m.tool_calls[0].id);
+      if (kept) { add("assistant", kept as Anthropic.ContentBlockParam[]); continue; }
+      const blocks: Anthropic.ContentBlockParam[] = m.content ? [{ type: "text", text: m.content }] : [];
+      for (const c of m.tool_calls ?? []) {
+        let input: unknown = {};
+        try { input = JSON.parse(c.function.arguments || "{}"); } catch { /* empty input */ }
+        blocks.push({ type: "tool_use", id: c.id, name: c.function.name, input });
+      }
+      if (blocks.length) add("assistant", blocks);
+    } else if (m.role === "tool") add("user", [{ type: "tool_result", tool_use_id: m.tool_call_id, content: m.content }]);
+  }
+  while (out[0]?.role === "assistant") out.shift();
+  return { system: system.join("\n\n"), messages: out };
+}
+
+async function callClaudeTools(key: string, model: string, opts: ToolCallCascadeOptions) {
+  const { system, messages } = toClaude(opts.messages);
+  try {
+    const msg = await claudeClient(key, opts.timeoutMs ?? 60_000).messages.create({
+      model,
+      max_tokens: Math.max(opts.maxTokens ?? 2000, CLAUDE_MIN_TOKENS),
+      ...(system ? { system } : {}),
+      messages,
+      tools: opts.tools.map((t) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters ?? { type: "object", properties: {} } })),
+      output_config: { effort: "low" },
+    });
+    const none = claudeNoAnswer(msg);
+    if (none) return none;
+    const calls = msg.content.flatMap((b) => (b.type === "tool_use" ? [b] : []));
+    if (calls.length) {
+      claudeTurns.set(calls[0].id, msg.content);
+      if (claudeTurns.size > CLAUDE_TURNS_KEPT) claudeTurns.delete(claudeTurns.keys().next().value!);
+    }
+    const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    return {
+      ok: true as const,
+      content: text || null,
+      tool_calls: calls.length ? calls.map((b) => ({ id: b.id, type: "function" as const, function: { name: b.name, arguments: JSON.stringify(b.input) } })) : undefined,
+      model,
+    };
+  } catch (e) {
+    return claudeFailure(e);
+  }
+}
+
 // Unattended work (Gmail scan, log sync) never spends paid credit.
-const PAID = new Set<CloudProvider>(["openai", "grok"]);
+const PAID = new Set<CloudProvider>(["openrouter-paid", "anthropic", "openai", "grok"]);
 
 export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeResult> {
   const keys = loadKeys();
@@ -550,7 +663,8 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const pref = opts.preferProvider;
 
   const order: (CloudProvider | "ollama")[] = pref ? [pref]
-    : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))] : [...cascadeOrder(), "ollama"];
+    : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))]
+    : localFirst() ? ["ollama", ...cascadeOrder()] : [...cascadeOrder(), "ollama"];
   const tokens = estimateTokens([opts.system, opts.messages]);
 
   for (const provider of order) {
@@ -563,7 +677,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     // hang-and-timeout) entirely rather than pay for a call we already know
     // the answer to.
     const hp = healthName(provider);
-    const benched = provider === "ollama" || opts.ignoreBench ? null : inCooldown(hp) ? "cooling down after a recent quota error"
+    const benched = opts.ignoreBench ? null : provider === "ollama" ? (inCooldown(hp) ? "your computer didn't answer a moment ago" : null) : inCooldown(hp) ? "cooling down after a recent quota error"
       : (await benchedReason(hp)) ?? (opts.background ? await backgroundBlocked(hp) : null);
     if (benched) {
       attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
@@ -610,16 +724,37 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       attempts.push(attempt("openrouter", model, res));
       if (res.ok) { await noteSuccess(healthName("openrouter"), model); return { text: res.text, provider: "openrouter", model, attempts }; }
       if (res.quota) startCooldown(healthName("openrouter"), res.retryAfterMs);
+    } else if (provider === "openrouter-paid" && keys.openrouter) {
+      const model = modelFor("openrouterPaid");
+      const res = await callOpenAICompatible(OPENROUTER_BASE, keys.openrouter, model, opts);
+      attempts.push(attempt("openrouter-paid", model, res));
+      if (res.ok) { await noteSuccess(healthName("openrouter-paid"), model); return { text: res.text, provider: "openrouter-paid", model, attempts }; }
+      if (res.quota) startCooldown(healthName("openrouter-paid"), res.retryAfterMs);
+    } else if (provider === "anthropic" && keys.anthropic) {
+      const model = modelFor("anthropic");
+      const res = await callClaude(keys.anthropic, model, opts);
+      attempts.push(attempt("anthropic", model, res));
+      if (res.ok) { await noteSuccess(healthName("anthropic"), model); return { text: res.text, provider: "anthropic", model, attempts }; }
+      if (res.quota) startCooldown(healthName("anthropic"), res.retryAfterMs);
+    } else if (provider === "huggingface" && keys.huggingface) {
+      const { res, model } = await withLiveModel("huggingface", HF_BASE, keys.huggingface, modelFor("huggingface"), (m) => callOpenAICompatible(HF_BASE, keys.huggingface, m, opts));
+      attempts.push(attempt("huggingface", model, res));
+      if (res.ok) { await noteSuccess(healthName("huggingface"), model); return { text: res.text, provider: "huggingface", model, attempts }; }
+      if (res.quota) startCooldown(healthName("huggingface"), res.retryAfterMs);
     } else if (provider === "mistral" && keys.mistral) {
       const { res, model } = await withLiveModel("mistral", MISTRAL_BASE, keys.mistral, modelFor("mistral"), (m) => callOpenAICompatible(MISTRAL_BASE, keys.mistral, m, opts));
       attempts.push(attempt("mistral", model, res));
       if (res.ok) { await noteSuccess(healthName("mistral"), model); return { text: res.text, provider: "mistral", model, attempts }; }
       if (res.quota) startCooldown(healthName("mistral"), res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
-      const model = modelFor("ollama");
-      const res = await callOllama(model, opts);
+      const blocked = await ownOllamaBlocked();
+      if (blocked) { attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${blocked}` }); continue; }
+      const model = ollamaModel();
+      const res = await callOpenAICompatible(ollamaBase(), ollamaKey(), model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 });
       attempts.push(attempt("ollama", model, res));
       if (res.ok) { await noteSuccess(healthName("ollama"), model); return { text: res.text, provider: "ollama", model, attempts }; }
+      if (ollamaAway(res.status)) startCooldown(hp, OLLAMA_AWAY_MS);
+      continue;
     }
     for (const a of attempts.slice(before)) {
       if (a.ok || !a.status) continue;
@@ -668,7 +803,7 @@ async function visionOpenAICompatible(base: string, key: string, model: string, 
   const { signal, clear } = withTimeout(o.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal,
+      method: "POST", redirect: "error", headers: { "Content-Type": "application/json", Authorization: authorization(key) }, signal,
       body: JSON.stringify({
         model, max_tokens: o.maxTokens ?? 1200,
         messages: [
@@ -744,8 +879,8 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
   const { signal, clear } = withTimeout(opts.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      method: "POST", redirect: "error",
+      headers: { "Content-Type": "application/json", Authorization: authorization(key) },
       body: JSON.stringify({
         model,
         messages: opts.messages,
@@ -779,10 +914,20 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.groq) rows.push({ provider: "groq", base: GROQ_BASE, model: modelFor("groq"), key: keys.groq });
   if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
+  if (keys.huggingface) rows.push({ provider: "huggingface", base: HF_BASE, model: modelFor("huggingface"), key: keys.huggingface });
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
   if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
+  if (keys.openrouter) rows.push({ provider: "openrouter-paid", base: OPENROUTER_BASE, model: modelFor("openrouterPaid"), key: keys.openrouter });
+  if (keys.anthropic) rows.push({ provider: "anthropic", base: "", model: modelFor("anthropic"), key: keys.anthropic });
   const rank = cascadeOrder();
-  return rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
+  rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
+  // Last, as in the text cascade: slowest, but never out of quota. First when
+  // the user's own computer is set to answer first.
+  if (keys.ollama) {
+    const local = { provider: "ollama", base: ollamaBase(), model: ollamaModel(), key: ollamaKey() };
+    if (localFirst()) rows.unshift(local); else rows.push(local);
+  }
+  return rows;
 }
 
 export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<ToolCallCascadeResult> {
@@ -790,9 +935,14 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
   const tokens = estimateTokens([opts.messages, opts.tools]);
   for (const { provider, base, model, key } of toolCapableOrder()) {
     const hp = healthName(provider);
-    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : await benchedReason(hp);
+    const local = provider === "ollama";
+    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : local ? await ownOllamaBlocked() : await benchedReason(hp);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
-    const { res, model: used } = await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
+    // The user's own model is theirs to choose, so a missing one is reported, not swapped.
+    const { res, model: used } = provider === "anthropic"
+      ? { res: await callClaudeTools(key, model, opts), model }
+      : local ? { res: await callOpenAICompatibleTools(base, key, model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 }), model }
+      : await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
     if (res.ok) {
       await noteSuccess(hp, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
@@ -802,6 +952,7 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
     await noteFailure(hp, used, res.status, res.err, res.retryAfterMs);
     attempts.push(`${provider}:${res.status}`);
     if (res.quota) startCooldown(hp, res.retryAfterMs);
+    if (local && ollamaAway(res.status)) startCooldown(hp, OLLAMA_AWAY_MS);
   }
   throw new Error(`All tool-capable fallback providers failed. Attempts: ${attempts.join(", ") || "no keys configured"}`);
 }
@@ -846,21 +997,59 @@ function transcriptionFile(audio: Blob): { file: File; mime: string } {
   return { file: new File([audio], "audio.webm", { type: "audio/webm" }), mime: "audio/webm" };
 }
 
-async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = 30_000): Promise<{ ok: boolean; text?: string; status?: number; quota?: boolean }> {
+interface WhisperSegment { text: string; no_speech_prob?: number; avg_logprob?: number; compression_ratio?: number }
+
+/**
+ * Whisper's own confidence decides what was speech: a segment it scores as
+ * probably silent and decoded with low confidence is room noise turned into
+ * words, and one that repeats itself (high compression) is a decoding loop.
+ */
+// Whisper stuck in a loop on noise repeats one phrase: "I know. I know. I know."
+// One copy is what was said, if anything was.
+export function collapseRepeats(text: string): string {
+  const parts = text.match(/[^.!?।]+[.!?।]*/g) ?? [];
+  const norm = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const out: string[] = [];
+  for (const raw of parts) {
+    const p = raw.trim();
+    if (p && norm(p) !== norm(out[out.length - 1] ?? "")) out.push(p);
+  }
+  return out.join(" ").replace(/\b(\p{L}+(?:\s+\p{L}+){0,3})(?:[\s,]+\1\b){2,}/giu, "$1").trim();
+}
+
+export function spokenText(body: { text?: string; segments?: WhisperSegment[] }): string {
+  if (!Array.isArray(body.segments)) return collapseRepeats((body.text ?? "").trim());
+  return collapseRepeats(body.segments
+    .filter((s) => !((s.no_speech_prob ?? 0) > 0.6 && (s.avg_logprob ?? 0) < -0.7) && (s.compression_ratio ?? 0) < 2.4)
+    .map((s) => s.text)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim());
+}
+
+// A phrase comes back in a second or two, so a stalled provider is dropped
+// quickly for the next one; long recordings get time in proportion to size.
+// Biases Whisper toward how people here actually talk: English, Hindi and the
+// two mixed, with Hindi words kept in Roman script as typed in chats.
+const STT_PROMPT = "Hi JARVIS, kal ki meeting ka reminder laga do. Send the report to Priya, aur WhatsApp pe bata dena.";
+
+async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = Math.min(60_000, 12_000 + audio.size / 50)): Promise<{ ok: boolean; text?: string; language?: string; status?: number; quota?: boolean }> {
   const { signal, clear } = withTimeout(timeoutMs);
   try {
     const fd = new FormData();
     fd.append("file", transcriptionFile(audio).file);
     fd.append("model", model);
     if (lang) fd.append("language", lang.split("-")[0]);
-    fd.append("response_format", "text");
+    if (!lang || /^(en|hi)/i.test(lang)) fd.append("prompt", STT_PROMPT);
+    fd.append("temperature", "0");
+    fd.append("response_format", "verbose_json");
     const r = await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd, signal });
     if (!r.ok) { const err = await r.text().catch(() => ""); return { ok: false, status: r.status, quota: isQuotaError(r.status, err) }; }
     const body = await r.text();
-    // response_format=text returns raw text; some gateways still wrap it in JSON.
-    let text = body;
-    try { const j = JSON.parse(body); if (j && typeof j.text === "string") text = j.text; } catch { /* raw text */ }
-    return { ok: true, text: text.trim() };
+    let text = body.trim();
+    let language: string | undefined;
+    try { const j = JSON.parse(body); text = spokenText(j); language = typeof j.language === "string" ? j.language.toLowerCase() : undefined; } catch { /* a gateway that answered in plain text */ }
+    return { ok: true, text, language };
   } catch { return { ok: false, status: 0 }; }
   finally { clear(); }
 }
@@ -898,8 +1087,8 @@ async function transcribeGemini(key: string, audio: Blob, lang?: string): Promis
     const buf = Buffer.from(await audio.arrayBuffer());
     if (buf.length < 400) return { ok: false, status: 0 };
     const prompt = lang
-      ? `Transcribe this audio (${lang}). Return only the transcript.`
-      : "Transcribe this audio. Return only the transcript.";
+      ? `Transcribe this audio (${lang}) exactly as spoken. Return only the transcript.`
+      : "Transcribe this audio exactly as spoken, in whatever language or mix of languages is used. Hindi or Hinglish: write Hindi words in Roman script as they sound and English words in English. Return only the transcript, or nothing if there is no speech.";
     const r = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(modelFor("gemini"))}:generateContent?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -935,19 +1124,36 @@ const HALLUCINATIONS = new Set([
 
 export function isHallucination(text: string): boolean {
   const t = text.toLowerCase().replace(/[^\p{L}\p{N}\s.:/-]/gu, "").replace(/[.\s]+$/, "").trim();
-  return !t || HALLUCINATIONS.has(t);
+  // Whisper repeats its prompt back when it hears nothing.
+  return !t || HALLUCINATIONS.has(t) || (t.length > 8 && STT_PROMPT.toLowerCase().includes(t));
 }
 
-export async function transcribeCascade(audio: Blob, lang?: string): Promise<TranscribeCascadeResult> {
+const ISO_NAMES: Record<string, string> = { en: "english", hi: "hindi", ur: "urdu", bn: "bengali", ta: "tamil", te: "telugu", mr: "marathi", gu: "gujarati", kn: "kannada", ml: "malayalam", pa: "punjabi", es: "spanish", fr: "french", de: "german" };
+
+/**
+ * `lang` forces a language the user picked. Otherwise Whisper detects it, which
+ * is what Hindi and Hinglish need (forcing the browser's "en" turned them into
+ * English nonsense), and `hint` - the device language - is the fallback when
+ * detection lands on a language nobody here speaks, which is noise.
+ */
+export async function transcribeCascade(audio: Blob, lang?: string, hint?: string): Promise<TranscribeCascadeResult> {
   const keys = loadKeys();
   const errors: string[] = [];
+  const expected = new Set(["english", "hindi", ISO_NAMES[(hint ?? "").slice(0, 2).toLowerCase()] ?? ""]);
+  const settle = async (base: string, key: string, model: string) => {
+    const res = await transcribeOne(base, key, model, audio, lang);
+    if (!res.ok || lang || !res.language || expected.has(res.language)) return res;
+    // Hinglish is often detected as Urdu (and written in its script).
+    const retry = await transcribeOne(base, key, model, audio, res.language === "urdu" ? "hi" : (hint || "en"));
+    return retry.ok ? retry : res;
+  };
   if (keys.groq) {
-    const res = await transcribeOne(GROQ_BASE, keys.groq, "whisper-large-v3", audio, lang);
+    const res = await settle(GROQ_BASE, keys.groq, "whisper-large-v3");
     if (res.ok) return { text: res.text ?? "", provider: "groq", model: "whisper-large-v3" };
     errors.push(`groq:${res.status}`);
   }
   for (const key of keys.openai) {
-    const res = await transcribeOne(OPENAI_BASE, key, "whisper-1", audio, lang);
+    const res = await settle(OPENAI_BASE, key, "whisper-1");
     if (res.ok) return { text: res.text ?? "", provider: "openai", model: "whisper-1" };
     errors.push(`openai:${res.status}`);
     if (!res.quota) break;
@@ -955,7 +1161,7 @@ export async function transcribeCascade(audio: Blob, lang?: string): Promise<Tra
   const gemini = usableGeminiKey();
   if (gemini) {
     const res = await transcribeGemini(gemini, audio, lang);
-    if (res.ok) return { text: res.text ?? "", provider: "gemini", model: modelFor("gemini") };
+    if (res.ok) return { text: collapseRepeats(res.text ?? ""), provider: "gemini", model: modelFor("gemini") };
     errors.push(`gemini:${res.status}`);
   }
   throw new Error(`All transcription providers failed (${errors.join(", ") || "no keys configured"}).`);

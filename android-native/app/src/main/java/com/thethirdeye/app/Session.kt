@@ -26,9 +26,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -59,6 +59,7 @@ class Session(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var name by mutableStateOf<String?>(null)
+    var email by mutableStateOf<String?>(null)
 
     private val prefs = app.getSharedPreferences("session", Context.MODE_PRIVATE)
 
@@ -73,6 +74,7 @@ class Session(app: Application) : AndroidViewModel(app) {
         state = try {
             val user = json.parseToJsonElement(Api.backend.send("GET", "/api/auth/session")).jsonObject["user"] as? JsonObject
             name = user?.get("name")?.jsonPrimitive?.contentOrNull
+            email = user?.get("email")?.jsonPrimitive?.contentOrNull
             prefs.edit().putBoolean("was-signed-in", user != null).apply()
             if (user != null) State.SignedIn else State.SignedOut
         } catch (e: ApiError) {
@@ -139,9 +141,11 @@ class Session(app: Application) : AndroidViewModel(app) {
         WebStorage.getInstance().deleteAllData()
         AgentLog.get(app).clear()
         Reminders.clear(app)
+        Local.get(app).clear()
         Events.signedOut.tryEmit(Unit)
         prefs.edit().putBoolean("was-signed-in", false).apply()
         name = null
+        email = null
         state = State.SignedOut
     }
 }

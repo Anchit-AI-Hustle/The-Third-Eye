@@ -407,6 +407,82 @@ export function executeHomeAction(payload: DeviceActionPayload): DeviceExecResul
   return result;
 }
 
+
+// ---- Phone actions only the app can do (Android) ---------------------------
+
+type NativeReply = { ok?: boolean; applied?: string; error?: string; needsPermission?: string };
+const NEEDS: Record<string, string> = {
+  dnd: "Do Not Disturb access is needed for that. I've opened the setting: turn on The Third Eye, then ask again.",
+  accessibility: "That needs The Third Eye turned on under Accessibility. I've opened it: switch it on, then ask again.",
+};
+
+async function nativeAction(action: string, method: string, args: Record<string, unknown>): Promise<DeviceExecResult> {
+  const plugin = capPlugin();
+  if (!plugin.isNative) return { ok: false, action, via: "none", applied: "That works in The Third Eye's Android app; a browser can't do it." };
+  const r = (await plugin.call(method, args).catch((e: Error) => ({ ok: false, error: e.message }))) as NativeReply | null;
+  if (!r) return { ok: false, action, via: "none", applied: "This version of the app can't do that yet; update it from /get." };
+  if (r.needsPermission) return { ok: false, action, via: "settings", applied: NEEDS[r.needsPermission] ?? "A permission is needed; I've opened the setting." };
+  return { ok: Boolean(r.ok), action, via: "native", applied: r.ok ? r.applied ?? "Done" : r.error ?? "It didn't work." };
+}
+
+/** "7:30", "7:30 am", "19:05 gym", "6 pm" -> hour, minute and the rest as a label. */
+export function parseClock(value: string | null | undefined): { hour: number; minute: number; label?: string } | null {
+  const m = String(value ?? "").trim().match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\s*(.*)$/i);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = Number(m[2] ?? 0);
+  const ap = m[3]?.toLowerCase().replace(/\./g, "");
+  if (ap === "pm" && hour < 12) hour += 12;
+  if (ap === "am" && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+  return { hour, minute, label: m[4]?.trim() || undefined };
+}
+
+/** "10 min", "90s", "1h 30m", "300" -> seconds. */
+export function parseDuration(value: string | null | undefined): number | null {
+  const v = String(value ?? "").toLowerCase().trim();
+  if (/^\d+$/.test(v)) return Number(v);
+  let total = 0;
+  for (const [, n, unit] of v.matchAll(/(\d+(?:\.\d+)?)\s*(h|hr|hour|m|min|minute|s|sec|second)s?\b/g)) {
+    total += Number(n) * (unit.startsWith("h") ? 3600 : unit.startsWith("m") ? 60 : 1);
+  }
+  return total > 0 ? Math.round(total) : null;
+}
+
+const SYSTEM: Record<string, string> = {
+  screen_lock: "lock", go_home: "home", go_back: "back", recents: "recents",
+  screenshot: "screenshot", notifications_shade: "notifications", quick_settings: "quick_settings",
+};
+
+async function phoneAction(key: string, value: string | null | undefined): Promise<DeviceExecResult | null> {
+  if (key.startsWith("app")) {
+    if (!value) return { ok: false, action: "app", via: "none", applied: "Which app should I open?" };
+    return nativeAction("app", "openApp", { name: value });
+  }
+  if (key.startsWith("alarm")) {
+    const t = parseClock(value);
+    if (!t) return { ok: false, action: "alarm", via: "none", applied: "What time should the alarm be?" };
+    return nativeAction("alarm", "setAlarm", { hour: t.hour, minute: t.minute, label: t.label ?? "JARVIS" });
+  }
+  if (key.startsWith("timer")) {
+    const seconds = parseDuration(value);
+    if (!seconds) return { ok: false, action: "timer", via: "none", applied: "How long should the timer be?" };
+    return nativeAction("timer", "setTimer", { seconds });
+  }
+  if (key.startsWith("media")) {
+    const k = /next|skip/.test(key) ? "next" : /prev/.test(key) ? "previous" : /pause|_off|stop/.test(key) ? "pause" : /play|_on/.test(key) ? "play" : "toggle";
+    return nativeAction("media", "media", { key: k });
+  }
+  if (key.startsWith("ringer")) {
+    const mode = /silent|_off|mute/.test(`${key} ${value ?? ""}`) ? "silent" : /vibrat/.test(`${key} ${value ?? ""}`) ? "vibrate" : "normal";
+    return nativeAction("ringer", "ringer", { mode });
+  }
+  const system = Object.keys(SYSTEM).find((k) => key.startsWith(k));
+  if (system) return nativeAction(system, "systemAction", { action: SYSTEM[system] });
+  if (key.startsWith("settings")) return nativeAction("settings", "openSettings", { pane: (value ?? "apps").toLowerCase() });
+  return null;
+}
+
 export async function executeDeviceAction(payload: DeviceActionPayload): Promise<DeviceExecResult> {
   const act = (payload.action || "status").toLowerCase();
   const device = (payload.device || "phone").toLowerCase();
@@ -415,8 +491,11 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
   const key = act.includes("_") ? act : device !== "phone" ? `${device}_${act}` : act;
 
   let result: DeviceExecResult;
+  const phone = await phoneAction(key, value);
 
-  if (key.startsWith("flashlight") || key.startsWith("torch") || (device === "flashlight" && ["on", "off", "toggle"].includes(act))) {
+  if (phone) {
+    result = phone;
+  } else if (key.startsWith("flashlight") || key.startsWith("torch") || (device === "flashlight" && ["on", "off", "toggle"].includes(act))) {
     const on = key.includes("toggle") ? !torchOn : parseOnOff(key, true);
     result = await setTorch(on);
   } else if (key.startsWith("vibrate") || key === "haptic") {
@@ -431,6 +510,8 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
   } else if (key === "unmute" || key === "mute_off") {
     result = await setVolume("60");
     result.action = "unmute";
+  } else if ((key.startsWith("dnd") || key === "silent") && capPlugin().isNative) {
+    result = await nativeAction(parseOnOff(key, true) ? "dnd_on" : "dnd_off", "doNotDisturb", { on: parseOnOff(key, true) });
   } else if (key.startsWith("dnd") || key === "silent") {
     const on = parseOnOff(key, true);
     if (typeof window !== "undefined") (window as any).__jarvisDnd = on;
@@ -479,7 +560,7 @@ export async function executeDeviceAction(payload: DeviceActionPayload): Promise
       ok: false,
       action: act,
       via: "none",
-      applied: `I don’t have a handler for “${act}” on ${device}. Try flashlight, vibrate, volume, brightness, DND, notify, camera, location, clipboard, share, fullscreen.`,
+      applied: `I don’t have a handler for “${act}” on ${device}. Try flashlight, vibrate, volume, brightness, DND, notify, camera, location, clipboard, share, fullscreen, or in the Android app: open an app, alarm, timer, music controls, ringer, lock screen, home, back, screenshot.`,
     };
   }
 

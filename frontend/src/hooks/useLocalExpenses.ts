@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 import { localDay } from "@/lib/localDay";
 
@@ -47,7 +48,8 @@ export function useLocalExpenses() {
     let cancelled = false;
     if (markReady) setReady(false);
     dataList<Expense>("expenses").then((r) => {
-      if (cancelled) return;
+      // A background refresh that can't reach the server keeps the server-backed list.
+      if (cancelled || (!markReady && remote.current && !r.remote)) return;
       remote.current = r.remote;
       setExpenses(r.remote ? r.rows : ls().sort(sortDesc));
       setReady(true);
@@ -56,6 +58,9 @@ export function useLocalExpenses() {
   }, []);
 
   useEffect(() => load(), [userId, load]);
+  // Changes made on another device (or by the server) show up here too.
+  const tick = useLiveTick();
+  useEffect(() => { if (tick) load(false); }, [tick, load]);
 
   useEffect(() => {
     const onUpdated = () => load(false);

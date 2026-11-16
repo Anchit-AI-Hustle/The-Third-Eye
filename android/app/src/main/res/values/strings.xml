@@ -4,4 +4,5 @@
     <string name="title_activity_main">The Third Eye</string>
     <string name="package_name">com.jarvis.app</string>
     <string name="custom_url_scheme">com.jarvis.app</string>
+    <string name="whatsapp_sender_description">Lets JARVIS act on your phone when you ask it to: press WhatsApp\'s send button on a message you asked it to send (only on a chat it just opened), and lock the screen, go home or back, open recent apps, notifications or quick settings, and take a screenshot. It reads nothing else.</string>
 </resources>

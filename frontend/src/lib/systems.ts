@@ -1,5 +1,3 @@
-"use client";
-
 // "All Systems Online" — each system reports its status in ITS OWN voice via the
 // browser's SpeechSynthesis (distinct voice per system, same mechanism the agent
 // personas use). Triggered by saying/typing "all systems online", "systems

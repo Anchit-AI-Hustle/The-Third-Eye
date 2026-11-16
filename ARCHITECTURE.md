@@ -30,7 +30,7 @@ JARVIS OS is a self-hosted, agent-orchestrated personal operating system. It pro
           │                 │                       │
           ▼                 ▼                       ▼
 ┌─────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│  Next.js 14     │ │   FastAPI        │ │   n8n            │
+│  Next.js 16     │ │   FastAPI        │ │   n8n            │
 │  Frontend       │ │   Backend        │ │   Workflow Engine │
 │  (Port 3000)    │ │   (Port 8000)    │ │   (Port 5678)    │
 └────────┬────────┘ └────────┬─────────┘ └────────┬─────────┘

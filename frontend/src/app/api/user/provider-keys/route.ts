@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { deleteOwnKey, loadOwnKeys, ollamaUrlProblem, OWN_KEY_PROVIDERS, saveOwnKey, type OwnKeyProvider } from "@/lib/providerKeys";
+import { publicHost } from "@/lib/mcp/userConnectors";
+import { deleteOwnKey, HF_OAUTH, keyProblem, loadOwnKeys, ollamaUrlProblem, OWN_KEY_PROVIDERS, saveOwnKey, type OwnKeyProvider } from "@/lib/providerKeys";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function PUT(req: Request) {
   const v = typeof value === "string" ? value.trim() : "";
   if (!isProvider(provider)) return Response.json({ error: "Unknown provider" }, { status: 400 });
   if (!v || v.length > 500) return Response.json({ error: "Paste the key (or URL) first." }, { status: 400 });
-  const problem = provider === "ollama" ? ollamaUrlProblem(v) : null;
+  const problem = provider === "ollama" ? ollamaUrlProblem(v) ?? (await publicHost(v)) : await keyProblem(provider, v);
   if (problem) return Response.json({ error: problem }, { status: 400 });
   if (!(await saveOwnKey(email, provider, v))) {
     return Response.json({ error: "Keys can't be stored on this deployment yet (it needs TOKEN_ENCRYPTION_KEY and the database)." }, { status: 503 });
@@ -41,5 +42,6 @@ export async function DELETE(req: Request) {
   const provider = new URL(req.url).searchParams.get("provider");
   if (!isProvider(provider)) return Response.json({ error: "Unknown provider" }, { status: 400 });
   await deleteOwnKey(email, provider);
+  if (provider === "huggingface") await deleteOwnKey(email, HF_OAUTH);
   return Response.json({ ok: true });
 }

@@ -46,6 +46,8 @@ object Palette {
     val secondary = Color(0xFFB0B8C8)
     val muted = Color(0xFF7F87A8)
     val red = Color(0xFFEF4444)
+    val success = Color(0xFF10B981)
+    val warning = Color(0xFFF59E0B)
 }
 
 @Composable

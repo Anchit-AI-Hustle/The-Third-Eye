@@ -1,7 +1,8 @@
 name: iOS TestFlight
-# Signs the iOS app and uploads it to TestFlight, so iPhones install it from
-# the TestFlight app with one tap. Dormant until the Apple Developer Program
-# secrets below exist; run it from the Actions tab after enrolling.
+# Signs the native SwiftUI app (ios-native/) and uploads it to TestFlight, so
+# iPhones install it from the /get page's TestFlight link with one tap. Dormant
+# until the Apple Developer Program secrets below exist; after that every change
+# to ios-native/ on main ships a new build.
 #
 # Repo secrets (Settings -> Secrets and variables -> Actions):
 #   APPLE_TEAM_ID                  - Membership details at developer.apple.com
@@ -9,9 +10,14 @@ name: iOS TestFlight
 #   APP_STORE_CONNECT_ISSUER_ID    - same page
 #   APP_STORE_CONNECT_KEY          - contents of the downloaded AuthKey_<id>.p8
 # The app record must exist in App Store Connect with the bundle ID in
-# capacitor.config.ts (appId); xcodebuild creates certificates and profiles.
+# ios-native/project.yml (com.thethirdeye.app); xcodebuild creates the
+# certificates and profiles. Then turn on a public link in TestFlight and set it
+# as IOS_TESTFLIGHT_URL in Vercel, which puts it on /get.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["ios-native/**", ".github/workflows/ios-testflight.yml"]
 permissions:
   contents: read
 jobs:
@@ -35,17 +41,15 @@ jobs:
       - if: steps.keys.outputs.ready == 'true'
         uses: actions/checkout@v7
       - if: steps.keys.outputs.ready == 'true'
-        uses: actions/setup-node@v7
-        with: { node-version: 22 }
-      - if: steps.keys.outputs.ready == 'true'
-        run: npm ci && npx cap sync ios
+        run: brew install xcodegen && xcodegen generate
+        working-directory: ios-native
       - name: Archive and upload to TestFlight
         if: steps.keys.outputs.ready == 'true'
         run: |
           KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
           printf '%s' "$KEY" > "$KEY_PATH"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+          xcodebuild -project ios-native/TheThirdEye.xcodeproj -scheme TheThirdEye -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
             DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" "${AUTH[@]}" archive

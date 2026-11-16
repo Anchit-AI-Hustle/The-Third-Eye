@@ -10,7 +10,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -18,6 +21,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -32,12 +36,23 @@ const val BASE_URL = "https://the-third-eye.anchit-tandon.com"
 
 val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; isLenient = true; explicitNulls = false }
 
-class ApiError(val status: Int) : IOException() {
+class ApiError(val status: Int, body: String = "") : IOException() {
+    private val reply = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+    private fun field(key: String) = (reply?.get(key) as? JsonPrimitive)?.contentOrNull
+
+    /** What the server could not delete, when it says. */
+    val failed get() = (reply?.get("failed") as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+
+    /** The Job Agent answers 403 with this when the server has it switched off. */
+    val disabled get() = (reply?.get("disabled") as? JsonPrimitive)?.booleanOrNull == true
+
     override val message: String
-        get() = when (status) {
-            401 -> "You're signed out. Sign in again."
-            0 -> "No connection. Check your internet."
-            else -> "The server said $status. Try again."
+        get() = when {
+            status == 401 -> "You're signed out. Sign in again."
+            status == 0 -> "No connection. Check your internet."
+            status == 402 && field("code") == "insufficient_credits" ->
+                "Not enough credits (needs ${field("cost")}, you have ${field("balance")}). See Plans & Credits."
+            else -> field("error") ?: field("message") ?: "The server said $status. Try again."
         }
 }
 
@@ -53,7 +68,13 @@ interface Backend {
     suspend fun send(method: String, path: String, body: JsonElement? = null): String
     /** Server-sent events: (event, data) pairs. */
     fun stream(path: String, body: JsonElement): Flow<Pair<String, JsonObject>>
+    /** Files as multipart form fields named [field]. */
+    suspend fun upload(path: String, field: String, files: List<UploadFile>): String = throw ApiError(0)
+    /** A file's raw bytes, with the session cookie for this server's own paths; POSTed when there is a body. */
+    suspend fun bytes(path: String, body: JsonElement? = null): ByteArray = throw ApiError(0)
 }
+
+class UploadFile(val name: String, val mime: String, val bytes: ByteArray)
 
 object Api {
     var backend: Backend = HttpBackend
@@ -87,17 +108,49 @@ object HttpBackend : Backend {
             .method(method, body?.toString()?.toRequestBody(type) ?: if (method == "GET" || method == "DELETE") null else "".toRequestBody(type))
             .build()
 
-    private fun check(status: Int) {
+    private fun check(status: Int, body: String = "") {
         if (status == 401) Events.sessionExpired.tryEmit(Unit)
-        if (status !in 200..299) throw ApiError(status)
+        if (status !in 200..299) throw ApiError(status, body)
     }
 
     override suspend fun send(method: String, path: String, body: JsonElement?): String =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             try {
                 client.newCall(request(method, path, body)).execute().use { r ->
-                    check(r.code)
-                    r.body.string()
+                    val text = r.body.string()
+                    check(r.code, text)
+                    text
+                }
+            } catch (e: ApiError) {
+                throw e
+            } catch (e: IOException) {
+                throw ApiError(0)
+            }
+        }
+
+    override suspend fun upload(path: String, field: String, files: List<UploadFile>): String =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+            for (f in files) form.addFormDataPart(field, f.name, f.bytes.toRequestBody(f.mime.toMediaType()))
+            try {
+                client.newCall(Request.Builder().url(Api.url(path)).post(form.build()).build()).execute().use { r ->
+                    val text = r.body.string()
+                    check(r.code, text)
+                    text
+                }
+            } catch (e: ApiError) {
+                throw e
+            } catch (e: IOException) {
+                throw ApiError(0)
+            }
+        }
+
+    override suspend fun bytes(path: String, body: JsonElement?): ByteArray =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            try {
+                client.newCall(request(if (body == null) "GET" else "POST", path, body)).execute().use { r ->
+                    if (r.code !in 200..299) check(r.code, r.body.string())
+                    r.body.bytes()
                 }
             } catch (e: ApiError) {
                 throw e

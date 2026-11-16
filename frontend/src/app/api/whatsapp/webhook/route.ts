@@ -3,7 +3,7 @@ import { validSignature, whatsappConfigured } from "@/lib/whatsapp";
 import { handleInbound } from "@/lib/whatsappAgent";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Meta's subscription handshake: echo the challenge when the verify token matches.
 export async function GET(req: NextRequest) {

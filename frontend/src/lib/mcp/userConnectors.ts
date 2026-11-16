@@ -18,12 +18,43 @@ function privateV4(ip: string): boolean {
   return PRIVATE_V4.some(([base, bits]) => (n >>> (32 - bits)) === (base >>> (32 - bits)));
 }
 
+// Eight 16-bit groups, or null when it isn't an IPv6 address.
+function hextets(ip: string): number[] | null {
+  if (isIP(ip) !== 6) return null;
+  let v = ip.toLowerCase();
+  const v4 = v.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4) {
+    const [a, b, c, d] = v4[1].split(".").map(Number);
+    v = v.slice(0, -v4[1].length) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head, tail] = v.split("::");
+  const part = (s: string | undefined) => (s ? s.split(":").map((h) => parseInt(h, 16)) : []);
+  const h = part(head), t = part(tail);
+  return tail === undefined ? h : [...h, ...Array(8 - h.length - t.length).fill(0), ...t];
+}
+
+const v4Of = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+
+// Anything outside global unicast (2000::/3) is refused, and addresses that
+// carry an IPv4 one (mapped, NAT64, 6to4) are judged by that IPv4 address.
 export function isPrivateAddress(ip: string): boolean {
   if (isIP(ip) === 4) return privateV4(ip);
-  const v6 = ip.toLowerCase();
-  const mapped = v6.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return privateV4(mapped[1]);
-  return v6 === "::" || v6 === "::1" || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || /^ff/.test(v6);
+  const h = hextets(ip);
+  if (!h) return true;
+  if (h.slice(0, 5).every((x) => x === 0) && (h[5] === 0 || h[5] === 0xffff)) return privateV4(v4Of(h[6], h[7]));
+  if (h[0] === 0x64 && h[1] === 0xff9b) return privateV4(v4Of(h[6], h[7]));
+  if (h[0] === 0x2002) return privateV4(v4Of(h[1], h[2]));
+  if (h[0] === 0x2001 && h[1] === 0) return true;
+  return (h[0] & 0xe000) !== 0x2000;
+}
+
+/** Why the URL's host isn't on the public internet, or null when it is. */
+export async function publicHost(raw: string): Promise<string | null> {
+  let host: string;
+  try { host = new URL(raw).hostname.replace(/^\[|\]$/g, ""); } catch { return "That isn't a URL."; }
+  const addrs = isIP(host) ? [host] : await lookup(host, { all: true }).then((r) => r.map((a) => a.address)).catch(() => []);
+  if (!addrs.length) return `Couldn't find ${host}.`;
+  return addrs.some(isPrivateAddress) ? "That address is on a private network. Use a public https address." : null;
 }
 
 /** The URL if it is https on a publicly routable host, else why not. */

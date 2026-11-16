@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.agents.base import AgentContext, AgentResult, AgentTask, BaseAgent
+from app.agents import research as research_mod
 from app.agents.orchestrator import (
     MAX_DELEGATION_DEPTH,
     Orchestrator,
@@ -336,7 +337,7 @@ async def test_research_uses_google_grounding_when_serper_missing(
     research_agent, context, monkeypatch
 ):
     """Without SERPER_API_KEY the agent must still answer, via grounding."""
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "")
     sources = [{"title": "A", "url": "https://a.example/1", "domain": "a.example"}]
 
     with patch(
@@ -362,7 +363,7 @@ async def test_research_reports_ungrounded_answer_as_not_searched(
     research_agent, context, monkeypatch
 ):
     """No citations (ungrounded fallback / privacy mode) must not claim a search."""
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "")
     with patch(
         "app.agents.research.model_router.complete",
         new=AsyncMock(return_value=("Best guess.", _grounded_log([], queries=[]))),
@@ -379,7 +380,7 @@ async def test_research_reports_ungrounded_answer_as_not_searched(
 async def test_research_falls_back_to_message_when_grounding_disabled(
     research_agent, context, monkeypatch
 ):
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "")
     monkeypatch.setattr("app.agents.research.settings.enable_google_grounding", False)
 
     result = await research_agent.run(
@@ -394,7 +395,7 @@ async def test_research_falls_back_to_message_when_grounding_disabled(
 async def test_research_grounding_failure_surfaces_error(
     research_agent, context, monkeypatch
 ):
-    monkeypatch.delenv("SERPER_API_KEY", raising=False)
+    monkeypatch.setattr(research_mod.settings, "serper_api_key", "")
     with patch(
         "app.agents.research.model_router.complete",
         new=AsyncMock(side_effect=RuntimeError("all providers exhausted")),

@@ -7,6 +7,7 @@ import { dispatchDaily } from "@/lib/music/daily";
 import { probeProviders } from "@/lib/llmCascade";
 import { syncStaleChats } from "@/lib/chatTasks";
 import { notifyWhatsApp } from "@/lib/whatsapp";
+import { notifyNewFeaturePRs } from "@/lib/featureRequests";
 import { escapeHtml, logNotification, mailboxFor, runReminders, type MailboxCache } from "@/lib/reminders";
 
 export const runtime = "nodejs";
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
   if (job === "all" || job === "digest") out.digest = await runDigest(sb);
   if (job === "all" || job === "music") out.music = await dispatchDaily(sb);
   if (job === "all" || job === "providers") out.providers = await probeProviders();
+  if (job === "all" || job === "features") out.featurePRs = await notifyNewFeaturePRs().catch(() => 0);
   // Its own cron entry: up to 8 model calls would crowd the 60s budget of "all".
   if (job === "chat_tasks") out.chatTasks = await syncStaleChats(sb);
   return json(out);

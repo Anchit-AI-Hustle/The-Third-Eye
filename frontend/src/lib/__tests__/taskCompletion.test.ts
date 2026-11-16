@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { withCompletionStamp } from "@/hooks/useLocalTasks";
+import { localDay } from "@/lib/localDay";
 
 // The tracker has a Completed column and the dashboard counts "completed
 // today", but only the device-log importer ever set completed_at. Finishing a
 // task by dragging it, by the row button, or by asking the assistant left the
 // column at "—" and the dashboard count at zero forever.
 
-const today = new Date().toISOString().slice(0, 10);
+const today = localDay();
 
 describe("finishing a task", () => {
   it("stamps the completion date", () => {

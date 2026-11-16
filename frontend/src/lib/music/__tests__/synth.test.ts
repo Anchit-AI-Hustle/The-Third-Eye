@@ -27,6 +27,12 @@ describe("code-composed music", () => {
     expect(new Set(events.map((e) => e.kind))).toEqual(new Set(["pad", "bass", "arp", "kick", "snare", "hat"]));
   });
 
+  it("honours speedcore tempos instead of clamping to 200", () => {
+    const { events } = composeTrack({ bpm: 320, seconds: 4, energy: 9, seed: "core" });
+    const kicks = events.filter((e) => e.kind === "kick");
+    expect(kicks.length).toBeGreaterThan(16); // far denser than 120 BPM
+  });
+
   it("calm music drops the drums back", () => {
     const kinds = new Set(composeTrack({ bpm: 70, seconds: 16, energy: 2, seed: "x" }).events.map((e) => e.kind));
     expect(kinds.has("hat")).toBe(false);

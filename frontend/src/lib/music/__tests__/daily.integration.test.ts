@@ -18,6 +18,7 @@ vi.mock("@/lib/push", () => ({ sendPush: vi.fn().mockResolvedValue(true) }));
 vi.mock("@/lib/llmCascade", () => ({
   llmCascade: vi.fn().mockResolvedValue({ text: '{"title":"Neon Mantra","description":"Acid lines over a rolling bass."}', provider: "test" }),
 }));
+vi.mock("@/lib/music/originality", async (orig) => ({ ...(await orig<typeof import("@/lib/music/originality")>()), titleTaken: vi.fn(async () => false) }));
 vi.mock("@/lib/music/agents", () => ({
   planSong: vi.fn().mockResolvedValue({
     brief: { bpm: 200 },

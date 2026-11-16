@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useLiveTick } from "@/lib/liveSync";
 import { dataList, dataInsert, dataUpdate, dataDelete } from "@/lib/dataClient";
 
 export interface Goal {
@@ -30,22 +31,28 @@ export function useLocalGoals() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [ready, setReady] = useState(false);
   const remote = useRef(false);
+  const loadedFor = useRef<string | null | undefined>(undefined);
   // Read by adjust(): a value computed inside a setState updater is not there
   // yet when React defers the updater, so the database write was skipped.
   const goalsRef = useRef(goals);
   goalsRef.current = goals;
 
+  // Re-read on every live-sync tick, so changes from other devices show up.
+  const tick = useLiveTick();
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
+    if (!tick) setReady(false);
     dataList<Goal>("goals").then((r) => {
-      if (cancelled) return;
+      // A background refresh for the same account that can't reach the server
+      // keeps the server-backed list; a sign-out or account change does not.
+      if (cancelled || (loadedFor.current === userId && remote.current && !r.remote)) return;
+      loadedFor.current = userId;
       remote.current = r.remote;
       setGoals(r.remote ? r.rows : ls());
       setReady(true);
     });
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, tick]);
 
   const add = useCallback(async (goal: Omit<Goal, "id" | "created_at">) => {
     const g: Goal = { ...goal, id: crypto.randomUUID(), created_at: new Date().toISOString() };
