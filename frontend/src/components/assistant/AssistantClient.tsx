@@ -325,8 +325,20 @@ export function AssistantClient({ userName }: { userName?: string }) {
         return next;
       });
     };
+    const onPersist = (e: Event) => {
+      const r = (e as CustomEvent<{ notSaved: string[]; replyId?: string }>).detail;
+      if (!r?.notSaved?.length) return;
+      setMessages((prev) => {
+        const i = prev.findIndex(m => m.id === r.replyId);
+        if (i < 0) return prev;
+        const next = [...prev];
+        next[i] = { ...next[i], content: `${next[i].content}\n\n_Storage unconfirmed: ${r.notSaved.join(", ")}. The storage request failed or its response was lost. It may or may not have saved. I did not retry it._` };
+        return next;
+      });
+    };
     window.addEventListener("te:device-result", onResult);
-    return () => window.removeEventListener("te:device-result", onResult);
+    window.addEventListener("te:persist-result", onPersist);
+    return () => { window.removeEventListener("te:device-result", onResult); window.removeEventListener("te:persist-result", onPersist); };
   }, []);
 
   const runUndo = useCallback(() => {
@@ -640,7 +652,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: msg,
+          message: msg, requestId: userMsg.id,
           attachments: [...attached, ...(project?.files ?? [])].map(({ name, mimeType, data }) => ({ name, mimeType, data })),
           projectInstructions: project?.instructions || undefined,
           checklist: openChecklist,
@@ -725,7 +737,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                 ));
               } else if (eventType === "confirm" && parsed.tool) {
                 addPending({
-                  id: parsed.id, tool: parsed.tool, args: parsed.args,
+                  id: parsed.id, proof: parsed.proof, tool: parsed.tool, args: parsed.args,
                   summary: parsed.summary, status: "pending",
                   url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
                 });
@@ -793,7 +805,7 @@ export function AssistantClient({ userName }: { userName?: string }) {
                   { role: "user", content: msg },
                   { role: "assistant", content: effectiveContent },
                 ];
-                applyActions(parsed.sideEffects).then(offerUndo);
+                applyActions(parsed.sideEffects, assistantId).then(offerUndo);
                 // The phone app reschedules its reminder notifications.
                 if (remindersChanged) window.dispatchEvent(new Event(REMINDERS_CHANGED));
                 openLinks(parsed.sideEffects);
@@ -1702,4 +1714,3 @@ function WhatsAppPhonePicker({
     </form>
   );
 }
-
