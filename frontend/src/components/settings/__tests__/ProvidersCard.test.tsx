@@ -67,7 +67,7 @@ describe("AI providers in Settings", () => {
     server({ connected: false, localFirst: false, model: null, assistantModels: {}, hasToken: false });
     window.history.pushState({}, "", "/settings?tab=agent&connect=huggingface_connected");
     render(<ProvidersCard />);
-    expect(await screen.findByText("Signed in with Hugging Face. Your chats now use your own Hugging Face account.")).toBeInTheDocument();
+    expect(await screen.findByText('Signed in with Hugging Face. Tick "Use this key for my chats" to turn it on.')).toBeInTheDocument();
     window.history.pushState({}, "", "/");
   });
 
@@ -112,7 +112,7 @@ describe("AI providers in Settings", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: /Answer from my computer first/ }));
     await waitFor(() => expect(puts).toContainEqual({ localFirst: false }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(6));
     expect(model).toHaveValue("my-own:7b");
   });
 
