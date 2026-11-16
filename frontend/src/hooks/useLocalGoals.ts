@@ -61,7 +61,7 @@ export function useLocalGoals() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataInsert("goals", g);
+    if (remote.current) if (!(await dataInsert("goals", g))) return null;
     return g;
   }, []);
 
@@ -73,7 +73,8 @@ export function useLocalGoals() {
     goalsRef.current = next;
     setGoals(next);
     if (!remote.current) lsSet(next);
-    else await dataUpdate("goals", id, { current: nextCurrent });
+    else return await dataUpdate("goals", id, { current: nextCurrent });
+    return true;
   }, []);
 
   const remove = useCallback(async (id: string) => {
@@ -82,7 +83,7 @@ export function useLocalGoals() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataDelete("goals", id);
+    return !remote.current || await dataDelete("goals", id);
   }, []);
 
   return { goals, ready, add, adjust, remove };
