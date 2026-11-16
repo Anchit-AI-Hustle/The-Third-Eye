@@ -12,14 +12,19 @@ export type Applied = { type: string; ok: boolean };
 const clean = (o: Row) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ""));
 
 /** Writes the assistant's record changes for the signed-in person. Anything else is left to the app. */
-export async function applyEffects(db: Db, email: string, effects: Effect[]): Promise<Applied[]> {
+export async function applyEffects(db: Db, email: string, effects: Effect[], requestId?: string): Promise<Applied[]> {
   const out: Applied[] = [];
   const now = new Date().toISOString();
   const run = async (type: string, op: () => PromiseLike<{ error: unknown }>) => {
     const { error } = await op();
     out.push({ type, ok: !error });
   };
-  for (const { type, data: d = {} } of effects) {
+  for (const [i, { type, data: d = {} }] of effects.entries()) {
+    if (requestId && /^(task|note|goal|expense)_(create|update|delete)$/.test(type)) {
+      const { error } = await db.from("processed_messages").insert({ user_id: email, source: "record-effect", message_id: `${requestId}:${i}` });
+      // A claim is not proof of completion. Refuse replay, report unknown, never blindly rerun a delta.
+      if (error) { out.push({ type, ok: false }); continue; }
+    }
     switch (type) {
       case "task_create":
         if (d.title) await run(type, () => db.from("tasks").insert(clean({
