@@ -937,6 +937,10 @@ export type OpenAIChatMessage =
   | { role: "tool"; tool_call_id: string; content: string };
 
 export interface ToolCallCascadeOptions {
+  /** One user operation's memory: "provider:model" pairs already rejected for quota/size are not sent again. */
+  rejected?: Set<string>;
+  /** One user operation's outbound-call allowance across all its tool turns (counted per request sent). */
+  budget?: { left: number };
   messages: OpenAIChatMessage[];
   tools: any[];
   temperature?: number;
@@ -1019,7 +1023,17 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
       ? { res: await callClaudeTools(key, model, opts), model }
       : local ? { res: await callOpenAICompatibleTools(base, key, model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 }), model }
       : provider === "cloudflare" ? { res: await callOpenAICompatibleTools(base, key, model, opts), model } // never swap to another model: it could need paid billing
-      : await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
+      : await withLiveModel(provider, base, key, model, async (m) => {
+        const id = `${provider}:${m}`;
+        if (opts.rejected?.has(id)) return { ok: false as const, status: 429, err: "skipped: already rejected in this reply", quota: false, retryAfterMs: undefined } as unknown as Awaited<ReturnType<typeof callOpenAICompatibleTools>>;
+        if (opts.budget) {
+          if (opts.budget.left <= 0) return { ok: false as const, status: 429, err: "skipped: call allowance for this reply used", quota: false, retryAfterMs: undefined } as unknown as Awaited<ReturnType<typeof callOpenAICompatibleTools>>;
+          opts.budget.left--;
+        }
+        const r = await callOpenAICompatibleTools(base, key, m, opts);
+        if (!r.ok && (r.quota || r.status === 429 || tooLargeLimit(r.status, r.err) !== null)) opts.rejected?.add(id);
+        return r;
+      });
     if (res.ok) {
       await noteSuccess(hp, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
