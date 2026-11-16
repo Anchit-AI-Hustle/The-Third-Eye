@@ -241,3 +241,63 @@ describe("confirmed build_app", () => {
     expect(body.result).toMatch(/could not be turned on/);
   });
 });
+
+describe("one confirmation runs once", () => {
+  it("claims the confirmation id before sending, and a repeat sends nothing", async () => {
+    const claimed = new Set<string>();
+    vi.doMock("@/lib/db", () => ({
+      getDb: () => ({
+        from: () => ({
+          insert: async (r: { message_id: string }) => {
+            if (claimed.has(r.message_id)) return { error: { code: "23505", message: "duplicate key" } };
+            claimed.add(r.message_id); return { error: null };
+          },
+          delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => { claimed.clear(); return { error: null }; } }) }) }),
+        }),
+      }),
+    }));
+    const first = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-aaaa-1111" });
+    expect(first.body.ok).toBe(true);
+    const sends = vi.mocked(globalThis.fetch).mock.calls.length;
+    const again = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-aaaa-1111" });
+    expect(again.status).toBe(409);
+    expect(String(again.body.error)).toMatch(/not run again[\s\S]*outcome is unknown/);
+    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(sends);
+    vi.doUnmock("@/lib/db");
+  });
+
+  it("keeps the claim when the action blows up, so a retry cannot repeat it", async () => {
+    const claimed = new Set<string>(); let deletes = 0;
+    vi.doMock("@/lib/db", () => ({
+      getDb: () => ({ from: () => ({
+        insert: async (r: { message_id: string }) => { claimed.add(r.message_id); return { error: null }; },
+        delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => { deletes++; return { error: null }; } }) }) }),
+      }) }),
+    }));
+    vi.mocked(globalThis.fetch).mockRejectedValue(new Error("socket hang up"));
+    const r = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-bbbb-2222" });
+    expect(r.body.ok === false).toBe(true);
+    expect(String(r.body.result)).toMatch(/do not know whether it was sent/);
+    expect(r.body.result).not.toMatch(/draft/i);
+    expect(deletes).toBe(0);
+    vi.doUnmock("@/lib/db");
+  });
+
+  it("frees the id after a clean refusal, and fails closed if the claim cannot be recorded", async () => {
+    let deletes = 0;
+    vi.doMock("@/lib/db", () => ({ getDb: () => ({ from: () => ({
+      insert: async () => ({ error: null }),
+      delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => { deletes++; return { error: null }; } }) }) }),
+    }) }) }));
+    googleToken = null;
+    await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-cccc-3333" });
+    expect(deletes).toBe(1);
+    vi.doMock("@/lib/db", () => ({ getDb: () => ({ from: () => ({ insert: async () => ({ error: { code: "08001", message: "down" } }) }) }) }));
+    vi.resetModules(); googleToken = "ya29.token";
+    const n = vi.mocked(globalThis.fetch).mock.calls.length;
+    const r = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-dddd-4444" });
+    expect(r.status).toBe(503);
+    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(n);
+    vi.doUnmock("@/lib/db");
+  });
+});
