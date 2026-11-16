@@ -13,7 +13,10 @@ function fakeDb(seed: Record<string, Row[]> = {}) {
     const matches = (r: Row) => where.every(([k, v]) => r[k] === v);
     const exec = () => {
       const rows = (tables[table] ??= []);
-      if (op.kind === "insert") rows.push(op.row);
+      if (op.kind === "insert") {
+        if (table === "processed_messages" && rows.some(r => r.user_id === (op as any).row.user_id && r.source === (op as any).row.source && r.message_id === (op as any).row.message_id)) return { data: null, error: { code: "23505" } };
+        rows.push(op.row);
+      }
       if (op.kind === "update") for (const r of rows.filter(matches)) Object.assign(r, (op as { patch: Row }).patch);
       if (op.kind === "delete") tables[table] = rows.filter((r) => !matches(r));
       return { data: op.kind === "select" ? rows.filter(matches) : null, error: null };
@@ -86,4 +89,14 @@ describe("applyEffects for the native apps", () => {
     expect(await applyEffects(db, "me@x.com", [{ type: "task_create", data: {} }, { type: "expense_create", data: { amount: 0 } }])).toEqual([]);
     expect(tables).toEqual({});
   });
+});
+
+it("does not rerun an attempted request's create or additive update, nor claim it saved", async () => {
+ const { db, tables } = fakeDb({goals:[{id:"g1",user_id:"u",current:1}]});
+ const fx = [{type:"task_create",data:{title:"Synthetic"}},{type:"goal_update",data:{id:"g1",delta:1}}];
+ expect((await applyEffects(db,"u",fx,"request-1")).every(a=>a.ok)).toBe(true);
+ expect((await applyEffects(db,"u",fx,"request-1")).every(a=>!a.ok)).toBe(true);
+ expect(tables.tasks).toHaveLength(1); expect(tables.goals[0].current).toBe(2);
+ // The same request id of another authenticated user is independent.
+ await applyEffects(db,"other",[fx[0]],"request-1"); expect(tables.tasks).toHaveLength(2);
 });
