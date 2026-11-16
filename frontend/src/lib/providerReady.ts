@@ -17,7 +17,7 @@ export function systemStatus(env: EnvLike = process.env) {
   const geminiLive = !!usableGeminiKey(env);
   return {
     // Any provider in the cascade answers chat, not only Gemini.
-    ai: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"].some((k) => !!clean(env[k])),
+    ai: ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "CEREBRAS_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY"].some((k) => !!clean(env[k])),
     // Whisper is Groq or OpenAI. A live Gemini key transcribes audio too,
     // so the row is not "missing" on a deployment that already has Gemini.
     openai: !!(clean(env.OPENAI_API_KEY) || clean(env.GROQ_API_KEY)) || geminiLive,
@@ -31,7 +31,7 @@ export function systemStatus(env: EnvLike = process.env) {
       grok: !!clean(env.XAI_API_KEY),
       groq: !!clean(env.GROQ_API_KEY),
       cerebras: !!clean(env.CEREBRAS_API_KEY),
-      openrouter: !!clean(env.OPENROUTER_API_KEY),
+      openrouter: false, // excluded by the owner
       mistral: !!clean(env.MISTRAL_API_KEY),
     },
   };
