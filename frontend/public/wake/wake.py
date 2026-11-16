@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # The Third Eye on a computer, with or without a tab open, all day:
 #  - "Hey JARVIS" opens talk mode. Spotted offline with Vosk (Apache-2.0).
-#  - With a listener token (Settings -> Activation), the day is logged like the
+#  - Only with THIRD_EYE_LIFELOG=1 AND a listener token, the day is logged like the
 #    phone does: 45-second chunks, silence skipped, transcribed and filed in the
 #    Life Log, where follow-ups become tasks and reminders.
 import json, os, queue, subprocess, sys, threading, time, urllib.request, uuid, webbrowser
@@ -14,6 +14,14 @@ SITE = os.environ.get("THIRD_EYE_URL", "https://the-third-eye.anchit-tandon.com"
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL = os.path.join(HERE, "model")
 TOKEN_FILE = os.path.join(HERE, "token")
+# Wake-only is the default, including when an old token file is present.
+# Uploading ambient audio is a separate opt-in, not a consequence of waking.
+LIFELOG_ENABLED = os.environ.get("THIRD_EYE_LIFELOG", "").strip() == "1"
+
+
+def logging_enabled():
+    return LIFELOG_ENABLED and bool(token())
+
 CHUNK_S = 45
 # The website's silence threshold: 0.012 of full scale.
 SILENT_PEAK = 393
@@ -105,6 +113,8 @@ def wav(pcm):
 
 
 def post(path, body, content_type):
+    if not logging_enabled():
+        raise RuntimeError("Life Log uploads are disabled in wake-only mode")
     req = urllib.request.Request(SITE + path, data=body, method="POST", headers={
         "Authorization": "Bearer " + token(), "Content-Type": content_type, "User-Agent": "ThirdEyeListener/1",
     })
@@ -113,6 +123,8 @@ def post(path, body, content_type):
 
 
 def deliver(pcm, start, end, silent):
+    if not logging_enabled():
+        return
     try:
         text, provider = "", None
         if not silent:
@@ -146,7 +158,7 @@ class Status(BaseHTTPRequestHandler):
         self._head()
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps({"logging": bool(token()), "wake": True}).encode())
+        self.wfile.write(json.dumps({"logging": logging_enabled(), "wake": True}).encode())
 
     def log_message(self, *args):
         pass
@@ -167,10 +179,10 @@ def listen():
     chunk, peak, start = bytearray(), 0, int(time.time() * 1000)
     with sd.RawInputStream(samplerate=16000, blocksize=1600, dtype="int16", channels=1,
                            callback=lambda data, frames, t, status: audio.put(bytes(data))):
-        print("Listening for \"Hey JARVIS\"%s..." % (" and logging the day" if token() else ""), flush=True)
+        print("Listening for \"Hey JARVIS\"%s..." % (" and logging the day" if logging_enabled() else ""), flush=True)
         while True:
             data = audio.get()
-            if token():
+            if logging_enabled():
                 chunk += data
                 peak = max(peak, max(abs(int.from_bytes(data[i:i + 2], "little", signed=True)) for i in range(0, len(data), 64)))
                 now = int(time.time() * 1000)
@@ -182,7 +194,7 @@ def listen():
             result = json.loads(rec.Result())
             if heard_name(result) and time.time() - last > COOLDOWN_S:
                 last = time.time()
-                print("Heard: " + result.get("text", ""), flush=True)
+                print("Wake phrase detected", flush=True)
                 open_talk()
 
 
