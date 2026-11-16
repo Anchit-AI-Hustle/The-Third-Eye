@@ -120,7 +120,7 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
       return next;
     });
     if (remote.current) {
-      await dataInsert("tasks", t);
+      if (!(await dataInsert("tasks", t))) return null;
       // The task autopilot picks it up straight away instead of on its next poll.
       window.dispatchEvent(new CustomEvent("te:task-created"));
     }
@@ -138,7 +138,7 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
       if (!remote.current) lsSet(TASK_KEY, next);
       return next;
     });
-    if (remote.current) await dataUpdate("tasks", id, patch);
+    return !remote.current || await dataUpdate("tasks", id, patch);
   }, []);
 
   const remove = useCallback(async (id: string) => {
@@ -147,7 +147,7 @@ export function useLocalTasks(statusFilter?: TaskStatus) {
       if (!remote.current) lsSet(TASK_KEY, next);
       return next;
     });
-    if (remote.current) await dataDelete("tasks", id);
+    return !remote.current || await dataDelete("tasks", id);
   }, []);
 
   const addMember = useCallback(async (name: string) => {
