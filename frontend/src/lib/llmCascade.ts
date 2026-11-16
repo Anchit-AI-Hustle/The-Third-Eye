@@ -14,6 +14,7 @@
 // other plain-text generations where any model will do.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { freeOnly, gatedKey, isPaidLlmProvider, modelAllowed, providerAllowed } from "@/lib/freeOnly";
 import { usableGeminiKey } from "@/lib/providerReady";
 import { backgroundBlocked, benchedReason, classifyFailure, forgetSeenHealth, healthMap, noteFailure, noteSuccess, resetHealthCache } from "@/lib/providerHealth";
 import { currentOwnKeys, localFirst, ownOllamaModel, tunnelAuth } from "@/lib/providerKeys";
@@ -86,16 +87,19 @@ const clean = (s?: string) =>
 // deployment's, so their requests run on their own quota first.
 function loadKeys() {
   const own = currentOwnKeys();
+  // Free-only: paid providers get no key at all (deployment or the user's own), and
+  // providers whose account billing can't be seen need FREE_TIER_CONFIRMED (see freeOnly.ts).
+  const g = gatedKey;
   return {
-    openai:    [own?.openai, process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3].map(clean).filter(Boolean),
-    gemini:    clean(own?.gemini) || clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY),
-    grok:      clean(process.env.XAI_API_KEY),
-    groq:      clean(own?.groq) || clean(process.env.GROQ_API_KEY),
-    cerebras:  clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY),
+    openai:    freeOnly() ? [] : [own?.openai, process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3].map(clean).filter(Boolean),
+    gemini:    g("gemini", clean(own?.gemini) || clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY)),
+    grok:      g("grok", clean(process.env.XAI_API_KEY)),
+    groq:      g("groq", clean(own?.groq) || clean(process.env.GROQ_API_KEY)),
+    cerebras:  g("cerebras", clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY)),
     openrouter: clean(own?.openrouter) || clean(process.env.OPENROUTER_API_KEY),
-    mistral:   clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY),
-    huggingface: clean(own?.huggingface) || clean(process.env.HF_TOKEN),
-    anthropic: clean(process.env.ANTHROPIC_API_KEY),
+    mistral:   g("mistral", clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY)),
+    huggingface: g("huggingface", clean(own?.huggingface) || clean(process.env.HF_TOKEN)),
+    anthropic: g("anthropic", clean(process.env.ANTHROPIC_API_KEY)),
     ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
 }
@@ -252,7 +256,8 @@ type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 // Claude, OpenAI and Grok. LLM_PRIMARY_PROVIDER moves one provider to the front.
 export function cascadeOrder(): CloudProvider[] {
   const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
-  return CLOUD_PROVIDERS.includes(primary) ? [primary, ...CLOUD_PROVIDERS.filter((p) => p !== primary)] : [...CLOUD_PROVIDERS];
+  const all = CLOUD_PROVIDERS.filter((p) => providerAllowed(p));
+  return all.includes(primary) ? [primary, ...all.filter((p) => p !== primary)] : [...all];
 }
 
 /** Chat starts on native Gemini only when it is the primary (and the user's own computer isn't set to answer first) or the message has media only Gemini can read. */
@@ -263,7 +268,7 @@ export function nativeGeminiFirst(hasMedia: boolean): boolean {
 /** Providers with a key on this deployment. */
 export function configuredProviders(): string[] {
   const keys = loadKeys();
-  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : p === "openrouter-paid" ? !!keys.openrouter : !!keys[p]));
+  return CLOUD_PROVIDERS.filter((p) => (p === "openai" ? keys.openai.length > 0 : p === "gemini-lite" ? !!keys.gemini : p === "openrouter-paid" ? !freeOnly() && !!keys.openrouter : !!keys[p]));
 }
 
 export type LlmProviderState = "ok" | "quota" | "misconfigured";
@@ -517,6 +522,7 @@ async function callGemini(key: string, model: string, opts: LlmCascadeOptions) {
 
 // OpenAI-compatible: xAI, Groq, Cerebras
 async function callOpenAICompatible(base: string, key: string, model: string, opts: LlmCascadeOptions) {
+  if (!modelAllowed(base, model)) return { ok: false as const, status: 0, err: "blocked by free-only mode: not a :free model", quota: false, retryAfterMs: undefined as number | undefined };
   const { signal, clear } = withTimeout(opts.timeoutMs ?? 30_000);
   try {
     const messages = [
@@ -662,7 +668,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const attempts: LlmCascadeResult["attempts"] = [];
   const pref = opts.preferProvider;
 
-  const order: (CloudProvider | "ollama")[] = pref ? [pref]
+  const order: (CloudProvider | "ollama")[] = pref ? [pref].filter((p) => providerAllowed(p))
     : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))]
     : localFirst() ? ["ollama", ...cascadeOrder()] : [...cascadeOrder(), "ollama"];
   const tokens = estimateTokens([opts.system, opts.messages]);
@@ -800,6 +806,7 @@ async function visionGemini(key: string, model: string, o: VisionCascadeOptions)
 }
 
 async function visionOpenAICompatible(base: string, key: string, model: string, o: VisionCascadeOptions) {
+  if (!modelAllowed(base, model)) return { ok: false as const, status: 0, err: "blocked by free-only mode: not a :free model", quota: false, retryAfterMs: undefined as number | undefined };
   const { signal, clear } = withTimeout(o.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
@@ -876,6 +883,7 @@ export interface ToolCallCascadeResult {
 }
 
 async function callOpenAICompatibleTools(base: string, key: string, model: string, opts: ToolCallCascadeOptions) {
+  if (!modelAllowed(base, model)) return { ok: false as const, status: 0, err: "blocked by free-only mode: not a :free model", quota: false, retryAfterMs: undefined as number | undefined };
   const { signal, clear } = withTimeout(opts.timeoutMs ?? 30_000);
   try {
     const r = await fetch(`${base}/chat/completions`, {
@@ -917,7 +925,7 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.huggingface) rows.push({ provider: "huggingface", base: HF_BASE, model: modelFor("huggingface"), key: keys.huggingface });
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
   if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
-  if (keys.openrouter) rows.push({ provider: "openrouter-paid", base: OPENROUTER_BASE, model: modelFor("openrouterPaid"), key: keys.openrouter });
+  if (keys.openrouter && !freeOnly()) rows.push({ provider: "openrouter-paid", base: OPENROUTER_BASE, model: modelFor("openrouterPaid"), key: keys.openrouter });
   if (keys.anthropic) rows.push({ provider: "anthropic", base: "", model: modelFor("anthropic"), key: keys.anthropic });
   const rank = cascadeOrder();
   rows.sort((a, b) => rank.indexOf(a.provider as CloudProvider) - rank.indexOf(b.provider as CloudProvider));
