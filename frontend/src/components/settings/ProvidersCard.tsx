@@ -14,10 +14,9 @@ const NAME: Record<string, string> = {
 };
 
 // Each provider's own way in: a sign-in where the provider offers one to other
-// apps (OpenRouter, Hugging Face), otherwise a key from its console. Ollama
+// apps (Hugging Face), otherwise a key from its console. Ollama
 // takes the https URL of the user's own machine.
 const OWN: { id: string; name: string; placeholder: string; note: string; url?: string; signIn?: string; main?: boolean }[] = [
-  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", note: "Free models, or your credit for paid ones", signIn: "/api/connect/openrouter", main: true },
   { id: "huggingface", name: "Hugging Face", placeholder: "hf_...", note: "Open models on your Hugging Face inference credit", signIn: "/api/connect/huggingface" },
   { id: "groq", name: "Groq", placeholder: "gsk_...", note: "Free key from the Groq console", url: "https://console.groq.com/keys", main: true },
   { id: "gemini", name: "Google Gemini", placeholder: "AIza...", note: "Free key from Google AI Studio", url: "https://aistudio.google.com/apikey", main: true },
