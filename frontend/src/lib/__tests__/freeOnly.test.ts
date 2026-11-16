@@ -92,3 +92,15 @@ describe("free-only guard (default)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("serper gate", () => {
+  const saved = { ...process.env };
+  afterEach(() => { process.env = { ...saved }; vi.resetModules(); });
+  it("keeps the Serper key off until the owner confirms it", async () => {
+    delete process.env.PAID_PATH_TESTS; delete process.env.FREE_TIER_CONFIRMED;
+    const m = await import("@/lib/freeOnly");
+    expect(m.gatedKey("serper", "k")).toBe("");
+    process.env.FREE_TIER_CONFIRMED = "serper";
+    expect(m.gatedKey("serper", "k")).toBe("k");
+  });
+});
