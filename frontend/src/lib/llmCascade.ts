@@ -831,6 +831,18 @@ export async function visionCascade(o: VisionCascadeOptions): Promise<VisionCasc
     if (res.ok) return { text: res.text, provider: "gemini", model };
     errors.push(`gemini:${res.status}`);
   }
+  if (keys.groq) {
+    const model = process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+    const res = await visionOpenAICompatible(GROQ_BASE, keys.groq, model, o);
+    if (res.ok) return { text: res.text, provider: "groq", model };
+    errors.push(`groq:${res.status}`);
+  }
+  if (keys.mistral) {
+    const model = process.env.MISTRAL_VISION_MODEL || "pixtral-12b-2409";
+    const res = await visionOpenAICompatible(MISTRAL_BASE, keys.mistral, model, o);
+    if (res.ok) return { text: res.text, provider: "mistral", model };
+    errors.push(`mistral:${res.status}`);
+  }
   for (const key of keys.openai) {
     const res = await visionOpenAICompatible(OPENAI_BASE, key, "gpt-4o-mini", o);
     if (res.ok) return { text: res.text, provider: "openai", model: "gpt-4o-mini" };

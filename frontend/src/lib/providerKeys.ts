@@ -30,11 +30,15 @@ export async function loadOwnKeys(userId: string): Promise<OwnKeys> {
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.keys;
   const keys: OwnKeys = { userId };
   const db = getDb();
-  if (db) {
-    const { data } = await db.from("user_provider_keys").select("provider, key_enc").eq("user_id", userId);
-    for (const row of (data ?? []) as { provider: Stored; key_enc: string }[]) {
-      const plain = decrypt(row.key_enc);
-      if (plain) keys[row.provider] = plain;
+  if (db && typeof db.from === "function") {
+    try {
+      const { data } = await db.from("user_provider_keys").select("provider, key_enc").eq("user_id", userId);
+      for (const row of (data ?? []) as { provider: Stored; key_enc: string }[]) {
+        const plain = decrypt(row.key_enc);
+        if (plain) keys[row.provider] = plain;
+      }
+    } catch {
+      // Table not migrated or mock DB without user_provider_keys support
     }
   }
   const renewed = await renewHuggingFace(userId, keys[HF_OAUTH]);

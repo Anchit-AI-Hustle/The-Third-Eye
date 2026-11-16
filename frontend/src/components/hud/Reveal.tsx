@@ -26,7 +26,7 @@ export type RevealProps = {
 // never armed and the content renders normally.
 export function Reveal({
   children,
-  distance = 28,
+  distance = 20,
   stagger = 0.08,
   immediate = false,
   className,
@@ -79,7 +79,7 @@ export function Reveal({
             opacity: 1,
             y: 0,
             filter: "blur(0px)",
-            duration: 0.75,
+            duration: 0.45,
             ease: "power3.out",
             stagger,
             // Animating `y` writes an inline `transform`, which outranks the

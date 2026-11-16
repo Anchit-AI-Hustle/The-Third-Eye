@@ -39,7 +39,7 @@ export function classifyFailure(status: number, body: string): { status: Provide
 export async function healthMap(): Promise<Map<string, ProviderHealth>> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.rows;
   const db = getDb();
-  const { data } = db ? await db.from("provider_health").select("*") : { data: null };
+  const { data } = db && typeof db.from === "function" ? await db.from("provider_health").select("*") : { data: null };
   const rows = new Map(((data ?? []) as ProviderHealth[]).map((r) => [r.provider, r]));
   for (const [provider, mine] of seen) {
     const stored = rows.get(provider);
@@ -78,7 +78,7 @@ async function write(row: Omit<ProviderHealth, "checked_at">) {
   seen.set(row.provider, full);
   cache?.rows.set(row.provider, full);
   const db = getDb();
-  if (!db) return;
+  if (!db || typeof db.from !== "function") return;
   await db.from("provider_health").upsert(full, { onConflict: "provider" });
 }
 

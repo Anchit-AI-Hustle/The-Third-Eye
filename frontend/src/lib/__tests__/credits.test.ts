@@ -69,4 +69,15 @@ describe("credits", () => {
     expect(res.status).toBe(401);
     expect(balances).toEqual({});
   });
+
+  it("never charges a test-unlocked account", async () => {
+    const { clearUserTestUnlocked, markUserTestUnlocked } = await import("@/lib/testUnlock");
+    markUserTestUnlocked("u@x.test");
+    try {
+      expect(await spendCredits("u@x.test", "video.render")).toEqual({ ok: true, cost: 0, balance: null });
+      expect(balances).toEqual({});
+    } finally {
+      clearUserTestUnlocked("u@x.test");
+    }
+  });
 });
