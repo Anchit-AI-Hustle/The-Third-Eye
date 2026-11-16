@@ -2136,7 +2136,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
   // key is absent, we DON'T hard-fail — we fall through to the multi-provider
   // cascade (Groq/OpenAI/etc.) for a plain-text answer, so the assistant stays
   // usable on free keys alone. The cascade path is in the stream's catch below.
-  const apiKey = currentOwnKeys()?.gemini || process.env.GEMINI_API_KEY;
+  const apiKey = currentOwnKeys()?.gemini || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
   const body = (await req.json()) as ChatRequest;
   const {

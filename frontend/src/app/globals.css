@@ -44,6 +44,7 @@ html { font-size: 14px; line-height: 1.6; }
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   background-image:
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79,195,247,0.04) 0%, transparent 70%),

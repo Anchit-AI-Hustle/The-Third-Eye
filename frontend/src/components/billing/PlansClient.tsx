@@ -32,23 +32,53 @@ export function PlansClient({ razorpay }: { razorpay: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Plans have no payment gateway yet: owner test accounts buy for free, everyone else is told.
+  // No payment gateway is connected for plans yet: owner/test-unlocked accounts buy for free, everyone else tries checkout or is told.
   const notLive = () => flash("Payments are not live yet. Nothing was charged and no credits were added.");
   const doSubscribe = async (tier: Tier) => {
     if (tier === "basic") return;
-    if (!b.unlimited) return notLive();
-    const r = await b.testPurchase({ tier, period });
-    flash(r.ok ? `Test purchase: ${TIERS[tier].label} plan active, +${r.added.toLocaleString()} credits (no payment)` : r.error);
+    if (b.unlimited || b.testUnlocked) {
+      const r = await b.testPurchase({ tier, period });
+      flash(r.ok ? `Test purchase: ${TIERS[tier].label} plan active, +${r.added.toLocaleString()} credits (no payment)` : r.error);
+      return;
+    }
+    const checkout = await fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier, period, interval: period === "annual" ? "yearly" : "monthly" }),
+    }).catch(() => null);
+    if (checkout?.ok) {
+      const data = (await checkout.json().catch(() => ({}))) as { url?: string };
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+    }
+    return notLive();
   };
   const doBuy = async (id: string) => {
-    if (razorpay) {
+    if (razorpay && !b.unlimited && !b.testUnlocked) {
       const r = await buyPack(id, user);
       if (r.ok) await b.reload();
       return flash(r.ok ? "Payment received, credits added." : r.message, 4000);
     }
-    if (!b.unlimited) return notLive();
-    const r = await b.testPurchase({ bundle: id });
-    flash(r.ok ? `Test purchase: +${r.added.toLocaleString()} credits (no payment)` : r.error);
+    if (b.unlimited || b.testUnlocked) {
+      const r = await b.testPurchase({ bundle: id });
+      flash(r.ok ? `Test purchase: +${r.added.toLocaleString()} credits (no payment)` : r.error);
+      return;
+    }
+    const checkout = await fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bundle: id }),
+    }).catch(() => null);
+    if (checkout?.ok) {
+      const data = (await checkout.json().catch(() => ({}))) as { url?: string };
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+    }
+    return notLive();
   };
   const submitCode = async () => {
     if (await b.tryUnlock(code)) { setCodeMsg("Unlocked - all paid features open (test mode)."); setCode(""); }

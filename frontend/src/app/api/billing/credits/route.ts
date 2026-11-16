@@ -1,12 +1,22 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { creditBalance, creditsRefused, spendCredits, unlimitedCredits } from "@/lib/credits";
+import { creditBalance, creditsRefused, fallbackCreditLedger, spendCredits, unlimitedCredits } from "@/lib/credits";
+import { CREDIT_COSTS, type Tier } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
-// Creations rendered in the browser are charged here before they start.
-const CLIENT_ACTIONS = new Set(["video.render"]);
+// Creations rendered in the browser (plus any defined credit action) are charged here before they start.
+const CLIENT_ACTIONS = new Set(["video.render", ...Object.keys(CREDIT_COSTS)]);
+
+function inferTierFromLedger(rows: { reason?: string }[]): Tier | null {
+  for (const r of rows) {
+    const reason = String(r.reason ?? "");
+    const m = /(?:Test purchase|Purchase):\s*(Plus|Pro|Max)\s+plan/i.exec(reason);
+    if (m) return m[1].toLowerCase() as Tier;
+  }
+  return null;
+}
 
 async function user() {
   return (await getServerSession(authOptions))?.user?.email ?? null;
@@ -18,14 +28,23 @@ export async function GET() {
   const unlimited = unlimitedCredits(email);
   const balance = await creditBalance(email);
   const db = getDb();
-  if (!db) return Response.json({ unlimited, balance, used: 0, ledger: [] });
-  // Creations made = spends minus refunds.
-  const [ledger, spent, refunded] = await Promise.all([
+  if (!db) {
+    const fb = fallbackCreditLedger(email);
+    return Response.json({ unlimited, balance, used: fb.used, ledger: fb.ledger, tier: inferTierFromLedger(fb.ledger) });
+  }
+  // Creations made = spends minus refunds (excluding sign-up gift and pack/plan top-ups).
+  const [ledger, spent, positive] = await Promise.all([
     db.from("credit_ledger").select("delta, reason, balance_after, created_at").eq("user_id", email).order("created_at", { ascending: false }).limit(50),
     db.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", email).lt("delta", 0),
-    db.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", email).gt("delta", 0).like("reason", "Refund:%"),
+    db.from("credit_ledger").select("reason").eq("user_id", email).gt("delta", 0),
   ]);
-  return Response.json({ unlimited, balance, used: (spent.count ?? 0) - (refunded.count ?? 0), ledger: ledger.data ?? [] });
+  if (ledger.error) {
+    const fb = fallbackCreditLedger(email);
+    return Response.json({ unlimited, balance, used: fb.used, ledger: fb.ledger, tier: inferTierFromLedger(fb.ledger) });
+  }
+  const rows = ledger.data ?? [];
+  const refundedCount = (positive.data ?? []).filter((r: { reason?: string }) => String(r.reason ?? "").startsWith("Refund:")).length;
+  return Response.json({ unlimited, balance, used: Math.max(0, (spent.count ?? 0) - refundedCount), ledger: rows, tier: inferTierFromLedger(rows) });
 }
 
 export async function POST(req: Request) {

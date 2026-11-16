@@ -2,6 +2,8 @@ import type { NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getDb, type Db } from "@/lib/db";
+import { grantCredits } from "@/lib/credits";
+import { BUNDLES, TIERS, type Tier } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
@@ -32,12 +34,25 @@ export async function POST(req: NextRequest) {
         const s = event.data.object as Stripe.Checkout.Session;
         const email = s.metadata?.email || s.client_reference_id || (s.customer_email ?? undefined);
         if (email) {
-          await upsert(sb, email, {
-            stripe_customer_id: typeof s.customer === "string" ? s.customer : undefined,
-            stripe_subscription_id: typeof s.subscription === "string" ? s.subscription : undefined,
-            subscription_tier: "premium",
-            subscription_status: "active",
-          });
+          if (s.mode !== "payment") {
+            await upsert(sb, email, {
+              stripe_customer_id: typeof s.customer === "string" ? s.customer : undefined,
+              stripe_subscription_id: typeof s.subscription === "string" ? s.subscription : undefined,
+              subscription_tier: "premium",
+              subscription_status: "active",
+            });
+          }
+          const bundleId = s.metadata?.bundle;
+          const tierId = s.metadata?.tier as Tier | undefined;
+          const pack = bundleId ? BUNDLES.find((b) => b.id === bundleId) : undefined;
+          const plan = tierId && tierId !== "basic" && tierId in TIERS ? TIERS[tierId] : undefined;
+          if (pack || plan) {
+            const amount = pack ? pack.credits + pack.bonus : plan!.monthlyCredits;
+            const label = pack ? `${pack.label} pack` : `${plan!.label} plan`;
+            if (typeof (sb as { rpc?: unknown }).rpc === "function") {
+              await grantCredits(email, amount, `Purchase: ${label}`);
+            }
+          }
         }
         break;
       }

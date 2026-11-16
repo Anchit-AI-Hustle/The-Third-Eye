@@ -67,6 +67,7 @@ export async function flushDeviceLogs(email: string | null | undefined): Promise
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(events),
+      keepalive: true,
     });
     if (res.ok) writeBuf(key, readBuf(key).slice(events.length));
   } catch { /* transient - next tick retries */ }
@@ -151,15 +152,25 @@ export function DeviceLogBridge() {
     };
 
     const visible = () => document.visibilityState === "visible";
+    const onVisibilityFlush = () => {
+      if (document.visibilityState === "hidden") {
+        window.dispatchEvent(new CustomEvent(SEAL_EVENT));
+        beacon();
+      } else if (readBuf(key).length > 0) {
+        void flushDeviceLogs(email);
+      }
+    };
     const flushId = setInterval(() => { if (visible()) void flushDeviceLogs(email); }, FLUSH_MS);
     const syncId = setInterval(() => { if (visible()) void sync(); }, SYNC_MS);
     const warmup = setTimeout(sync, 45_000); // fold in anything left from the last session
     window.addEventListener("pagehide", beacon);
+    document.addEventListener("visibilitychange", onVisibilityFlush);
     return () => {
       clearInterval(flushId);
       clearInterval(syncId);
       clearTimeout(warmup);
       window.removeEventListener("pagehide", beacon);
+      document.removeEventListener("visibilitychange", onVisibilityFlush);
     };
   }, [status, email]);
 

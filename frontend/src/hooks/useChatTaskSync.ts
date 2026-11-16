@@ -32,8 +32,14 @@ export function useChatTaskSync() {
   }, [flush]);
 
   useEffect(() => {
+    const onVis = () => { if (document.visibilityState === "hidden") flush(); };
     window.addEventListener("pagehide", flush);
-    return () => { window.removeEventListener("pagehide", flush); flush(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+      flush();
+    };
   }, [flush]);
 
   return { schedule, flush };

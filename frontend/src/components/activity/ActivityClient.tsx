@@ -6,22 +6,76 @@ import {
   AGENT_EVENT, getAgentLog, isAgentKilled, setAgentKilled, clearAgentLog,
   type AgentLogEntry,
 } from "@/lib/agentControl";
+import { LIVE_SYNC } from "@/lib/liveSync";
 import { localDay } from "@/lib/localDay";
+
+type DisplayLogEntry = AgentLogEntry & { source?: string };
 
 export function ActivityClient() {
   const [killed, setKilled] = useState(false);
-  const [log, setLog] = useState<AgentLogEntry[]>([]);
+  const [log, setLog] = useState<DisplayLogEntry[]>([]);
 
-  const refresh = useCallback(() => { setKilled(isAgentKilled()); setLog(getAgentLog()); }, []);
+  const loadServer = useCallback(async () => {
+    const local = getAgentLog();
+    try {
+      const r = await fetch("/api/activity", { cache: "no-store" });
+      if (!r.ok) {
+        setKilled(isAgentKilled());
+        setLog(local);
+        return;
+      }
+      const data = (await r.json()) as { killed?: boolean; entries?: DisplayLogEntry[] };
+      if (typeof data.killed === "boolean") {
+        setKilled(data.killed || isAgentKilled());
+      }
+      const merged = [...local, ...(data.entries ?? [])];
+      const seen = new Set<string>();
+      const deduped: DisplayLogEntry[] = [];
+      for (const item of merged.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts))) {
+        const key = `${item.type}:${item.label}:${item.ts.slice(0, 16)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(item);
+      }
+      setLog(deduped.slice(0, 200));
+    } catch {
+      setKilled(isAgentKilled());
+      setLog(local);
+    }
+  }, []);
+
+  const refresh = useCallback(() => {
+    setKilled(isAgentKilled());
+    setLog(getAgentLog());
+    void loadServer();
+  }, [loadServer]);
 
   useEffect(() => {
     refresh();
     const on = () => refresh();
+    const onVis = () => { if (document.visibilityState === "visible") void loadServer(); };
     window.addEventListener(AGENT_EVENT, on);
-    // Reflect changes made in other tabs too.
+    window.addEventListener(LIVE_SYNC, on);
     window.addEventListener("storage", on);
-    return () => { window.removeEventListener(AGENT_EVENT, on); window.removeEventListener("storage", on); };
-  }, [refresh]);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener(AGENT_EVENT, on);
+      window.removeEventListener(LIVE_SYNC, on);
+      window.removeEventListener("storage", on);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [refresh, loadServer]);
+
+  const toggleKill = async () => {
+    const next = !killed;
+    setAgentKilled(next);
+    setKilled(next);
+    await fetch("/api/activity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ killed: next }),
+    }).catch(() => {});
+  };
 
   function exportLog() {
     const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
@@ -54,7 +108,7 @@ export function ActivityClient() {
             </div>
           </div>
           <button
-            onClick={() => setAgentKilled(!killed)}
+            onClick={() => void toggleKill()}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-input text-sm font-semibold transition-colors ${
               killed
                 ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25"

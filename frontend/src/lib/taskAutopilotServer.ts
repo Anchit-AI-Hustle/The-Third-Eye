@@ -1,4 +1,5 @@
 import type { Db } from "@/lib/db";
+import { logActivity } from "@/lib/activity";
 import { askInChat } from "@/lib/askInChat";
 import { applySideEffects } from "@/lib/whatsapp";
 import { judgeRun, NO_PROVIDER, STALE_MS, type AutopilotRun, type AutopilotStatus, type AutopilotTask } from "@/lib/taskAutopilot";
@@ -51,6 +52,10 @@ export async function recordRun(sb: Db, email: string, task: TaskRow, run: Autop
   if (status === "done") { patch.status = "done"; patch.completed_at = now.slice(0, 10); }
   else if (status === "needs_you" && task.status === "todo") patch.status = "in_progress";
   await sb.from("tasks").update(patch).eq("user_id", email).eq("id", task.id);
+  void logActivity(email, "autopilot", `${label}: ${task.title}`, {
+    detail: report.slice(0, 300),
+    status: status === "done" ? "done" : status === "needs_you" ? "needs_you" : "failed",
+  }).catch(() => {});
   // What it needs is asked in chat, where the answer lets it carry on.
   if (status === "needs_you") await askInChat(sb, email, `About your task **${task.title}** - I've done what I can; here's what I need from you:\n\n${String(run.text ?? "").trim() || report}`).catch(() => {});
   return { status, report };

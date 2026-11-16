@@ -1,5 +1,22 @@
 import "@testing-library/jest-dom/vitest";
 
+// jsdom replaces globalThis.AbortController/AbortSignal while leaving Node's
+// native undici Request in place, causing `new Request(url, { signal })` to
+// reject jsdom's AbortSignal. Preserve non-native signals on Request instances.
+const NativeRequest = globalThis.Request;
+class CompatRequest extends NativeRequest {
+  private _compatSignal?: AbortSignal;
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    const { signal: customSignal, ...rest } = init ?? {};
+    super(input, rest);
+    if (customSignal) this._compatSignal = customSignal;
+  }
+  override get signal(): AbortSignal {
+    return this._compatSignal ?? super.signal;
+  }
+}
+globalThis.Request = CompatRequest;
+
 class MockStorage implements Storage {
   private store = new Map<string, string>();
   get length() {

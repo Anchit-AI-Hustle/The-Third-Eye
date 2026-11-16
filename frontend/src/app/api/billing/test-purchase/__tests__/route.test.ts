@@ -42,4 +42,17 @@ describe("test purchases", () => {
     expect((await buy({ bundle: "nope" })).status).toBe(400);
     expect((await buy({ tier: "basic" })).status).toBe(400);
   });
+
+  it("allows a test-unlocked account to purchase packs and plans", async () => {
+    const { clearUserTestUnlocked, markUserTestUnlocked } = await import("@/lib/testUnlock");
+    email = "unlocked@else.test";
+    markUserTestUnlocked(email);
+    try {
+      const res = await buy({ bundle: "spark" });
+      expect(await res.json()).toMatchObject({ ok: true, added: 500 });
+      expect(balances["unlocked@else.test"]).toBe(116 + 500);
+    } finally {
+      clearUserTestUnlocked("unlocked@else.test");
+    }
+  });
 });

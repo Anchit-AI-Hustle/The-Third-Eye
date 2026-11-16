@@ -34,6 +34,6 @@ describe("Connect Google while verification is open", () => {
   it("keeps everyone else off the unverified scopes", async () => {
     process.env.GOOGLE_CONNECT_USERS = "reviewer@gmail.com";
     const res = await start();
-    expect(res.headers.get("location")).toBe("https://app.example.com/settings?connect=google_pending");
+    expect(res.headers.get("location")).toBe("https://app.example.com/settings?tab=account&connect=google_pending");
   });
 });

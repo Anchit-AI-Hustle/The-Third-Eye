@@ -4,10 +4,11 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { LandingHero } from "@/components/landing/LandingHero";
+import { LandingNav } from "@/components/landing/LandingNav";
+import { LandingFaq } from "@/components/landing/LandingFaq";
 import { FeatureGrid, type Feature } from "@/components/landing/FeatureGrid";
 import { Reveal } from "@/components/hud/Reveal";
 import { HoloFrame } from "@/components/hud/HoloFrame";
-import { LogoMark } from "@/components/layout/LogoMark";
 import { AppStartRedirect } from "@/components/landing/AppStartRedirect";
 import { SiteFooter } from "@/components/landing/SiteFooter";
 import { pageMetadata } from "@/lib/site";
@@ -15,7 +16,7 @@ import { pageMetadata } from "@/lib/site";
 export const metadata = pageMetadata({
   title: "The Third Eye - Your Personal AI Operating System",
   description:
-    "Tasks buried in email and chat, notes you can't find, answers stuck in your own documents. The Third Eye is a private personal AI operating system that pulls it all into one workspace and acts on it for you - capturing tasks and notes, searching your knowledge, and tracking goals and finances.",
+    "Private personal AI workspace that turns email into tasks, searches your documents, and acts across web, iPhone, and Android.",
   path: "/",
 });
 
@@ -102,26 +103,33 @@ export default async function Home() {
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-5xl px-5">
-        <header className="flex items-center justify-between py-5">
-          <Link href="/" className="flex items-center gap-3" aria-label="The Third Eye home">
-            <LogoMark size={36} />
-
-            <span className="font-display font-bold tracking-tight">The Third Eye</span>
-          </Link>
-
-          <Link
-            href="/auth/signin"
-            className="flex h-10 items-center justify-center rounded-input bg-accent-blue px-4 text-sm font-medium text-background-base transition-all duration-interaction hover:bg-accent-blue/90 active:scale-[0.98]"
-          >
-            Sign in
-          </Link>
-        </header>
+        <LandingNav />
 
         <main id="main-content">
           <LandingHero />
 
           <Reveal>
-            <section className="pb-16">
+            <section className="pb-14" aria-label="Highlights">
+              <div
+                data-reveal
+                className="grid grid-cols-1 gap-3 rounded-card border border-border-default bg-background-surface/70 p-4 text-center sm:grid-cols-3"
+              >
+                <div className="px-3 py-2">
+                  <p className="font-mono text-xs uppercase tracking-wider text-accent-blue">Private by default</p>
+                  <p className="mt-1 text-xs text-text-secondary">Your data stays isolated to your account</p>
+                </div>
+                <div className="px-3 py-2">
+                  <p className="font-mono text-xs uppercase tracking-wider text-accent-blue">Opt-in integrations</p>
+                  <p className="mt-1 text-xs text-text-secondary">Gmail &amp; Calendar stay off until you connect</p>
+                </div>
+                <div className="px-3 py-2">
+                  <p className="font-mono text-xs uppercase tracking-wider text-accent-blue">Cross-platform</p>
+                  <p className="mt-1 text-xs text-text-secondary">Web, iPhone, and Android in sync</p>
+                </div>
+              </div>
+            </section>
+
+            <section id="features" className="scroll-mt-8 pb-16">
               <h2 data-reveal className="mb-8 text-center font-display text-2xl font-semibold">
                 What you can do with The Third Eye
               </h2>
@@ -129,7 +137,7 @@ export default async function Home() {
               <FeatureGrid features={FEATURES} />
             </section>
 
-            <section className="pb-16">
+            <section id="how-it-works" className="scroll-mt-8 pb-16">
               <h2 data-reveal className="mb-8 text-center font-display text-2xl font-semibold">
                 How it works
               </h2>
@@ -178,6 +186,16 @@ export default async function Home() {
                   </Link>
                   .
                 </p>
+              </div>
+            </section>
+
+            <section id="faq" className="scroll-mt-8 pb-16">
+              <h2 data-reveal className="mb-8 text-center font-display text-2xl font-semibold">
+                Frequently asked questions
+              </h2>
+
+              <div data-reveal>
+                <LandingFaq />
               </div>
             </section>
 
