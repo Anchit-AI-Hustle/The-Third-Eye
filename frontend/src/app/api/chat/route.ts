@@ -484,6 +484,11 @@ async function runTool(
           due_date: input.due_date,
           description: input.description,
         };
+        // A retry (or a repeated request) must not add the same open task twice: an identical
+        // open task already on the list is reported as existing, with nothing new to save.
+        const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+        const same = ctx.tasks.find((t) => t.status !== "done" && norm(t.title) === norm(task.title) && norm(t.due_date) === norm(task.due_date));
+        if (same) return { result: JSON.stringify({ success: true, already_exists: true, note: "An identical open task is already on the list, so nothing new was added.", task: same }) };
         ctx.tasks.unshift({ ...task, status: "todo" });
         return {
           result: JSON.stringify({ success: true, task }),
@@ -2449,6 +2454,9 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
       // Real tools run so far this turn, on any tier.
       const toolsRun: string[] = [];
       const toolOutcomes: { name: string; outcome: string }[] = [];
+      // One reply: models already rejected are not retried, and total outbound tool-cascade calls are capped.
+      const rejectedModels = new Set<string>();
+      const callBudget = { left: 40 };
 
       // Checklist calls are answered by the ledger, not runTool, and ordered
       // around the real tools in the same batch: plan/start first so the work is
@@ -2525,15 +2533,14 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
       // Tools already ran (a mail may be sent) and no model can finish the
       // reply: say what ran rather than start the task again elsewhere.
       const endPartial = async (why = "") => {
-        // Only what a tool itself reported is stated, and as a report, not as proof it was saved.
+        // Only what a tool returned is stated, never as proof it was saved or sent; nothing is re-run automatically.
         const named = (o: string) => [...new Set(toolOutcomes.filter((t) => t.outcome === o).map((t) => t.name))];
         const ok = named("ok"), waiting = named("awaiting");
         const reason = userFacingOutage(why, timezone || req.headers.get("x-vercel-ip-timezone") || "UTC");
         const lines = [
-          ok.length ? `These actions reported success: ${ok.join(", ")}.` : "",
+          ok.length ? `These actions ran and returned a result: ${ok.join(", ")}. I have no confirmation here that each one was saved or sent, and I won't repeat them on my own.` : "",
           waiting.length ? `Waiting for your confirmation: ${waiting.join(", ")}.` : "",
           `I couldn't write the rest of my reply. ${reason}`,
-          ok.length ? "Check the result before asking again, so the same action isn't run twice." : "",
         ].filter(Boolean);
         send("text", { text: `${lines.join(" ")}${openGap() ?? ""}` });
         await done({ stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
@@ -2699,7 +2706,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           let usedProvider = "";
           let usedModel = "";
           while (loopGuard2++ < (checklist.planned ? 30 : 8) && Date.now() < deadline && !cancelled) {
-            const out = await toolCallCascade({ messages: toolMessages, tools: openAiTools, temperature: 0.6, maxTokens: 1500 });
+            const out = await toolCallCascade({ messages: toolMessages, tools: openAiTools, temperature: 0.6, maxTokens: 1500, rejected: rejectedModels, budget: callBudget });
             usedProvider = out.provider;
             usedModel = out.model;
 
