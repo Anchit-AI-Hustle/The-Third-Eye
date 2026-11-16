@@ -55,7 +55,8 @@ describe("AI providers in Settings", () => {
   it("offers each provider its own way in: a sign-in where it has one, otherwise its own key page", async () => {
     server({ connected: false, localFirst: false, model: null, assistantModels: {}, hasToken: false });
     render(<ProvidersCard />);
-    expect(await screen.findByRole("link", { name: /Sign in with OpenRouter/ })).toHaveAttribute("href", "/api/connect/openrouter");
+    expect(await screen.findByRole("link", { name: /Sign in with Hugging Face/ })).toBeInTheDocument();
+    expect(screen.queryByText(/OpenRouter/)).toBeNull();
     expect(screen.getByRole("link", { name: /Sign in with Hugging Face/ })).toHaveAttribute("href", "/api/connect/huggingface");
     const keyPages = screen.getAllByRole("link", { name: "Get a key" }).map((a) => a.getAttribute("href"));
     expect(keyPages).toEqual(expect.arrayContaining(["https://console.groq.com/keys", "https://aistudio.google.com/apikey", "https://console.mistral.ai/api-keys", "https://platform.openai.com/api-keys"]));
