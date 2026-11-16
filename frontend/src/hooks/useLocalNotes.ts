@@ -54,7 +54,7 @@ export function useLocalNotes() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataInsert("notes", n);
+    if (remote.current) if (!(await dataInsert("notes", n))) return null;
     return n;
   }, []);
 
@@ -65,7 +65,7 @@ export function useLocalNotes() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataUpdate("notes", id, patch);
+    return !remote.current || await dataUpdate("notes", id, patch);
   }, []);
 
   const remove = useCallback(async (id: string) => {
@@ -74,7 +74,7 @@ export function useLocalNotes() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataDelete("notes", id);
+    return !remote.current || await dataDelete("notes", id);
   }, []);
 
   return { notes, ready, create, update, remove };
