@@ -281,6 +281,7 @@ export function MusicStudio() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [brief, setBrief] = useState<Brief | null>(null);
   const [loopSession, setLoopSession] = useState(false);
+  const [resultSessionSeconds, setResultSessionSeconds] = useState(30);
   const [copied, setCopied] = useState(false);
   const [filling, setFilling] = useState(false);
   const [busyField, setBusyField] = useState<string | null>(null);
@@ -300,6 +301,8 @@ export function MusicStudio() {
   const [savedNote, setSavedNote] = useState(false);
   const fFor = useRef(f); fFor.current = f;
   const pRef = useRef(""); const lRef = useRef("");
+  const renderedVocalsRef = useRef<boolean | null>(null);
+  const resultSessionRef = useRef(30);
   const voiceRef = useRef(""); // the voice the song was sung in, when the form left it to the musicologist
 
   // Library is localStorage-backed with cloud best-effort, so it works even
@@ -337,7 +340,7 @@ export function MusicStudio() {
       id: crypto.randomUUID(),
       title: cur.title || cur.description.slice(0, 60), description: cur.description,
       prompt: promptStr, lyrics: lyricsStr, audio_url: audio, created_at: new Date().toISOString(),
-      params: { genres: cur.genres, moods: cur.moods, tempo: cur.tempo, vocals: cur.vocals, duration: cur.duration },
+      params: { genres: cur.genres, moods: cur.moods, tempo: cur.tempo, vocals: renderedVocalsRef.current === false ? false : cur.vocals, duration: resultSessionRef.current },
     };
     lsWrite([row, ...lsRead()]);                 // always persist locally
     dataInsert("music_tracks", row).catch(() => {}); // cloud best-effort
@@ -349,7 +352,7 @@ export function MusicStudio() {
         { label: "Genres", value: cur.genres.join(", ") }, { label: "Moods", value: cur.moods.join(", ") },
         { label: "Tempo", value: `${cur.tempo} BPM` }, { label: "Structure", value: cur.structure },
         { label: "Instruments", value: cur.instruments.join(", ") }, { label: "Artist vibe", value: cur.artistInspiration.join(", ") },
-        { label: "Vocals", value: cur.vocals ? `${cur.vocalStyles.join(", ") || voiceRef.current} (${cur.vocalIntensity}/10)` : "instrumental" },
+        { label: "Vocals", value: renderedVocalsRef.current === false ? "instrumental (no vocals rendered)" : cur.vocals ? `${cur.vocalStyles.join(", ") || voiceRef.current} (${cur.vocalIntensity}/10)` : "instrumental" },
         { label: "Vocal languages", value: cur.vocalLanguages.join(", ") },
         { label: "Vocal effects", value: cur.vocalEffects.join(", ") },
       ].filter((x) => x.value),
@@ -502,13 +505,16 @@ export function MusicStudio() {
       setPrompt(d.prompt ?? ""); setLyrics(d.lyrics ?? ""); pRef.current = d.prompt ?? ""; lRef.current = d.lyrics ?? "";
       setBrief(d.brief ?? null);
       voiceRef.current = d.brief?.vocalStyle ?? "";
+      renderedVocalsRef.current = d.vocalsRendered === false || d.fellBackToInstrumental ? false : null;
       setLoopSession(!!d.loop);
+      resultSessionRef.current = Number.isFinite(d.sessionSeconds) && d.sessionSeconds > 0 ? d.sessionSeconds : f.duration;
+      setResultSessionSeconds(resultSessionRef.current);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       const notes: string[] = [];
       if (d.elevenLabsError) notes.push(`ElevenLabs couldn't make this one (${String(d.elevenLabsError).slice(0, 160)}), so a backup model is used.`);
       if (d.fellBackToInstrumental) notes.push(`Couldn't generate sung vocals${d.vocalError ? ` - ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
-      if (d.provider === "code" && d.note) notes.push(d.note);
-      if (d.loop) notes.push(`Long session: a ${d.clipSeconds}s clip will loop seamlessly to fill ${fmtDuration(d.sessionSeconds)}.`);
+      if (d.note) notes.push(d.note);
+      if (d.loop) notes.push(`Long session: a ${d.clipSeconds}s clip repeats to fill ${fmtDuration(d.sessionSeconds)}. This is not a full-length generated song.`);
       if (notes.length) setNote(notes.join(" "));
       // Free HuggingFace fallback returns audio synchronously (no job to poll).
       if (d.done && d.audioUrl) { onAudioReady(d.audioUrl); return; }
@@ -787,7 +793,7 @@ export function MusicStudio() {
         )}
         {audioUrl && phase === "ready" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}{loopSession && <span className="text-[10px] font-mono text-text-muted">· 🔁 looping to fill {fmtDuration(f.duration)}</span>}</div>
+            <div className="flex items-center gap-2 text-[#34D399]"><Play size={16} /><span className="hud-label text-[#34D399]">Your track</span>{savedNote && <span className="text-[10px] text-text-muted">· saved to library</span>}{loopSession && <span className="text-[10px] font-mono text-text-muted">· 🔁 loop target {fmtDuration(resultSessionSeconds)}</span>}</div>
             <audio controls loop={loopSession} src={audioUrl} className="w-full" />
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => saveMedia(audioUrl, f.title || f.description || "track").catch((e) => setError(e instanceof Error ? e.message : "Download failed."))} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-input border border-border-default text-xs text-text-secondary hover:text-text-primary"><Download size={12} /> Audio</button>
@@ -857,4 +863,4 @@ function BriefCard({ brief }: { brief: Brief }) {
       {brief.culturalContext ? <p className="text-[11px] text-text-secondary italic leading-relaxed">{brief.culturalContext}</p> : null}
     </div>
   );
-}
+          }
