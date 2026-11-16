@@ -175,7 +175,7 @@ async function create(req: NextRequest) {
         const stored = await persistStudioRemoteAudio(db, user, hf, { provider: "huggingface" });
         if (stored) audioUrl = stored;
       }
-      return Response.json({ configured: true, done: true, audioUrl, model: "huggingface:musicgen", provider: "huggingface", prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
+      return Response.json({ configured: true, done: true, audioUrl, model: "huggingface:musicgen", provider: "huggingface", outputKind: "ai-instrumental", vocalsRendered: false, fellBackToInstrumental: sing, prompt, tags, lyrics, ...loopMeta, ...briefMeta, ...elMeta });
     }
     const keySet = !!process.env.ELEVENLABS_API_KEY?.trim();
     if (keySet && !elevenLabsConfigured()) console.warn("ELEVENLABS_API_KEY is a key id, not the sk_ secret; songs fall back to instrumentals");
@@ -191,9 +191,9 @@ async function create(req: NextRequest) {
       catch { /* the inline copy still plays */ }
     }
     return refundable(Response.json({
-      configured: true, done: true, audioUrl, model: "code:synth", provider: "code",
+      configured: true, done: true, audioUrl, model: "code:synth", provider: "code", outputKind: "composed-instrumental", vocalsRendered: false, fellBackToInstrumental: sing,
       prompt, tags, lyrics, sessionSeconds, clipSeconds: seconds, loop: sessionSeconds > seconds, ...briefMeta, ...elMeta,
-      note: `This track is instrumental, with no vocals${sing ? " (the lyrics are below)" : ""}.`,
+      note: `This is a synthesized instrumental preview, not AI-generated sung audio. No vocals were rendered${sing ? "; the lyrics are text only" : ""}.`,
     }));
   }
 
@@ -251,7 +251,7 @@ async function create(req: NextRequest) {
       }
       return Response.json({
         configured: true, done: true, audioUrl,
-        model: "huggingface:musicgen", provider: "huggingface",
+        model: "huggingface:musicgen", provider: "huggingface", outputKind: "ai-instrumental", vocalsRendered: false,
         prompt, tags, lyrics, fellBackToInstrumental: sing,
         ...loopMeta, clipSeconds: Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), loop: sessionSeconds > Math.min(sessionSeconds, INSTRUMENTAL_CLIP_MAX), ...briefMeta, ...elMeta,
       });
@@ -293,4 +293,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export const POST = chargedRoute("music.generate", create);
+const chargedCreate = chargedRoute("music.generate", create);
+
+export async function POST(req: NextRequest) {
+  // The keyless composer must remain reachable with a zero-credit wallet.
+  // Charging then refunding is too late: insufficient credits would block it.
+  // Keep the normal wallet path when any allowed audio provider may be used.
+  if (!elevenLabsConfigured() && !replicateConfigured() && !hfToken()) return create(req);
+  return chargedCreate(req);
+}
