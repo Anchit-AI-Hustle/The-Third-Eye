@@ -329,7 +329,21 @@ describe("toolCallCascade: one reply's rejected models and call allowance", () =
     resetCooldowns();
     await toolCallCascade({ messages: msgs, tools: [], rejected, budget });
     expect(sent).toEqual(["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.8-27b"]); // 120b not sent again
-    expect(budget.left).toBe(5);
+    expect(budget.left).toBe(3); // 3 chat calls + 2 /models lookups now all count
+    process.env.PAID_PATH_TESTS = "1";
+  });
+
+  it("counts the model-list lookup against the allowance and ends with a plain message", async () => {
+    process.env.GROQ_API_KEY = "test-groq-key"; process.env.FREE_TIER_CONFIRMED = "groq"; process.env.PAID_PATH_TESTS = "0";
+    const urls: string[] = [];
+    const inner = stub("openai/gpt-oss-120b");
+    const base = (globalThis as { fetch: (u: string, i?: unknown) => Promise<unknown> }).fetch;
+    vi.stubGlobal("fetch", vi.fn(async (u: string, i?: unknown) => { urls.push(u); return base(u, i); }));
+    const budget = { left: 1 }; // one chat call, then no room for the /models lookup or another call
+    await expect(toolCallCascade({ messages: msgs, tools: [], budget })).rejects.toBeTruthy();
+    expect(urls.filter((u) => u.endsWith("/models")).length).toBe(0);
+    expect(inner).toEqual(["openai/gpt-oss-120b"]);
+    expect(userFacingOutage("All tool-capable fallback providers failed. Attempts: groq:429 skipped: call allowance for this reply used")).toMatch(/stopped this reply early.*Nothing further was started/);
     process.env.PAID_PATH_TESTS = "1";
   });
 
