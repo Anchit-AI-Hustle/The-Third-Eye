@@ -14,7 +14,7 @@
 // other plain-text generations where any model will do.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { freeOnly, gatedKey, isPaidLlmProvider, modelAllowed, providerAllowed } from "@/lib/freeOnly";
+import { freeOnly, gatedKey, isPaidLlmProvider, modelAllowed, providerAllowed, userKeyAllowed } from "@/lib/freeOnly";
 import { usableGeminiKey } from "@/lib/providerReady";
 import { backgroundBlocked, benchedReason, classifyFailure, forgetSeenHealth, healthMap, noteFailure, noteSuccess, resetHealthCache } from "@/lib/providerHealth";
 import { currentOwnKeys, localFirst, ownOllamaModel, tunnelAuth } from "@/lib/providerKeys";
@@ -90,15 +90,18 @@ function loadKeys() {
   // Free-only: paid providers get no key at all (deployment or the user's own), and
   // providers whose account billing can't be seen need FREE_TIER_CONFIRMED (see freeOnly.ts).
   const g = gatedKey;
+  // The user's own key first (it bills their own account, so the owner's free-tier list
+  // does not gate it); otherwise the deployment's key, which stays gated.
+  const pick = (p: string, mine: string | undefined, shared: string) => (clean(mine) && userKeyAllowed(p, own) ? clean(mine) : g(p, shared));
   return {
-    openai:    freeOnly() ? [] : [own?.openai, process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3].map(clean).filter(Boolean),
-    gemini:    g("gemini", clean(own?.gemini) || clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY)),
+    openai:    [freeOnly() ? (userKeyAllowed("openai", own) ? own?.openai : "") : own?.openai, ...(freeOnly() ? [] : [process.env.OPENAI_API_KEY, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3])].map((k) => clean(k)).filter(Boolean),
+    gemini:    pick("gemini", own?.gemini, clean(process.env.GEMINI_API_KEY) || clean(process.env.GOOGLE_API_KEY)),
     grok:      g("grok", clean(process.env.XAI_API_KEY)),
-    groq:      g("groq", clean(own?.groq) || clean(process.env.GROQ_API_KEY)),
-    cerebras:  g("cerebras", clean(own?.cerebras) || clean(process.env.CEREBRAS_API_KEY)),
+    groq:      pick("groq", own?.groq, clean(process.env.GROQ_API_KEY)),
+    cerebras:  pick("cerebras", own?.cerebras, clean(process.env.CEREBRAS_API_KEY)),
     openrouter: g("openrouter", ""),
-    mistral:   g("mistral", clean(own?.mistral) || clean(process.env.MISTRAL_API_KEY)),
-    huggingface: g("huggingface", clean(own?.huggingface) || clean(process.env.HF_TOKEN)),
+    mistral:   pick("mistral", own?.mistral, clean(process.env.MISTRAL_API_KEY)),
+    huggingface: pick("huggingface", own?.huggingface, clean(process.env.HF_TOKEN)),
     anthropic: g("anthropic", clean(process.env.ANTHROPIC_API_KEY)),
     ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
@@ -256,7 +259,9 @@ type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 // Claude, OpenAI and Grok. LLM_PRIMARY_PROVIDER moves one provider to the front.
 export function cascadeOrder(): CloudProvider[] {
   const primary = clean(process.env.LLM_PRIMARY_PROVIDER).toLowerCase() as CloudProvider;
-  const all = CLOUD_PROVIDERS.filter((p) => providerAllowed(p));
+  const own = currentOwnKeys();
+  const mine = (p: string) => { const b = p === "gemini-lite" ? "gemini" : p; return !!(own as Record<string, string | undefined> | undefined)?.[b] && userKeyAllowed(b, own); };
+  const all = CLOUD_PROVIDERS.filter((p) => providerAllowed(p) || mine(p));
   return all.includes(primary) ? [primary, ...all.filter((p) => p !== primary)] : [...all];
 }
 
@@ -326,7 +331,10 @@ export function summarizeAttempts(attempts: LlmCascadeResult["attempts"]): strin
 }
 
 function failureKind(a: LlmCascadeResult["attempts"][number]): string {
-  if (a.reason?.startsWith("skipped:")) return "cooling down after a quota error";
+  if (a.reason?.startsWith("skipped:")) {
+    const until = a.reason.match(/until \d{2}:\d{2} UTC/)?.[0];
+    return until ? `cooling down after a quota error ${until}` : a.reason.includes("token cap") ? "request larger than its per-minute token cap" : "cooling down after a quota error";
+  }
   const s = a.status ?? 0;
   if (s === 401 || s === 403) return "key rejected";
   if (s === 404) return "model not found";
@@ -343,6 +351,15 @@ function failureKind(a: LlmCascadeResult["attempts"][number]): string {
  * short wait.
  */
 export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()): string {
+  const wait = shortestRetryWait(raw);
+  if (wait !== null && wait >= 120_000) {
+    const at = new Date(now.getTime() + wait).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+    const h = Math.floor(wait / 3_600_000), m = Math.round((wait % 3_600_000) / 60_000);
+    return `My free AI limit is used up for now. The provider says it frees up in about ${h ? `${h}h ` : ""}${m}m, around ${at}. Please try again then.`;
+  }
+  if (/larger than its (per-minute )?token cap|request too large|too large/i.test(raw) && !/quota|rate.?limit|until \d{2}:\d{2} UTC/i.test(raw)) {
+    return "That message is too big for the free AI model's per-minute limit. Try a shorter message, or send fewer or smaller attachments.";
+  }
   const reset = firstReset(raw, now);
   if (reset) {
     const at = reset.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone });
@@ -355,6 +372,14 @@ export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()
   if (rateLimited) return "I'm getting a lot of requests right now and need a moment to catch up. Please try again in about a minute.";
   if (overloaded) return "I'm at capacity right now. This should clear on its own within a minute or two, so please try again shortly.";
   return "Something went wrong on my end. Please try again in a moment.";
+}
+
+// Shortest "Please try again in 1h30m27.6s" a provider reported (ms), or null.
+export function shortestRetryWait(raw: string): number | null {
+  const waits = [...raw.matchAll(/try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?/gi)]
+    .map((m) => (Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)) * 1000)
+    .filter((n) => n > 0);
+  return waits.length ? Math.min(...waits) : null;
 }
 
 // Earliest "quota until HH:MM UTC" (from a cooldown skip) still ahead of now.
@@ -393,7 +418,10 @@ export function retryAfterMs(headers: Headers | undefined, body: string): number
     if (ms > 0) return ms;
   }
   const delay = body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)?.[1];
-  return delay ? Number(delay) * 1000 : undefined;
+  if (delay) return Number(delay) * 1000;
+  // Groq's 429 body: "Please try again in 1h30m27.6s". Capped at a day.
+  const said = shortestRetryWait(body);
+  return said ? Math.min(said, 24 * 3_600_000) : undefined;
 }
 
 async function failed(r: Response) {
@@ -432,6 +460,14 @@ function inCooldown(provider: string): boolean {
 }
 
 // A provider's own retry-after wins over the default when it sent one.
+/** Why a provider is being skipped, with the time it should be back when that is far off. */
+function cooldownNote(provider: string): string {
+  const until = cooldownUntil.get(provider);
+  if (until === undefined || until - Date.now() < 120_000) return "cooling down after a recent quota error";
+  const t = new Date(until);
+  return `cooling down after a recent quota error until ${String(t.getUTCHours()).padStart(2, "0")}:${String(t.getUTCMinutes()).padStart(2, "0")} UTC`;
+}
+
 function startCooldown(provider: string, retryAfter?: number): void {
   cooldownUntil.set(provider, Date.now() + (retryAfter ?? COOLDOWN_MS));
 }
@@ -668,7 +704,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
   const attempts: LlmCascadeResult["attempts"] = [];
   const pref = opts.preferProvider;
 
-  const order: (CloudProvider | "ollama")[] = pref ? [pref].filter((p) => providerAllowed(p))
+  const order: (CloudProvider | "ollama")[] = pref ? [pref].filter((p) => providerAllowed(p) || (cascadeOrder() as string[]).includes(p))
     : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))]
     : localFirst() ? ["ollama", ...cascadeOrder()] : [...cascadeOrder(), "ollama"];
   const tokens = estimateTokens([opts.system, opts.messages]);
@@ -683,7 +719,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     // hang-and-timeout) entirely rather than pay for a call we already know
     // the answer to.
     const hp = healthName(provider);
-    const benched = opts.ignoreBench ? null : provider === "ollama" ? (inCooldown(hp) ? "your computer didn't answer a moment ago" : null) : inCooldown(hp) ? "cooling down after a recent quota error"
+    const benched = opts.ignoreBench ? null : provider === "ollama" ? (inCooldown(hp) ? "your computer didn't answer a moment ago" : null) : inCooldown(hp) ? cooldownNote(hp)
       : (await benchedReason(hp)) ?? (opts.background ? await backgroundBlocked(hp) : null);
     if (benched) {
       attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
@@ -892,8 +928,7 @@ async function callOpenAICompatibleTools(base: string, key: string, model: strin
       body: JSON.stringify({
         model,
         messages: opts.messages,
-        tools: opts.tools,
-        tool_choice: "auto",
+        ...(opts.tools.length ? { tools: opts.tools, tool_choice: "auto" } : {}),
         max_tokens: opts.maxTokens ?? 2000,
         temperature: opts.temperature ?? 0.7,
       }),
@@ -944,7 +979,7 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
   for (const { provider, base, model, key } of toolCapableOrder()) {
     const hp = healthName(provider);
     const local = provider === "ollama";
-    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? "cooling down" : local ? await ownOllamaBlocked() : await benchedReason(hp);
+    const benched = overCap(provider, tokens) ? "request larger than its token cap" : inCooldown(hp) ? cooldownNote(hp) : local ? await ownOllamaBlocked() : await benchedReason(hp);
     if (benched) { attempts.push(`${provider}:${benched}`); continue; }
     // The user's own model is theirs to choose, so a missing one is reported, not swapped.
     const { res, model: used } = provider === "anthropic"
