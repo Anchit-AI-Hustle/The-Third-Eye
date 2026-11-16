@@ -53,7 +53,7 @@ export function useAgentActions() {
   // Returns the list of undoable actions applied (created items), so the caller
   // can offer a short-lived "Undo" — the agent's writes are no longer one-way.
   return useCallback(
-    async (sideEffects: AgentSideEffect[] | undefined): Promise<UndoableAction[]> => {
+    async (sideEffects: AgentSideEffect[] | undefined, replyId?: string): Promise<UndoableAction[]> => {
       if (!sideEffects?.length) return [];
       // Kill switch (spec §6/§11): when engaged, the agent applies NOTHING —
       // every requested action is logged as blocked and skipped.
@@ -64,12 +64,13 @@ export function useAgentActions() {
         return [];
       }
       const undoables: UndoableAction[] = [];
+      const notSaved: string[] = [];
       const applyList = async (effects: AgentSideEffect[]): Promise<UndoableAction[]> => {
         const local: UndoableAction[] = [];
         for (const fx of effects) {
           const d = fx.data ?? {};
           let outcome: "applied" | "failed" = "applied";
-          switch (fx.type) {
+          try { switch (fx.type) {
             case "task_create":
               if (d.title) {
                 const t = await createTask({
@@ -81,23 +82,25 @@ export function useAgentActions() {
                   due_date: d.due_date,
                   description: d.description,
                 });
+                if (!t?.id) { outcome = "failed"; notSaved.push(fx.type); }
                 if (t?.id) local.push({ label: `task "${d.title}"`, undo: () => removeTask(t.id) });
               }
               break;
             case "task_update":
-              if (d.id) updateTask(d.id, d.patch ?? {});
+              if (d.id && await updateTask(d.id, d.patch ?? {}) === false) { outcome = "failed"; notSaved.push(fx.type); }
               break;
             case "task_delete":
-              if (d.id) removeTask(d.id);
+              if (d.id && await removeTask(d.id) === false) { outcome = "failed"; notSaved.push(fx.type); }
               break;
             case "note_create":
               if (d.title) {
                 const n = await createNote(d.title, d.content ?? "");
+                if (!n?.id) { outcome = "failed"; notSaved.push(fx.type); }
                 if (n?.id) local.push({ label: `note "${d.title}"`, undo: () => removeNote(n.id) });
               }
               break;
             case "note_delete":
-              if (d.id) removeNote(d.id);
+              if (d.id && await removeNote(d.id) === false) { outcome = "failed"; notSaved.push(fx.type); }
               break;
             case "goal_create":
               if (d.title) {
@@ -110,14 +113,15 @@ export function useAgentActions() {
                   deadline: d.deadline,
                   description: d.description,
                 });
+                if (!g?.id) { outcome = "failed"; notSaved.push(fx.type); }
                 if (g?.id) local.push({ label: `goal "${d.title}"`, undo: () => removeGoal(g.id) });
               }
               break;
             case "goal_update":
-              if (d.id && d.delta !== undefined) adjustGoal(d.id, d.delta);
+              if (d.id && d.delta !== undefined && await adjustGoal(d.id, d.delta) === false) { outcome = "failed"; notSaved.push(fx.type); }
               break;
             case "goal_delete":
-              if (d.id) removeGoal(d.id);
+              if (d.id && await removeGoal(d.id) === false) { outcome = "failed"; notSaved.push(fx.type); }
               break;
             case "expense_create":
               if (typeof d.amount === "number" && d.amount > 0) {
@@ -128,11 +132,12 @@ export function useAgentActions() {
                   gst_rate: typeof d.gst_rate === "number" ? d.gst_rate : undefined,
                   spent_on: d.spent_on,
                 });
+                if (!ex?.id) { outcome = "failed"; notSaved.push(fx.type); }
                 if (ex?.id) local.push({ label: `expense ₹${d.amount}`, undo: () => removeExpense(ex.id) });
               }
               break;
             case "expense_delete":
-              if (d.id) removeExpense(d.id);
+              if (d.id && await removeExpense(d.id) === false) { outcome = "failed"; notSaved.push(fx.type); }
               break;
             case "contact_add":
               if (d.contact && typeof window !== "undefined") {
@@ -182,11 +187,14 @@ export function useAgentActions() {
             default:
               break;
           }
+          } catch { outcome = "failed"; notSaved.push(fx.type); }
           logAgentAction({ type: fx.type, label: describeSideEffect(fx.type, d), outcome });
         }
         return local;
       };
       undoables.push(...(await applyList(sideEffects)));
+      // A create that came back without a record id was not stored. Say so instead of leaving "Done" standing.
+      if (notSaved.length && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("te:persist-result", { detail: { notSaved, replyId } }));
       return undoables;
     },
     [createTask, updateTask, removeTask, createNote, removeNote, addGoal, adjustGoal, removeGoal, addExpense, removeExpense, openResolved],
