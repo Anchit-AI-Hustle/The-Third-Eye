@@ -7,7 +7,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 // doesn't stop them. "ollama" holds a URL (their own machine, usually through
 // a tunnel) instead of a key.
 
-export const OWN_KEY_PROVIDERS = ["gemini", "groq", "openrouter", "mistral", "cerebras", "openai", "huggingface", "ollama"] as const;
+export const OWN_KEY_PROVIDERS = ["gemini", "groq", "mistral", "cerebras", "openai", "huggingface", "ollama"] as const;
 export type OwnKeyProvider = (typeof OWN_KEY_PROVIDERS)[number];
 // How that Ollama is used, stored alongside it: its tunnel password, the model
 // to run (one for everyone, or one per assistant as JSON), and "off" in
@@ -109,11 +109,9 @@ export function ollamaUrlProblem(raw: string): string | null {
 }
 
 // Where a pasted key is checked before it's saved: a request that costs no tokens.
-// OpenRouter's model list is public, so its key endpoint is asked instead.
 const KEY_CHECK: Record<Exclude<OwnKeyProvider, "ollama">, { name: string; url: (key: string) => string; bearer: boolean }> = {
   gemini: { name: "Google", url: (k) => `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(k)}`, bearer: false },
   groq: { name: "Groq", url: () => "https://api.groq.com/openai/v1/models", bearer: true },
-  openrouter: { name: "OpenRouter", url: () => "https://openrouter.ai/api/v1/key", bearer: true },
   mistral: { name: "Mistral", url: () => "https://api.mistral.ai/v1/models", bearer: true },
   cerebras: { name: "Cerebras", url: () => "https://api.cerebras.ai/v1/models", bearer: true },
   openai: { name: "OpenAI", url: () => "https://api.openai.com/v1/models", bearer: true },
