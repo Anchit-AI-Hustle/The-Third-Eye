@@ -83,7 +83,7 @@ export function useLocalExpenses() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataInsert("expenses", e);
+    if (remote.current) if (!(await dataInsert("expenses", e))) return null;
     broadcast();
     return e;
   }, []);
@@ -94,7 +94,7 @@ export function useLocalExpenses() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataUpdate("expenses", id, patch);
+    return !remote.current || await dataUpdate("expenses", id, patch);
     broadcast();
   }, []);
 
@@ -104,7 +104,7 @@ export function useLocalExpenses() {
       if (!remote.current) lsSet(next);
       return next;
     });
-    if (remote.current) await dataDelete("expenses", id);
+    return !remote.current || await dataDelete("expenses", id);
     broadcast();
   }, []);
 
