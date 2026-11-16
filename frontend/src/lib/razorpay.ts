@@ -1,3 +1,4 @@
+import { freeOnly } from "@/lib/freeOnly";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { creditBalance } from "@/lib/credits";
@@ -30,6 +31,7 @@ export interface Purchase {
 interface Payment { id: string; order_id: string; amount: number; currency: string; status: string }
 
 export function razorpayReady(): boolean {
+  if (freeOnly()) return false;
   return Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
 }
 
