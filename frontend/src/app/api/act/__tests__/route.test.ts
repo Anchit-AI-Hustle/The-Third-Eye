@@ -53,9 +53,14 @@ vi.mock("@/lib/appBuilder", () => ({
   publishApp: (...a: unknown[]) => publishApp(...a),
 }));
 
+let seq = 0;
 async function post(body: unknown, headers: Record<string, string> = {}) {
   const { POST } = await import("@/app/api/act/route");
-  const res = await POST({ json: () => Promise.resolve(body), headers: new Headers(headers) } as any);
+  const withId = body && typeof body === "object" && !("actionId" in (body as object)) ? { actionId: `test-confirm-${++seq}`, ...(body as object) } : body;
+  const b = withId as any;
+  const { actionProof } = await import("@/lib/actionIdentity");
+  if (b?.actionId && !("proof" in b)) b.proof = actionProof(headers.authorization ? "wa-user@x.com" : sessionEmail ?? "", b.actionId, b.tool, b.args);
+  const res = await POST({ json: () => Promise.resolve(withId), headers: new Headers(headers) } as any);
   return { status: res.status, body: await res.json() };
 }
 
@@ -63,6 +68,7 @@ const EMAIL_ARGS = { action: "email", to: "v@x.com", subject: "Hi", body: "Text"
 
 beforeEach(() => {
   vi.resetModules();
+  process.env.NEXTAUTH_SECRET = "isolated-test-secret";
   sessionEmail = SIGNED_IN;
   enforced = false;
   tier = "free";
@@ -242,62 +248,66 @@ describe("confirmed build_app", () => {
   });
 });
 
-describe("one confirmation runs once", () => {
-  it("claims the confirmation id before sending, and a repeat sends nothing", async () => {
-    const claimed = new Set<string>();
-    vi.doMock("@/lib/db", () => ({
-      getDb: () => ({
-        from: () => ({
-          insert: async (r: { message_id: string }) => {
-            if (claimed.has(r.message_id)) return { error: { code: "23505", message: "duplicate key" } };
-            claimed.add(r.message_id); return { error: null };
-          },
-          delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => { claimed.clear(); return { error: null }; } }) }) }),
-        }),
-      }),
-    }));
-    const first = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-aaaa-1111" });
-    expect(first.body.ok).toBe(true);
-    const sends = vi.mocked(globalThis.fetch).mock.calls.length;
-    const again = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-aaaa-1111" });
-    expect(again.status).toBe(409);
-    expect(String(again.body.error)).toMatch(/not run again[\s\S]*outcome is unknown/);
-    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(sends);
-    vi.doUnmock("@/lib/db");
-  });
-
-  it("keeps the claim when the action blows up, so a retry cannot repeat it", async () => {
-    const claimed = new Set<string>(); let deletes = 0;
-    vi.doMock("@/lib/db", () => ({
-      getDb: () => ({ from: () => ({
-        insert: async (r: { message_id: string }) => { claimed.add(r.message_id); return { error: null }; },
-        delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => { deletes++; return { error: null }; } }) }) }),
-      }) }),
-    }));
-    vi.mocked(globalThis.fetch).mockRejectedValue(new Error("socket hang up"));
-    const r = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-bbbb-2222" });
-    expect(r.body.ok === false).toBe(true);
-    expect(String(r.body.result)).toMatch(/do not know whether it was sent/);
-    expect(r.body.result).not.toMatch(/draft/i);
-    expect(deletes).toBe(0);
-    vi.doUnmock("@/lib/db");
-  });
-
-  it("frees the id after a clean refusal, and fails closed if the claim cannot be recorded", async () => {
-    let deletes = 0;
+describe("bound confirmation identity", () => {
+  function ledger() {
+    const rows = new Set<string>();
     vi.doMock("@/lib/db", () => ({ getDb: () => ({ from: () => ({
-      insert: async () => ({ error: null }),
-      delete: () => ({ eq: () => ({ eq: () => ({ eq: async () => { deletes++; return { error: null }; } }) }) }),
+      insert: async (r: any) => {
+        const k = JSON.stringify([r.user_id, r.source, r.message_id]);
+        if (rows.has(k)) return { error: { code: "23505" } };
+        rows.add(k); return { error: null };
+      },
     }) }) }));
-    googleToken = null;
-    await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-cccc-3333" });
-    expect(deletes).toBe(1);
-    vi.doMock("@/lib/db", () => ({ getDb: () => ({ from: () => ({ insert: async () => ({ error: { code: "08001", message: "down" } }) }) }) }));
-    vi.resetModules(); googleToken = "ya29.token";
-    const n = vi.mocked(globalThis.fetch).mock.calls.length;
-    const r = await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-dddd-4444" });
-    expect(r.status).toBe(503);
-    expect(vi.mocked(globalThis.fetch).mock.calls.length).toBe(n);
-    vi.doUnmock("@/lib/db");
+    return rows;
+  }
+  afterEach(() => { vi.doUnmock("@/lib/db"); });
+  it("concurrent requests and a lost-response retry send at most once", async () => {
+    ledger();
+    const b = { tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-concurrent" };
+    const r = await Promise.all([post({ ...b }), post({ ...b })]);
+    expect(r.map(x => x.status).sort()).toEqual([200, 409]);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+    expect((await post({ ...b })).status).toBe(409);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+  });
+  it("rejects a changed payload and a proof copied across users", async () => {
+    ledger();
+    const { actionProof } = await import("@/lib/actionIdentity");
+    const actionId = "confirm-bound-payload";
+    const proof = actionProof(SIGNED_IN, actionId, "communicate", EMAIL_ARGS);
+    expect((await post({ tool: "communicate", args: { ...EMAIL_ARGS, body: "altered" }, actionId, proof })).status).toBe(400);
+    sessionEmail = "other@example.com";
+    expect((await post({ tool: "communicate", args: EMAIL_ARGS, actionId, proof })).status).toBe(400);
+    expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+  });
+  it("scopes the same id independently to each authenticated user", async () => {
+    ledger();
+    expect((await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "same-id-two-users" })).status).toBe(200);
+    sessionEmail = "other@example.com";
+    expect((await post({ tool: "communicate", args: EMAIL_ARGS, actionId: "same-id-two-users" })).status).toBe(200);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(2);
+  });
+  it("keeps an unknown Gmail outcome claimed, not retried or offered as a draft", async () => {
+    ledger();
+    vi.mocked(globalThis.fetch).mockRejectedValue(new Error("socket hang up"));
+    const b = { tool: "communicate", args: EMAIL_ARGS, actionId: "confirm-unknown" };
+    const r = await post({ ...b });
+    expect(r.body.result).toMatch(/do not know whether it was sent/);
+    expect(r.body.openUrl).toBeUndefined();
+    expect((await post({ ...b })).status).toBe(409);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+  });
+  it("refuses writes in deployed state without a database", async () => {
+    vi.doMock("@/lib/db", () => ({ getDb: () => null }));
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect((await post({ tool: "communicate", args: EMAIL_ARGS })).status).toBe(503);
+      expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it("fails closed if the claim cannot be recorded", async () => {
+    vi.doMock("@/lib/db", () => ({ getDb: () => ({ from: () => ({ insert: async () => ({ error: { code: "08001" } }) }) }) }));
+    expect((await post({ tool: "communicate", args: EMAIL_ARGS })).status).toBe(503);
+    expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
   });
 });
