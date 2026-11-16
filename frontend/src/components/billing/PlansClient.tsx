@@ -33,7 +33,7 @@ export function PlansClient({ razorpay }: { razorpay: boolean }) {
   }, []);
 
   // Plans have no payment gateway yet: owner test accounts buy for free, everyone else is told.
-  const notLive = () => flash("Payments are not live yet. Nothing was charged and no credits were added.");
+  const notLive = () => flash("Payments are turned off (free-only mode). Nothing was charged and no credits were added.");
   const doSubscribe = async (tier: Tier) => {
     if (tier === "basic") return;
     if (!b.unlimited) return notLive();
@@ -82,9 +82,9 @@ export function PlansClient({ razorpay }: { razorpay: boolean }) {
           <span className="text-xs font-mono text-text-muted">credits</span>
         </div>
       </div>
-      {b.unlimited && (
-        <p className="text-xs font-mono text-[#34D399] -mt-5">Owner test account: {razorpay ? "plans are" : "packs and plans are"} free to buy here, and creations are never charged.</p>
-      )}
+      <p className="text-xs font-mono text-text-muted -mt-5" data-testid="free-only-note">
+        Free-only mode: payments are turned off in this app.{b.unlimited && " Owner test account: the buttons add test credits with no payment."}
+      </p>
 
       {/* Subscription tiers */}
       <section>
@@ -139,12 +139,12 @@ export function PlansClient({ razorpay }: { razorpay: boolean }) {
                   ))}
                 </ul>
                 <button
-                  disabled={isBasic || active}
+                  disabled={isBasic || active || !b.unlimited}
                   onClick={() => doSubscribe(id)}
                   className="rounded-input px-4 py-2.5 text-sm font-medium transition-opacity disabled:opacity-50 disabled:cursor-default"
                   style={active || isBasic ? { border: "1px solid var(--border-default,#2A2A3A)", color: "#9898B8" } : { backgroundColor: t.color, color: "#000" }}
                 >
-                  {isBasic ? "Included" : active ? "Current plan" : `Choose ${t.label}`}
+                  {isBasic ? "Included" : active ? "Current plan" : b.unlimited ? `Test ${t.label} (no charge)` : "Payments off"}
                 </button>
               </div>
             );
@@ -162,7 +162,7 @@ export function PlansClient({ razorpay }: { razorpay: boolean }) {
       <section>
         <span className="hud-label text-accent-blue">Pay as you go</span>
         <h2 className="font-display text-xl font-semibold text-text-primary">Credit packs</h2>
-        <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups - no subscription required. Bigger packs = cheaper per credit.{razorpay && " Pay in rupees with UPI, cards or netbanking (Razorpay)."}</p>
+        <p className="text-text-muted text-xs font-mono mt-0.5 mb-4">One-time top-ups - no subscription required. Bigger packs = cheaper per credit.{razorpay && " Pay in rupees with UPI, cards or netbanking (Razorpay)."} Prices are shown for reference only while payments are off.</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {BUNDLES.map((bundle) => (
             <div key={bundle.id} className={`holo-card p-4 flex flex-col ${bundle.best ? "ring-1 ring-accent-blue/60" : ""}`}>
@@ -174,8 +174,8 @@ export function PlansClient({ razorpay }: { razorpay: boolean }) {
               </div>
               <div className="text-[11px] font-mono text-text-muted">₹{pricePer100(bundle)} / 100 cr</div>
               <div className="text-lg font-display font-semibold text-text-primary mt-2 mb-3">₹{bundle.priceInr.toLocaleString()}</div>
-              <button onClick={() => void doBuy(bundle.id)} className="mt-auto rounded-input px-3 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-blue transition-colors">
-                Buy
+              <button disabled={!b.unlimited} onClick={() => void doBuy(bundle.id)} className="mt-auto rounded-input px-3 py-2 text-sm font-medium bg-background-secondary border border-border-default text-text-primary hover:border-accent-blue transition-colors disabled:opacity-50 disabled:cursor-default">
+                {b.unlimited ? "Test add (no charge)" : "Payments off"}
               </button>
             </div>
           ))}
