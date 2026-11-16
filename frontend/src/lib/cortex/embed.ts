@@ -1,10 +1,12 @@
+import { providerAllowed } from "@/lib/freeOnly";
 // Gemini text-embedding-004 (768-dim). Server-only. Returns null when the key
 // is missing so Cortex degrades to the app's keyword fallbacks.
 const MODEL = "text-embedding-004";
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 function apiKey(): string | undefined {
-  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  // Free-only: off until FREE_TIER_CONFIRMED lists gemini; Cortex then falls back to keyword search.
+  return providerAllowed("gemini") ? process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY : undefined;
 }
 
 export function cortexEnabled(): boolean {
