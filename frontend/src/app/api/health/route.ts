@@ -22,7 +22,7 @@ export async function GET() {
     grok:      !!clean(env.XAI_API_KEY),
     groq:      !!clean(env.GROQ_API_KEY),
     cerebras:  !!clean(env.CEREBRAS_API_KEY),
-    openrouter: !!clean(env.OPENROUTER_API_KEY),
+    openrouter: false, // excluded by the owner
     mistral:    !!clean(env.MISTRAL_API_KEY),
     huggingface: !!clean(env.HF_TOKEN),
     anthropic: !!clean(env.ANTHROPIC_API_KEY),
