@@ -1,3 +1,4 @@
+import { freeOnly } from "@/lib/freeOnly";
 // Eleven Music through the ElevenLabs API — the same engine and key ANCHOR uses.
 //
 // POST https://api.elevenlabs.io/v1/music with a text prompt, the length in
@@ -29,6 +30,7 @@ export class ElevenLabsError extends Error {
 // A working secret is the value shown once at creation, and it starts with sk_.
 // Sending the id back produces HTTP 400 "API key ID used as API key".
 function usableElevenKey(raw: string | undefined): string | null {
+  if (freeOnly()) return null; // free-only: ElevenLabs music terms for free accounts are unverified
   const k = raw?.trim();
   return k && k.startsWith("sk_") ? k : null;
 }
