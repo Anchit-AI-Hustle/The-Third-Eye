@@ -47,12 +47,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("model IDs come from the providers' current lists", () => {
-  it("asks Groq, Cerebras and OpenRouter for models they still serve", async () => {
-    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c"; process.env.OPENROUTER_API_KEY = "o";
-    stubFetch({ "api.groq.com": okChat, "api.cerebras.ai": okChat, "openrouter.ai": okChat });
+  it("asks Groq and Cerebras for models they still serve", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c";
+    stubFetch({ "api.groq.com": okChat, "api.cerebras.ai": okChat });
     const { llmCascade } = await import("@/lib/llmCascade");
-    for (const p of ["groq", "cerebras", "openrouter"] as const) await llmCascade({ preferProvider: p, messages: [{ role: "user", content: "x" }] });
-    expect(calls.map((c) => c.model)).toEqual(["openai/gpt-oss-120b", "gpt-oss-120b", "nvidia/nemotron-3-super-120b-a12b:free"]);
+    for (const p of ["groq", "cerebras"] as const) await llmCascade({ preferProvider: p, messages: [{ role: "user", content: "x" }] });
+    expect(calls.map((c) => c.model)).toEqual(["openai/gpt-oss-120b", "gpt-oss-120b"]);
   });
 });
 
@@ -99,24 +99,8 @@ describe("free first, paid credit as backup", () => {
     expect((await toolCallCascade({ messages: [{ role: "user", content: "x" }], tools: [] })).provider).toBe("openai");
   });
 
-  it("tries OpenRouter's paid model on the same key once its free model is spent", async () => {
-    process.env.OPENROUTER_API_KEY = "o";
-    stubWithClaude({}, []);
-    let n = 0;
-    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body ?? "{}"));
-      if (new URL(url).pathname.endsWith("/models")) return new Response(JSON.stringify({ data: [] }));
-      calls.push({ host: new URL(url).hostname, model: body.model, auth: null, path: "" });
-      return n++ === 0 ? new Response(JSON.stringify(rateLimited.body), { status: 429 }) : new Response(JSON.stringify({ choices: [{ message: { content: "paid" } }] }));
-    }));
-    const { llmCascade } = await import("@/lib/llmCascade");
-    const out = await llmCascade({ messages: [{ role: "user", content: "x" }] });
-    expect(out).toMatchObject({ provider: "openrouter-paid", model: "openai/gpt-oss-120b", text: "paid" });
-    expect(calls.map((c) => c.model)).toEqual(["nvidia/nemotron-3-super-120b-a12b:free", "openai/gpt-oss-120b"]);
-  });
-
   it("never spends paid credit on unattended work", async () => {
-    process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.OPENROUTER_API_KEY = "o"; process.env.GROQ_API_KEY = "g";
+    process.env.ANTHROPIC_API_KEY = "sk-ant"; process.env.GROQ_API_KEY = "g";
     stubWithClaude({ "api.groq.com": rateLimited, "openrouter.ai": rateLimited }, []);
     const { llmCascade } = await import("@/lib/llmCascade");
     await llmCascade({ background: true, messages: [{ role: "user", content: "x" }] }).catch(() => {});
@@ -150,8 +134,8 @@ describe("free first, paid credit as backup", () => {
 });
 
 describe("JSON mode reaches every OpenAI-compatible provider", () => {
-  it("sends response_format json_object to Groq, Cerebras, OpenRouter and Mistral", async () => {
-    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c"; process.env.OPENROUTER_API_KEY = "o"; process.env.MISTRAL_API_KEY = "m";
+  it("sends response_format json_object to Groq, Cerebras and Mistral", async () => {
+    process.env.GROQ_API_KEY = "g"; process.env.CEREBRAS_API_KEY = "c"; process.env.MISTRAL_API_KEY = "m";
     const formats: unknown[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/models")) return new Response(JSON.stringify({ data: [] }));
@@ -159,8 +143,8 @@ describe("JSON mode reaches every OpenAI-compatible provider", () => {
       return new Response(JSON.stringify(okChat.body));
     }));
     const { llmCascade } = await import("@/lib/llmCascade");
-    for (const p of ["groq", "cerebras", "openrouter", "mistral"] as const) await llmCascade({ preferProvider: p, jsonMode: true, messages: [{ role: "user", content: "x" }] });
-    expect(formats).toEqual(Array(4).fill({ type: "json_object" }));
+    for (const p of ["groq", "cerebras", "mistral"] as const) await llmCascade({ preferProvider: p, jsonMode: true, messages: [{ role: "user", content: "x" }] });
+    expect(formats).toEqual(Array(3).fill({ type: "json_object" }));
   });
 });
 
@@ -257,7 +241,7 @@ describe("a provider chosen by env goes first", () => {
 describe("every failure type falls through, then one clear message", () => {
   it("tries each configured provider in order and ends with a plain sentence", async () => {
     process.env.OPENAI_API_KEY = "a"; process.env.GEMINI_API_KEY = "x".repeat(39); process.env.GROQ_API_KEY = "g";
-    process.env.CEREBRAS_API_KEY = "c"; process.env.OPENROUTER_API_KEY = "o"; process.env.MISTRAL_API_KEY = "m";
+    process.env.CEREBRAS_API_KEY = "c"; process.env.MISTRAL_API_KEY = "m";
     stubFetch({
       "api.openai.com": { status: 429, body: { error: { message: "You exceeded your current quota, please check your plan and billing details." } } },
       "generativelanguage.googleapis.com": { status: 429, body: { error: { message: "You exceeded your current quota" } } },
@@ -269,7 +253,7 @@ describe("every failure type falls through, then one clear message", () => {
     const { llmCascade, LlmCascadeError, userFacingLlmError } = await import("@/lib/llmCascade");
     const err = await llmCascade({ messages: [{ role: "user", content: "x" }] }).catch((e) => e);
     expect(err).toBeInstanceOf(LlmCascadeError);
-    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "cerebras", "openrouter", "mistral", "gemini-lite", "gemini", "openrouter-paid", "openai"]);
+    expect(err.attempts.map((a: { provider: string }) => a.provider)).toEqual(["groq", "cerebras", "mistral", "gemini-lite", "gemini", "openai"]);
     const msg = userFacingLlmError(err);
     expect(msg).toMatch(/^[A-Z][^{}[\]]+\.$/);
     expect(msg).not.toMatch(/\bat \w|Error:|\{/);
