@@ -131,14 +131,22 @@ function OwnKeys() {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [consent, setConsent] = useState<string[]>([]);
+
+  const loadConsent = () => fetch("/api/user/paid-consent").then((r) => r.json()).then((j) => setConsent(j.consent ?? [])).catch(() => {});
+  async function setUse(id: string, on: boolean) {
+    const r = await fetch("/api/user/paid-consent", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: id, consent: on }) }).catch(() => null);
+    const j = await r?.json().catch(() => ({}));
+    if (!r?.ok) setNote(j?.error ?? "Couldn't change that setting."); else setConsent(j.consent ?? []);
+  }
 
   const load = () => fetch("/api/user/provider-keys").then((r) => r.json())
     .then((j) => setSaved(Object.fromEntries((j.keys ?? []).map((k: { provider: string; hint: string }) => [k.provider, k.hint])))).catch(() => {});
   useEffect(() => {
-    void load();
+    void load(); void loadConsent();
     const c = new URLSearchParams(window.location.search).get("connect");
     const who = OWN.find((o) => c?.startsWith(`${o.id}_`))?.name;
-    if (who && c?.endsWith("_connected")) setNote(`Signed in with ${who}. Your chats now use your own ${who} account.`);
+    if (who && c?.endsWith("_connected")) setNote(`Signed in with ${who}. Tick "Use this key for my chats" to turn it on.`);
     else if (who && c?.endsWith("_error")) setNote(`${who} sign-in didn't finish. ${new URLSearchParams(window.location.search).get("why") ?? "Try again."}`);
   }, []);
 
@@ -147,13 +155,13 @@ function OwnKeys() {
     const r = await fetch("/api/user/provider-keys", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: id, value }) }).catch(() => null);
     const j = await r?.json().catch(() => ({}));
     setBusy(false);
-    if (r?.ok) { setValue(""); setAdding(null); setNote(`${OWN.find((o) => o.id === id)?.name ?? "It"} connected. Your chats use it first.`); void load(); }
+    if (r?.ok) { setValue(""); setAdding(null); setNote(`${OWN.find((o) => o.id === id)?.name ?? "It"} connected. Tick "Use this key for my chats" to turn it on.`); void load(); }
     else setNote(j?.error ?? "Couldn't save it.");
   }
 
   async function remove(id: string) {
     await fetch(`/api/user/provider-keys?provider=${id}`, { method: "DELETE" }).catch(() => null);
-    void load();
+    void load(); void loadConsent();
   }
 
   const row = (o: (typeof OWN)[number]) => (
@@ -175,15 +183,22 @@ function OwnKeys() {
           </div>
         )}
       </div>
-      {adding === o.id && (
-        <div className="mt-2 flex gap-2">
+      {saved[o.id] && o.id !== "ollama" && (
+        <label className="mt-2 flex items-start gap-2 text-[11px] text-text-secondary">
+          <input type="checkbox" checked={consent.includes(o.id)} onChange={(e) => void setUse(o.id, e.target.checked)} className="mt-0.5" />
+          <span>Use this key for my chats. Your messages and files are then sent to {o.name} under your own account and its terms, and count against its limits. If that account is on a paid plan, {o.name} may bill you. Off until you tick this.</span>
+        </label>
+      )}
+      {adding === o.id && (<>
+        <p className="mt-2 text-[11px] text-text-muted">{o.id === "ollama" ? "Connecting checks that the address is public." : `Connecting sends this key once to ${o.name} to check it (a model-list request, no messages). Saving it does not turn it on for chats.`}</p>
+        <div className="mt-1 flex gap-2">
           <input type={o.id === "ollama" ? "url" : "password"} value={value} onChange={(e) => setValue(e.target.value)} placeholder={o.placeholder}
             autoComplete="off" aria-label={`${o.name} key`} className={`${field} flex-1 min-w-0`} />
           <button type="button" onClick={() => void save(o.id)} disabled={busy || !value.trim()} className={button}>
             {busy ? <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Checking</span> : "Connect"}
           </button>
         </div>
-      )}
+      </>)}
     </li>
   );
 
@@ -191,10 +206,10 @@ function OwnKeys() {
     <div className="mt-4 pt-4 border-t border-border-default">
       <div className="flex items-center gap-2 mb-1">
         <KeyRound size={13} className="text-[#4FC3F7]" />
-        <h3 className="text-sm font-medium text-text-primary">Use your own free AI account (optional)</h3>
+        <h3 className="text-sm font-medium text-text-primary">Use your own AI account (optional)</h3>
       </div>
       <p className="text-xs text-text-muted mb-3">
-        Your chats use it first, so they never wait on shared limits. Each key is checked with the provider when you connect it, stored encrypted and never shown again.
+        Once you tick "Use this key", your chats use it first, so they stop waiting on shared limits. Each key is checked with the provider when you connect it, stored encrypted and never shown again.
       </p>
       <ul className="space-y-1.5">{OWN.filter((o) => o.main).map(row)}</ul>
       {note && <p className="mt-2 text-xs text-text-secondary">{note}</p>}
