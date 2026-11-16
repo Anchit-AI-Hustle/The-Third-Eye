@@ -20,6 +20,15 @@ describe("ActivationSettings", () => {
     expect(screen.getByText("Device Shake")).toBeInTheDocument();
   });
 
+  it("separates wake-only setup from ambient Life Log recording", () => {
+    render(<ActivationSettings />);
+    expect(screen.getByText(/Open these settings on the HTTPS website/)).toBeInTheDocument();
+    expect(screen.queryByText(/curl -fsSL/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Optional Life Log is separate/)).toBeInTheDocument();
+    expect(screen.getByText(/Create separate Life Log setup/)).toBeInTheDocument();
+    expect(screen.queryByText("Set up this computer")).not.toBeInTheDocument();
+  });
+
   it("persists turning the wake word off", () => {
     render(<ActivationSettings />);
     const switches = screen.getAllByRole("switch");
