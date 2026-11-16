@@ -189,7 +189,7 @@ describe("Jarvis reliability evaluation", () => {
     const r = await chat("add book dentist and then plan my week");
     expect(r.made("task_create")).toHaveLength(1);
     expect(r.done.stop_reason).toBe("partial");
-    expect(r.text).toMatch(/reported success: manage_tasks/);
+    expect(r.text).toMatch(/ran and returned a result: manage_tasks/);
   });
 
   it("10 missing capability: an unknown tool is reported as not done", async () => {
