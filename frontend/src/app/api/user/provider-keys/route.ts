@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { publicHost } from "@/lib/mcp/userConnectors";
-import { deleteOwnKey, HF_OAUTH, keyProblem, loadOwnKeys, ollamaUrlProblem, OWN_KEY_PROVIDERS, saveOwnKey, type OwnKeyProvider } from "@/lib/providerKeys";
+import { withdrawConsent, deleteOwnKey, HF_OAUTH, keyProblem, loadOwnKeys, ollamaUrlProblem, OWN_KEY_PROVIDERS, saveOwnKey, type OwnKeyProvider } from "@/lib/providerKeys";
 
 export const runtime = "nodejs";
 
@@ -43,5 +43,7 @@ export async function DELETE(req: Request) {
   if (!isProvider(provider)) return Response.json({ error: "Unknown provider" }, { status: 400 });
   await deleteOwnKey(email, provider);
   if (provider === "huggingface") await deleteOwnKey(email, HF_OAUTH);
+  // Removing a key also withdraws the consent that went with it.
+  await withdrawConsent(email, provider);
   return Response.json({ ok: true });
 }
