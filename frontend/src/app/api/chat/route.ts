@@ -56,7 +56,7 @@ import { sendWhatsAppText, whatsappConfigured } from "@/lib/whatsapp";
 import { fileFeatureRequest } from "@/lib/featureRequests";
 import { refundCredits, spendCredits } from "@/lib/credits";
 import { applyEffects } from "@/lib/nativeClient";
-import { providerAllowed } from "@/lib/freeOnly";
+import { providerAllowed, gatedKey } from "@/lib/freeOnly";
 import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
 
 export const runtime = "nodejs";
@@ -261,7 +261,7 @@ async function wikiSnippets(query: string): Promise<string> {
 }
 
 async function webSearch(query: string): Promise<string> {
-  const serperKey = process.env.SERPER_API_KEY;
+  const serperKey = gatedKey("serper", process.env.SERPER_API_KEY ?? "");
   if (serperKey) {
     try {
       const res = await fetch("https://google.serper.dev/search", {
@@ -1232,7 +1232,7 @@ async function runTool(
 // ─── New tool implementations ─────────────────────────────────────────────
 
 async function getNews(query: string): Promise<string> {
-  const key = process.env.SERPER_API_KEY;
+  const key = gatedKey("serper", process.env.SERPER_API_KEY ?? "");
   if (!key) return (await freeNews(query)) || ((await grounded(query ? `${query} news` : "top news today")) ?? "[News unavailable right now.]");
   try {
     const res = await fetch("https://google.serper.dev/news", {
@@ -1254,7 +1254,7 @@ async function getNews(query: string): Promise<string> {
 async function getStockQuote(symbol: string): Promise<string> {
   const quote = await freeStockQuote(symbol);
   if (quote) return quote;
-  const key = process.env.SERPER_API_KEY;
+  const key = gatedKey("serper", process.env.SERPER_API_KEY ?? "");
   if (!key) return (await grounded(`${symbol} stock price`)) ?? `[No quote found for "${symbol}".]`;
   try {
     const res = await fetch("https://google.serper.dev/search", {
@@ -1275,7 +1275,7 @@ async function getStockQuote(symbol: string): Promise<string> {
 }
 
 async function getNearby(query: string, location?: { latitude: number; longitude: number }): Promise<string> {
-  const key = process.env.SERPER_API_KEY;
+  const key = gatedKey("serper", process.env.SERPER_API_KEY ?? "");
   if (!key) {
     const free = await freeNearby(query, location);
     if (free) return free;
