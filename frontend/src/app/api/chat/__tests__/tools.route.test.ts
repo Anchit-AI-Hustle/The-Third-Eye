@@ -132,6 +132,19 @@ describe("chat tools", () => {
     expect(r.done.sideEffects).toEqual([]);
   });
 
+  it("does not add an identical open task twice, in one reply or across a retry", async () => {
+    tables = { tasks: [{ id: "t1", user_id: "u@x.com", title: "Call the bank", due_date: "2026-11-17", status: "todo" }] };
+    calls = [
+      { name: "manage_tasks", args: { action: "create", title: "call the bank ", due_date: "2026-11-17" } },
+      { name: "manage_tasks", args: { action: "create", title: "Pay rent" } },
+      { name: "manage_tasks", args: { action: "create", title: "Pay rent" } },
+    ];
+    const r = await run();
+    expect(r.results[0]).toMatch(/already_exists/);
+    expect(r.results[2]).toMatch(/already_exists/);
+    expect(r.done.sideEffects).toEqual([expect.objectContaining({ type: "task_create", data: expect.objectContaining({ title: "Pay rent" }) })]);
+  });
+
   it("finds a task it created earlier in the same reply", async () => {
     calls = [
       { name: "manage_tasks", args: { action: "create", title: "Review Q2 deck" } },
