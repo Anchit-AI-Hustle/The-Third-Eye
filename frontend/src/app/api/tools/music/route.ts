@@ -1,3 +1,4 @@
+import { providerAllowed } from "@/lib/freeOnly";
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -72,6 +73,7 @@ const INLINE_MAX = 3_200_000;
 // Gated on a token: with no HF key it returns null and the caller keeps the
 // existing Replicate behaviour, so this can never break the working path.
 function hfToken(): string | null {
+  if (!providerAllowed("huggingface")) return null; // free-only: off until FREE_TIER_CONFIRMED lists it
   return process.env.HF_API_TOKEN || process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACEHUB_API_TOKEN || null;
 }
 
