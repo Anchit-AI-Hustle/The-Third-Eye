@@ -132,17 +132,22 @@ describe("chat tools", () => {
     expect(r.done.sideEffects).toEqual([]);
   });
 
-  it("does not add an identical open task twice, in one reply or across a retry", async () => {
-    tables = { tasks: [{ id: "t1", user_id: "u@x.com", title: "Call the bank", due_date: "2026-11-17", status: "todo" }] };
+  it("runs an identical write call once per reply, but still allows the same task in a later reply", async () => {
+    tables = { tasks: [] };
     calls = [
-      { name: "manage_tasks", args: { action: "create", title: "call the bank ", due_date: "2026-11-17" } },
-      { name: "manage_tasks", args: { action: "create", title: "Pay rent" } },
-      { name: "manage_tasks", args: { action: "create", title: "Pay rent" } },
+      { name: "manage_tasks", args: { action: "create", title: "Pay rent", due_date: "2026-11-17" } },
+      { name: "manage_tasks", args: { due_date: "2026-11-17", title: "Pay rent", action: "create" } },
+      { name: "manage_tasks", args: { action: "create", title: "Pay rent", due_date: "2026-11-18" } },
     ];
     const r = await run();
-    expect(r.results[0]).toMatch(/already_exists/);
-    expect(r.results[2]).toMatch(/already_exists/);
-    expect(r.done.sideEffects).toEqual([expect.objectContaining({ type: "task_create", data: expect.objectContaining({ title: "Pay rent" }) })]);
+    expect(r.results[1]).toMatch(/already ran with these exact arguments/);
+    expect(r.done.sideEffects).toEqual([
+      expect.objectContaining({ type: "task_create", data: expect.objectContaining({ due_date: "2026-11-17" }) }),
+      expect.objectContaining({ type: "task_create", data: expect.objectContaining({ due_date: "2026-11-18" }) }),
+    ]);
+    // A new reply is a new operation: an intentional repeat is not suppressed.
+    calls = [{ name: "manage_tasks", args: { action: "create", title: "Pay rent", due_date: "2026-11-17" } }];
+    expect((await run()).done.sideEffects).toHaveLength(1);
   });
 
   it("finds a task it created earlier in the same reply", async () => {
