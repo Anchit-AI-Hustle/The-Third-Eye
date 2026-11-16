@@ -1,7 +1,7 @@
 # Installs the listener on this PC: starts at sign-in, runs in the background,
 # listens for "Hey JARVIS" and, given the token from Settings, logs the day.
 # Usage: & ([scriptblock]::Create((irm <site>/wake/install-windows.ps1))) <token>
-param([string]$Token = "")
+param([string]$Token = "", [switch]$EnableLifeLog)
 # Remove it: delete "Third Eye wake.lnk" from shell:startup and the folder %LOCALAPPDATA%\ThirdEyeWake.
 $ErrorActionPreference = "Stop"
 $Site = if ($env:THIRD_EYE_URL) { $env:THIRD_EYE_URL } else { "https://the-third-eye.anchit-tandon.com" }
@@ -15,7 +15,12 @@ Write-Host "Installing into $Dir ..."
 python -m venv (Join-Path $Dir "venv")
 & (Join-Path $Dir "venv\Scripts\pip.exe") install -q --upgrade pip vosk sounddevice
 Invoke-WebRequest "$Site/wake/wake.py" -OutFile (Join-Path $Dir "wake.py")
-if ($Token) { Set-Content -NoNewline -Path (Join-Path $Dir "token") -Value $Token }
+if ($EnableLifeLog -and -not $Token) { throw "A Life Log token is required for this explicit mode." }
+if ($Token -and -not $EnableLifeLog) { throw "Use -EnableLifeLog only if you want ambient recording. No token is needed for wake-only." }
+if ($EnableLifeLog) { Set-Content -NoNewline -Path (Join-Path $Dir "token") -Value $Token }
+$LogMode = if ($EnableLifeLog) { "1" } else { "0" }
+[Environment]::SetEnvironmentVariable("THIRD_EYE_LIFELOG", $LogMode, "User")
+$env:THIRD_EYE_LIFELOG = $LogMode
 if (-not (Test-Path (Join-Path $Dir "model"))) {
   Write-Host "Downloading the offline voice model (36 MB, once) ..."
   $zip = Join-Path $Dir "model.zip"
@@ -33,3 +38,5 @@ $link.Arguments = "`"$script`""
 $link.Save()
 Start-Process $pyw "`"$script`""
 Write-Host "Done. Say ""Hey JARVIS"" any time."
+
+if (-not $EnableLifeLog) { Write-Host "Wake-only mode. No ambient audio is uploaded or filed to Life Log." }
