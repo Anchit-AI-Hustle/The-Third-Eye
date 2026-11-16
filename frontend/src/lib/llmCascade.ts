@@ -56,6 +56,13 @@ const CEREBRAS_BASE  = "https://api.cerebras.ai/v1";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const MISTRAL_BASE   = "https://api.mistral.ai/v1";
 const HF_BASE        = "https://router.huggingface.co/v1";
+// Cloudflare Workers AI (text only), through its OpenAI-compatible endpoint. Owner-deployment
+// only: needs CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN and FREE_TIER_CONFIRMED=cloudflare.
+// The account id goes into the URL, so only a 32-hex id is accepted.
+const cloudflareBase = () => {
+  const id = clean(process.env.CLOUDFLARE_ACCOUNT_ID);
+  return /^[0-9a-f]{32}$/i.test(id) ? `https://api.cloudflare.com/client/v4/accounts/${id}/ai/v1` : "";
+};
 // A user's own Ollama (their Mac, through a tunnel) wins over the deployment's.
 // Spoken to through its OpenAI-compatible /v1, so any local server with that
 // API (OpenJarvis `jarvis serve`, llama.cpp, vLLM) works the same way.
@@ -102,6 +109,7 @@ function loadKeys() {
     openrouter: g("openrouter", ""),
     mistral:   pick("mistral", own?.mistral, clean(process.env.MISTRAL_API_KEY)),
     huggingface: pick("huggingface", own?.huggingface, clean(process.env.HF_TOKEN)),
+    cloudflare: cloudflareBase() ? g("cloudflare", clean(process.env.CLOUDFLARE_API_TOKEN)) : "",
     anthropic: g("anthropic", clean(process.env.ANTHROPIC_API_KEY)),
     ollama:    !!own?.ollama || process.env.OLLAMA_ENABLED === "1",
   };
@@ -128,6 +136,8 @@ const DEFAULT_MODELS = {
   cerebras: "gpt-oss-120b",
   mistral: "mistral-small-latest",
   huggingface: "openai/gpt-oss-120b",
+  // Not on Cloudflare's paid-billing list; docs list function calling and zero data retention. Free status of a given account is still its owner's statement.
+  cloudflare: "@cf/zai-org/glm-4.7-flash",
   openrouter: "nvidia/nemotron-3-super-120b-a12b:free",
   // The paid backups, used once the free tiers are spent.
   openrouterPaid: "openai/gpt-oss-120b",
@@ -137,11 +147,16 @@ const DEFAULT_MODELS = {
 type ModelProvider = keyof typeof DEFAULT_MODELS;
 const MODEL_ENV: Record<ModelProvider, string> = {
   openai: "OPENAI_MODEL", gemini: "GEMINI_MODEL", geminiPro: "GEMINI_PRO_MODEL", grok: "XAI_MODEL",
-  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", huggingface: "HF_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
+  groq: "GROQ_MODEL", cerebras: "CEREBRAS_MODEL", mistral: "MISTRAL_MODEL", huggingface: "HF_MODEL", cloudflare: "CLOUDFLARE_MODEL", openrouter: "OPENROUTER_MODEL", ollama: "OLLAMA_MODEL",
   openrouterPaid: "OPENROUTER_PAID_MODEL", anthropic: "ANTHROPIC_MODEL",
 };
+// Cloudflare: only models checked against its pricing page (not on the "requires a paid billing
+// method" list) may be used, so CLOUDFLARE_MODEL cannot name a paid-only or unknown model.
+export const CLOUDFLARE_FREE_MODELS: readonly string[] = ["@cf/zai-org/glm-4.7-flash"];
 export function modelFor(provider: ModelProvider): string {
-  return process.env[MODEL_ENV[provider]]?.trim() || DEFAULT_MODELS[provider];
+  const v = process.env[MODEL_ENV[provider]]?.trim();
+  if (provider === "cloudflare") return v && CLOUDFLARE_FREE_MODELS.includes(v) ? v : DEFAULT_MODELS.cloudflare;
+  return v || DEFAULT_MODELS[provider];
 }
 
 // Providers retire models and every call to a retired one fails, which with every
@@ -247,7 +262,7 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
   return { res, model };
 }
 
-const CLOUD_PROVIDERS = ["groq", "cerebras", "openrouter", "mistral", "huggingface", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"] as const;
+const CLOUD_PROVIDERS = ["groq", "cerebras", "openrouter", "mistral", "huggingface", "cloudflare", "gemini-lite", "gemini", "openrouter-paid", "anthropic", "openai", "grok"] as const;
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number];
 
 // Free first, credits as backup. The free tiers in order of daily headroom:
@@ -367,6 +382,13 @@ export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()
   if (reset) {
     const at = reset.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone });
     return `My free AI limits are used up for now. The first one resets at about ${at}. Please try again then.`;
+  }
+  const quotaish = /quota|rate.?limit|\b429\b/i.test(raw);
+  if (!quotaish && /\b401\b|invalid[_ ]api[_ ]key|api key (?:expired|revoked)|key expired/i.test(raw)) {
+    return "An AI provider did not accept its API key. If it is a key you added in Settings, it may have expired or been revoked, so remove it and add a fresh one. If it is the shared key, the site owner needs to check it. I can't renew keys for you.";
+  }
+  if (!quotaish && /\b403\b/.test(raw)) {
+    return "An AI provider refused the request. This can be a permission, region or plan limit on the key, not necessarily an expired key. If it is a key you added, check its permissions in the provider's console. If it is the shared key, the site owner needs to check it.";
   }
   const outOfCredit = /credit balance|insufficient_quota|\bbilling\b|payment required/i.test(raw);
   const rateLimited = /rate.?limit|RESOURCE_EXHAUSTED|\b429\b|quota|exceeded/i.test(raw);
@@ -791,6 +813,13 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
       attempts.push(attempt("mistral", model, res));
       if (res.ok) { await noteSuccess(healthName("mistral"), model); return { text: res.text, provider: "mistral", model, attempts }; }
       if (res.quota) startCooldown(healthName("mistral"), res.retryAfterMs);
+    } else if (provider === "cloudflare" && keys.cloudflare) {
+      const base = cloudflareBase();
+      const model = modelFor("cloudflare");
+      const res = await callOpenAICompatible(base, keys.cloudflare, model, opts);
+      attempts.push(attempt("cloudflare", model, res));
+      if (res.ok) { await noteSuccess(healthName("cloudflare"), model); return { text: res.text, provider: "cloudflare", model, attempts }; }
+      if (res.quota) startCooldown(healthName("cloudflare"), res.retryAfterMs);
     } else if (provider === "ollama" && keys.ollama) {
       const blocked = await ownOllamaBlocked();
       if (blocked) { attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${blocked}` }); continue; }
@@ -961,6 +990,7 @@ function toolCapableOrder(): { provider: string; base: string; model: string; ke
   if (keys.cerebras) rows.push({ provider: "cerebras", base: CEREBRAS_BASE, model: modelFor("cerebras"), key: keys.cerebras });
   if (keys.mistral) rows.push({ provider: "mistral", base: MISTRAL_BASE, model: modelFor("mistral"), key: keys.mistral });
   if (keys.huggingface) rows.push({ provider: "huggingface", base: HF_BASE, model: modelFor("huggingface"), key: keys.huggingface });
+  if (keys.cloudflare) rows.push({ provider: "cloudflare", base: cloudflareBase(), model: modelFor("cloudflare"), key: keys.cloudflare });
   if (keys.grok) rows.push({ provider: "grok", base: GROK_BASE, model: modelFor("grok"), key: keys.grok });
   if (keys.openrouter) rows.push({ provider: "openrouter", base: OPENROUTER_BASE, model: modelFor("openrouter"), key: keys.openrouter });
   if (keys.openrouter && !freeOnly()) rows.push({ provider: "openrouter-paid", base: OPENROUTER_BASE, model: modelFor("openrouterPaid"), key: keys.openrouter });
@@ -988,6 +1018,7 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
     const { res, model: used } = provider === "anthropic"
       ? { res: await callClaudeTools(key, model, opts), model }
       : local ? { res: await callOpenAICompatibleTools(base, key, model, { ...opts, timeoutMs: opts.timeoutMs ?? 60_000 }), model }
+      : provider === "cloudflare" ? { res: await callOpenAICompatibleTools(base, key, model, opts), model } // never swap to another model: it could need paid billing
       : await withLiveModel(provider, base, key, model, (m) => callOpenAICompatibleTools(base, key, m, opts));
     if (res.ok) {
       await noteSuccess(hp, used);
@@ -996,8 +1027,8 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
     const limit = tooLargeLimit(res.status, res.err);
     if (limit !== null) { noteTooLarge(provider, tokens, limit); attempts.push(`${provider}:too large`); continue; }
     await noteFailure(hp, used, res.status, res.err, res.retryAfterMs);
-    attempts.push(`${provider}:${res.status}`);
     if (res.quota) startCooldown(hp, res.retryAfterMs);
+    attempts.push(`${provider}:${res.status}${res.quota ? ` ${cooldownNote(hp)}` : ""}`);
     if (local && ollamaAway(res.status)) startCooldown(hp, OLLAMA_AWAY_MS);
   }
   throw new Error(`All tool-capable fallback providers failed. Attempts: ${attempts.join(", ") || "no keys configured"}`);
