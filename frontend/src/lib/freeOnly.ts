@@ -6,6 +6,7 @@
 //  - OpenRouter: only models whose id ends in ":free", which OpenRouter lists at $0 per
 //    token. Caveats: free-model daily limits depend on the account's purchased credit, and a
 //    key's own credit is never touched by a :free model. Any other model id is refused.
+//  - Serper (web search, metered, one-time free credits): same confirmation rule, key "serper".
 //  - Groq, Cerebras, Gemini, Mistral, Hugging Face: blocked until the owner lists the
 //    provider in FREE_TIER_CONFIRMED (e.g. FREE_TIER_CONFIRMED=groq,cerebras). That list is the
 //    owner's own statement that the key is on a free plan with billing off. This code
@@ -27,7 +28,7 @@ export function isPaidLlmProvider(p: string): boolean {
   return (PAID_LLM_PROVIDERS as readonly string[]).includes(p);
 }
 
-const NEEDS_CONFIRMATION = new Set(["groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface"]);
+const NEEDS_CONFIRMATION = new Set(["groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface", "serper"]);
 
 function confirmed(): Set<string> {
   return new Set((process.env.FREE_TIER_CONFIRMED ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean).map((s) => (s === "gemini-lite" ? "gemini" : s)));
