@@ -241,7 +241,7 @@ async function servedModel(provider: string, base: string, key: string, tried: S
 // about the next: try a few others the provider serves before giving up on it.
 // A retired model is replaced for good; a rate-limited one only for this call.
 async function withLiveModel<T extends { ok: boolean; status?: number }>(
-  provider: string, base: string, key: string, configured: string, call: (model: string) => Promise<T>,
+  provider: string, base: string, key: string, configured: string, call: (model: string) => Promise<T>, budget?: { left: number },
 ): Promise<{ res: T; model: string }> {
   let model = liveModels.get(provider) ?? configured;
   let res = await call(model);
@@ -252,6 +252,8 @@ async function withLiveModel<T extends { ok: boolean; status?: number }>(
     const retired = isRetiredModel(status, err);
     if (tooLargeLimit(status, err) !== null) break;
     if (!retired && (status !== 429 || classifyFailure(status, err)?.status === "credit")) break;
+    // The model-list lookup is an outbound request too, so it counts against the reply's allowance.
+    if (budget) { if (budget.left <= 0) break; budget.left--; }
     const next = await servedModel(provider, base, key, tried);
     if (!next) break;
     if (retired) liveModels.set(provider, next);
@@ -368,6 +370,9 @@ function failureKind(a: LlmCascadeResult["attempts"][number]): string {
 export function userFacingOutage(raw: string, timezone = "UTC", now = new Date()): string {
   if (/no AI provider key is configured/i.test(raw)) {
     return "No free AI model is turned on for you right now. If you added your own key in Settings, tick \"Use this key for my chats\"; otherwise the shared free model isn't available yet.";
+  }
+  if (/call allowance for this reply used/i.test(raw)) {
+    return "I stopped this reply early to protect the free AI quota. Nothing further was started. Send a follow-up message to continue.";
   }
   const wait = shortestRetryWait(raw);
   if (wait !== null && wait >= 120_000) {
@@ -1033,7 +1038,7 @@ export async function toolCallCascade(opts: ToolCallCascadeOptions): Promise<Too
         const r = await callOpenAICompatibleTools(base, key, m, opts);
         if (!r.ok && (r.quota || r.status === 429 || tooLargeLimit(r.status, r.err) !== null)) opts.rejected?.add(id);
         return r;
-      });
+      }, opts.budget);
     if (res.ok) {
       await noteSuccess(hp, used);
       return { content: res.content, tool_calls: res.tool_calls, provider, model: used };
