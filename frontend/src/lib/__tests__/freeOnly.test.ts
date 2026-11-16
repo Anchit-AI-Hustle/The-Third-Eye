@@ -20,11 +20,11 @@ describe("free-only guard (default)", () => {
     expect(freeOnly()).toBe(true);
   });
 
-  it("keeps only OpenRouter (:free models) by default; paid and unconfirmed providers are gone", async () => {
+  it("has no cloud provider by default: OpenRouter is owner-excluded, paid and unconfirmed providers are gone", async () => {
     const { cascadeOrder, configuredProviders } = await import("@/lib/llmCascade");
     const cfg = configuredProviders();
-    expect(cfg).toEqual(["openrouter"]);
-    for (const p of [...PAID, "groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface"]) expect(cascadeOrder()).not.toContain(p);
+    expect(cfg).toEqual([]);
+    for (const p of [...PAID, "groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface", "openrouter"]) expect(cascadeOrder()).not.toContain(p);
   });
 
   it("FREE_TIER_CONFIRMED re-enables only the named providers, never a paid one", async () => {
@@ -51,7 +51,8 @@ describe("free-only guard (default)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("calls only openrouter.ai on a full text cascade, tool cascade, vision and transcription", async () => {
+  it("with only groq confirmed, calls only api.groq.com on text, tool, vision and transcription paths (OpenRouter key present, unused)", async () => {
+    process.env.FREE_TIER_CONFIRMED = "groq";
     const hosts: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string) => { hosts.push(new URL(String(url)).host); return new Response(JSON.stringify({ error: "x" }), { status: 500 }); }));
     const m = await import("@/lib/llmCascade");
@@ -59,24 +60,20 @@ describe("free-only guard (default)", () => {
     await m.toolCallCascade({ messages: [{ role: "user", content: "hi" }], tools: [] } as never).catch(() => null);
     await m.visionCascade({ prompt: "x", image: { mimeType: "image/png", data: "AAAA" } }).catch(() => null);
     await m.transcribeCascade(new Blob(["abc"], { type: "audio/webm" })).catch(() => null);
-    const allowed = new Set(["openrouter.ai"]);
+    const allowed = new Set(["api.groq.com"]);
     expect(hosts.length).toBeGreaterThan(0);
     for (const h of hosts) expect(allowed.has(h), h).toBe(true);
   });
 
-  it("refuses a non-:free OpenRouter model (env override or rotation) without a request", async () => {
-    process.env.OPENROUTER_MODEL = "openai/gpt-4o";
-    process.env.OPENROUTER_VISION_MODEL = "openai/gpt-4o";
-    const bodies: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => { if (String(url).includes("openrouter.ai") && init?.body) bodies.push(String(init.body)); return new Response("{}", { status: 500 }); }));
+  it("never contacts OpenRouter, even with a :free model, a preferred provider or the key present", async () => {
+    process.env.FREE_TIER_CONFIRMED = "groq";
+    const hosts: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => { hosts.push(new URL(String(url)).host); return new Response("{}", { status: 500 }); }));
     const m = await import("@/lib/llmCascade");
     await m.llmCascade({ preferProvider: "openrouter", messages: [{ role: "user", content: "hi" }] } as never).catch(() => null);
+    await m.llmCascade({ messages: [{ role: "user", content: "hi" }] } as never).catch(() => null);
     await m.visionCascade({ prompt: "x", image: { mimeType: "image/png", data: "AAAA" } }).catch(() => null);
-    for (const b of bodies) expect(b).not.toContain("gpt-4o");
-    // Positive control: with the default :free vision model the same path does call OpenRouter.
-    delete process.env.OPENROUTER_VISION_MODEL;
-    await m.visionCascade({ prompt: "x", image: { mimeType: "image/png", data: "AAAA" } }).catch(() => null);
-    expect(bodies.some((b) => b.includes(":free"))).toBe(true);
+    expect(hosts).not.toContain("openrouter.ai");
   });
 
   it("turns off embeddings, the Claude post generator, Replicate, ElevenLabs, Razorpay and Stripe", async () => {
