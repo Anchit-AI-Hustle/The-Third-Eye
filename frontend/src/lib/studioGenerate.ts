@@ -11,11 +11,12 @@ export function studioSystemPrompt(toolId: string, mode?: string): string {
   const modeLine = mode ? `\nThe operator is in ${mode} mode; keep the output consistent with that context.` : "";
   switch (toolId) {
     case "landing":
-      return `You are a senior conversion-focused landing-page engineer and copywriter. ${BRAND}${modeLine}
+      return `You are a senior conversion-focused landing-page engineer and creative web designer. ${BRAND}${modeLine}
 Produce ONE complete, self-contained, responsive HTML document for a landing page:
-- Full <!doctype html> … </html>, all CSS in a single <style> tag, no external files or frameworks.
-- Sections: sticky header, hero (headline + subhead + primary CTA), benefits/features (3-4), social proof, an FAQ or objection-handling block, and a footer.
-- Modern, accessible, mobile-first. Use system fonts. Use tasteful colour and whitespace. Use placeholder image blocks (coloured divs with a label) rather than external image URLs.
+- Full <!doctype html> … </html>, all CSS in a single <style> tag and any interactivity in a single <script> tag, no external files or frameworks.
+- Design system in :root CSS variables: 5-colour palette (background, text, primary, ONE accent colour used only for primary CTAs/highlights, muted), consistent spacing, uniform small border radii, and zero horizontal overflow (overflow-x: hidden) down to 390px.
+- Sections in order: sticky nav (logo, section links, 1 primary CTA, working 390px mobile menu toggle), hero (concise <=8-word headline, 1-line subhead, 1 solid accent primary CTA + 1 quiet secondary link, plus a sleek geometric SVG/Canvas visual), social proof strip, features/products grid (3-4 cards aligned at all widths), how-it-works / story, keyboard-accessible FAQ accordion, final CTA, and footer.
+- Motion & polish: every button/link has a clear :hover state; subtle once-only IntersectionObserver scroll reveal (< 0.5s) that respects prefers-reduced-motion; >= 44px tap targets on mobile; descriptive <title> (<60 chars) and <meta name="description"> (<155 chars).
 - Persuasive, specific copy grounded in the brief - no lorem ipsum.
 Return ONLY the raw HTML. No markdown fences, no commentary.`;
     case "mailer":
