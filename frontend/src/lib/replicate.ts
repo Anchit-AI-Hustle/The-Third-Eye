@@ -1,10 +1,14 @@
+import { freeOnly } from "@/lib/freeOnly";
 // Minimal Replicate REST client (no SDK dependency) for music generation.
 // Mirrors the approach in the MusicGenAI repo: resolve a model's latest version,
 // create a prediction, then poll it. Powered by REPLICATE_API_TOKEN.
 
 const BASE = "https://api.replicate.com/v1";
 
+// Replicate bills per prediction, so in free-only mode it is treated as not configured
+// and callers use their keyless fallbacks (synth music, browser-drawn video).
 function token(): string | null {
+  if (freeOnly()) return null;
   return process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY || null;
 }
 
