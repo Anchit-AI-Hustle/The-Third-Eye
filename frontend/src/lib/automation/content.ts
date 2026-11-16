@@ -1,3 +1,4 @@
+import { freeOnly } from "@/lib/freeOnly";
 import Anthropic from "@anthropic-ai/sdk";
 import { calculators } from "@/lib/calculators/data";
 import { SITE_URL } from "@/lib/site";
@@ -56,7 +57,8 @@ export function pickIdea(seed: number): ContentIdea {
 
 /** Generate the post text via Claude, falling back to the template if no key. */
 export async function generatePost(idea: ContentIdea): Promise<PostDraft> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // Free-only: the paid Claude call is skipped and the template text is used.
+  const apiKey = freeOnly() ? undefined : process.env.ANTHROPIC_API_KEY;
   let text = idea.fallback;
 
   if (apiKey) {
