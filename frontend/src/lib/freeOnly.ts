@@ -3,7 +3,7 @@
 // Settings) cannot make a call that bills.
 //
 // What is allowed, and why:
-//  - OpenRouter: only models whose id ends in ":free", which OpenRouter lists at $0 per
+//  - OpenRouter: excluded by the owner (OWNER_EXCLUDED), no calls at all. If it is ever re-enabled, only models whose id ends in ":free", which OpenRouter lists at $0 per
 //    token. Caveats: free-model daily limits depend on the account's purchased credit, and a
 //    key's own credit is never touched by a :free model. Any other model id is refused.
 //  - Serper (web search, metered, one-time free credits): same confirmation rule, key "serper".
@@ -28,6 +28,9 @@ export function isPaidLlmProvider(p: string): boolean {
   return (PAID_LLM_PROVIDERS as readonly string[]).includes(p);
 }
 
+/** Owner instruction (16 Nov): OpenRouter is not used at all, free models included. */
+export const OWNER_EXCLUDED = ["openrouter"] as const;
+
 const NEEDS_CONFIRMATION = new Set(["groq", "cerebras", "gemini", "gemini-lite", "mistral", "huggingface", "serper"]);
 
 function confirmed(): Set<string> {
@@ -38,6 +41,7 @@ function confirmed(): Set<string> {
 export function providerAllowed(p: string): boolean {
   if (!freeOnly()) return true;
   if (isPaidLlmProvider(p)) return false;
+  if ((OWNER_EXCLUDED as readonly string[]).includes(p)) return false;
   if (NEEDS_CONFIRMATION.has(p)) return confirmed().has(p === "gemini-lite" ? "gemini" : p);
   return true;
 }
