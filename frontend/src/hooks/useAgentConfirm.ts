@@ -8,6 +8,7 @@ import { classifyOpenUrl } from "@/lib/liveActions";
 // by tapping the ActionCard or (in the voice surface) by saying "confirm".
 export interface PendingAction {
   id: string;
+  proof?: string;
   tool: string;
   args: any;
   summary: string;
@@ -106,7 +107,7 @@ export function useAgentConfirm() {
       const res = await fetch("/api/act", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: action.tool, args: action.args, actionId: action.id }),
+        body: JSON.stringify({ tool: action.tool, args: action.args, actionId: action.id, proof: action.proof }),
       });
       const data = await res.json().catch(() => ({}));
       const openUrl = typeof data.openUrl === "string" ? data.openUrl : "";
