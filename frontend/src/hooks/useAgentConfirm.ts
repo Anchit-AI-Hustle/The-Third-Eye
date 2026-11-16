@@ -106,7 +106,7 @@ export function useAgentConfirm() {
       const res = await fetch("/api/act", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: action.tool, args: action.args }),
+        body: JSON.stringify({ tool: action.tool, args: action.args, actionId: action.id }),
       });
       const data = await res.json().catch(() => ({}));
       const openUrl = typeof data.openUrl === "string" ? data.openUrl : "";
