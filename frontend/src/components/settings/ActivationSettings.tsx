@@ -75,7 +75,7 @@ export function ActivationSettings() {
             Assistant activation
           </h2>
           <p className="text-xs text-text-muted mt-0.5">
-            Wake word, phone gestures, and a desktop hotkey - from any screen.
+            In-app voice and gestures, plus separate device setup for outside-app activation.
           </p>
         </div>
         {saved && (
@@ -93,7 +93,7 @@ export function ActivationSettings() {
             </div>
             <div>
               <h3 className="text-sm font-medium text-text-primary">Voice activation</h3>
-              <p className="text-xs text-text-muted">Always-on wake word</p>
+              <p className="text-xs text-text-muted">Wake word while the app is active</p>
             </div>
           </div>
           <Toggle enabled={config.wakeWordEnabled} onChange={(v) => set("wakeWordEnabled", v)} />
@@ -229,7 +229,7 @@ export function ActivationSettings() {
           </div>
         </div>
         <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-text-muted">Global activation hotkey</span>
+          <span className="text-xs text-text-muted">In-app activation hotkey</span>
           <button
             type="button"
             onClick={() => setRecording(true)}
@@ -374,7 +374,7 @@ type WakeNative = {
 const capacitor = () => (globalThis as { Capacitor?: { getPlatform?: () => string; Plugins?: Record<string, unknown> } }).Capacitor;
 
 // "Hey JARVIS" with the app closed. Android spots the name on the phone in the
-// background; iOS lets only Siri listen while apps are closed; a computer runs
+// background; iOS uses system Shortcuts/Siri activation; a computer runs
 // the small helper from /wake, which opens talk mode when it hears the name.
 function ClosedAppWake() {
   const [platform, setPlatform] = useState<"android" | "ios" | "desktop" | null>(null);
@@ -398,7 +398,7 @@ function ClosedAppWake() {
   }, [platform]);
 
   if (!platform) return null;
-  const host = typeof location !== "undefined" ? location.origin : "";
+  const host = typeof location !== "undefined" && location.protocol === "https:" ? location.origin : "";
   return (
     <div className="pt-3 border-t border-border-default space-y-2">
       <p className="text-xs font-medium text-text-primary">When the app is closed</p>
@@ -412,7 +412,7 @@ function ClosedAppWake() {
       )}
       {platform === "ios" && (
         <p className="text-xs text-text-muted">
-          iPhone lets only Siri listen while apps are closed. Say <span className="text-text-primary">“Hey Siri, talk to Jarvis”</span> and The Third Eye opens ready to talk.
+          For a custom "Hey Jarvis" phrase outside the app, use iPhone Settings &gt; Accessibility &gt; Vocal Shortcuts to run a Shortcut that opens the assistant. Phrase detection is on-device. If the native Third Eye app is installed and its Talk action appears in Shortcuts, you can select it instead. A locked phone may require unlocking; website microphone access can still require a tap. This device setup has not been verified here.
         </p>
       )}
       {platform === "desktop" && <ComputerListener host={host} />}
@@ -439,38 +439,45 @@ function ComputerListener({ host }: { host: string }) {
   const revoke = async () => {
     const ok = await fetch("/api/listener/token", { method: "DELETE" }).then((r) => r.ok).catch(() => false);
     setToken(null);
-    setNote(ok ? "Computers stopped logging. “Hey JARVIS” still works there." : "Couldn't stop them. Try again.");
+    setNote(ok ? "The logging token was revoked. A running wake-only helper needs no account token." : "Couldn't stop them. Try again.");
   };
   const arg = token ?? "";
   return (
     <div className="space-y-1.5">
       <p className="text-xs text-text-muted">
-        Install the listener once and this computer listens all day with no tab open: “Hey JARVIS” opens talk mode, and what you say is logged to your Life Log, where tasks and reminders are picked up. The name is spotted offline; speech is sent for transcription in 45-second pieces, silence skipped.
+        Wake-only mode detects the phrase offline and opens talk mode while this computer is awake and the helper is running. It needs microphone permission, but does not upload ambient speech or record your day. It cannot keep listening after shutdown or guarantee browser mic access without a tap. No helper is installed by this page.
       </p>
+      {host ? <>
+      <p className="text-xs text-text-muted">Wake-only Mac command (no account token needed):</p>
+      <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">curl -fsSL {host}/wake/install-mac.sh | bash</code>
+      <p className="text-xs text-text-muted">Wake-only Windows command:</p>
+      <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">{"& ([scriptblock]::Create((irm " + host + "/wake/install-windows.ps1)))"}</code>
+      </> : <p className="text-xs text-text-muted">Open these settings on the HTTPS website to get install commands. Setup is unavailable in this preview.</p>}
+      <p className="text-xs text-warning">Optional Life Log is separate: it records ambient speech and uploads non-silent 45-second chunks for transcription. Do not enable it just to use the wake phrase.</p>
       {!token ? (
         <div className="flex gap-2">
-          <button type="button" disabled={busy} onClick={() => void mint()}
+          <button type="button" disabled={busy || !host} onClick={() => void mint()}
             className="px-3 py-1.5 rounded-input text-xs font-medium bg-accent-blue/15 border border-accent-blue/50 text-accent-blue disabled:opacity-50">
-            {busy ? "Creating…" : "Set up this computer"}
+            {busy ? "Creating…" : "Create separate Life Log setup"}
           </button>
           <button type="button" onClick={() => void revoke()}
             className="px-3 py-1.5 rounded-input text-xs border border-border-default text-text-muted hover:text-text-primary">
             Stop logging on computers
           </button>
         </div>
-      ) : (
+      ) : host ? (
         <>
           <p className="text-xs text-text-muted">Mac - paste in Terminal (shown once; it holds this computer&apos;s key):</p>
           <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
-            curl -fsSL {host}/wake/install-mac.sh | bash -s -- {arg}
+            curl -fsSL {host}/wake/install-mac.sh | bash -s -- --enable-lifelog {arg}
           </code>
           <p className="text-xs text-text-muted">Windows - paste in PowerShell:</p>
           <code className="block text-[11px] bg-background-base border border-border-default rounded-input px-2 py-1.5 text-text-primary break-all select-all">
-            {"& ([scriptblock]::Create((irm " + host + "/wake/install-windows.ps1))) " + arg}
+            {"& ([scriptblock]::Create((irm " + host + "/wake/install-windows.ps1))) -EnableLifeLog -Token " + arg}
           </code>
         </>
-      )}
+      ) : null}
       {note && <p className="text-xs text-text-muted">{note}</p>}
     </div>
   );
-}
+    }
