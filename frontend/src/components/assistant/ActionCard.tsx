@@ -54,7 +54,7 @@ export function ActionCard({
           )}
           {a.status === "failed" && (
             <div className="mt-3 space-y-2">
-              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>Couldn&apos;t do it - {a.result}</span></div>
+              <div className="flex items-start gap-2 text-xs text-accent-red"><X size={13} className="flex-none mt-0.5" /> <span>{/unknown|unconfirmed|do not know whether|lost contact/i.test(a.result ?? "") ? "Outcome unconfirmed - " : "Action not completed - "}{a.result}</span></div>
               {/(connect|not connected|permission|scope|authoriz)/i.test(a.result ?? "") && (
                 <div className="flex items-center gap-2">
                   <a href="/api/connect/google"
