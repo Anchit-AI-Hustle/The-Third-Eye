@@ -71,6 +71,15 @@ export function VoiceOverlay() {
   const { allTasks } = useLocalTasks();
   const { expenses } = useLocalExpenses();
   const applyActions = useAgentActions();
+  useEffect(() => {
+    const onStorage = (e: Event) => {
+      const r = (e as CustomEvent<{ notSaved?: string[] }>).detail;
+      if (r?.notSaved?.length) setResponse(prev => `${prev}\n\nStorage unconfirmed: ${(r.notSaved ?? []).join(", ")}. The request failed or its response was lost. It was not retried.`);
+    };
+    window.addEventListener("te:persist-result", onStorage);
+    return () => window.removeEventListener("te:persist-result", onStorage);
+  }, []);
+
   const { docs } = useLocalKnowledge();
   const { active: agent } = useAgentProfile();
   const { modeId } = useMode();
@@ -313,7 +322,7 @@ export function VoiceOverlay() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: msg,
+            message: msg, requestId: crypto.randomUUID(),
             history: historyRef.current,
             memory: memoryRef.current,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -373,7 +382,7 @@ export function VoiceOverlay() {
                   // Sensitive action needs explicit approval. Show the card and,
                   // hands-free, prompt the user to say "confirm" or "cancel".
                   addPending({
-                    id: parsed.id, tool: parsed.tool, args: parsed.args,
+                    id: parsed.id, proof: parsed.proof, tool: parsed.tool, args: parsed.args,
                     summary: parsed.summary, status: "pending",
                     url: parsed.url, openLabel: parsed.openLabel, clientAction: parsed.clientAction,
                   });
