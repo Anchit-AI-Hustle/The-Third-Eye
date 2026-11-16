@@ -14,7 +14,7 @@ import { PLATFORMS, describeResults, listAccounts, postEverywhere, type Platform
 // (/api/act), or straight away when the user's own message asked for it
 // (/api/chat, see lib/explicitRequest.ts).
 
-export interface ActionOutcome { ok: boolean; result: string; openUrl?: string; error?: string }
+export interface ActionOutcome { ok: boolean; result: string; openUrl?: string; error?: string; unknownOutcome?: boolean }
 
 export async function runConfirmedAction(email: string, tool: string, args: any): Promise<ActionOutcome> {
   // The send needs a token carrying gmail.send. Google sign-in asks for it,
@@ -65,6 +65,11 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
       const sent = await sendGmail(accessToken, to, subject, body);
       if (sent.ok) return { ok: true, result: `Email sent to ${to}.` };
       console.error("gmail send failed", sent.status, sent.error.slice(0, 400));
+      // No answer (dropped connection, timeout) or a server error: Gmail may have accepted the message.
+      // That is an unknown outcome, not a clean failure, so it is never retried or offered as "not sent".
+      if (sent.status === 0 || sent.status >= 500) {
+        return { ok: false, unknownOutcome: true, result: `I lost contact with Gmail while sending to ${to}, so I do not know whether it was sent. I have not retried. Check your Sent folder before sending it again.` };
+      }
       return { ok: false, openUrl: compose, result: `${gmailSendError(sent.status, sent.error)} You can open the Gmail draft below.` };
     }
     case "build_app": {
