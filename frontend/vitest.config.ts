@@ -8,6 +8,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/__tests__/setup.ts"],
+    // The existing provider tests cover the paid paths, which are off by default now.
+    // freeOnly.test.ts removes this (NODE_ENV=test only; production cannot) to test the default.
+    env: { PAID_PATH_TESTS: "1" },
     css: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
