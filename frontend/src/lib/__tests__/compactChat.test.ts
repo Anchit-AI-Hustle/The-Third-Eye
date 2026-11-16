@@ -56,6 +56,7 @@ describe("provider retry evidence", () => {
     expect(m.retryAfterMs(undefined, body)).toBe((3600 + 1800 + 27.6) * 1000);
     expect(m.retryAfterMs(undefined, "Please try again in 6.5s")).toBe(6500);
     expect(m.summarizeAttempts([{ provider: "groq", model: "-", ok: false, reason: "skipped: cooling down after a recent quota error until 13:51 UTC" }])).toContain("until 13:51 UTC");
+    expect(m.userFacingOutage("No AI provider could answer (no AI provider key is configured).")).toContain("Use this key for my chats");
     expect(m.userFacingOutage("groq skipped: request larger than its per-minute token cap")).toContain("too big");
     expect(m.userFacingOutage("groq skipped: cooling down after a quota error until 13:51 UTC", "Asia/Kolkata", new Date("2026-11-16T12:00:00Z"))).toContain("7:21 PM");
   });
