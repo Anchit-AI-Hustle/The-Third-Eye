@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { identify } from "@/lib/serverIdentity";
 import { isHallucination, transcribeCascade } from "@/lib/llmCascade";
-import { usableGeminiKey } from "@/lib/providerReady";
+import { withOwnKeys } from "@/lib/providerKeys";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -18,10 +18,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY && !usableGeminiKey()) {
-    return Response.json({ error: "No transcription provider configured (set GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY)" }, { status: 503 });
-  }
-
   try {
     const form = await req.formData();
     const audio = form.get("audio") as Blob | null;
@@ -35,10 +31,14 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Audio too large (max 25 MB)" }, { status: 413 });
     }
 
-    const { text, provider } = await transcribeCascade(audio, lang, hint);
+    const who = (await identify(req.headers, "transcribe")).email;
+    const { text, provider } = await (who ? withOwnKeys(who, () => transcribeCascade(audio, lang, hint)) : transcribeCascade(audio, lang, hint));
     return Response.json({ text: isHallucination(text) ? "" : text, provider });
   } catch (err) {
     console.error("transcribe route error:", err);
-    return Response.json({ error: "Transcription failed" }, { status: 500 });
+    const none = err instanceof Error && /no keys configured|no AI provider key is configured/i.test(err.message);
+    return Response.json({
+      error: none ? "Voice transcription isn't available right now: no free speech model is set up. Add your own Groq key in Settings and tick Use this key, or try again later." : "Transcription failed",
+    }, { status: none ? 503 : 500 });
   }
 }
