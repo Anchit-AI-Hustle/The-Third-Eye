@@ -22,7 +22,7 @@ export const ENV_SCHEMA: EnvVar[] = [
   llm("XAI_API_KEY", "Grok"),
   llm("GROQ_API_KEY", "Groq"),
   llm("CEREBRAS_API_KEY", "Cerebras"),
-  llm("OPENROUTER_API_KEY", "OpenRouter"),
+  { name: "OPENROUTER_API_KEY", required: false, purpose: "ignored: OpenRouter is excluded by the owner" },
   llm("ANTHROPIC_API_KEY", "Anthropic Claude"),
   llm("MISTRAL_API_KEY", "Mistral"),
   llm("HF_TOKEN", "Hugging Face Inference Providers"),
