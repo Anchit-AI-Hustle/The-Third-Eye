@@ -1,3 +1,4 @@
+import { providerAllowed } from "@/lib/freeOnly";
 // A short stand-in (the CI placeholder is 14 characters) must not count as a
 // live Gemini key. Real Google API keys are ~39 characters.
 const MIN_GEMINI_KEY = 30;
@@ -8,7 +9,8 @@ type EnvLike = Record<string, string | undefined>;
 
 export function usableGeminiKey(env: EnvLike = process.env): string {
   const k = clean(env.GEMINI_API_KEY) || clean(env.GOOGLE_API_KEY);
-  return k.length >= MIN_GEMINI_KEY ? k : "";
+  // Free-only: Gemini stays off until FREE_TIER_CONFIRMED lists it (see freeOnly.ts).
+  return k.length >= MIN_GEMINI_KEY && providerAllowed("gemini") ? k : "";
 }
 
 export function systemStatus(env: EnvLike = process.env) {
