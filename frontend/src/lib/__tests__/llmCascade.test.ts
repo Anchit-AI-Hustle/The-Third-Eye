@@ -10,7 +10,7 @@ import { generationFailure, geminiToolsToOpenAI, llmCascade, resetCooldowns, too
 const ENV_KEYS = [
   "OPENAI_API_KEY", "OPENAI_API_KEY_2", "OPENAI_API_KEY_3", "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY", "GROQ_API_KEY",
-  "CEREBRAS_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "OLLAMA_ENABLED", "LLM_PRIMARY_PROVIDER",
+  "CEREBRAS_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "FREE_TIER_CONFIRMED", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "OLLAMA_ENABLED", "LLM_PRIMARY_PROVIDER",
 ];
 
 function clearKeys() {
@@ -197,6 +197,11 @@ describe("toolCallCascade: tool-capable fallback (Groq/Cerebras/Mistral)", () =>
 });
 
 describe("userFacingOutage", () => {
+  it("separates a rejected key (401) from a permission refusal (403) and ignores quota errors", () => {
+    expect(userFacingOutage("401 invalid_api_key")).toMatch(/did not accept its API key.*fresh one/);
+    expect(userFacingOutage("403 forbidden")).toMatch(/refused the request.*not necessarily an expired key/);
+    expect(userFacingOutage("401 key rejected 429 rate limit")).not.toMatch(/API key/);
+  });
   it("does not tell someone an empty balance will clear in a couple of minutes", () => {
     const raw = "openai 429 insufficient_quota billing | gemini RESOURCE_EXHAUSTED";
     expect(userFacingOutage(raw)).toBe("The configured AI providers are out of credits or need billing attention. Check the provider keys and billing settings, then try again.");
@@ -246,5 +251,55 @@ describe("llmCascade: when every provider fails", () => {
   it("says so when no provider key is configured at all", async () => {
     const err = await llmCascade({ messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
     expect(generationFailure(err)).toContain("no AI provider key is configured");
+  });
+});
+
+describe("llmCascade: Cloudflare Workers AI backup (free-only gate)", () => {
+  const ID = "0123456789abcdef0123456789abcdef";
+  const CF = "api.cloudflare.com";
+  beforeEach(() => { process.env.PAID_PATH_TESTS = "0"; }); // free-only guard ON
+  afterEach(() => { process.env.PAID_PATH_TESTS = "1"; });
+
+  it("is never called without FREE_TIER_CONFIRMED, even with an account id and token", async () => {
+    process.env.CLOUDFLARE_ACCOUNT_ID = ID; process.env.CLOUDFLARE_API_TOKEN = "cf-synthetic";
+    const { calls } = fetchStub([{ match: (u) => hostIs(u, CF), status: 200, body: { choices: [{ message: { content: "cf" } }] } }]);
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toBeTruthy();
+    expect(calls.length).toBe(0);
+  });
+
+  it("ignores a CLOUDFLARE_MODEL that is not on the verified free list and never swaps models on 404", async () => {
+    process.env.CLOUDFLARE_ACCOUNT_ID = ID; process.env.CLOUDFLARE_API_TOKEN = "cf-synthetic"; process.env.FREE_TIER_CONFIRMED = "cloudflare";
+    process.env.CLOUDFLARE_MODEL = "@cf/moonshotai/kimi-k2.6";
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: { body?: string }) => { bodies.push(`${url} ${init?.body ?? ""}`); return { ok: false, status: 404, json: async () => ({}), text: async () => "{}" }; }));
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toBeTruthy();
+    expect(bodies.every((b) => !b.includes("kimi"))).toBe(true);
+    expect(bodies.some((b) => b.includes("@cf/zai-org/glm-4.7-flash"))).toBe(true);
+    expect(bodies.length).toBe(1); // no /models lookup, no retry on another model
+    delete process.env.CLOUDFLARE_MODEL;
+  });
+
+  it("is rejected when the account id is not 32 hex characters", async () => {
+    process.env.CLOUDFLARE_ACCOUNT_ID = "../evil"; process.env.CLOUDFLARE_API_TOKEN = "cf-synthetic"; process.env.FREE_TIER_CONFIRMED = "cloudflare";
+    const { calls } = fetchStub([{ match: () => true, status: 200, body: { choices: [{ message: { content: "x" } }] } }]);
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toBeTruthy();
+    expect(calls.length).toBe(0);
+  });
+
+  it("answers as the backup when Groq is out of quota, on the account's own URL", async () => {
+    process.env.CLOUDFLARE_ACCOUNT_ID = ID; process.env.CLOUDFLARE_API_TOKEN = "cf-synthetic";
+    process.env.GROQ_API_KEY = "test-groq-key"; process.env.FREE_TIER_CONFIRMED = "groq,cloudflare";
+    const { calls } = fetchStub([
+      { match: (u) => hostIs(u, GROQ_HOST), status: 429, body: { error: { message: "Rate limit reached. Please try again in 1h2m3s" } } },
+      { match: (u) => hostIs(u, CF), status: 200, body: { choices: [{ message: { content: "cf answer" } }] } },
+    ]);
+    const r = await llmCascade({ messages: [{ role: "user", content: "hi" }] });
+    expect(r.provider).toBe("cloudflare");
+    expect(calls.some((u) => u.startsWith(`https://api.cloudflare.com/client/v4/accounts/${ID}/ai/v1/`))).toBe(true);
+    // Groq is now benched: the next call does not hit it again.
+    const groqBefore = calls.filter((u) => hostIs(u, GROQ_HOST)).length;
+    const r2 = await llmCascade({ messages: [{ role: "user", content: "again" }] });
+    expect(r2.provider).toBe("cloudflare");
+    expect(calls.filter((u) => hostIs(u, GROQ_HOST)).length).toBe(groqBefore);
   });
 });
