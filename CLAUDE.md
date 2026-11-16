@@ -78,6 +78,7 @@ alembic revision --autogenerate -m "msg"
   (kill switch + audit log), `dataClient.ts` (database-or-localStorage
   fallback), `apps/registry.ts` (App Hub entries).
 - **Design tokens: `frontend/DESIGN.md`** is the source of truth for colours, type, spacing, radius, and motion. Follow it for all UI styling. `tailwind.config.ts` and `globals.css :root` define the same 14 colour values — keep them in step when changing either.
+- **Web & Landing Page Standards:** Follow the `futuristic-web-design` skill for all landing pages and web UI: 1 primary accent colour, `<= 8`-word hero headline with 1 primary CTA + quiet secondary link, full anatomy (nav + 390px mobile menu, hero, trust strip, features, how it works, accessible FAQ accordion, final CTA, footer), `< 0.5s` once-only reveals respecting `prefers-reduced-motion`, DPR `<= 2` & portrait re-framing on Three.js/WebGL canvases, `overflow-x: hidden` at `390px`, `< 60`-char titles and `< 155`-char meta descriptions.
 - Full architecture, request flow, and "where to make common changes" table: **[DEVELOPMENT.md](DEVELOPMENT.md)**.
 
 ### Backend layout (`backend/app/`) — not deployed, see Stack above
