@@ -2448,6 +2448,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
       const failures = new Map<string, string>();
       // Real tools run so far this turn, on any tier.
       const toolsRun: string[] = [];
+      const toolOutcomes: { name: string; outcome: string }[] = [];
 
       // Checklist calls are answered by the ledger, not runTool, and ordered
       // around the real tools in the same batch: plan/start first so the work is
@@ -2497,6 +2498,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
               }));
             }
             const outcome = classifyResult(out[i].result);
+            toolOutcomes.push({ name: c.name, outcome });
             const key = typeof c.args?.action === "string" ? `${c.name} (${c.args.action})` : c.name;
             if (outcome === "failed") failures.set(key, out[i].result.slice(0, 200));
             else if (outcome === "ok") failures.delete(key);
@@ -2522,8 +2524,18 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
       const failed = () => [...failures.keys()];
       // Tools already ran (a mail may be sent) and no model can finish the
       // reply: say what ran rather than start the task again elsewhere.
-      const endPartial = async () => {
-        send("text", { text: `Done so far: ${[...new Set(toolsRun)].join(", ")}. No AI provider is available to write the rest of the reply right now, so ask again in a minute to continue.${openGap() ?? ""}` });
+      const endPartial = async (why = "") => {
+        // Only what a tool itself reported is stated, and as a report, not as proof it was saved.
+        const named = (o: string) => [...new Set(toolOutcomes.filter((t) => t.outcome === o).map((t) => t.name))];
+        const ok = named("ok"), waiting = named("awaiting");
+        const reason = userFacingOutage(why, timezone || req.headers.get("x-vercel-ip-timezone") || "UTC");
+        const lines = [
+          ok.length ? `These actions reported success: ${ok.join(", ")}.` : "",
+          waiting.length ? `Waiting for your confirmation: ${waiting.join(", ")}.` : "",
+          `I couldn't write the rest of my reply. ${reason}`,
+          ok.length ? "Check the result before asking again, so the same action isn't run twice." : "",
+        ].filter(Boolean);
+        send("text", { text: `${lines.join(" ")}${openGap() ?? ""}` });
         await done({ stop_reason: "partial", model: "none", memory: memoryStore, sideEffects, checklist: checklist.snapshot(), failed: failed() });
         close();
       };
@@ -2652,7 +2664,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
         if (geminiStatus) await noteFailure("gemini", MODEL, geminiStatus, String(err));
         // Gemini failed after running tools: re-running the request on another
         // model would repeat them.
-        if (toolsRun.length) { await endPartial(); return; }
+        if (toolsRun.length) { await endPartial(String(err)); return; }
         // The primary model (Gemini) failed — most often a free-tier 429/quota.
         // Tier 2: try a tool-capable fallback (Groq/Cerebras/Mistral all speak
         // OpenAI-style function calling) so live actions — send an email, add
@@ -2725,11 +2737,11 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           }
           tier2Handled = true;
           close();
-        } catch {
+        } catch (e2) {
           // Tools already ran (a mail may be sent): say so rather than let the
           // tools-less tier 3 tell the user it cannot act.
           if (toolsRun.length) {
-            await endPartial();
+            await endPartial(String(e2));
             tier2Handled = true;
           }
           // Otherwise tier 2 is unavailable too; fall through to tier 3.
