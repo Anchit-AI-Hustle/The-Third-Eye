@@ -53,7 +53,7 @@ export async function dataRead<T>(entity: string): Promise<T[] | null> {
 /** Insert one or many rows. Returns whether the server handled it. */
 export async function dataInsert(entity: string, rows: unknown | unknown[]): Promise<boolean> {
   const res = await req(entity, { method: "POST", body: JSON.stringify(rows) });
-  return !isLocalOnly(res);
+  return !!res?.ok;
 }
 
 /** Insert and say whether it was stored: "local" means there is no database to store it in. */
@@ -65,10 +65,10 @@ export async function dataSave(entity: string, rows: unknown | unknown[]): Promi
 
 export async function dataUpdate(entity: string, id: string, patch: Record<string, unknown>): Promise<boolean> {
   const res = await req(entity, { method: "PATCH", body: JSON.stringify({ id, patch }) });
-  return !isLocalOnly(res);
+  return !!res?.ok;
 }
 
 export async function dataDelete(entity: string, id: string): Promise<boolean> {
   const res = await req(`${entity}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-  return !isLocalOnly(res);
+  return !!res?.ok;
 }
