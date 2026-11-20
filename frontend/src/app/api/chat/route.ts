@@ -198,6 +198,17 @@ const SYSTEM_PROMPT = `You are JARVIS - Just A Rather Very Intelligent System - 
 ${INTERPRETATION_PROTOCOL}`;
 
 
+/** The assistant in under 300 tokens, for a provider whose free tier can't take the full instruction. */
+function compactInstruction(agentName: string | undefined, userName: string | undefined, timezone: string | undefined): string {
+  return [
+    `You are ${agentName || "JARVIS"}, the personal AI assistant in The Third Eye${userName ? `, talking to ${userName}` : ""}.`,
+    `Today is ${new Date().toLocaleString("en-IN", { timeZone: validZone(timezone) ?? "UTC", dateStyle: "full", timeStyle: "short" })}.`,
+    "Answer the request directly, accurately and completely, in the user's language, with clear structure (headings, lists or a table where they help).",
+    "You are running in a reduced mode right now: you have no tools, so you cannot search the web, open apps, send messages, or read or change the user's data. Never pretend you did. Answer from what you know, say plainly when a fact may be out of date or when something needs a live action, and suggest asking again in a little while for those parts.",
+    "Never output anything that looks like a tool or function call.",
+  ].join("\n");
+}
+
 // ─── Tool implementations
 
 function simpleSearch(docs: Array<{ id: string; title: string; content: string }>, query: string, topK = 4): string {
@@ -2747,12 +2758,21 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
           // the action succeeded. Override that explicitly rather than let a
           // weaker fallback model hallucinate both the call and its result.
           const fallbackSystemInstruction = `${systemInstruction}\n\n## Degraded mode - no tool access\nYour normal tool-calling connection is temporarily down. Every tool named above is UNAVAILABLE right now - ignore those instructions entirely.\n- Never output anything that looks like a function or tool call: no JSON, no "tool_code", no "Tool Call:" labels, no code blocks pretending to invoke a function.\n- Never claim to have opened an app, sent a message, made a call, controlled a device, or performed any other action. You cannot.\n- If the request needs Gmail or Calendar (reading/sending email, checking events) AND ${accessToken ? "a Google account IS connected" : "no Google account is connected"}: ${accessToken ? "say that action is temporarily unavailable and to try again shortly." : googleState === "expired" ? "say plainly that Google access has expired or was revoked and to reconnect in Settings → Connections (\"Reconnect / update permissions\")." : "say plainly that Gmail/Calendar isn't connected yet - go to Settings → Connections and use \"Connect Google\" (basic sign-in alone doesn't grant mail/calendar access). This is a one-time setup step, not a retry-shortly situation."}\n- For any other action (not Gmail/Calendar), say plainly that live actions are temporarily unavailable and to try again shortly. Answer only the informational part of the question, if any.`;
+          // The full instruction with every tool described is larger than a
+          // free tier's per-minute token cap (Groq: 6-8K), so when the paid
+          // providers are out of credit the only ones left refuse it on size.
+          // A second pass sends a short instruction and the recent turns only.
           const out = await llmCascade({
             system: fallbackSystemInstruction,
             messages: fbMessages,
             temperature: 0.6,
             maxTokens: 1200,
-          });
+          }).catch(() => llmCascade({
+            system: compactInstruction(agentName, userName, timezone),
+            messages: [...fbMessages.slice(-5, -1).map((m) => ({ ...m, content: m.content.slice(0, 1500) })), { ...fbMessages[fbMessages.length - 1], content: fbMessages[fbMessages.length - 1].content.slice(0, 6000) }],
+            temperature: 0.6,
+            maxTokens: 1000,
+          }));
           send("text", { text: out.text });
           await saveMemory(email, memory, memoryStore);
           await done({ stop_reason: "fallback", model: out.provider, memory: memoryStore, sideEffects });
