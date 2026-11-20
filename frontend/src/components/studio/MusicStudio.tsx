@@ -505,6 +505,7 @@ export function MusicStudio() {
       setLoopSession(!!d.loop);
       if (d.configured === false) { setPhase("error"); setNote(d.note); return; }
       const notes: string[] = [];
+      if (d.anchorError) notes.push(`ANCHOR's engine couldn't take this one (${String(d.anchorError).slice(0, 160)}), so a backup model is used.`);
       if (d.elevenLabsError) notes.push(`ElevenLabs couldn't make this one (${String(d.elevenLabsError).slice(0, 160)}), so a backup model is used.`);
       if (d.fellBackToInstrumental) notes.push(`Couldn't generate sung vocals${d.vocalError ? ` - ${String(d.vocalError).slice(0, 160)}` : ""}, so this is an instrumental version (lyrics shown below).`);
       if (d.provider === "code" && d.note) notes.push(d.note);
@@ -512,8 +513,10 @@ export function MusicStudio() {
       if (notes.length) setNote(notes.join(" "));
       // Free HuggingFace fallback returns audio synchronously (no job to poll).
       if (d.done && d.audioUrl) { onAudioReady(d.audioUrl); return; }
-      setPhase("queued"); setStatus("Composing audio… this can take up to a minute.");
-      poll(d.jobId);
+      setPhase("queued");
+      setStatus(d.message || "Composing audio… this can take up to a minute.");
+      if (d.provider === "anchor" && d.title) setNote(`"${d.title}" is being made on ANCHOR's engine. Keep this page open; it can take up to an hour.`);
+      poll(d.jobId, d.giveUpMinutes, d.pollSeconds);
     } catch { setPhase("error"); setError("Network error - please try again."); }
   }
   // Audio is ready: play, save, and — if the user asked for a video up-front —
@@ -525,15 +528,15 @@ export function MusicStudio() {
       void makeVideo(url, fFor.current.title || fFor.current.description, "create");
     }
   }
-  function poll(jobId: string) {
+  function poll(jobId: string, giveUpMinutes = 10, pollSeconds = 3) {
     stopPoll();
     // A job a provider never finishes would otherwise be polled for as long as the page is open.
-    const giveUp = Date.now() + 10 * 60_000;
+    const giveUp = Date.now() + giveUpMinutes * 60_000;
     pollRef.current = setInterval(async () => {
       if (Date.now() > giveUp) {
         stopPoll();
         setPhase("error");
-        setError("Still not finished after 10 minutes. The provider may be stuck; try again.");
+        setError(`Still not finished after ${giveUpMinutes} minutes. The provider may be stuck; try again.`);
         // Ask the poll endpoint once more so a stuck job can still refund if the provider failed.
         void fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`).catch(() => null);
         return;
@@ -541,7 +544,8 @@ export function MusicStudio() {
       try {
         const res = await fetch(`/api/tools/music?id=${encodeURIComponent(jobId)}`);
         const d = await res.json();
-        if (d.status) setStatus(`Composing audio… (${d.status})`);
+        if (d.message) setStatus(d.message);
+        else if (d.status) setStatus(`Composing audio… (${d.status})`);
         if (d.status === "succeeded" && d.audioUrl) { stopPoll(); onAudioReady(d.audioUrl); }
         else if (d.status === "succeeded" && !d.audioUrl) {
           stopPoll();
@@ -556,7 +560,7 @@ export function MusicStudio() {
           if (d.refunded) setNote("Credits for this failed job were returned.");
         }
       } catch { /* keep polling */ }
-    }, 3000);
+    }, pollSeconds * 1000);
   }
   const busy = phase === "generating" || phase === "queued";
 
