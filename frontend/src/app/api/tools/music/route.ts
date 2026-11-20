@@ -10,6 +10,10 @@ import { storeStudioAudio, audioPath, persistStudioRemoteAudio } from "@/lib/mus
 import { renderWav } from "@/lib/music/synth";
 import { getDb } from "@/lib/db";
 import { chargedRoute, refundable, refundMusicJobOnce } from "@/lib/credits";
+import {
+  ANCHOR_GIVE_UP_MINUTES, ANCHOR_JOB, anchorLyrics, anchorRequest, anchorStudioConfigured, fetchAnchorMp3,
+  pollAnchorSong, startAnchorSong,
+} from "@/lib/music/anchorStudio";
 
 export const runtime = "nodejs";
 // Eleven Music returns the finished song in one call, which can take a few
@@ -130,7 +134,28 @@ async function create(req: NextRequest) {
   // ace-step tags+lyrics), so it drives the instrumental models + HF fallback.
   const instrPromptText = prompt;
 
-  // Eleven Music first: one call, the finished song back in this response.
+  // ANCHOR's engine first (Anchit, 2026-11-20: the Studio uses ANCHOR's exact architecture):
+  // the song is made on the Mac by anchor/studio.py, takes and gates included, and polled below.
+  let anchorError: string | undefined;
+  if (anchorStudioConfigured()) {
+    try {
+      const words = await anchorLyrics(i, { title: i.title, lyrics });
+      const r = anchorRequest(i, words, sing);
+      await startAnchorSong(r);
+      return Response.json({
+        configured: true, jobId: r.id, status: "queued", model: "anchor:ace-step-1.5-xl", provider: "anchor",
+        prompt, tags, lyrics: r.lyrics, title: r.title, genreHint: r.genre,
+        giveUpMinutes: ANCHOR_GIVE_UP_MINUTES, pollSeconds: 15,
+        message: "Sent to ANCHOR's engine: it renders several takes on the Mac GPU and keeps only one that passes every gate (10 to 60 minutes).",
+        ...loopMeta, loop: false, ...briefMeta,
+      });
+    } catch (e) {
+      anchorError = e instanceof Error ? e.message : "ANCHOR studio failed";
+      console.warn(`[music] ANCHOR studio failed, falling back: ${anchorError}`);
+    }
+  }
+
+  // Eleven Music next: one call, the finished song back in this response.
   let elevenLabsError: string | undefined;
   if (elevenLabsConfigured()) {
     const elSeconds = clipSecondsFor(sessionSeconds);
@@ -160,7 +185,7 @@ async function create(req: NextRequest) {
       console.warn(`[music] ElevenLabs failed, falling back: ${elevenLabsError}`);
     }
   }
-  const elMeta = elevenLabsError ? { elevenLabsError } : {};
+  const elMeta = { ...(elevenLabsError ? { elevenLabsError } : {}), ...(anchorError ? { anchorError } : {}) };
 
   // If Replicate isn't configured, fall straight to the free HuggingFace
   // (MusicGen) provider when a token is present; else return the prompt/lyrics.
@@ -263,6 +288,7 @@ export async function GET(req: NextRequest) {
   if (!user) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const id = new URL(req.url).searchParams.get("id");
   if (!id || !/^[a-zA-Z0-9]+$/.test(id)) return Response.json({ error: "valid id required" }, { status: 400 });
+  if (ANCHOR_JOB.test(id)) return pollAnchor(user, id);
   try {
     const p = await getPrediction(id);
     if (p.status === "failed" || p.status === "canceled") {
@@ -292,3 +318,25 @@ export async function GET(req: NextRequest) {
 }
 
 export const POST = chargedRoute("music.generate", create);
+
+async function pollAnchor(user: string, id: string) {
+  try {
+    const p = await pollAnchorSong(id);
+    if (p.status === "failed") {
+      const refunded = await refundMusicJobOnce(user, id);
+      return Response.json({ status: "failed", audioUrl: null, error: p.error, refunded, meta: p.meta ?? null });
+    }
+    if (p.status !== "succeeded") return Response.json({ status: p.status, audioUrl: null, error: null, message: p.message });
+    const meta = { title: p.meta.title, genre: p.meta.genre, bpm: p.meta.bpm, key: p.meta.key, arrangement: p.meta.arrangement };
+    const db = getDb();
+    if (!db) return Response.json({ status: "succeeded", audioUrl: p.mp3Url, error: null, anchor: meta });
+    const { data: had } = await db.from("music_studio_audio").select("id").eq("user_id", user).eq("song_id", id).limit(1);
+    if (had?.length) return Response.json({ status: "succeeded", audioUrl: audioPath(String(had[0].id)), error: null, anchor: meta });
+    const bytes = await fetchAnchorMp3(p.mp3Url);
+    const stored = await storeStudioAudio(db, user, bytes, { audioType: "audio/mpeg", provider: "anchor", songId: id })
+      .then(audioPath).catch(() => null);
+    return Response.json({ status: "succeeded", audioUrl: stored ?? p.mp3Url, error: null, anchor: meta });
+  } catch (e) {
+    return Response.json({ status: "processing", audioUrl: null, error: null, message: `Checking ANCHOR (${e instanceof Error ? e.message : "unreachable"})…` });
+  }
+}
