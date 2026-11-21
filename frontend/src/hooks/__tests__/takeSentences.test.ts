@@ -51,5 +51,12 @@ describe("what is read aloud", () => {
   it("reads Hindi script with a Hindi voice", () => {
     expect(scriptLang("आज मौसम कैसा है")).toBe("hi-IN");
     expect(scriptLang("aaj mausam kaisa hai")).toBeUndefined();
+    expect(scriptLang("مرحبا بالعالم", "ar-SA")).toBe("ar-SA");
+  });
+
+  it("never cuts a decimal number between two pieces", () => {
+    const text = `${"Fill the tank slowly and keep watching the gauge, ".repeat(4)}then use the conversion factor of 3.5 and retain the result. Done.`;
+    expect(speechChunks(text).some((c) => /3\.$/.test(c))).toBe(false);
+    expect(speechChunks(text).join(" ")).toBe(text);
   });
 });

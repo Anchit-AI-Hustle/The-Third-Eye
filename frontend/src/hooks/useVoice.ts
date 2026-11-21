@@ -548,7 +548,7 @@ const SPEAK_MAX = 220;
 export function speechChunks(text: string, max = SPEAK_MAX): string[] {
   if (text.length <= max) return text ? [text] : [];
   const out: string[] = [];
-  for (const sentence of text.match(/[^.!?।…]+[.!?।…]*["')\]]*\s*/g) ?? [text]) {
+  for (const sentence of text.match(/.+?(?:[.!?।…]+["')\]]*(?=\s|$)|$)\s*/g) ?? [text]) {
     let s = sentence.trim();
     while (s.length > max) {
       const cut = Math.max(s.lastIndexOf(", ", max), s.lastIndexOf(" ", max));
@@ -564,11 +564,13 @@ export function speechChunks(text: string, max = SPEAK_MAX): string[] {
 const SCRIPT_LANGS: [RegExp, string][] = [
   [/[\u0900-\u097F]/, "hi-IN"], [/[\u0980-\u09FF]/, "bn-IN"], [/[\u0A00-\u0A7F]/, "pa-IN"], [/[\u0A80-\u0AFF]/, "gu-IN"],
   [/[\u0B80-\u0BFF]/, "ta-IN"], [/[\u0C00-\u0C7F]/, "te-IN"], [/[\u0C80-\u0CFF]/, "kn-IN"], [/[\u0D00-\u0D7F]/, "ml-IN"],
-  [/[\u0600-\u06FF]/, "ur-PK"],
 ];
+// Arabic, Urdu and Persian share one script; the device's own language decides between them.
+const ARABIC_SCRIPT = /[\u0600-\u06FF]/;
 
 /** The language a sentence is written in, when its script says so. An English voice reads Hindi script as silence or noise. */
-export function scriptLang(text: string): string | undefined {
+export function scriptLang(text: string, device = typeof navigator !== "undefined" ? navigator.language : ""): string | undefined {
+  if (ARABIC_SCRIPT.test(text)) return /^(ar|ur|fa|ps)/i.test(device) ? device : "ur-PK";
   return SCRIPT_LANGS.find(([re]) => re.test(text))?.[1];
 }
 
