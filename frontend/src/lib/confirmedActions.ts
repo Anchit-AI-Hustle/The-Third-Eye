@@ -1,3 +1,4 @@
+import { encodeMailHeader } from "@/lib/google/api";
 import { premiumEnforced, PREMIUM_TOOLS } from "@/lib/entitlements";
 import { getTier } from "@/lib/usage";
 import { refreshGoogleToken } from "@/lib/googleToken";
@@ -125,7 +126,7 @@ export async function runConfirmedAction(email: string, tool: string, args: any)
 
 async function sendGmail(accessToken: string, to: string, subject: string, body: string): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const header = (s: string) => s.replace(/[\r\n]/g, " ").trim();
-  const raw = [`To: ${header(to)}`, `Subject: ${header(subject)}`, "Content-Type: text/plain; charset=utf-8", "", body].join("\r\n");
+  const raw = [`To: ${header(to)}`, `Subject: ${encodeMailHeader(subject)}`, "Content-Type: text/plain; charset=utf-8", "", body].join("\r\n");
   const encoded = Buffer.from(raw).toString("base64url");
   try {
     const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {

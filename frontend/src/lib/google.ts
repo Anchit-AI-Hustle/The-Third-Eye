@@ -1,3 +1,4 @@
+import { encodeMailHeader } from "@/lib/google/api";
 // Server-side Google helpers for the cron dispatcher: exchange a stored refresh
 // token for an access token, then send Gmail on the user's behalf.
 
@@ -54,7 +55,7 @@ export async function sendGmail(
 ): Promise<boolean> {
   const raw = [
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeMailHeader(subject)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/html; charset=utf-8",
     "",

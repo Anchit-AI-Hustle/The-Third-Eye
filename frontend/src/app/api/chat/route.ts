@@ -57,6 +57,7 @@ import { fileFeatureRequest } from "@/lib/featureRequests";
 import { refundCredits, spendCredits } from "@/lib/credits";
 import { applyEffects } from "@/lib/nativeClient";
 import { DAYLOG_KEY, LOG_KINDS, activityBrief, addEntry, isLogKind, mergeLogs, summarize } from "@/lib/dailyLife";
+import { encodeMailHeader } from "@/lib/google/api";
 
 export const runtime = "nodejs";
 // Fluid compute lets Hobby run 300s; a long tool sweep (twenty GitHub calls)
@@ -405,7 +406,7 @@ async function readEmails(accessToken: string | undefined, query = "is:unread", 
 async function sendEmail(accessToken: string | undefined, to: string, subject: string, body: string): Promise<string> {
   if (!accessToken) return "Gmail isn't connected yet. Open Settings → Connections and use \"Connect Google\" (grant Gmail access) to enable this. Basic sign-in alone does not grant mail access.";
   try {
-    const message = [`To: ${to}`, `Subject: ${subject}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\r\n");
+    const message = [`To: ${to}`, `Subject: ${encodeMailHeader(subject)}`, `Content-Type: text/plain; charset=utf-8`, ``, body].join("\r\n");
     const encoded = Buffer.from(message).toString("base64url");
     const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",
