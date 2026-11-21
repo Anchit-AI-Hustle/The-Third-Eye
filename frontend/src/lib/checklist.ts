@@ -54,7 +54,7 @@ export function resumeNote(raw: unknown): string {
   const steps = parseSteps(raw);
   if (!steps.some((s) => s.status !== "done")) return "";
   const lines = steps.map((s) => `${s.id}. [${s.status === "done" ? "x" : " "}] ${s.title} - verify: ${s.verify}`);
-  return `\n\n**Checklist carried over from your last reply** (already loaded - don't re-plan unless the user changed the request; start_step the first open one):\n${lines.join("\n")}`;
+  return `\n\n**Checklist carried over from your last reply** (only if the latest message asks to continue that same job: then it is already loaded, so start_step the first open one. If the latest message is about anything else, ignore this checklist entirely and run none of its steps):\n${lines.join("\n")}`;
 }
 
 export class Checklist {

@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Audio too large (max 25 MB)" }, { status: 413 });
     }
 
-    const { text, provider } = await withKeys(own, () => transcribeCascade(audio, lang, hint));
-    return Response.json({ text: isHallucination(text) ? "" : text, provider });
+    const { text, provider, confident } = await withKeys(own, () => transcribeCascade(audio, lang, hint));
+    return Response.json({ text: isHallucination(text, confident) ? "" : text, provider });
   } catch (err) {
     console.error("transcribe route error:", err);
     return Response.json({ error: "Transcription failed" }, { status: 500 });

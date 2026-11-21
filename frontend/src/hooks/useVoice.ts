@@ -30,11 +30,17 @@ const BARGE_PEAK = 0.12;
 const SILENCE_MS = 1100;
 // Audio kept from just before speech is detected, so the first word is whole.
 const PRE_ROLL_S = 0.5;
-// Speech has to clear the room's own level by this factor, and last this many
-// frames (~60/s), before a phrase is sent: fans, traffic and keyboard clicks
-// otherwise reach Whisper, which turns noise into "Thank you." in any language.
+// Speech has to clear the room's own level by this factor, and last this long,
+// before a phrase is sent: fans, traffic and keyboard clicks otherwise reach
+// Whisper, which turns noise into "Thank you." in any language. Measured in
+// time, not frames: the loop runs at 30 to 120 frames a second depending on
+// the screen and power mode, so a frame count dropped "yes" and "haan" on one
+// device and let clicks through on another.
 const NOISE_MARGIN = 2.5;
-const MIN_SPEECH_FRAMES = 18;
+const MIN_SPEECH_MS = 200;
+// Steady loud sound (music, a TV) never falls quiet, so a phrase is closed here
+// instead of recording for ever and never being transcribed.
+const MAX_PHRASE_MS = 30_000;
 const BARGE_HOLD_MS = 280;
 // The assistant speaks through the OS voice (speechSynthesis), which Chrome's
 // echo cancellation does not hear, so its own voice comes back through the
@@ -43,7 +49,7 @@ const BARGE_HOLD_MS = 280;
 const ECHO_LEARN_MS = 600;
 const ECHO_MARGIN = 1.6;
 const ECHO_DECAY = 0.998;
-const BARGE_FRAMES = 15;
+const BARGE_MS = 240;
 
 const words = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
 
@@ -116,7 +122,8 @@ export function createBargeDetector(now: () => number = Date.now) {
       if (!since) since = t;
       if (t - since < ECHO_LEARN_MS) { echo = Math.max(echo, peak); return false; }
       if (peak >= Math.max(BARGE_PEAK, echo * ECHO_MARGIN)) {
-        if (++loud >= BARGE_FRAMES) { loud = 0; return true; }
+        if (!loud) loud = t;
+        if (t - loud >= BARGE_MS) { loud = 0; return true; }
         return false;
       }
       loud = 0;
@@ -158,7 +165,9 @@ function armUtteranceRecorder(
   let barged = false;
   let floor = 0;
   let floorSeeded = false;
-  let speechFrames = 0;
+  let speechMs = 0;
+  let voicedAt = 0;
+  let lastTick = Date.now();
   const barge = createBargeDetector();
   let replyStart = 0;
   // Raw samples rather than a MediaRecorder: see lib/pcmClip.ts.
@@ -175,7 +184,7 @@ function armUtteranceRecorder(
     clip.drop();
     voiced = false;
     silenceAt = 0;
-    speechFrames = 0;
+    speechMs = 0;
   };
 
   const flush = async (blob: Blob) => {
@@ -204,11 +213,11 @@ function armUtteranceRecorder(
   };
 
   const end = () => {
-    if (speechFrames < MIN_SPEECH_FRAMES) { drop(); return; }
+    if (speechMs < MIN_SPEECH_MS) { drop(); return; }
     if (clip.recording) void flush(encodeWav(downsample(clip.stop(), ctx.sampleRate, TARGET_RATE), TARGET_RATE));
     voiced = false;
     silenceAt = 0;
-    speechFrames = 0;
+    speechMs = 0;
   };
 
   const time = new Uint8Array(analyser.fftSize);
@@ -216,6 +225,9 @@ function armUtteranceRecorder(
     if (stopped || !active()) return;
     analyser.getByteTimeDomainData(time);
     const peak = pcmPeak(time);
+    const now = Date.now();
+    const dt = Math.min(50, now - lastTick);
+    lastTick = now;
     if (suppressed()) {
       // A phrase still recording when the reply starts would capture the
       // assistant's voice along with the user's.
@@ -237,11 +249,12 @@ function armUtteranceRecorder(
     // first loud frame of speech the room's level, and the speaker inaudible.
     if (!voiced) { floor = floorSeeded ? floor * 0.98 + peak * 0.02 : peak; floorSeeded = true; }
     if (peak >= threshold) {
-      if (voiced) speechFrames++;
-      if (Date.now() >= holdUntil) {
-        if (!voiced) { voiced = true; begin(); }
+      if (voiced) speechMs += dt;
+      if (now >= holdUntil) {
+        if (!voiced) { voiced = true; voicedAt = now; begin(); }
         silenceAt = 0;
       }
+      if (voiced && now - voicedAt > MAX_PHRASE_MS) end();
     } else {
       if (voiced && Date.now() >= holdUntil) {
         if (!silenceAt) silenceAt = Date.now();
@@ -474,6 +487,9 @@ export const useWhisperSTT = useVoiceSTT;
 
 const ABBREVIATION = /\b(?:mr|mrs|ms|dr|st|vs|etc|e\.g|i\.e|no|approx)\.$/i;
 
+const INITIAL = /(?:^|\s)\p{Lu}\.$/u;
+const LIST_MARKER = /^\s*(?:\d+[.)]|[-*+#>]+)\s*$/;
+
 /**
  * Splits streamed reply text into the sentences that are complete so far, so
  * the first one can be spoken while the rest is still being written. Text
@@ -488,28 +504,72 @@ export function takeSentences(text: string): { sentences: string[]; rest: string
     const cut = m.index + (m[1]?.length ?? 0);
     const piece = text.slice(start, cut);
     if ((piece.match(/```/g)?.length ?? 0) % 2) continue;
-    if (m[1] && ABBREVIATION.test(piece.trimEnd())) continue;
+    if (m[1] && (ABBREVIATION.test(piece.trimEnd()) || INITIAL.test(piece.trimEnd()))) continue;
+    // "1." or "-" alone is a list marker whose item is still to come.
+    if (LIST_MARKER.test(piece)) continue;
     if (piece.trim()) sentences.push(piece.trim());
     start = m.index + m[0].length;
   }
   return { sentences, rest: text.slice(start) };
 }
 
-function stripMarkdown(text: string): string {
+/** The words a person would say: no markup, link addresses, table rules or stray symbols read out as "asterisk". */
+export function stripMarkdown(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, "code block")
     .replace(/`[^`]+`/g, (m) => m.slice(1, -1))
-    .replace(/#{1,6}\s+/g, "")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/!?\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/https?:\/\/(?:www\.)?([^\s/)]+)[^\s)]*/g, "$1")
+    .replace(/<[^>\s][^>]*>/g, " ")
+    .replace(/^[ \t]*\|?[ \t:|-]*-{3,}[ \t:|-]*$/gm, "")
+    .replace(/^\s*\|(.*)\|\s*$/gm, (_, row: string) => `${row.split("|").map((c) => c.trim()).filter(Boolean).join(", ")}.`)
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*>+\s?/gm, "")
+    .replace(/^\s*[-*+]\s+(?:\[[ xX]\]\s+)?/gm, "")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/(\*\*|__|~~)(.*?)\1/g, "$2")
     .replace(/\*(.*?)\*/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/^[-*+]\s+/gm, "")
-    .replace(/^\d+\.\s+/gm, "")
-    .replace(/\n{2,}/g, ". ")
+    .replace(/(^|\s)_([^_]+)_(?=\s|[.,!?]|$)/g, "$1$2")
+    .replace(/[*#`|~]+/g, " ")
+    .replace(/([^\s.!?:;,।])[ \t]*\n{2,}/g, "$1. ")
     .replace(/\n/g, " ")
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F0FF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{200D}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const SPEAK_MAX = 220;
+
+/**
+ * One utterance per sentence, long ones cut at a comma or space. Chrome stops
+ * a network voice about 15 seconds into an utterance, mid-word; short pieces
+ * finish well inside that, so nothing is left unsaid.
+ */
+export function speechChunks(text: string, max = SPEAK_MAX): string[] {
+  if (text.length <= max) return text ? [text] : [];
+  const out: string[] = [];
+  for (const sentence of text.match(/[^.!?।…]+[.!?।…]*["')\]]*\s*/g) ?? [text]) {
+    let s = sentence.trim();
+    while (s.length > max) {
+      const cut = Math.max(s.lastIndexOf(", ", max), s.lastIndexOf(" ", max));
+      const at = cut > max / 2 ? cut + 1 : max;
+      out.push(s.slice(0, at).trim());
+      s = s.slice(at).trim();
+    }
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+const SCRIPT_LANGS: [RegExp, string][] = [
+  [/[\u0900-\u097F]/, "hi-IN"], [/[\u0980-\u09FF]/, "bn-IN"], [/[\u0A00-\u0A7F]/, "pa-IN"], [/[\u0A80-\u0AFF]/, "gu-IN"],
+  [/[\u0B80-\u0BFF]/, "ta-IN"], [/[\u0C00-\u0C7F]/, "te-IN"], [/[\u0C80-\u0CFF]/, "kn-IN"], [/[\u0D00-\u0D7F]/, "ml-IN"],
+  [/[\u0600-\u06FF]/, "ur-PK"],
+];
+
+/** The language a sentence is written in, when its script says so. An English voice reads Hindi script as silence or noise. */
+export function scriptLang(text: string): string | undefined {
+  return SCRIPT_LANGS.find(([re]) => re.test(text))?.[1];
 }
 
 // Cross-browser TTS hardening:
@@ -518,16 +578,14 @@ function stripMarkdown(text: string): string {
 //   warm-up utterance which silently kills the unlock itself.
 // - iOS Safari often returns 0 voices for the first ~200ms; await
 //   voiceschanged with a polling fallback (the event sometimes never fires).
-// - Chrome kills long utterances after ~15s without activity; we pause +
-//   resume every 10s while speaking to keep the queue alive.
+// - Chrome kills long utterances after ~15s; replies are spoken in short
+//   pieces (speechChunks) so none runs that long.
 // - Defensive cancel + resume before each speak to prevent the iOS
 //   paused-after-cancel deadlock.
 
 const isIOS = typeof navigator !== "undefined"
   && /iPad|iPhone|iPod/.test(navigator.userAgent)
   && !(window as any).MSStream;
-const isChrome = typeof navigator !== "undefined"
-  && /Chrome|CriOS/.test(navigator.userAgent);
 
 let ttsUnlocked = false;
 
@@ -619,7 +677,6 @@ export function useTTS(agent?: TTSVoice) {
     if (localStorage.getItem(TTS_KEY) === "true") setEnabled(true);
     loaded.current = true;
   }, []);
-  const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const ok = typeof window !== "undefined" && "speechSynthesis" in window;
@@ -641,24 +698,6 @@ export function useTTS(agent?: TTSVoice) {
     if (loaded.current) localStorage.setItem(TTS_KEY, String(enabled));
   }, [enabled]);
 
-  const startKeepalive = useCallback(() => {
-    if (!isChrome || keepaliveRef.current) return;
-    // 8s — Chrome's hard cap is ~15s of silence, so 8s gives plenty of margin
-    // and survives throttled tabs that delay timers up to ~1.5×.
-    keepaliveRef.current = setInterval(() => {
-      if (!window.speechSynthesis.speaking) return;
-      window.speechSynthesis.pause();
-      window.speechSynthesis.resume();
-    }, 8_000);
-  }, []);
-
-  const stopKeepalive = useCallback(() => {
-    if (keepaliveRef.current) {
-      clearInterval(keepaliveRef.current);
-      keepaliveRef.current = null;
-    }
-  }, []);
-
   // One reply can arrive in pieces, spoken while its text still streams in.
   // The pieces play back to back as one reply: "speaking", the echo guard and
   // onEnd span all of them, so the mic stays shut between sentences.
@@ -673,17 +712,18 @@ export function useTTS(agent?: TTSVoice) {
     r.playing = false;
     if (r.begun) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
     setSpeaking(false);
-    stopKeepalive();
     const cb = r.onEnd;
     r.onEnd = undefined;
     cb?.();
-  }, [stopKeepalive]);
+  }, []);
 
   const playOne = useCallback(async (clean: string, volume: number, onStart: () => void): Promise<void> => {
     // The natural voice speaks once it has loaded; until then (and while it
     // downloads in the background) the device's most human voice answers, so
     // a reply never waits on a download.
-    if (naturalVoiceOn()) {
+    // The neural voice is English only; another script goes to a voice of that language.
+    const native = scriptLang(clean);
+    if (!native && naturalVoiceOn()) {
       if (naturalVoiceReady()) { if (await speakNatural(clean, { voice: natural, volume, onStart })) return; }
       else void loadNaturalVoice();
     }
@@ -692,8 +732,11 @@ export function useTTS(agent?: TTSVoice) {
       const u = new SpeechSynthesisUtterance(clean);
       u.rate = 1.05;
       u.volume = volume;
-      const preferred = humanVoice(voices, voicePreference, typeof navigator !== "undefined" ? navigator.language : "en", gender);
-      if (preferred) { u.voice = preferred; u.lang = preferred.lang; }
+      const preferred = humanVoice(voices, native ? undefined : voicePreference, native ?? (typeof navigator !== "undefined" ? navigator.language : "en"), gender);
+      const fits = !native || preferred?.lang?.toLowerCase().startsWith(native.slice(0, 2));
+      if (preferred && fits) { u.voice = preferred; u.lang = preferred.lang; }
+      // No voice of that language is listed: name the language and let the system choose.
+      else if (native) u.lang = native;
       // No voice of the agent's gender on this device: shift the pitch toward it.
       const off = (gender === "male" || gender === "female") && voiceGender(preferred) !== gender;
       u.pitch = off ? (gender === "male" ? 0.8 : 1.2) : 1.0;
@@ -713,7 +756,6 @@ export function useTTS(agent?: TTSVoice) {
       u.onstart = () => {
         begun = true;
         onStart();
-        startKeepalive();
         clearTimeout(watchdog);
         watchdog = setTimeout(done, clean.length * SPEECH_MS_PER_CHAR + SPEECH_END_GRACE_MS);
       };
@@ -724,7 +766,7 @@ export function useTTS(agent?: TTSVoice) {
         if (!begun) watchdog = setTimeout(done, SPEECH_START_TIMEOUT_MS);
       }, isIOS ? 80 : 0);
     });
-  }, [voicePreference, gender, natural, startKeepalive]);
+  }, [voicePreference, gender, natural]);
 
   const pump = useCallback(async () => {
     const r = replyRef.current;
@@ -758,9 +800,8 @@ export function useTTS(agent?: TTSVoice) {
       try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }
     if (ttsSpeaking()) lastSpoken.until = Date.now() + ECHO_TEXT_MS;
-    stopKeepalive();
     setSpeaking(false);
-  }, [supported, stopKeepalive]);
+  }, [supported]);
 
   /** Starts a reply that is added to piece by piece; false when nothing will be spoken. */
   const begin = useCallback((onEnd?: () => void, force = false): boolean => {
@@ -785,7 +826,7 @@ export function useTTS(agent?: TTSVoice) {
     const r = replyRef.current;
     const clean = stripMarkdown(text);
     if (!r.open || !clean) return;
-    r.parts.push(clean);
+    r.parts.push(...speechChunks(clean));
     r.text = r.text ? `${r.text} ${clean}` : clean;
     void pump();
   }, [pump]);

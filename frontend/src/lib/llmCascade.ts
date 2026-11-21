@@ -998,7 +998,7 @@ export function geminiToolsToOpenAI(
 // ─── Transcription cascade (audio → text) ────────────────────────────────
 // Groq Whisper (free, fast) → OpenAI Whisper. Both are OpenAI-compatible
 // multipart endpoints, so the same request shape works for each.
-export interface TranscribeCascadeResult { text: string; provider: string; model: string }
+export interface TranscribeCascadeResult { text: string; provider: string; model: string; confident?: boolean }
 
 function transcriptionFile(audio: Blob): { file: File; mime: string } {
   const t = (audio.type || "").toLowerCase();
@@ -1029,6 +1029,12 @@ export function collapseRepeats(text: string): string {
   return out.join(" ").replace(/\b(\p{L}+(?:\s+\p{L}+){0,3})(?:[\s,]+\1\b){2,}/giu, "$1").trim();
 }
 
+/** Every segment was clearly speech and decoded with confidence, so even "Okay." or "Thank you." was really said. */
+export function confidentSpeech(body: { segments?: WhisperSegment[] }): boolean {
+  const segs = body.segments;
+  return Array.isArray(segs) && segs.length > 0 && segs.every((s) => (s.no_speech_prob ?? 1) < 0.2 && (s.avg_logprob ?? -1) > -0.4);
+}
+
 export function spokenText(body: { text?: string; segments?: WhisperSegment[] }): string {
   if (!Array.isArray(body.segments)) return collapseRepeats((body.text ?? "").trim());
   return collapseRepeats(body.segments
@@ -1042,10 +1048,14 @@ export function spokenText(body: { text?: string; segments?: WhisperSegment[] })
 // A phrase comes back in a second or two, so a stalled provider is dropped
 // quickly for the next one; long recordings get time in proportion to size.
 // Biases Whisper toward how people here actually talk: English, Hindi and the
-// two mixed, with Hindi words kept in Roman script as typed in chats.
-const STT_PROMPT = "Hi JARVIS, kal ki meeting ka reminder laga do. Send the report to Priya, aur WhatsApp pe bata dena.";
+// two mixed, with Hindi words kept in Roman script as typed in chats. Whisper
+// repeats its prompt back when it hears only noise, so the prompt must never
+// read as a request: the old one ("Send the report to Priya...") came back as
+// the user's words and the assistant acted on it.
+const STT_PROMPT = "Hinglish aur English ki baat-cheet, Roman script mein likhi hui.";
+const OLD_STT_PROMPT = "Hi JARVIS, kal ki meeting ka reminder laga do. Send the report to Priya, aur WhatsApp pe bata dena.";
 
-async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = Math.min(60_000, 12_000 + audio.size / 50)): Promise<{ ok: boolean; text?: string; language?: string; status?: number; quota?: boolean }> {
+async function transcribeOne(base: string, key: string, model: string, audio: Blob, lang?: string, timeoutMs = Math.min(60_000, 12_000 + audio.size / 50)): Promise<{ ok: boolean; text?: string; language?: string; confident?: boolean; status?: number; quota?: boolean }> {
   const { signal, clear } = withTimeout(timeoutMs);
   try {
     const fd = new FormData();
@@ -1060,8 +1070,9 @@ async function transcribeOne(base: string, key: string, model: string, audio: Bl
     const body = await r.text();
     let text = body.trim();
     let language: string | undefined;
-    try { const j = JSON.parse(body); text = spokenText(j); language = typeof j.language === "string" ? j.language.toLowerCase() : undefined; } catch { /* a gateway that answered in plain text */ }
-    return { ok: true, text, language };
+    let confident = false;
+    try { const j = JSON.parse(body); text = spokenText(j); confident = confidentSpeech(j); language = typeof j.language === "string" ? j.language.toLowerCase() : undefined; } catch { /* a gateway that answered in plain text */ }
+    return { ok: true, text, language, confident };
   } catch { return { ok: false, status: 0 }; }
   finally { clear(); }
 }
@@ -1134,10 +1145,15 @@ const HALLUCINATIONS = new Set([
   "subtitles by the amara.org community", "transcribed by https://otter.ai",
 ]);
 
-export function isHallucination(text: string): boolean {
+const plainWords = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/** `confident`: Whisper scored the clip as clear speech, so a stock phrase alone is what the user said. */
+export function isHallucination(text: string, confident = false): boolean {
   const t = text.toLowerCase().replace(/[^\p{L}\p{N}\s.:/-]/gu, "").replace(/[.\s]+$/, "").trim();
-  // Whisper repeats its prompt back when it hears nothing.
-  return !t || HALLUCINATIONS.has(t) || (t.length > 8 && STT_PROMPT.toLowerCase().includes(t));
+  if (!t || (!confident && HALLUCINATIONS.has(t))) return true;
+  // Whisper repeats its prompt back, whole or in part, when it hears nothing.
+  const w = plainWords(text);
+  return [STT_PROMPT, OLD_STT_PROMPT].map(plainWords).some((p) => w.includes(p) || (w.split(" ").length >= 3 && ` ${p} `.includes(` ${w} `)));
 }
 
 const ISO_NAMES: Record<string, string> = { en: "english", hi: "hindi", ur: "urdu", bn: "bengali", ta: "tamil", te: "telugu", mr: "marathi", gu: "gujarati", kn: "kannada", ml: "malayalam", pa: "punjabi", es: "spanish", fr: "french", de: "german" };
@@ -1161,12 +1177,12 @@ export async function transcribeCascade(audio: Blob, lang?: string, hint?: strin
   };
   if (keys.groq) {
     const res = await settle(GROQ_BASE, keys.groq, "whisper-large-v3");
-    if (res.ok) return { text: res.text ?? "", provider: "groq", model: "whisper-large-v3" };
+    if (res.ok) return { text: res.text ?? "", provider: "groq", model: "whisper-large-v3", confident: res.confident };
     errors.push(`groq:${res.status}`);
   }
   for (const key of keys.openai) {
     const res = await settle(OPENAI_BASE, key, "whisper-1");
-    if (res.ok) return { text: res.text ?? "", provider: "openai", model: "whisper-1" };
+    if (res.ok) return { text: res.text ?? "", provider: "openai", model: "whisper-1", confident: res.confident };
     errors.push(`openai:${res.status}`);
     if (!res.quota) break;
   }
