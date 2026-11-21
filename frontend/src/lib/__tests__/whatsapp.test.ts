@@ -46,6 +46,9 @@ vi.mock("@/lib/cron", () => ({
 const sent: { to: string; body: string }[] = [];
 const calls: { url: string; body: Row; auth: string | null }[] = [];
 let chatSse = "";
+const receipts: string[] = [];
+const media = { mime: "audio/ogg", bytes: new Uint8Array(2000) };
+vi.mock("@/lib/llmCascade", () => ({ isHallucination: (t: string) => !t, transcribeCascade: async () => ({ text: "add milk to my list", provider: "groq" }) }));
 
 beforeEach(() => {
   limits.clear();
@@ -53,14 +56,19 @@ beforeEach(() => {
   processed.clear();
   sent.length = 0;
   calls.length = 0;
+  receipts.length = 0;
+  media.mime = "audio/ogg";
   process.env.WHATSAPP_TOKEN = "t";
   process.env.WHATSAPP_PHONE_NUMBER_ID = "pn";
   process.env.WHATSAPP_VERIFY_TOKEN = "v";
   process.env.WHATSAPP_APP_SECRET = "secret";
   process.env.NEXTAUTH_URL = "https://app.test";
-  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
+    if (url.endsWith("/media-1")) return new Response(JSON.stringify({ url: "https://lookaside.test/file", mime_type: media.mime, file_size: media.bytes.length }));
+    if (url === "https://lookaside.test/file") return new Response(media.bytes, { headers: { "content-type": media.mime } });
     const body = JSON.parse(String(init.body));
     if (url.includes("graph.facebook.com")) {
+      if (body.status === "read") { receipts.push(body.message_id); return new Response("{}"); }
       sent.push({ to: body.to, body: body.text?.body ?? `[template] ${body.template.components[0].parameters[0].text}` });
       return new Response("{}");
     }
@@ -173,6 +181,38 @@ describe("handleInbound", () => {
     await handleInbound(msg("no"));
     expect(calls).toEqual([]);
     expect(sent.map((s) => s.body)).toEqual(["Cancelled - nothing was done."]);
+  });
+});
+
+describe("voice notes, photos and documents", () => {
+  it("answers a voice note from its transcript, with a read receipt", async () => {
+    const { handleInbound } = await import("@/lib/whatsappAgent");
+    linked();
+    chatSse = sse(["text", { text: "Added milk." }], ["done", { sideEffects: [] }]);
+    await handleInbound({ id: "w-voice", from: "919800000000", type: "audio", audio: { id: "media-1" } });
+    expect(calls[0].body).toMatchObject({ message: "add milk to my list", attachments: [] });
+    expect(sent.map((x) => x.body)).toEqual(["Added milk."]);
+    expect(receipts).toEqual(["w-voice"]);
+  });
+
+  it("passes a photo to the assistant with its caption", async () => {
+    const { handleInbound } = await import("@/lib/whatsappAgent");
+    linked();
+    media.mime = "image/jpeg";
+    chatSse = sse(["text", { text: "That's a bill for 450." }], ["done", { sideEffects: [] }]);
+    await handleInbound({ id: "w-photo", from: "919800000000", type: "image", image: { id: "media-1", caption: "what is this?" } });
+    const body = calls[0].body as { message: string; attachments: { name: string; mimeType: string; data: string }[] };
+    expect(body.message).toBe("what is this?");
+    expect(body.attachments[0]).toMatchObject({ name: "photo.jpg", mimeType: "image/jpeg" });
+    expect(body.attachments[0].data.length).toBeGreaterThan(100);
+  });
+
+  it("says what it can read when sent something else", async () => {
+    const { handleInbound } = await import("@/lib/whatsappAgent");
+    linked();
+    await handleInbound({ id: "w-sticker", from: "919800000000", type: "sticker" });
+    expect(sent[0].body).toMatch(/text, voice notes, photos and documents/);
+    expect(calls).toEqual([]);
   });
 });
 
