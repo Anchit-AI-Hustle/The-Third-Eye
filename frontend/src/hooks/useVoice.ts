@@ -522,7 +522,7 @@ export function stripMarkdown(text: string): string {
     .replace(/https?:\/\/(?:www\.)?([^\s/)]+)[^\s)]*/g, "$1")
     .replace(/<[^>\s][^>]*>/g, " ")
     .replace(/^[ \t]*\|?[ \t:|-]*-{3,}[ \t:|-]*$/gm, "")
-    .replace(/^\s*\|(.*)\|\s*$/gm, (_, row: string) => `${row.split("|").map((c) => c.trim()).filter(Boolean).join(", ")}.`)
+    .replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_, row: string) => `${row.split("|").map((c) => c.trim()).filter(Boolean).join(", ")}.`)
     .replace(/^\s{0,3}#{1,6}\s+/gm, "")
     .replace(/^\s*>+\s?/gm, "")
     .replace(/^\s*[-*+]\s+(?:\[[ xX]\]\s+)?/gm, "")
