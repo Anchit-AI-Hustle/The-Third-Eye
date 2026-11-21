@@ -44,3 +44,20 @@ describe("spokenText", () => {
     expect(spokenText({ text: " Hello there " })).toBe("Hello there");
   });
 });
+
+describe("the transcriber's own hint heard back", () => {
+  it("drops the old hint, whole or in part, however it is punctuated", () => {
+    for (const t of [
+      "Send the report to Priya, aur WhatsApp pe bata dena.",
+      "Send the report to Priya",
+      "Hi Jarvis kal ki meeting ka reminder laga do",
+      "Hinglish aur English ki baat-cheet, Roman script mein likhi hui.",
+    ]) expect(isHallucination(t)).toBe(true);
+  });
+
+  it("keeps a stock phrase Whisper heard as clear speech", () => {
+    expect(isHallucination("Okay.", true)).toBe(false);
+    expect(isHallucination("Thank you.", true)).toBe(false);
+    expect(isHallucination("Okay.")).toBe(true);
+  });
+});

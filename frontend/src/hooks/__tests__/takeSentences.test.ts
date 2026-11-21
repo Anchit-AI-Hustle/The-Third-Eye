@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { takeSentences } from "../useVoice";
+import { scriptLang, speechChunks, stripMarkdown, takeSentences } from "../useVoice";
 
 describe("takeSentences", () => {
   it("returns finished sentences and keeps the unfinished tail", () => {
@@ -27,5 +27,29 @@ describe("takeSentences", () => {
   it("holds text inside an unfinished code block", () => {
     const { sentences } = takeSentences("Here it is.\n```js\nconst a = 1;\nconst b = 2;\n");
     expect(sentences).toEqual(["Here it is."]);
+  });
+});
+
+describe("what is read aloud", () => {
+  it("keeps a list number or an initial with the words that follow", () => {
+    expect(takeSentences("1. Buy milk.\n2. Call J. K. Rao. Then").sentences).toEqual(["1. Buy milk.", "2. Call J. K. Rao."]);
+  });
+
+  it("says the words, not the markup, link addresses or table rules", () => {
+    expect(stripMarkdown("## Plan\n**Step one:** open [the site](https://example.com/a?b=1) ~~now~~")).toBe("Plan Step one: open the site now");
+    expect(stripMarkdown("| Item | Price |\n|---|---|\n| Tea | 20 |")).toBe("Item, Price. Tea, 20.");
+    expect(stripMarkdown("See https://www.example.com/path/x for more")).toBe("See example.com for more");
+  });
+
+  it("speaks a long reply in short pieces and loses none of it", () => {
+    const text = `${"This sentence is here to make the reply long, ".repeat(8)}and it ends. Second one.`;
+    const chunks = speechChunks(text);
+    expect(chunks.every((c) => c.length <= 220)).toBe(true);
+    expect(chunks.join(" ")).toBe(text);
+  });
+
+  it("reads Hindi script with a Hindi voice", () => {
+    expect(scriptLang("आज मौसम कैसा है")).toBe("hi-IN");
+    expect(scriptLang("aaj mausam kaisa hai")).toBeUndefined();
   });
 });

@@ -123,7 +123,7 @@ async function understand(msg: InboundMessage, body: string): Promise<{ text: st
   if (!file) return { reply: "I couldn't open that one - it may be too large (16 MB is the limit). Try sending it again or smaller." };
 
   if (msg.type === "audio") {
-    const heard = await transcribeCascade(file.blob).then((t) => (isHallucination(t.text) ? "" : t.text.trim())).catch(() => "");
+    const heard = await transcribeCascade(file.blob).then((t) => (isHallucination(t.text, t.confident) ? "" : t.text.trim())).catch(() => "");
     return heard ? { text: heard, attachments: [] } : { reply: "I couldn't make out that voice note. Say it again, or type it." };
   }
   if (file.blob.size > MAX_ATTACHMENT_BYTES) return { reply: "That file is over 3 MB, which is the most I can read in one go. Send a smaller copy or the part you need." };
