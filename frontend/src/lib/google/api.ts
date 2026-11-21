@@ -133,6 +133,21 @@ function headerSafe(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
 }
 
+// Raw UTF-8 in a header shows up as mojibake ("Ã°ÂŸÂ—Â“") in Gmail, so
+// non-ASCII text goes out as RFC 2047 encoded-words of at most 75 chars.
+export function encodeMailHeader(value: string): string {
+  const safe = headerSafe(value);
+  if (/^[\x20-\x7e]*$/.test(safe)) return safe;
+  const words: string[] = [];
+  let chunk = "";
+  for (const ch of safe) {
+    if (Buffer.byteLength(chunk + ch) > 45) { words.push(chunk); chunk = ""; }
+    chunk += ch;
+  }
+  if (chunk) words.push(chunk);
+  return words.map((w) => `=?UTF-8?B?${Buffer.from(w).toString("base64")}?=`).join("\r\n ");
+}
+
 export async function gmailSend(
   token: string,
   to: string,
@@ -142,7 +157,7 @@ export async function gmailSend(
   if (!to.trim()) return { ok: false, error: "No recipient given." };
   const raw = [
     `To: ${headerSafe(to)}`,
-    `Subject: ${headerSafe(subject)}`,
+    `Subject: ${encodeMailHeader(subject)}`,
     "Content-Type: text/plain; charset=utf-8",
     "",
     body,
