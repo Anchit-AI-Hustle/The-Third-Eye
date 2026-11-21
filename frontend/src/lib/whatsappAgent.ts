@@ -1,7 +1,9 @@
 import { getDb } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { alreadyProcessed, markProcessed } from "@/lib/cron";
-import { applySideEffects, linksFrom, sendWhatsAppText, type WhatsAppLink } from "@/lib/whatsapp";
+import { applySideEffects, fetchWhatsAppMedia, linksFrom, markReadAndTyping, sendWhatsAppText, type WhatsAppLink } from "@/lib/whatsapp";
+import { isHallucination, transcribeCascade } from "@/lib/llmCascade";
+import { MAX_ATTACHMENT_BYTES, type Attachment } from "@/lib/attachments";
 
 // Answers one inbound WhatsApp message as the linked user: through the same
 // /api/chat the app uses (with that user's scoped gateway token), applying the
@@ -13,20 +15,21 @@ const YES = /^\s*(yes|y|confirm|ok|okay|go ahead|send it|do it)\s*[.!]*\s*$/i;
 const NO = /^\s*(no|n|cancel|stop|don'?t)\s*[.!]*\s*$/i;
 const LINK = /^\s*link\s+(\d{6})\s*$/i;
 
-interface InboundMessage { id: string; from: string; type: string; text?: { body?: string } }
+type Media = { id?: string; caption?: string; filename?: string };
+interface InboundMessage { id: string; from: string; type: string; text?: { body?: string }; audio?: Media; image?: Media; document?: Media }
 type Effect = { type: string; data?: Record<string, unknown> };
 
 const origin = () => (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
 
 /** Runs one chat turn over the SSE stream and returns what the app would have shown. */
-async function chatTurn(token: string, message: string, link: WhatsAppLink) {
+async function chatTurn(token: string, message: string, link: WhatsAppLink, attachments: Attachment[] = []) {
   const db = getDb()!;
   const [tasks, notes, goals] = await Promise.all(["tasks", "notes", "goals"].map(async (t) =>
     ((await db.from(t).select("*").eq("user_id", link.user_id)).data ?? []) as unknown[]));
   const res = await fetch(`${origin()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ message, history: link.history, tasks, notes, goals, timezone: process.env.WHATSAPP_TIMEZONE || "Asia/Kolkata" }),
+    body: JSON.stringify({ message, history: link.history, tasks, notes, goals, attachments, timezone: process.env.WHATSAPP_TIMEZONE || "Asia/Kolkata" }),
   });
   if (!res.ok || !res.body) return { text: "I couldn't reach my brain just now - try again in a minute.", confirm: null, effects: [] as Effect[] };
 
@@ -98,12 +101,35 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
     return;
   }
   await db.from("whatsapp_links").update({ last_inbound_at: new Date().toISOString() }).eq("user_id", link.user_id);
-  if (!body) {
-    await sendWhatsAppText(msg.from, "I can read text messages here for now - type what you need.");
+  void markReadAndTyping(msg.id).catch(() => {});
+
+  const said = await understand(msg, body);
+  if ("reply" in said) {
+    await sendWhatsAppText(msg.from, said.reply);
     return;
   }
+  await sendWhatsAppText(msg.from, await answer(link, token, said.text, said.attachments));
+}
 
-  await sendWhatsAppText(msg.from, await answer(link, token, body));
+/**
+ * What the person sent, as the chat takes it: text as it is, a voice note as
+ * its transcript, a photo or document as an attachment with its caption.
+ */
+async function understand(msg: InboundMessage, body: string): Promise<{ text: string; attachments: Attachment[] } | { reply: string }> {
+  if (msg.type === "text") return body ? { text: body, attachments: [] } : { reply: "Send me a message, a voice note, a photo or a document." };
+  const media = msg.type === "audio" ? msg.audio : msg.type === "image" ? msg.image : msg.type === "document" ? msg.document : undefined;
+  if (!media?.id) return { reply: "I can take text, voice notes, photos and documents here. That kind of message I can't read yet." };
+  const file = await fetchWhatsAppMedia(media.id);
+  if (!file) return { reply: "I couldn't open that one - it may be too large (16 MB is the limit). Try sending it again or smaller." };
+
+  if (msg.type === "audio") {
+    const heard = await transcribeCascade(file.blob).then((t) => (isHallucination(t.text) ? "" : t.text.trim())).catch(() => "");
+    return heard ? { text: heard, attachments: [] } : { reply: "I couldn't make out that voice note. Say it again, or type it." };
+  }
+  if (file.blob.size > MAX_ATTACHMENT_BYTES) return { reply: "That file is over 3 MB, which is the most I can read in one go. Send a smaller copy or the part you need." };
+  const name = media.filename ?? (msg.type === "image" ? "photo.jpg" : "document");
+  const data = Buffer.from(await file.blob.arrayBuffer()).toString("base64");
+  return { text: media.caption?.trim() || "", attachments: [{ name, mimeType: file.mimeType, data }] };
 }
 
 /**
@@ -111,7 +137,7 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
  * webhook or a bridge like OpenClaw). Keeps the shared history and holds a
  * confirm-before-act action until a YES or NO.
  */
-export async function answer(link: WhatsAppLink, token: string, body: string): Promise<string> {
+export async function answer(link: WhatsAppLink, token: string, body: string, attachments: Attachment[] = []): Promise<string> {
   const db = getDb()!;
   if (link.pending && (YES.test(body) || NO.test(body))) {
     const reply = YES.test(body) ? await act(token, link.pending) : "Cancelled - nothing was done.";
@@ -119,7 +145,7 @@ export async function answer(link: WhatsAppLink, token: string, body: string): P
     return reply;
   }
 
-  const turn = await chatTurn(token, body, link);
+  const turn = await chatTurn(token, body, link, attachments);
   await applySideEffects(link.user_id, turn.effects);
   const parts = [turn.text || "Done."];
   const links = linksFrom(turn.effects);
@@ -128,7 +154,7 @@ export async function answer(link: WhatsAppLink, token: string, body: string): P
   const reply = parts.join("\n\n");
   await db.from("whatsapp_links").update({
     pending: turn.confirm,
-    history: [...link.history, { role: "user", content: body }, { role: "assistant", content: reply }].slice(-HISTORY_TURNS),
+    history: [...link.history, { role: "user", content: body || `[sent ${attachments.map((a) => a.name).join(", ")}]` }, { role: "assistant", content: reply }].slice(-HISTORY_TURNS),
   }).eq("user_id", link.user_id);
   return reply;
 }

@@ -69,6 +69,24 @@ async function graphSend(payload: Record<string, unknown>): Promise<boolean> {
   return !!res?.ok;
 }
 
+/** Blue ticks and "typing…" while the reply is worked out, so the chat feels answered at once. */
+export async function markReadAndTyping(messageId: string): Promise<void> {
+  await graphSend({ status: "read", message_id: messageId, typing_indicator: { type: "text" } });
+}
+
+const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+
+/** A voice note, photo or document the user sent: fetched from Meta with the bot's token. */
+export async function fetchWhatsAppMedia(mediaId: string): Promise<{ blob: Blob; mimeType: string } | null> {
+  const auth = { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` };
+  const meta = await fetch(`${GRAPH}/${mediaId}`, { headers: auth }).then((r) => (r.ok ? r.json() : null)).catch(() => null) as { url?: string; mime_type?: string; file_size?: number } | null;
+  if (!meta?.url || (meta.file_size ?? 0) > MAX_MEDIA_BYTES) return null;
+  const res = await fetch(meta.url, { headers: auth }).catch(() => null);
+  if (!res?.ok) return null;
+  const blob = await res.blob();
+  return blob.size > MAX_MEDIA_BYTES ? null : { blob, mimeType: (meta.mime_type ?? blob.type).split(";")[0] };
+}
+
 export async function sendWhatsAppText(to: string, text: string): Promise<boolean> {
   let ok = true;
   for (const body of chunks(toWhatsAppText(text))) ok = (await graphSend({ to, type: "text", text: { body, preview_url: true } })) && ok;
