@@ -17,7 +17,7 @@ jobs:
   check-demo-tooling:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9 # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Verify recorder JavaScript syntax
         run: node --check scripts/oauth-demo/record-demo.mjs
       - name: Verify post-render validator syntax
