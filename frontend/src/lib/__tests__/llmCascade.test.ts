@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generationFailure, geminiToolsToOpenAI, llmCascade, resetCooldowns, toolCallCascade, userFacingOutage } from "@/lib/llmCascade";
+import { forgetSeenHealth, resetHealthCache } from "@/lib/providerHealth";
 
 // A provider that just failed on quota grounds should be skipped on the next
 // call within the cooldown window, instead of paying for another failed
@@ -246,5 +247,38 @@ describe("llmCascade: when every provider fails", () => {
   it("says so when no provider key is configured at all", async () => {
     const err = await llmCascade({ messages: [{ role: "user", content: "hi" }] }).catch((e) => e);
     expect(generationFailure(err)).toContain("no AI provider key is configured");
+  });
+});
+
+describe("llmCascade: waiting out a rate limit", () => {
+  afterEach(() => { vi.useRealTimers(); forgetSeenHealth(); resetHealthCache(); });
+
+  it("waits for the only provider's per-minute limit to lift instead of failing", async () => {
+    process.env.GROQ_API_KEY = "test-groq-key";
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (!hostIs(url, GROQ_HOST) || url.endsWith("/models")) return { ok: false, status: 404, json: async () => ({}), text: async () => "" };
+      const limited = n++ === 0;
+      const body = limited ? { error: "rate limited" } : { choices: [{ message: { content: "after the wait" } }] };
+      return { ok: !limited, status: limited ? 429 : 200, json: async () => body, text: async () => JSON.stringify(body) };
+    }));
+
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toThrow();
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toThrow();
+    expect(n).toBe(1);
+
+    vi.useFakeTimers();
+    const answer = llmCascade({ messages: [{ role: "user", content: "hi" }], patienceMs: 180_000 });
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect((await answer).text).toBe("after the wait");
+  });
+
+  it("does not wait on a provider that is out of credit", async () => {
+    process.env.GROQ_API_KEY = "test-groq-key";
+    const { fn } = fetchStub([{ match: (u) => hostIs(u, GROQ_HOST), status: 402, body: { error: "payment required" } }]);
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }] })).rejects.toThrow();
+    const calls = fn.mock.calls.length;
+    await expect(llmCascade({ messages: [{ role: "user", content: "hi" }], patienceMs: 180_000 })).rejects.toThrow();
+    expect(fn.mock.calls.length).toBe(calls);
   });
 });
