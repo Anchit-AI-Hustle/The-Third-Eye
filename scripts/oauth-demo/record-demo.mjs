@@ -93,8 +93,8 @@ async function setup() {
   await page.goto("https://accounts.google.com/");
   log(`Sign in to Google as ${TEST_EMAIL} in the Chrome window (password + any prompts).`);
   log("Use only the dedicated Google test account in this separate Chrome profile. Gmail and Calendar /u/0 must point to that account.");
-  log("Then open https://myaccount.google.com/connections and remove The Third Eye if it is listed, so the consent screen appears fresh");
-  log("(otherwise it says the app \"already has some access\" instead of listing the three permissions).");
+  log("Do not revoke existing Google grants just for the recording: the app's Connect Google flow requests prompt=consent explicitly.");
+  log("Use only the approved test account, and finish Google sign-in before continuing.");
   await rl.question("Press Enter here when done… ");
   await ctx.close();
   log(`Saved. Chrome profile: ${PROFILE}`);
