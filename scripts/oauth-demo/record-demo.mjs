@@ -229,13 +229,19 @@ async function record() {
     need(ff.exitCode === null, `FFmpeg stopped during scene "${key}". Partial recording: ${raw}`);
   };
 
-  // Clicks the first locator that appears; otherwise asks you to click it.
-  // The recording keeps running, so a manual click is still one continuous take.
+  // Never accept Enter in place of a required click: the previous recorder
+  // continued filming even if the actual action never happened.
   const click = async (page, label, ...locs) => {
     for (const l of locs) {
-      try { await l.first().waitFor({ state: "visible", timeout: 6000 }); await l.first().click(); return; } catch { /* next */ }
+      try {
+        await l.first().waitFor({ state: "visible", timeout: 6000 });
+        await l.first().click();
+        return;
+      } catch { /* test next supported selector */ }
     }
-    await rl.question(`\x1b[33m⚠ Please click "${label}" in Chrome, then press Enter… \x1b[0m`);
+    const shot = join(OUT, `failed-click-${Date.now()}.png`);
+    try { await page.screenshot({ path: shot }); } catch { /* page may be closed */ }
+    throw new Error(`Could not click the required real UI action "${label}" at ${page.url()}. Screenshot: ${shot}. Recording aborted instead of skipping evidence.`);
   };
   // For screens Google shows only sometimes (account chooser, re-consent).
   const maybe = async (loc, ms = 5000) => {
