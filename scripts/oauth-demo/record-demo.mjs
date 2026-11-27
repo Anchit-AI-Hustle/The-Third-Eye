@@ -309,7 +309,16 @@ async function record() {
       await assertSignedIn();
     }
     await say("signin");
-    mark("app_identity", { account: TEST_EMAIL, preExistingSession: existingEmail === TEST_EMAIL.toLowerCase() });
+    // The app intentionally executes explicitly requested sends directly unless
+    // "Ask before acting" is ON (frontend/src/lib/explicitRequest.ts). A review
+    // video must visibly show a confirmation card BEFORE every Gmail send.
+    const confirmationEnabled = await app.evaluate(() => {
+      localStorage.setItem("jarvis_confirm_actions", "1");
+      return localStorage.getItem("jarvis_confirm_actions") === "1";
+    });
+    need(confirmationEnabled, "Could not enable the real app's Ask before acting preference. A Gmail confirmation card must be shown for review.");
+    log("Enabled the app's Ask before acting preference for this dedicated demo browser profile.");
+    mark("app_identity", { account: TEST_EMAIL, preExistingSession: existingEmail === TEST_EMAIL.toLowerCase(), askBeforeActing: true });
     log(`Verified The Third Eye is signed in as ${TEST_EMAIL}.`);
 
     // 3 — the consent flow under review
