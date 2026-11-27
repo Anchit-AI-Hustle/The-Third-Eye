@@ -16,7 +16,7 @@
 // `setup`, which is not recorded.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +27,9 @@ const MODE = process.argv[2];
 const APP = (process.env.APP_URL ?? "https://the-third-eye.anchit-tandon.com").replace(/\/$/, "");
 const TEST_EMAIL = process.env.TEST_EMAIL;
 const RECIPIENT = process.env.RECIPIENT;
+const INBOX_SUBJECT = process.env.DEMO_INBOX_SUBJECT ?? "Q3 report";
+const CALENDAR_EVENT = process.env.DEMO_EVENT_TITLE ?? "";
+const RUN_TAG = new Date().toISOString().replace(/[:.]/g, "-");
 const EXPECTED_CLIENT_PREFIX = process.env.EXPECTED_CLIENT_PREFIX ?? "529553308976-";
 const REQUIRED_FEATURE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -174,7 +177,15 @@ async function record() {
   need(existsSync(PROFILE), "Run `npm run setup` first to sign in to Google.");
   need(spawnSync("which", ["ffmpeg"]).status === 0, "Install ffmpeg: brew install ffmpeg");
   mkdirSync(OUT, { recursive: true });
-
+  // Preserve the previous output rather than confusing it with this run.
+  const finalPath = join(OUT, "the-third-eye-oauth-demo.mp4");
+  if (existsSync(finalPath)) {
+    const archive = join(OUT, `previous-demo-${RUN_TAG}.mp4`);
+    renameSync(finalPath, archive);
+    log(`Archived old video to ${archive}; a new final MP4 will exist only after this run passes.`);
+  }
+  need(CALENDAR_EVENT.trim().length >= 3,
+    "Set DEMO_EVENT_TITLE to an existing, non-sensitive event title on the test account's primary Google Calendar. This is required to prove the read-only feature.");
   log("Rendering narration…");
   const dur = renderVoice();
 
@@ -208,6 +219,8 @@ async function record() {
   const timeline = [];
   const marks = {};
   const now = () => Date.now() - t0;
+  const evidence = [];
+  const mark = (scene, detail) => evidence.push({ scene, seconds: +(now() / 1000).toFixed(2), detail });
   const say = async (key) => {
     need(ff.exitCode === null, `FFmpeg stopped before scene "${key}". Partial recording: ${raw}`);
     timeline.push({ key, at: now() });
@@ -402,7 +415,9 @@ async function record() {
     rl.close();
   }
 
-  writeFileSync(join(OUT, "timeline.json"), JSON.stringify({ timeline, marks }, null, 2));
+  writeFileSync(join(OUT, "timeline.json"), JSON.stringify({ timeline, marks, evidence }, null, 2));
+  writeFileSync(join(OUT, "evidence-manifest.json"), JSON.stringify({ runTag: RUN_TAG, generatedAt: new Date().toISOString(), app: APP, expectedScopes: REQUIRED_FEATURE_SCOPES, evidence }, null, 2));
+  need(evidence.some((e) => e.scene === "oauth_consent") && evidence.some((e) => e.scene === "gmail_read") && evidence.some((e) => e.scene === "gmail_send") && evidence.some((e) => e.scene === "calendar_read"), "Required OAuth verification evidence is incomplete. Final video will not be assembled.");
   assemble(timeline, marks);
 }
 
@@ -460,6 +475,12 @@ function assemble(timeline, marks) {
   log("Assembling the final video…");
   const r = spawnSync("ffmpeg", args, { cwd: OUT, stdio: "inherit" });
   need(r.status === 0, "ffmpeg assembly failed (see above).");
+  const final = join(OUT, "the-third-eye-oauth-demo.mp4");
+  need(existsSync(final) && statSync(final).size > 100_000, "Final MP4 is missing or unexpectedly tiny.");
+  const media = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", final], { encoding: "utf8" });
+  need(media.status === 0, `Cannot probe assembled video: ${media.stderr}`);
+  const info = JSON.parse(media.stdout || "{}");
+  need(Number(info.format?.duration) > 45 && info.streams?.some((s) => s.codec_type === "video") && info.streams?.some((s) => s.codec_type === "audio"), "Finished file must contain real video, narration and adequate duration.");
   log(`Done: ${join(OUT, "the-third-eye-oauth-demo.mp4")}`);
   log("Watch it once, then upload to YouTube as Unlisted and paste the link into Data Access and your reply.");
 }
