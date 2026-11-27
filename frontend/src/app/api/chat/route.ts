@@ -2775,6 +2775,7 @@ async function chat(req: NextRequest, identity: Awaited<ReturnType<typeof identi
             messages: [...fbMessages.slice(-5, -1).map((m) => ({ ...m, content: m.content.slice(0, 1500) })), { ...fbMessages[fbMessages.length - 1], content: fbMessages[fbMessages.length - 1].content.slice(0, 6000) }],
             temperature: 0.6,
             maxTokens: 2500,
+            patienceMs: 30_000,
           }));
           send("text", { text: out.text });
           await saveMemory(email, memory, memoryStore);

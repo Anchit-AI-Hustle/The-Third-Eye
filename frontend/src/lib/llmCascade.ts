@@ -37,6 +37,8 @@ export interface LlmCascadeOptions {
   background?: boolean;
   /** Force JSON-only response */
   jsonMode?: boolean;
+  /** Total time this call may wait for rate limits to lift, when waiting is all that stands between it and an answer. */
+  patienceMs?: number;
 }
 
 export interface LlmCascadeResult {
@@ -426,6 +428,15 @@ function inCooldown(provider: string): boolean {
   return until !== undefined && Date.now() < until;
 }
 
+/** Ms until a rate limit lifts, or null when waiting won't help (out of credit, daily quota, rejected key). */
+async function rateLimitWait(provider: string): Promise<number | null> {
+  const h = (await healthMap()).get(provider);
+  const benched = h?.benched_until ? new Date(h.benched_until).getTime() : 0;
+  if (benched > Date.now() && h?.status !== "rate_limited") return null;
+  const wait = Math.max(benched, cooldownUntil.get(provider) ?? 0) - Date.now();
+  return wait > 0 ? wait : null;
+}
+
 // A provider's own retry-after wins over the default when it sent one.
 function startCooldown(provider: string, retryAfter?: number): void {
   cooldownUntil.set(provider, Date.now() + (retryAfter ?? COOLDOWN_MS));
@@ -666,6 +677,7 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     : opts.background ? ["ollama", ...cascadeOrder().filter((p) => !PAID.has(p))]
     : localFirst() ? ["ollama", ...cascadeOrder()] : [...cascadeOrder(), "ollama"];
   const tokens = estimateTokens([opts.system, opts.messages]);
+  let patience = opts.patienceMs ?? 0;
 
   for (const provider of order) {
     if (overCap(provider, tokens)) {
@@ -680,8 +692,16 @@ export async function llmCascade(opts: LlmCascadeOptions): Promise<LlmCascadeRes
     const benched = opts.ignoreBench ? null : provider === "ollama" ? (inCooldown(hp) ? "your computer didn't answer a moment ago" : null) : inCooldown(hp) ? "cooling down after a recent quota error"
       : (await benchedReason(hp)) ?? (opts.background ? await backgroundBlocked(hp) : null);
     if (benched) {
-      attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
-      continue;
+      // A per-minute limit lifts in seconds. When the providers with credit are
+      // gone and the free one is between minutes, waiting is the only answer.
+      const wait = patience > 0 && provider !== "ollama" ? await rateLimitWait(hp) : null;
+      if (wait === null || wait > patience) {
+        attempts.push({ provider, model: "-", ok: false, reason: `skipped: ${benched}` });
+        continue;
+      }
+      patience -= wait;
+      await new Promise((r) => setTimeout(r, wait + 250));
+      cooldownUntil.delete(hp);
     }
     const before = attempts.length;
     if (provider === "openai" && keys.openai.length > 0) {
