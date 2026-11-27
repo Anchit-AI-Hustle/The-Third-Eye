@@ -26,11 +26,11 @@ import { chromium } from "playwright-core";
 const MODE = process.argv[2];
 const APP = (process.env.APP_URL ?? "https://the-third-eye.anchit-tandon.com").replace(/\/$/, "");
 const TEST_EMAIL = process.env.TEST_EMAIL;
-const RECIPIENT = process.env.RECIPIENT;
-const INBOX_SUBJECT = process.env.DEMO_INBOX_SUBJECT ?? "Q3 report";
+const RECIPIENT = process.env.RECIPIENT ?? TEST_EMAIL;
 const CALENDAR_EVENT = process.env.DEMO_EVENT_TITLE ?? "";
 const RUN_STARTED_MS = Date.now();
 const RUN_TAG = new Date(RUN_STARTED_MS).toISOString().replace(/[:.]/g, "-");
+const INBOX_SUBJECT = process.env.DEMO_INBOX_SUBJECT ?? `The Third Eye OAuth review evidence ${RUN_TAG}`;
 const EXPECTED_CLIENT_PREFIX = process.env.EXPECTED_CLIENT_PREFIX ?? "529553308976-";
 const REQUIRED_FEATURE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -51,8 +51,8 @@ const LINES = {
   clientId: "This is the live Google OAuth authorization for the Third Eye Google Cloud project 5 2 9 5 5 3 3 0 8 9 7 6. The video records the actual Google permission screen, not a mockup.",
   consent: "All services are expanded so each permission is readable. The app requests exactly three scopes: gmail dot readonly, gmail dot send, and calendar dot events dot owned dot readonly. Nothing else. I allow all three.",
   connected: "Back in the app, Settings shows Google connected with the three permissions that were granted.",
-  sourceMail: "Here is an unread email in my Gmail inbox. The deadline, by Friday, is in the message body.",
-  scan: "gmail dot readonly powers the Task Tracker. Scan now reads my unread mail from the last two days and turns action items into tasks. The deadline is in the body, so the app must read it. gmail dot metadata only returns headers and cannot do this.",
+  sourceMail: "To demonstrate Gmail reading with a reproducible test, the assistant has sent an action-item email to my own Google inbox. Here is that newly received message, including the task and its deadline.",
+  scan: "Gmail read only powers the Task Tracker. Scan now reads this newly received email and turns the action item from its body into an actual task. Gmail metadata does not provide message bodies and cannot extract this task.",
   search: "gmail dot readonly also lets the Assistant search my mail when I ask. That uses Gmail search queries, which gmail dot metadata does not allow. The app never modifies or deletes mail, and it does not store message bodies.",
   sendAsk: "gmail dot send lets the Assistant send an email I ask for. It drafts the message and shows me the recipient, subject and body.",
   sendConfirm: "Nothing is sent until I press Confirm.",
@@ -388,12 +388,27 @@ async function record() {
     await app.getByRole("heading", { name: "Google account" }).scrollIntoViewIfNeeded().catch(() => {});
     await say("connected");
 
-    // 4 — gmail.readonly: source mail, Scan now, Assistant search
-    log("Scene 4: gmail.readonly");
+    // 4 — create a CURRENT-RUN Gmail fixture using the app's real gmail.send
+    // permission, then demonstrate gmail.readonly on that exact message.
+    // No stale Q3-report mail or manual test-message setup is required.
+    log("Scene 4: create test email and Gmail read-only proof");
+    await ask(`Send an email to ${TEST_EMAIL} with subject "${INBOX_SUBJECT}" and this body: "Please complete and submit the OAuth review evidence by tomorrow. This is a test task for the Google permission review."`);
+    await waitFor(app, "confirm the test email to the source Gmail account",
+      app.getByText("Confirm before I act"), 60000);
+    await say("sendAsk");
+    await say("sendConfirm");
+    await click(app, "Confirm test email", app.getByRole("button", { name: /Confirm & do it/ }));
     const mail = await ctx.newPage();
+    await mail.goto("https://mail.google.com/mail/u/0/#sent");
+    const fixtureSent = mail.locator("tr.zA").filter({ hasText: INBOX_SUBJECT });
+    await waitFor(mail, "the newly sent test email in the source Gmail Sent folder", fixtureSent, 60000);
+    await fixtureSent.first().click();
+    mark("gmail_send", { subject: INBOX_SUBJECT, recipient: TEST_EMAIL, purpose: "fresh Gmail read-only fixture" });
+    await mail.screenshot({ path: join(OUT, "evidence-gmail-fixture-sent.png") });
     await mail.goto(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(`subject:"${INBOX_SUBJECT}" in:inbox`)}`);
     const row = mail.locator("tr.zA").filter({ hasText: INBOX_SUBJECT });
-    await click(mail, "the Q3 report email", row);
+    await waitFor(mail, "the newly delivered source-account inbox message", row, 60000);
+    await row.first().click();
     await say("sourceMail");
     await click(mail, "Mark as unread", mail.getByRole("button", { name: /Mark as unread/i }));
     await app.bringToFront();
@@ -405,7 +420,7 @@ async function record() {
     const successfulScan = app.getByText(/Gmail: [1-9]\d* new/);
     await successfulScan.first().waitFor({ state: "visible", timeout: 45000 });
     log("Verified the test Gmail inbox produced at least one new task.");
-    const taskExpected = process.env.DEMO_TASK_TEXT?.trim() || INBOX_SUBJECT;
+    const taskExpected = process.env.DEMO_TASK_TEXT?.trim() || "OAuth review evidence";
     await waitFor(app, `extracted task containing "${taskExpected}"`,
       app.getByText(taskExpected, { exact: false }), 45000);
     mark("gmail_read", { subject: INBOX_SUBJECT, result: await successfulScan.first().innerText() });
