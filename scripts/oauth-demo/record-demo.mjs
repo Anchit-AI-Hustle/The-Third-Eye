@@ -16,7 +16,7 @@
 // `setup`, which is not recorded.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,11 @@ import { chromium } from "playwright-core";
 const MODE = process.argv[2];
 const APP = (process.env.APP_URL ?? "https://the-third-eye.anchit-tandon.com").replace(/\/$/, "");
 const TEST_EMAIL = process.env.TEST_EMAIL;
-const RECIPIENT = process.env.RECIPIENT;
+const RECIPIENT = process.env.RECIPIENT ?? TEST_EMAIL;
+const CALENDAR_EVENT = process.env.DEMO_EVENT_TITLE ?? "";
+const RUN_STARTED_MS = Date.now();
+const RUN_TAG = new Date(RUN_STARTED_MS).toISOString().replace(/[:.]/g, "-");
+const INBOX_SUBJECT = process.env.DEMO_INBOX_SUBJECT ?? `The Third Eye OAuth review evidence ${RUN_TAG}`;
 const EXPECTED_CLIENT_PREFIX = process.env.EXPECTED_CLIENT_PREFIX ?? "529553308976-";
 const REQUIRED_FEATURE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -42,13 +46,13 @@ const ZOOM_BOX = (process.env.ZOOM_BOX ?? "0,0.03,0.6,0.09").split(",").map(Numb
 
 const LINES = {
   intro: "This is The Third Eye, a personal assistant at the-third-eye dot anchit-tandon dot com. This video shows the OAuth consent flow and every Google permission the app uses: Gmail read-only, Gmail send, and read-only access to events on calendars I own.",
-  signin: "Signing in only asks for my name and email. Gmail and Calendar are a separate, optional step that the user starts themselves.",
+  signin: "The Third Eye signs users in with their Google identity. Gmail and Calendar access are requested separately, only when a user chooses Connect Google in Account and Connections.",
   connect: "In Settings, under Connections, I click Connect Google. This opens the OAuth consent screen under review.",
-  clientId: "The address bar shows the client ID of project 5 2 9 5 5 3 3 0 8 9 7 6.",
+  clientId: "This is the live Google OAuth authorization for the Third Eye Google Cloud project 5 2 9 5 5 3 3 0 8 9 7 6. The video records the actual Google permission screen, not a mockup.",
   consent: "All services are expanded so each permission is readable. The app requests exactly three scopes: gmail dot readonly, gmail dot send, and calendar dot events dot owned dot readonly. Nothing else. I allow all three.",
   connected: "Back in the app, Settings shows Google connected with the three permissions that were granted.",
-  sourceMail: "Here is an unread email in my Gmail inbox. The deadline, by Friday, is in the message body.",
-  scan: "gmail dot readonly powers the Task Tracker. Scan now reads my unread mail from the last two days and turns action items into tasks. The deadline is in the body, so the app must read it. gmail dot metadata only returns headers and cannot do this.",
+  sourceMail: "To demonstrate Gmail reading with a reproducible test, the assistant has sent an action-item email to my own Google inbox. Here is that newly received message, including the task and its deadline.",
+  scan: "Gmail read only powers the Task Tracker. Scan now reads this newly received email and turns the action item from its body into an actual task. Gmail metadata does not provide message bodies and cannot extract this task.",
   search: "gmail dot readonly also lets the Assistant search my mail when I ask. That uses Gmail search queries, which gmail dot metadata does not allow. The app never modifies or deletes mail, and it does not store message bodies.",
   sendAsk: "gmail dot send lets the Assistant send an email I ask for. It drafts the message and shows me the recipient, subject and body.",
   sendConfirm: "Nothing is sent until I press Confirm.",
@@ -89,8 +93,8 @@ async function setup() {
   await page.goto("https://accounts.google.com/");
   log(`Sign in to Google as ${TEST_EMAIL} in the Chrome window (password + any prompts).`);
   log("Use only the dedicated Google test account in this separate Chrome profile. Gmail and Calendar /u/0 must point to that account.");
-  log("Then open https://myaccount.google.com/connections and remove The Third Eye if it is listed, so the consent screen appears fresh");
-  log("(otherwise it says the app \"already has some access\" instead of listing the three permissions).");
+  log("Do not revoke existing Google grants just for the recording: the app's Connect Google flow requests prompt=consent explicitly.");
+  log("Use only the approved test account, and finish Google sign-in before continuing.");
   await rl.question("Press Enter here when done… ");
   await ctx.close();
   log(`Saved. Chrome profile: ${PROFILE}`);
@@ -174,7 +178,15 @@ async function record() {
   need(existsSync(PROFILE), "Run `npm run setup` first to sign in to Google.");
   need(spawnSync("which", ["ffmpeg"]).status === 0, "Install ffmpeg: brew install ffmpeg");
   mkdirSync(OUT, { recursive: true });
-
+  // Preserve the previous output rather than confusing it with this run.
+  const finalPath = join(OUT, "the-third-eye-oauth-demo.mp4");
+  if (existsSync(finalPath)) {
+    const archive = join(OUT, `previous-demo-${RUN_TAG}.mp4`);
+    renameSync(finalPath, archive);
+    log(`Archived old video to ${archive}; a new final MP4 will exist only after this run passes.`);
+  }
+  need(CALENDAR_EVENT.trim().length >= 3,
+    "Set DEMO_EVENT_TITLE to an existing, non-sensitive event title on the test account's primary Google Calendar. This is required to prove the read-only feature.");
   log("Rendering narration…");
   const dur = renderVoice();
 
@@ -208,6 +220,8 @@ async function record() {
   const timeline = [];
   const marks = {};
   const now = () => Date.now() - t0;
+  const evidence = [];
+  const mark = (scene, detail) => evidence.push({ scene, seconds: +(now() / 1000).toFixed(2), detail });
   const say = async (key) => {
     need(ff.exitCode === null, `FFmpeg stopped before scene "${key}". Partial recording: ${raw}`);
     timeline.push({ key, at: now() });
@@ -215,13 +229,19 @@ async function record() {
     need(ff.exitCode === null, `FFmpeg stopped during scene "${key}". Partial recording: ${raw}`);
   };
 
-  // Clicks the first locator that appears; otherwise asks you to click it.
-  // The recording keeps running, so a manual click is still one continuous take.
+  // Never accept Enter in place of a required click: the previous recorder
+  // continued filming even if the actual action never happened.
   const click = async (page, label, ...locs) => {
     for (const l of locs) {
-      try { await l.first().waitFor({ state: "visible", timeout: 6000 }); await l.first().click(); return; } catch { /* next */ }
+      try {
+        await l.first().waitFor({ state: "visible", timeout: 6000 });
+        await l.first().click();
+        return;
+      } catch { /* test next supported selector */ }
     }
-    await rl.question(`\x1b[33m⚠ Please click "${label}" in Chrome, then press Enter… \x1b[0m`);
+    const shot = join(OUT, `failed-click-${Date.now()}.png`);
+    try { await page.screenshot({ path: shot }); } catch { /* page may be closed */ }
+    throw new Error(`Could not click the required real UI action "${label}" at ${page.url()}. Screenshot: ${shot}. Recording aborted instead of skipping evidence.`);
   };
   // For screens Google shows only sometimes (account chooser, re-consent).
   const maybe = async (loc, ms = 5000) => {
@@ -275,14 +295,36 @@ async function record() {
     await app.mouse.wheel(0, 900); await sleep(1200); await app.mouse.wheel(0, -900);
     await say("intro");
 
-    // 2 — sign-in, identity only
+    // 2 — sign-in, identity only. Never pretend to demonstrate a sign-in
+    // button if the real Chrome session is already authenticated.
     log("Scene 2: sign-in");
-    await app.goto(`${APP}/auth/signin`);
-    await click(app, "Continue with Google", app.getByRole("button", { name: /Continue with Google/ }));
-    await maybe(app.getByText(TEST_EMAIL, { exact: false }));
-    await maybe(app.getByRole("button", { name: /^(Continue|Allow)$/ }));
+    const existing = await app.request.get(`${APP}/api/auth/session`).catch(() => null);
+    const existingSession = existing?.ok() ? await existing.json().catch(() => ({})) : {};
+    const existingEmail = String(existingSession?.user?.email ?? "").toLowerCase();
+    if (existingEmail && existingEmail !== TEST_EMAIL.toLowerCase()) {
+      throw new Error(`The current The Third Eye browser session belongs to ${existingEmail}, not TEST_EMAIL ${TEST_EMAIL}. Sign out of the app before capturing.`);
+    }
+    if (existingEmail === TEST_EMAIL.toLowerCase()) {
+      log("Existing test-account session detected: showing authenticated account settings rather than clicking a nonexistent Sign in button.");
+      await goAccountSettings();
+    } else {
+      await app.goto(`${APP}/auth/signin`);
+      await click(app, "Continue with Google", app.getByRole("button", { name: /Continue with Google/ }));
+      await maybe(app.getByText(TEST_EMAIL, { exact: false }));
+      await maybe(app.getByRole("button", { name: /^(Continue|Allow)$/ }));
+      await assertSignedIn();
+    }
     await say("signin");
-    await assertSignedIn();
+    // The app intentionally executes explicitly requested sends directly unless
+    // "Ask before acting" is ON (frontend/src/lib/explicitRequest.ts). A review
+    // video must visibly show a confirmation card BEFORE every Gmail send.
+    const confirmationEnabled = await app.evaluate(() => {
+      localStorage.setItem("jarvis_confirm_actions", "1");
+      return localStorage.getItem("jarvis_confirm_actions") === "1";
+    });
+    need(confirmationEnabled, "Could not enable the real app's Ask before acting preference. A Gmail confirmation card must be shown for review.");
+    log("Enabled the app's Ask before acting preference for this dedicated demo browser profile.");
+    mark("app_identity", { account: TEST_EMAIL, preExistingSession: existingEmail === TEST_EMAIL.toLowerCase(), askBeforeActing: true });
     log(`Verified The Third Eye is signed in as ${TEST_EMAIL}.`);
 
     // 3 — the consent flow under review
@@ -295,6 +337,14 @@ async function record() {
       `The test account ${TEST_EMAIL} is excluded by GOOGLE_CONNECT_USERS. Add the account to the production verification allowlist before recording.`);
     // /api/connect/google already forces prompt=consent, even for connected
     // accounts. Never revoke a working grant merely to demonstrate the flow.
+    let observedOauthClientId = "";
+    app.on("request", (request) => {
+      try {
+        const u = new URL(request.url());
+        if (u.hostname === "accounts.google.com" && u.searchParams.get("client_id")?.startsWith(EXPECTED_CLIENT_PREFIX))
+          observedOauthClientId = u.searchParams.get("client_id") || "";
+      } catch { /* unrelated request */ }
+    });
     await say("connect");
     await click(app, "Connect Google", app.getByRole("link", { name: /Connect Google|Reconnect/ }));
     await maybe(app.getByText(TEST_EMAIL, { exact: false }));
@@ -304,12 +354,13 @@ async function record() {
       await click(app, "Go to the-third-eye… (unsafe)", app.getByText(/^Go to .*\(unsafe\)$/), app.getByRole("button", { name: /^Continue$/ }));
     }
     await waitFor(app, "the consent screen", app.getByText(/wants (access|additional access)|Select all|Send email on your behalf/i));
-    // Hard evidence gate: do not produce a polished video of a skipped OAuth screen.
+    // Google's URL changes while it renders consent and may remove client_id.
+    // Preserve the true OAuth authorization request before that navigation.
     const consentUrl = new URL(app.url());
-    const consentClientId = consentUrl.searchParams.get("client_id");
+    const consentClientId = observedOauthClientId || consentUrl.searchParams.get("client_id");
     need(consentUrl.hostname === "accounts.google.com" && !!consentClientId?.startsWith(EXPECTED_CLIENT_PREFIX),
-      "Consent proof missing: Google must show an accounts.google.com consent URL with the expected client_id in the address bar. Stop and correct the OAuth review flow.");
-    log("Verified live Google consent URL and matching project client ID.");
+      "Consent proof missing: real accounts.google.com consent and the jarvis-anchit client ID must both be observed. Stop and correct OAuth configuration.");
+    log("Verified the actual Google authorization request and project client ID.");
     marks.zoomFrom = now();
     await say("clientId");
     marks.zoomTo = now();
@@ -325,6 +376,16 @@ async function record() {
       const line = app.getByText(t);
       if (await line.first().isVisible().catch(() => false)) { await line.first().scrollIntoViewIfNeeded(); await line.first().hover(); await sleep(2200); }
     }
+    const consentText = await app.locator("body").innerText();
+    const scopeProof = [
+      { scope: "gmail.readonly", pattern: /(?:read|view|see)[^\r\n]{0,120}(?:gmail|email)|(?:gmail|email)[^\r\n]{0,120}(?:read|view|see)/i },
+      { scope: "gmail.send", pattern: /send[^\r\n]{0,120}(?:gmail|email)|(?:gmail|email)[^\r\n]{0,120}send/i },
+      { scope: "calendar.events.owned.readonly", pattern: /(?:event|calendar)[^\r\n]{0,120}(?:own|calendar)|(?:own)[^\r\n]{0,120}(?:event|calendar)/i },
+    ];
+    const absent = scopeProof.filter((s) => !s.pattern.test(consentText)).map((s) => s.scope);
+    need(absent.length === 0, `The expanded Google permission screen is missing readable descriptions for: ${absent.join(", ")}. Do not submit a video with collapsed or incorrect scopes.`);
+    await app.screenshot({ path: join(OUT, "evidence-google-consent.png") });
+    mark("oauth_consent", { clientId: consentClientId, scopes: REQUIRED_FEATURE_SCOPES });
     await say("consent");
     await click(app, "Continue / Allow", app.getByRole("button", { name: /^(Continue|Allow)$/ }));
     await app.waitForURL(/\/settings/, { timeout: 60000 });
@@ -336,17 +397,33 @@ async function record() {
     need(status.connected && missingScopes.length === 0,
       `Google did not save a usable grant for all three scopes. Missing: ${missingScopes.join(", ") || "none"}; reason: ${status.problem ?? "unknown"}`);
     log("Verified all three Google scopes are granted and the refresh token is usable.");
+    mark("oauth_granted", { scopes: status.scopes, connected: status.connected });
     // Exact match: the "Google connected successfully" banner alone doesn't prove the grant was saved.
     await waitFor(app, "Connected", app.getByText("Connected", { exact: true }));
     await app.getByRole("heading", { name: "Google account" }).scrollIntoViewIfNeeded().catch(() => {});
     await say("connected");
 
-    // 4 — gmail.readonly: source mail, Scan now, Assistant search
-    log("Scene 4: gmail.readonly");
+    // 4 — create a CURRENT-RUN Gmail fixture using the app's real gmail.send
+    // permission, then demonstrate gmail.readonly on that exact message.
+    // No stale Q3-report mail or manual test-message setup is required.
+    log("Scene 4: create test email and Gmail read-only proof");
+    await ask(`Send an email to ${TEST_EMAIL} with subject "${INBOX_SUBJECT}" and this body: "Please complete and submit the OAuth review evidence by tomorrow. This is a test task for the Google permission review."`);
+    await waitFor(app, "confirm the test email to the source Gmail account",
+      app.getByText("Confirm before I act"), 60000);
+    await say("sendAsk");
+    await say("sendConfirm");
+    await click(app, "Confirm test email", app.getByRole("button", { name: /Confirm & do it/ }));
     const mail = await ctx.newPage();
-    await mail.goto(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent('subject:"Q3 report" in:inbox')}`);
-    const row = mail.locator("tr.zA").filter({ hasText: /Q3 report/i });
-    await click(mail, "the Q3 report email", row);
+    await mail.goto("https://mail.google.com/mail/u/0/#sent");
+    const fixtureSent = mail.locator("tr.zA").filter({ hasText: INBOX_SUBJECT });
+    await waitFor(mail, "the newly sent test email in the source Gmail Sent folder", fixtureSent, 60000);
+    await fixtureSent.first().click();
+    mark("gmail_send", { subject: INBOX_SUBJECT, recipient: TEST_EMAIL, purpose: "fresh Gmail read-only fixture" });
+    await mail.screenshot({ path: join(OUT, "evidence-gmail-fixture-sent.png") });
+    await mail.goto(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(`subject:"${INBOX_SUBJECT}" in:inbox`)}`);
+    const row = mail.locator("tr.zA").filter({ hasText: INBOX_SUBJECT });
+    await waitFor(mail, "the newly delivered source-account inbox message", row, 60000);
+    await row.first().click();
     await say("sourceMail");
     await click(mail, "Mark as unread", mail.getByRole("button", { name: /Mark as unread/i }));
     await app.bringToFront();
@@ -357,16 +434,22 @@ async function record() {
     await click(app, "Scan now", app.getByRole("button", { name: /Scan now/ }));
     const successfulScan = app.getByText(/Gmail: [1-9]\d* new/);
     await successfulScan.first().waitFor({ state: "visible", timeout: 45000 });
-    log("Verified that the test Gmail inbox produced at least one new task.");
+    log("Verified the test Gmail inbox produced at least one new task.");
+    const taskExpected = process.env.DEMO_TASK_TEXT?.trim() || "OAuth review evidence";
+    await waitFor(app, `extracted task containing "${taskExpected}"`,
+      app.getByText(taskExpected, { exact: false }), 45000);
+    mark("gmail_read", { subject: INBOX_SUBJECT, result: await successfulScan.first().innerText() });
+    await app.screenshot({ path: join(OUT, "evidence-gmail-task.png") });
     await say("scan");
     await app.mouse.wheel(0, 600); await sleep(2500);
-    await ask("Do I have any email about the Q3 report? Summarise it.");
+    await ask(`Do I have any email about ${INBOX_SUBJECT}? Summarise it.`);
     await sleep(4000);
     await say("search");
 
     // 5 — gmail.send, then the Sent folder as proof in the account
     log("Scene 5: gmail.send");
-    await ask(`Email ${RECIPIENT} with subject "Q3 report" saying the report will be attached by Friday.`);
+    const sendSubject = `The Third Eye OAuth verification send ${RUN_TAG}`;
+    await ask(`Email ${RECIPIENT} with subject "${sendSubject}" saying this is an authorized Google OAuth verification test message.`);
     await waitFor(app, "the Confirm card", app.getByText("Confirm before I act"));
     await say("sendAsk");
     await say("sendConfirm");
@@ -374,20 +457,29 @@ async function record() {
     await sleep(5000);
     await mail.bringToFront();
     await mail.goto("https://mail.google.com/mail/u/0/#sent");
-    const sentRow = mail.locator("tr.zA").filter({ hasText: /Q3 report/i });
+    const sentRow = mail.locator("tr.zA").filter({ hasText: sendSubject });
     await sentRow.first().waitFor({ state: "visible", timeout: 30000 });
     await sentRow.first().click();
-    log("Verified a matching message exists in the source Google account Sent folder.");
+    log("Verified a message with the unique current-run subject in the source Google account Sent folder.");
+    mark("gmail_send", { subject: sendSubject, recipient: RECIPIENT });
+    await mail.screenshot({ path: join(OUT, "evidence-gmail-sent.png") });
     await say("sent");
 
     // 6 — calendar.events.owned.readonly
     log("Scene 6: calendar");
     await mail.goto("https://calendar.google.com/calendar/u/0/r/week");
     await sleep(4000);
+    const googleCalendarText = await mail.locator("body").innerText();
+    need(googleCalendarText.toLowerCase().includes(CALENDAR_EVENT.toLowerCase()),
+      `Google Calendar does not visibly show the event "${CALENDAR_EVENT}". Ensure it is on the test account's calendar in the current week.`);
+    await mail.screenshot({ path: join(OUT, "evidence-calendar-source.png") });
     await say("calendarSource");
     await app.bringToFront();
     await ask("What's on my calendar this week?");
-    await sleep(9000);
+    await waitFor(app, `Assistant calendar result containing "${CALENDAR_EVENT}"`,
+      app.getByText(CALENDAR_EVENT, { exact: false }), 60000);
+    mark("calendar_read", { eventTitle: CALENDAR_EVENT });
+    await app.screenshot({ path: join(OUT, "evidence-calendar-assistant.png") });
     await say("calendar");
 
     // 7 — show user control without revoking a real account during review.
@@ -402,7 +494,9 @@ async function record() {
     rl.close();
   }
 
-  writeFileSync(join(OUT, "timeline.json"), JSON.stringify({ timeline, marks }, null, 2));
+  writeFileSync(join(OUT, "timeline.json"), JSON.stringify({ timeline, marks, evidence }, null, 2));
+  writeFileSync(join(OUT, "evidence-manifest.json"), JSON.stringify({ runTag: RUN_TAG, startedAt: new Date(RUN_STARTED_MS).toISOString(), generatedAt: new Date().toISOString(), app: APP, expectedScopes: REQUIRED_FEATURE_SCOPES, evidence }, null, 2));
+  need(evidence.some((e) => e.scene === "oauth_consent") && evidence.some((e) => e.scene === "gmail_read") && evidence.some((e) => e.scene === "gmail_send") && evidence.some((e) => e.scene === "calendar_read"), "Required OAuth verification evidence is incomplete. Final video will not be assembled.");
   assemble(timeline, marks);
 }
 
@@ -460,6 +554,14 @@ function assemble(timeline, marks) {
   log("Assembling the final video…");
   const r = spawnSync("ffmpeg", args, { cwd: OUT, stdio: "inherit" });
   need(r.status === 0, "ffmpeg assembly failed (see above).");
+  const final = join(OUT, "the-third-eye-oauth-demo.mp4");
+  need(existsSync(final) && statSync(final).size > 100_000, "Final MP4 is missing or unexpectedly tiny.");
+  const media = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", final], { encoding: "utf8" });
+  need(media.status === 0, `Cannot probe assembled video: ${media.stderr}`);
+  const info = JSON.parse(media.stdout || "{}");
+  need(Number(info.format?.duration) > 45 && info.streams?.some((s) => s.codec_type === "video") && info.streams?.some((s) => s.codec_type === "audio"), "Finished file must contain real video, narration and adequate duration.");
+  const qc = spawnSync("node", [join(dirname(fileURLToPath(import.meta.url)), "validate-demo.mjs")], { cwd: OUT, stdio: "inherit" });
+  need(qc.status === 0, "Video quality-control checks failed. Do not upload the MP4 to Google.");
   log(`Done: ${join(OUT, "the-third-eye-oauth-demo.mp4")}`);
   log("Watch it once, then upload to YouTube as Unlisted and paste the link into Data Access and your reply.");
 }

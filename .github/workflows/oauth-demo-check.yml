@@ -1,0 +1,27 @@
+name: OAuth demo recorder checks
+
+on:
+  pull_request:
+    paths:
+      - "scripts/oauth-demo/**"
+      - ".github/workflows/oauth-demo-check.yml"
+  push:
+    paths:
+      - "scripts/oauth-demo/**"
+      - ".github/workflows/oauth-demo-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check-demo-tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify recorder JavaScript syntax
+        run: node --check scripts/oauth-demo/record-demo.mjs
+      - name: Verify post-render validator syntax
+        run: node --check scripts/oauth-demo/validate-demo.mjs
+      - name: Verify no private footage tracked
+        run: |
+          ! git ls-files 'scripts/oauth-demo/out/*' | grep .
