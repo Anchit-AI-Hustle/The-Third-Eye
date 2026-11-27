@@ -45,7 +45,7 @@ const ZOOM_BOX = (process.env.ZOOM_BOX ?? "0,0.03,0.6,0.09").split(",").map(Numb
 
 const LINES = {
   intro: "This is The Third Eye, a personal assistant at the-third-eye dot anchit-tandon dot com. This video shows the OAuth consent flow and every Google permission the app uses: Gmail read-only, Gmail send, and read-only access to events on calendars I own.",
-  signin: "Signing in only asks for my name and email. Gmail and Calendar are a separate, optional step that the user starts themselves.",
+  signin: "The Third Eye signs users in with their Google identity. Gmail and Calendar access are requested separately, only when a user chooses Connect Google in Account and Connections.",
   connect: "In Settings, under Connections, I click Connect Google. This opens the OAuth consent screen under review.",
   clientId: "This is the live Google OAuth authorization for the Third Eye Google Cloud project 5 2 9 5 5 3 3 0 8 9 7 6. The video records the actual Google permission screen, not a mockup.",
   consent: "All services are expanded so each permission is readable. The app requests exactly three scopes: gmail dot readonly, gmail dot send, and calendar dot events dot owned dot readonly. Nothing else. I allow all three.",
@@ -288,14 +288,27 @@ async function record() {
     await app.mouse.wheel(0, 900); await sleep(1200); await app.mouse.wheel(0, -900);
     await say("intro");
 
-    // 2 — sign-in, identity only
+    // 2 — sign-in, identity only. Never pretend to demonstrate a sign-in
+    // button if the real Chrome session is already authenticated.
     log("Scene 2: sign-in");
-    await app.goto(`${APP}/auth/signin`);
-    await click(app, "Continue with Google", app.getByRole("button", { name: /Continue with Google/ }));
-    await maybe(app.getByText(TEST_EMAIL, { exact: false }));
-    await maybe(app.getByRole("button", { name: /^(Continue|Allow)$/ }));
+    const existing = await app.request.get(`${APP}/api/auth/session`).catch(() => null);
+    const existingSession = existing?.ok() ? await existing.json().catch(() => ({})) : {};
+    const existingEmail = String(existingSession?.user?.email ?? "").toLowerCase();
+    if (existingEmail && existingEmail !== TEST_EMAIL.toLowerCase()) {
+      throw new Error(`The current The Third Eye browser session belongs to ${existingEmail}, not TEST_EMAIL ${TEST_EMAIL}. Sign out of the app before capturing.`);
+    }
+    if (existingEmail === TEST_EMAIL.toLowerCase()) {
+      log("Existing test-account session detected: showing authenticated account settings rather than clicking a nonexistent Sign in button.");
+      await goAccountSettings();
+    } else {
+      await app.goto(`${APP}/auth/signin`);
+      await click(app, "Continue with Google", app.getByRole("button", { name: /Continue with Google/ }));
+      await maybe(app.getByText(TEST_EMAIL, { exact: false }));
+      await maybe(app.getByRole("button", { name: /^(Continue|Allow)$/ }));
+      await assertSignedIn();
+    }
     await say("signin");
-    await assertSignedIn();
+    mark("app_identity", { account: TEST_EMAIL, preExistingSession: existingEmail === TEST_EMAIL.toLowerCase() });
     log(`Verified The Third Eye is signed in as ${TEST_EMAIL}.`);
 
     // 3 — the consent flow under review
@@ -349,9 +362,9 @@ async function record() {
     }
     const consentText = await app.locator("body").innerText();
     const scopeProof = [
-      { scope: "gmail.readonly", pattern: /(?:read|view|see)[^\\n]{0,120}(?:gmail|email)|(?:gmail|email)[^\\n]{0,120}(?:read|view|see)/i },
-      { scope: "gmail.send", pattern: /send[^\\n]{0,120}(?:gmail|email)|(?:gmail|email)[^\\n]{0,120}send/i },
-      { scope: "calendar.events.owned.readonly", pattern: /(?:event|calendar)[^\\n]{0,120}(?:own|calendar)|(?:own)[^\\n]{0,120}(?:event|calendar)/i },
+      { scope: "gmail.readonly", pattern: /(?:read|view|see)[^\r\n]{0,120}(?:gmail|email)|(?:gmail|email)[^\r\n]{0,120}(?:read|view|see)/i },
+      { scope: "gmail.send", pattern: /send[^\r\n]{0,120}(?:gmail|email)|(?:gmail|email)[^\r\n]{0,120}send/i },
+      { scope: "calendar.events.owned.readonly", pattern: /(?:event|calendar)[^\r\n]{0,120}(?:own|calendar)|(?:own)[^\r\n]{0,120}(?:event|calendar)/i },
     ];
     const absent = scopeProof.filter((s) => !s.pattern.test(consentText)).map((s) => s.scope);
     need(absent.length === 0, `The expanded Google permission screen is missing readable descriptions for: ${absent.join(", ")}. Do not submit a video with collapsed or incorrect scopes.`);
@@ -390,6 +403,9 @@ async function record() {
     const successfulScan = app.getByText(/Gmail: [1-9]\d* new/);
     await successfulScan.first().waitFor({ state: "visible", timeout: 45000 });
     log("Verified the test Gmail inbox produced at least one new task.");
+    const taskExpected = process.env.DEMO_TASK_TEXT?.trim() || INBOX_SUBJECT;
+    await waitFor(app, `extracted task containing "${taskExpected}"`,
+      app.getByText(taskExpected, { exact: false }), 45000);
     mark("gmail_read", { subject: INBOX_SUBJECT, result: await successfulScan.first().innerText() });
     await app.screenshot({ path: join(OUT, "evidence-gmail-task.png") });
     await say("scan");
