@@ -22,12 +22,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { chromium } from "playwright-core";
+import { validEmail, readDemoSettings, resolveDemoSettings, saveDemoSettings } from "./demo-config.mjs";
 
 const MODE = process.argv[2];
 const APP = (process.env.APP_URL ?? "https://the-third-eye.anchit-tandon.com").replace(/\/$/, "");
-const TEST_EMAIL = process.env.TEST_EMAIL;
-const RECIPIENT = process.env.RECIPIENT ?? TEST_EMAIL;
-const CALENDAR_EVENT = process.env.DEMO_EVENT_TITLE ?? "";
+let TEST_EMAIL = "";
+let RECIPIENT = "";
+let CALENDAR_EVENT = "";
 const RUN_STARTED_MS = Date.now();
 const RUN_TAG = new Date(RUN_STARTED_MS).toISOString().replace(/[:.]/g, "-");
 const INBOX_SUBJECT = process.env.DEMO_INBOX_SUBJECT ?? `The Third Eye OAuth review evidence ${RUN_TAG}`;
@@ -41,6 +42,7 @@ const VOICE = process.env.VOICE ?? "Samantha";
 // Keep files beside this script, regardless of the shell working directory.
 const OUT = resolve(process.env.OUT ?? join(dirname(fileURLToPath(import.meta.url)), "out"));
 const PROFILE = process.env.PROFILE ?? join(homedir(), ".third-eye-demo-chrome");
+const SETTINGS_PATH = join(PROFILE, "oauth-demo-settings.json");
 // Address-bar region to enlarge on the consent screen, as fractions of the screen: x,y,w,h.
 const ZOOM_BOX = (process.env.ZOOM_BOX ?? "0,0.03,0.6,0.09").split(",").map(Number);
 
@@ -86,8 +88,62 @@ async function launch() {
 }
 
 // ─── setup: sign in to Google once, by hand, off camera ─────────────────────
+
+// Previous versions required TEST_EMAIL/RECIPIENT again on every run, despite
+// setup having already completed. Store only these non-secret demo preferences
+// in the private Chrome profile, not in the repository or a tracked .env.
+async function emailFromExistingAppSession() {
+  if (!existsSync(PROFILE)) return "";
+  let context;
+  try {
+    context = await launch();
+    const page = context.pages()[0] ?? await context.newPage();
+    await page.goto(APP, { waitUntil: "domcontentloaded", timeout: 12000 });
+    const response = await page.request.get(`${APP}/api/auth/session`, { timeout: 8000 });
+    if (!response.ok()) return "";
+    const account = (await response.json())?.user?.email;
+    return validEmail(account) ? account.trim() : "";
+  } catch {
+    return "";
+  } finally {
+    await context?.close().catch(() => {});
+  }
+}
+
+async function prepareDemoSettings({ requireCalendar = false } = {}) {
+  const saved = readDemoSettings(SETTINGS_PATH);
+  const defaults = resolveDemoSettings(process.env, saved);
+  TEST_EMAIL = defaults.testEmail;
+  RECIPIENT = defaults.recipient;
+  CALENDAR_EVENT = defaults.calendarEvent;
+
+  if (!TEST_EMAIL) {
+    TEST_EMAIL = await emailFromExistingAppSession();
+    if (TEST_EMAIL) {
+      log(`Detected existing authenticated The Third Eye account: ${TEST_EMAIL}`);
+      RECIPIENT = process.env.RECIPIENT?.trim() || TEST_EMAIL;
+    }
+  }
+  if (!TEST_EMAIL) {
+    TEST_EMAIL = (await rl.question("Google test account email (saved for future recordings): ")).trim();
+    RECIPIENT = process.env.RECIPIENT?.trim() || TEST_EMAIL;
+  }
+  need(validEmail(TEST_EMAIL), "Enter a real Google test account email. You can also set TEST_EMAIL=your@gmail.com.");
+  if (!RECIPIENT) RECIPIENT = TEST_EMAIL;
+  need(validEmail(RECIPIENT), "RECIPIENT must be a real inbox, not an example.com placeholder.");
+
+  if (requireCalendar && !CALENDAR_EVENT) {
+    CALENDAR_EVENT = (await rl.question("Title of an existing test event visible on your Google Calendar this week: ")).trim();
+  }
+  if (requireCalendar) need(CALENDAR_EVENT.length >= 3,
+    "Provide DEMO_EVENT_TITLE for an actual visible event on the test account's primary Google Calendar this week.");
+
+  saveDemoSettings(SETTINGS_PATH, { testEmail: TEST_EMAIL, recipient: RECIPIENT, calendarEvent: CALENDAR_EVENT });
+  log(`Demo account: ${TEST_EMAIL}; recipient: ${RECIPIENT}. Settings stored locally: ${SETTINGS_PATH}`);
+}
+
 async function setup() {
-  need(TEST_EMAIL, "Set TEST_EMAIL to the Google test account.");
+  await prepareDemoSettings();
   const ctx = await launch();
   const page = ctx.pages()[0] ?? (await ctx.newPage());
   await page.goto("https://accounts.google.com/");
@@ -172,10 +228,8 @@ function previewRecording(videoPath, previewPath) {
 
 // ─── record ──────────────────────────────────────────────────────────────────
 async function record() {
-  need(TEST_EMAIL && RECIPIENT, "Set TEST_EMAIL (Google test account) and RECIPIENT (a second address you can open).");
-  need(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(RECIPIENT) && !RECIPIENT.toLowerCase().endsWith("@example.com"),
-    "RECIPIENT must be a real inbox you control, not an example.com placeholder.");
-  need(existsSync(PROFILE), "Run `npm run setup` first to sign in to Google.");
+  need(existsSync(PROFILE), "Chrome demo profile is missing. Run npm run demo:setup once to sign in to Google.");
+  await prepareDemoSettings({ requireCalendar: true });
   need(spawnSync("which", ["ffmpeg"]).status === 0, "Install ffmpeg: brew install ffmpeg");
   mkdirSync(OUT, { recursive: true });
   // Preserve the previous output rather than confusing it with this run.

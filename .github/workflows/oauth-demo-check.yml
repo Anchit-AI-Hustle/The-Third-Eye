@@ -22,6 +22,10 @@ jobs:
         run: node --check scripts/oauth-demo/record-demo.mjs
       - name: Verify post-render validator syntax
         run: node --check scripts/oauth-demo/validate-demo.mjs
+      - name: Verify private configuration helper syntax
+        run: node --check scripts/oauth-demo/demo-config.mjs
+      - name: Verify demo settings defaults, persistence and permissions
+        run: node --test scripts/oauth-demo/demo-config.test.mjs
       - name: Verify no private footage tracked
         run: |
           ! git ls-files 'scripts/oauth-demo/out/*' | grep .
