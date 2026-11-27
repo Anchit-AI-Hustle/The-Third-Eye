@@ -1,60 +1,92 @@
-# OAuth verification video recorder: macOS runbook
+# Google OAuth reviewer video — real-screen recorder
 
-This script records the **real** The Third Eye Google OAuth consent flow and Gmail/Calendar features for the `jarvis-anchit` Google review. It uses FFmpeg's macOS display capture; **the usual macOS screen-recording toolbar will not appear**. FFmpeg running is not evidence of a usable video by itself.
+The Third Eye / Google Cloud project `jarvis-anchit` (`529553308976`).
 
-## Mac setup
+This utility records the **actual** Chrome app + Google consent flow using FFmpeg display capture; it is not a video generator and must never substitute screenshots, recreated OAuth UI or claimed actions that were not performed. Google is the final authority on approval. The macOS recorder does not display the normal screenshot/recording toolbar.
 
-Prerequisites: Chrome, Node, FFmpeg (`brew install ffmpeg`), and macOS **System Settings → Privacy & Security → Screen & System Audio Recording** permission for your terminal/FFmpeg. Restart the terminal after granting it, if needed. Use a dedicated Chrome test profile containing only the test Google account. Avoid personal messages, notifications or unrelated windows on screen.
+## Before recording
 
-1. From the repository root, after pulling the latest commit:
+- Mac with Chrome, Node and FFmpeg (`brew install ffmpeg`), with **Screen & System Audio Recording** permission for Terminal/FFmpeg in System Settings → Privacy & Security. Use one monitor where Chrome is visible. Do not let personal notifications appear in the capture.
+- An **approved Google test account** signed into the dedicated Chrome profile `~/.third-eye-demo-chrome`. The app session email must match `TEST_EMAIL`. The production `GOOGLE_CONNECT_USERS` setting must allow this account, and the deployed app must have the same OAuth client and redirect URI as Google Cloud.
+- **One non-sensitive Google Calendar event** on the test account's **primary** calendar during the current week, with a recognizable title such as `OAuth Verification Demo Meeting`. Set `DEMO_EVENT_TITLE` to that exact title. The script will verify the event is visible in both the Google Calendar week view and the Assistant response. No Calendar write permission is requested.
+- No test email setup is required. The recorder now uses **the actual app** to send a unique action-item message to the same test Gmail account. It checks the message in Gmail Sent and Inbox, scans the resulting task, then demonstrates a second sent email. `RECIPIENT` defaults to `TEST_EMAIL` when omitted; a real existing second mailbox is preferred if available.
 
-   ```sh
-   TEST_EMAIL='approved-test-account@gmail.com' RECIPIENT='real-test-inbox-you-control@gmail.com' npm run demo
-   ```
+## One-time setup
 
-   Do not use an `@example.com` recipient. Google reviewers need real source-account evidence of the sent message.
+From the repository root:
+```sh
+git pull --ff-only
+TEST_EMAIL='your-approved-test-account@gmail.com' npm run demo:setup
+```
 
-2. **Setup occurs off-camera.** Sign into Google in the spawned Chrome browser. Use exactly the account in `TEST_EMAIL`. Complete the setup prompt.
-3. The recorder first captures a short **warm-up video** and opens a local **capture-preview.png** image. This is a necessary preflight: check that it actually shows **the Chrome window and browser address bar**. Type `YES` only if it does. A black frame, desktop, other display, or missing browser means **do not record**; fix screen permissions or select the correct capture display.
-4. After `YES`, the terminal prints `RECORDING LIVE` and the full absolute path of `raw.mp4`. This is the actual video capture, not a macOS screenshot overlay.
-5. The script verifies the The Third Eye session email matches `TEST_EMAIL`, opens `/settings?tab=account`, clicks **Account & Connections**, checks for the **Google account** card, and checks the server's `GOOGLE_CONNECT_USERS` gate before beginning OAuth. If a required screen is missing, it saves a local `failed-scene-*.png` screenshot and stops rather than pretending the screen appeared.
-6. The app requests **the actual** Google consent screen; recording is only assembled after the Google client ID and all three granted scopes are verified. The test inbox must have a recent, unread `Q3 report` email containing an action item and deadline; add two events to the test account's calendar before recording.
-7. The script captures a Gmail send confirmation and checks a corresponding message in Gmail Sent, demonstrates a Calendar read, and shows the disconnect control **without revoking the connected account**.
+Sign into the dedicated Chrome profile as the **same** account. Do not paste passwords into a command or terminal recording.
 
-## Recording files
+## Record
 
-All paths are relative to the script directory, regardless of the shell working directory:
+```sh
+TEST_EMAIL='your-approved-test-account@gmail.com' \
+DEMO_EVENT_TITLE='OAuth Verification Demo Meeting' \
+RECIPIENT='a-real-email-address-you-control@gmail.com' \
+npm run demo:record
+```
 
-| File | Meaning |
+If you only control one Gmail account, `RECIPIENT` can be omitted; the recorder will send test messages to `TEST_EMAIL`. Never use `@example.com` as the recipient.
+
+The script captures a warmup, opens `out/capture-preview.png`, and requests `YES` only when it **actually displays Chrome and its address bar**. Then it logs `RECORDING LIVE`. If the screenshot is dark, blank or shows another monitor, **do not approve the preview**. Fix screen permission and/or set `SCREEN` to the correct AVFoundation video device index.
+
+## Required scenes (enforced, not inferred from a timer)
+
+1. Actual app identity, or real Google sign-in if the test user isn't already logged in.
+2. The user opens **Settings → Account & Connections → Connect Google**.
+3. The real `accounts.google.com` authorization request contains the Google Cloud project client ID, then the genuine consent page shows **all three grants expanded and readable**: `gmail.readonly`, `gmail.send`, `calendar.events.owned.readonly`.
+4. After Allow, app status confirms **Connected** with all three grants.
+5. The Assistant sends a **unique** email to the source account only after the confirmation card; the same email appears in Gmail **Sent** and **Inbox**.
+6. Task Tracker **Scan now** produces a fresh task from the Gmail action-item message. The Assistant searches/summarizes the same test email.
+7. The Assistant sends another uniquely titled test email to `RECIPIENT`, again after confirmation; the new message appears in the source Gmail **Sent** folder.
+8. An actual existing Calendar event is visible on Google Calendar and named in the Assistant's answer to **What's on my calendar this week?**.
+9. Google disconnect/revocation controls are shown **without** revoking the test account before the reviewer can access it.
+
+The recorder rejects reused Gmail subject evidence, a mismatched OAuth client ID, missing permissions, absent Calendar results, failure to ingest the named task, and missing videos. If the Google UI has changed, it saves an isolated `failed-scene-*.png` screenshot instead of proceeding as though the permission was granted.
+
+## Outputs and quality control
+
+Files are in `scripts/oauth-demo/out/` regardless of the shell working directory:
+
+| Output | Meaning |
 |---|---|
-| `scripts/oauth-demo/out/warmup.mp4` | Short permission/screen capture test |
-| `scripts/oauth-demo/out/capture-preview.png` | Frame you must inspect before typing YES |
-| `scripts/oauth-demo/out/raw.mp4` | Actual screen capture, potentially partial if a required scene fails |
-| `scripts/oauth-demo/out/failed-scene-*.png` | Local screenshot of the last page when an expected UI screen was missing |
-| `scripts/oauth-demo/out/the-third-eye-oauth-demo.mp4` | Finished narrated video, only after successful completion and assembly |
+| `warmup.mp4` / `capture-preview.png` | Confirm FFmpeg actually captured the correct Chrome display |
+| `raw.mp4` | Actual screen recording, possibly partial if any scene failed |
+| `evidence-*.png` | Private snapshots of the actual consent, Gmail and Calendar feature screens |
+| `timeline.json` / `evidence-manifest.json` | Recorded timestamps, granted scopes and unique subject evidence |
+| `the-third-eye-oauth-demo.mp4` | Only created after required scene evidence is captured and assembled |
+| `video-review-contact-sheet.jpg` | FFmpeg-generated frame overview for manual review |
+| `video-qc.json` | Results of media and scene-evidence structure validation |
 
-All capture files are ignored by Git: they may contain personal messages, account information, and consent parameters. Do **not** commit or publicly upload `raw.mp4`, screenshots, browser profiles, passwords or tokens. Review/redact the final video before uploading it unlisted for Google.
+An existing final MP4 is archived as `previous-demo-<run timestamp>.mp4` at the start of each new run to prevent a stale file being mistaken for the new result.
+
+Re-run structural validation independently:
+```sh
+node scripts/oauth-demo/validate-demo.mjs
+```
+
+**Passing structural checks does not certify the actual footage.** Inspect the entire output with sound in a media player. Pause on the Google consent screen and ensure every permission is legible; the browser address bar and project identity must be clear; each screen must actually demonstrate the function described. Verify that no private mail, password, token, unrelated notification or other sensitive information is visible. Only then upload to an accessible **Unlisted** video link for the Google review team.
 
 ## Troubleshooting
 
-**No recording indicator:** Normal for FFmpeg. The terminal prints the output video path. Confirm the capture preview; check the local `raw.mp4` file.
-
-**Preview is black, shows wallpaper or the wrong monitor:** Verify macOS Screen Recording permission; inspect FFmpeg's capture devices:
-
+**Wrong/black capture or no recording indicator:** FFmpeg records without the macOS toolbar. See `capture-preview.png`. To list displays:
 ```sh
 ffmpeg -hide_banner -f avfoundation -list_devices true -i "" 2>&1
 ```
+Supply `SCREEN=<video device number>` in front of the record command and inspect the new preview.
 
-Set `SCREEN=<device index>` in front of the command if Chrome is on another monitor. `SCREEN` is an FFmpeg AVFoundation **video device index**, not the macOS display arrangement number. Verify the preview again.
+**Connect Google returns to Settings:** The test account is excluded by `GOOGLE_CONNECT_USERS`, the Google OAuth redirects are incorrect, or the callback cannot save the grant. Check `?connect=...`, app logs and the runtime `/api/connect/google/status` response for the logged-in test account. Do not allow unverified restricted scopes to all production users.
 
-**"Google account connection card" absent:** Make sure the Google sign-in completed for `TEST_EMAIL`. The script now visits `/settings?tab=account` and selects **Account & Connections** explicitly. A previous script version navigated to default Device settings and searched for non-existent text `// Connections`.
+**No fresh Gmail task:** The assistant must really send its self-addressed task email and Gmail must receive it. Ensure Gmail ingest isn't in cooldown and the app's AI extractor is configured. Look at `failed-scene-*.png` and app logs rather than claiming success after an unrelated scan.
 
-**"excluded by GOOGLE_CONNECT_USERS":** The **production** app deliberately prevents the signed-in test email from reaching consent until that Google email is added to the reviewer allowlist. Do not open all unverified scopes to all production users.
+**Calendar event missing:** The name in `DEMO_EVENT_TITLE` must match a visible event in this week's primary calendar. Use an existing test event or create one through Google Calendar (not through The Third Eye).
 
-**No new Gmail task:** Ensure the disposable test message arrived within the last two days and is unread. Scans may be rate-limited. The script stops if no task is ingested; a silent or zero-result scan is not sufficient evidence.
+**Previously signed-in account:** The recorder detects and shows the authenticated test account rather than clicking an absent login button.
 
-**Test account already logged into Google:** To skip repeating setup after the initial sign-in, run `TEST_EMAIL='...' RECIPIENT='...' npm run demo:record`. It still performs the screen preview gate each time.
+**Script crash:** Partial `raw.mp4` may exist and is worth inspecting; no new finished MP4 is published on failure.
 
-**Unexpected failure:** Do not delete the raw recording. Inspect the last local `failed-scene-*.png` and terminal error. Only share screenshots after redacting any sensitive account data. Do not submit a final video to Google if consent, Gmail Sent or Calendar evidence is missing.
-
-**Approval:** This recorder provides authentic evidence, not a guarantee of Google's verification decision.
+**Critical privacy:** Never commit or publish screen recordings, test-account cookies, browser profiles, OAuth authorization codes or personal Gmail content. All capture paths are gitignored. Approval is Google's decision.
