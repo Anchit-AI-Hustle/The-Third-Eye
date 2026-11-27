@@ -29,7 +29,8 @@ const TEST_EMAIL = process.env.TEST_EMAIL;
 const RECIPIENT = process.env.RECIPIENT;
 const INBOX_SUBJECT = process.env.DEMO_INBOX_SUBJECT ?? "Q3 report";
 const CALENDAR_EVENT = process.env.DEMO_EVENT_TITLE ?? "";
-const RUN_TAG = new Date().toISOString().replace(/[:.]/g, "-");
+const RUN_STARTED_MS = Date.now();
+const RUN_TAG = new Date(RUN_STARTED_MS).toISOString().replace(/[:.]/g, "-");
 const EXPECTED_CLIENT_PREFIX = process.env.EXPECTED_CLIENT_PREFIX ?? "529553308976-";
 const REQUIRED_FEATURE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -381,6 +382,7 @@ async function record() {
     need(status.connected && missingScopes.length === 0,
       `Google did not save a usable grant for all three scopes. Missing: ${missingScopes.join(", ") || "none"}; reason: ${status.problem ?? "unknown"}`);
     log("Verified all three Google scopes are granted and the refresh token is usable.");
+    mark("oauth_granted", { scopes: status.scopes, connected: status.connected });
     // Exact match: the "Google connected successfully" banner alone doesn't prove the grant was saved.
     await waitFor(app, "Connected", app.getByText("Connected", { exact: true }));
     await app.getByRole("heading", { name: "Google account" }).scrollIntoViewIfNeeded().catch(() => {});
@@ -463,7 +465,7 @@ async function record() {
   }
 
   writeFileSync(join(OUT, "timeline.json"), JSON.stringify({ timeline, marks, evidence }, null, 2));
-  writeFileSync(join(OUT, "evidence-manifest.json"), JSON.stringify({ runTag: RUN_TAG, generatedAt: new Date().toISOString(), app: APP, expectedScopes: REQUIRED_FEATURE_SCOPES, evidence }, null, 2));
+  writeFileSync(join(OUT, "evidence-manifest.json"), JSON.stringify({ runTag: RUN_TAG, startedAt: new Date(RUN_STARTED_MS).toISOString(), generatedAt: new Date().toISOString(), app: APP, expectedScopes: REQUIRED_FEATURE_SCOPES, evidence }, null, 2));
   need(evidence.some((e) => e.scene === "oauth_consent") && evidence.some((e) => e.scene === "gmail_read") && evidence.some((e) => e.scene === "gmail_send") && evidence.some((e) => e.scene === "calendar_read"), "Required OAuth verification evidence is incomplete. Final video will not be assembled.");
   assemble(timeline, marks);
 }
@@ -528,6 +530,8 @@ function assemble(timeline, marks) {
   need(media.status === 0, `Cannot probe assembled video: ${media.stderr}`);
   const info = JSON.parse(media.stdout || "{}");
   need(Number(info.format?.duration) > 45 && info.streams?.some((s) => s.codec_type === "video") && info.streams?.some((s) => s.codec_type === "audio"), "Finished file must contain real video, narration and adequate duration.");
+  const qc = spawnSync("node", [join(dirname(fileURLToPath(import.meta.url)), "validate-demo.mjs")], { cwd: OUT, stdio: "inherit" });
+  need(qc.status === 0, "Video quality-control checks failed. Do not upload the MP4 to Google.");
   log(`Done: ${join(OUT, "the-third-eye-oauth-demo.mp4")}`);
   log("Watch it once, then upload to YouTube as Unlisted and paste the link into Data Access and your reply.");
 }
