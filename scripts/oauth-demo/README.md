@@ -11,6 +11,24 @@ This utility records the **actual** Chrome app + Google consent flow using FFmpe
 - **One non-sensitive Google Calendar event** on the test account's **primary** calendar during the current week, with a recognizable title such as `OAuth Verification Demo Meeting`. Set `DEMO_EVENT_TITLE` to that exact title. The script will verify the event is visible in both the Google Calendar week view and the Assistant response. No Calendar write permission is requested.
 - No test email setup is required. The recorder now uses **the actual app** to send a unique action-item message to the same test Gmail account. It checks the message in Gmail Sent and Inbox, scans the resulting task, then demonstrates a second sent email. `RECIPIENT` defaults to `TEST_EMAIL` when omitted; a real existing second mailbox is preferred if available.
 
+## Run again without setting environment variables
+
+Earlier versions crashed when `npm run demo:record` was run without `TEST_EMAIL` and `RECIPIENT`, despite a previous setup. **Fixed:** the recorder now reads the authenticated The Third Eye account from the existing Chrome profile when possible, stores the selected test email, recipient and Calendar event title in `~/.third-eye-demo-chrome/oauth-demo-settings.json`, and reuses them. This file stays local with `0600` permissions. It contains no password, session cookie, access token, or refresh token.
+
+To update your local checkout from the currently deployed `main` branch **even when your current feature branch has no upstream**:
+
+```bash
+cd ~/The-Third-Eye
+git fetch origin main
+git switch main
+git pull --ff-only origin main
+npm run demo:record
+```
+
+The first run after upgrading can ask for the test account email and the **exact title of a real event visible this week** in its Google Calendar. Subsequent runs reuse those preferences unless you override them using `TEST_EMAIL=`, `RECIPIENT=`, or `DEMO_EVENT_TITLE=`. If the Chrome profile is missing entirely, run `npm run demo:setup` first.
+
+`git switch main` will refuse to replace conflicting uncommitted local changes rather than discard them. Do not use `git reset --hard` or delete the current branch to fix the upstream problem.
+
 ## One-time setup
 
 From the repository root:
@@ -22,6 +40,8 @@ TEST_EMAIL='your-approved-test-account@gmail.com' npm run demo:setup
 Sign into the dedicated Chrome profile as the **same** account. Do not paste passwords into a command or terminal recording.
 
 ## Record
+
+After setup, `npm run demo:record` is sufficient when the account and Calendar title were already saved. The longer command below explicitly overrides the saved values.
 
 ```sh
 TEST_EMAIL='your-approved-test-account@gmail.com' \
