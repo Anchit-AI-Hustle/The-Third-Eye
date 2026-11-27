@@ -92,6 +92,24 @@ async function launch() {
 // Previous versions required TEST_EMAIL/RECIPIENT again on every run, despite
 // setup having already completed. Store only these non-secret demo preferences
 // in the private Chrome profile, not in the repository or a tracked .env.
+async function emailFromExistingAppSession() {
+  if (!existsSync(PROFILE)) return "";
+  let context;
+  try {
+    context = await launch();
+    const page = context.pages()[0] ?? await context.newPage();
+    await page.goto(APP, { waitUntil: "domcontentloaded", timeout: 12000 });
+    const response = await page.request.get(`${APP}/api/auth/session`, { timeout: 8000 });
+    if (!response.ok()) return "";
+    const account = (await response.json())?.user?.email;
+    return validEmail(account) ? account.trim() : "";
+  } catch {
+    return "";
+  } finally {
+    await context?.close().catch(() => {});
+  }
+}
+
 async function prepareDemoSettings({ requireCalendar = false } = {}) {
   const saved = readDemoSettings(SETTINGS_PATH);
   const defaults = resolveDemoSettings(process.env, saved);
@@ -99,6 +117,13 @@ async function prepareDemoSettings({ requireCalendar = false } = {}) {
   RECIPIENT = defaults.recipient;
   CALENDAR_EVENT = defaults.calendarEvent;
 
+  if (!TEST_EMAIL) {
+    TEST_EMAIL = await emailFromExistingAppSession();
+    if (TEST_EMAIL) {
+      log(`Detected existing authenticated The Third Eye account: ${TEST_EMAIL}`);
+      RECIPIENT = process.env.RECIPIENT?.trim() || TEST_EMAIL;
+    }
+  }
   if (!TEST_EMAIL) {
     TEST_EMAIL = (await rl.question("Google test account email (saved for future recordings): ")).trim();
     RECIPIENT = process.env.RECIPIENT?.trim() || TEST_EMAIL;
