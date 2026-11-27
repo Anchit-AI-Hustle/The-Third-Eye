@@ -19,6 +19,7 @@ const EXPECTED = [
 const SCREENSHOTS = [
   "evidence-google-consent.png",
   "evidence-gmail-task.png",
+  "evidence-gmail-fixture-sent.png",
   "evidence-gmail-sent.png",
   "evidence-calendar-source.png",
   "evidence-calendar-assistant.png",
